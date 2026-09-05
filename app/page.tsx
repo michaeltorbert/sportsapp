@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { loadScores } from "@/lib/score-client";
 import { classify, easternDate, shiftDate, sortGames, type Game, type Scoreboard, type Team } from "@/lib/football";
 
 type Filter = "watch" | "acc" | "close" | "upset";
@@ -57,9 +58,7 @@ export default function Home() {
     const c = new AbortController(); controller.current = c; setRefreshing(true);
     const timeout = window.setTimeout(() => c.abort(), 20000);
     try {
-      const r = await fetch(`/api/scores?date=${date}`, { cache: "no-store", signal: c.signal });
-      if (!r.ok) throw new Error("Unavailable");
-      const next: Scoreboard = await r.json();
+      const next = await loadScores(date, c.signal);
       if (next.date !== date || !Array.isArray(next.games) || !Number.isFinite(Date.parse(next.fetchedAt))) throw new Error("Invalid update");
       if (selectedDate.current !== date || controller.current !== c) return;
       const old = previous.current?.date === date ? previous.current : null;

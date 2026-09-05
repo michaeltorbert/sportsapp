@@ -1,59 +1,32 @@
-import { z } from "zod";
-import { easternDate, type Game, type Scoreboard, type Team } from "./football";
+import { normalizeScoreboard, scoreboardUrl } from "./espn-data";
+import type { Scoreboard } from "./football";
 
-const numberLike = z.union([z.string(), z.number()]);
-const statusSchema = z.object({ period: z.number().optional(), clock: z.number().optional(), type: z.object({ name: z.string(), state: z.string(), completed: z.boolean().optional(), shortDetail: z.string().optional(), detail: z.string().optional(), description: z.string().optional() }) });
-const competitorSchema = z.object({ id: z.string(), homeAway: z.string(), score: numberLike.nullish(), curatedRank: z.object({ current: z.number().optional() }).optional(), team: z.object({ id: z.string(), shortDisplayName: z.string().optional(), displayName: z.string().optional(), location: z.string().optional(), abbreviation: z.string().optional(), logo: z.string().optional(), conferenceId: numberLike.optional() }), records: z.array(z.object({ type: z.string().optional(), name: z.string().optional(), summary: z.string().optional() })).optional() });
-const eventSchema = z.object({ id: z.string(), date: z.string(), status: statusSchema.optional(), links: z.array(z.object({ rel: z.array(z.string()).optional(), href: z.string() })).optional(), competitions: z.array(z.object({ date: z.string().optional(), timeValid: z.boolean().optional(), status: statusSchema.optional(), competitors: z.array(competitorSchema), broadcasts: z.array(z.object({ names: z.array(z.string()).optional() })).optional(), broadcast: z.string().optional(), situation: z.object({ possession: numberLike.optional(), downDistanceText: z.string().optional(), isRedZone: z.boolean().optional() }).optional() })) });
-
-function score(value: string | number | null | undefined) { if (value === null || value === undefined || value === "") return null; const n = Number(value); return Number.isFinite(n) && n >= 0 ? n : null; }
-function espnLink(value: string | undefined, fallback: string) { try { const u = new URL(value || ""); return u.protocol === "https:" && (u.hostname === "espn.com" || u.hostname.endsWith(".espn.com")) ? u.href : fallback; } catch { return fallback; } }
-function logoLink(value: string | undefined) { try { const u = new URL(value || ""); return u.protocol === "https:" && u.hostname.endsWith(".espncdn.com") ? u.href : null; } catch { return null; } }
-function team(c: z.infer<typeof competitorSchema>): Team { const rank = c.curatedRank?.current; return { id: c.team.id, name: c.team.shortDisplayName || c.team.location || c.team.displayName || c.team.abbreviation || "Team", abbreviation: c.team.abbreviation || "", logo: logoLink(c.team.logo), conferenceId: c.team.conferenceId === undefined ? null : String(c.team.conferenceId), score: score(c.score), rank: rank && rank >= 1 && rank <= 25 ? rank : null, rankKnown: typeof rank === "number" && rank >= 1, record: c.records?.find(r => r.type === "total" || r.name === "overall")?.summary || "" }; }
-
-export function normalizeScoreboard(raw: unknown, date: string, fetchedAt = new Date().toISOString()): Scoreboard {
-  const envelope = z.object({ events: z.array(z.unknown()) }).parse(raw);
-  const games = new Map<string, Game>(); let unreadable = 0;
-  for (const item of envelope.events) {
-    const parsed = eventSchema.safeParse(item);
-    if (!parsed.success) { unreadable++; continue; }
-    const e = parsed.data, c = e.competitions[0], s = c?.status || e.status;
-    if (!c || !s || c.competitors.length !== 2) { unreadable++; continue; }
-    const away = c.competitors.find(t => t.homeAway === "away"), home = c.competitors.find(t => t.homeAway === "home");
-    const gameDate = c.date || e.date;
-    if (!away || !home || !Number.isFinite(Date.parse(gameDate))) { unreadable++; continue; }
-    if (easternDate(new Date(gameDate)) !== date) continue;
-    const statusName = s.type.name;
-    const state: Game["state"] = /CANCELED|CANCELLED|POSTPONED|NO_CONTEST|FORFEIT/.test(statusName) ? "other" : /DELAYED|SUSPENDED|INTERRUPTED/.test(statusName) ? "delayed" : s.type.completed || s.type.state === "post" ? "final" : s.type.state === "in" ? "live" : "upcoming";
-    const teams: [Team, Team] = [team(away), team(home)];
-    const started = (s.period || 0) > 0 || teams.some(t => (t.score || 0) > 0) || state === "final";
-    games.set(e.id, { id: e.id, date: gameDate, timeValid: c.timeValid !== false, state, started, status: s.type.shortDetail || s.type.detail || s.type.description || "Status unavailable", period: s.period || 0, clock: s.clock || 0, teams, broadcast: [...new Set(c.broadcasts?.flatMap(b => b.names || []) || [])].join(" / ") || c.broadcast || "", possession: c.situation?.possession === undefined ? null : String(c.situation.possession), downDistance: c.situation?.downDistanceText || "", redZone: c.situation?.isRedZone === true, url: espnLink(e.links?.find(l => l.rel?.includes("summary"))?.href, `https://www.espn.com/college-football/game/_/gameId/${encodeURIComponent(e.id)}`) });
-  }
-  if (envelope.events.length && unreadable === envelope.events.length) throw new Error("ESPN returned unreadable games");
-  return { date, fetchedAt, games: [...games.values()], warnings: unreadable ? ["Some games could not be read from ESPN; the list may be incomplete."] : undefined };
-}
-
+// Only completed public data is shared across Worker requests. An in-flight
+// promise belongs to its originating request and can be canceled with it.
 const cache = new Map<string, { expires: number; data: Scoreboard }>();
-const pending = new Map<string, Promise<Scoreboard>>();
 export async function getScoreboard(date: string): Promise<Scoreboard> {
   const cached = cache.get(date);
   if (cached && cached.expires > Date.now()) return cached.data;
-  const running = pending.get(date); if (running) return running;
-  const request = (async () => {
-    try {
-      // ESPN accepts 200; an oversized limit can silently fall back to 25.
-      const url = new URL("https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard");
-      url.searchParams.set("dates", date.replaceAll("-", "")); url.searchParams.set("groups", "80"); url.searchParams.set("limit", "200");
-      const response = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(12000) });
-      if (!response.ok) throw new Error(`ESPN status ${response.status}`);
-      const data = normalizeScoreboard(await response.json(), date);
-      cache.set(date, { expires: Date.now() + 15000, data });
-      if (cache.size > 8) cache.delete(cache.keys().next().value!);
-      return data;
-    } catch (error) {
-      if (cached && Date.now() - Date.parse(cached.data.fetchedAt) < 600000) return { ...cached.data, stale: true };
-      throw error;
-    } finally { pending.delete(date); }
-  })();
-  pending.set(date, request); return request;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(scoreboardUrl(date), {
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`ESPN status ${response.status}`);
+    const data = normalizeScoreboard(await response.json(), date);
+    cache.set(date, { expires: Date.now() + 15000, data });
+    if (cache.size > 8) cache.delete(cache.keys().next().value!);
+    return data;
+  } catch (error) {
+    console.error(JSON.stringify({ event: "score_feed_failed", date,
+      error: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : "UnknownError" }));
+    if (cached && Date.now() - Date.parse(cached.data.fetchedAt) < 600000)
+      return { ...cached.data, stale: true };
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }

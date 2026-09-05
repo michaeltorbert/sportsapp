@@ -27,7 +27,7 @@ button:focus-visible, a:focus-visible, .date-picker:focus-within { outline: 2px 
 .today-button { min-height: 44px; border: 1px solid #33435d; border-radius: 22px; padding: 0 16px; font-size: 14px; font-weight: 600; color: #cad6e8; }
 .today-button.is-today { border-color: transparent; background: #1a2639; color: #bfd2f2; }
 .score-tabs { gap: 0; }
-.score-tabs .filter-tabs { position: sticky; top: 0; z-index: 10; display: grid; grid-template-columns: 1.15fr .8fr 1.1fr 1fr; width: 100%; height: auto; min-height: 52px; gap: 4px; padding: 5px; border: 1px solid #293345; background: #111a28; border-radius: 14px; box-shadow: 0 8px 24px #090d1644; }
+.score-tabs .filter-tabs { position: sticky; top: 0; z-index: 10; display: grid; grid-template-columns: 1.12fr .72fr 1.26fr .94fr; width: 100%; height: auto; min-height: 52px; gap: 4px; padding: 5px; border: 1px solid #293345; background: #111a28; border-radius: 14px; box-shadow: 0 8px 24px #090d1644; }
 .filter-tabs .filter-tab { min-height: 44px; height: 100%; padding: 8px 7px; border: 0; border-radius: 9px; gap: 6px; font-size: 14px; font-weight: 600; color: #b8c4d7; flex-wrap: wrap; white-space: normal; line-height: 1.2; }
 .filter-tabs .filter-tab[data-state="active"] { background: #d3fc81; color: #1b280a; box-shadow: 0 2px 8px #0002; }
 .tab-count { font-size: 12px; min-width: 17px; height: 19px; display: inline-grid; place-items: center; color: inherit; opacity: .7; font-variant-numeric: tabular-nums; }
