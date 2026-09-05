@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "../vendor/shadcn-tailwind-4.13.0.css";
+/* Scrolling utilities used by the shared component catalog. */
+@utility scrollbar-thin { scrollbar-width: thin; }
+@utility scrollbar-none { scrollbar-width: none; &::-webkit-scrollbar { display: none; } }
+@utility scrollbar-gutter-stable { scrollbar-gutter: stable; }
 :root { color-scheme: dark; --background: #0a0e16; --foreground: #f3f5fa; --card: #141b28; --card-foreground: #f3f5fa; --popover: #141b28; --popover-foreground: #f3f5fa; --primary: #cefb70; --primary-foreground: #172308; --secondary: #1c2636; --secondary-foreground: #f3f5fa; --muted: #1a2332; --muted-foreground: #a1aec3; --accent: #283448; --accent-foreground: #f3f5fa; --destructive: #ff927c; --border: #293345; --input: #293345; --ring: #cefb70; --radius: 1rem; }
 @theme inline { --color-background: var(--background); --color-foreground: var(--foreground); --color-card: var(--card); --color-card-foreground: var(--card-foreground); --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground); --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground); --color-secondary: var(--secondary); --color-secondary-foreground: var(--secondary-foreground); --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground); --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground); --color-destructive: var(--destructive); --color-border: var(--border); --color-input: var(--input); --color-ring: var(--ring); --radius-sm: .5rem; --radius-md: .75rem; --radius-lg: 1rem; --radius-xl: 1.25rem; --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 * { box-sizing: border-box; }
@@ -73,3 +77,16 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 @media (min-width: 1100px) { .app-shell { padding-top: 44px; } }
 @media (max-width: 370px) { .app-shell { padding-left: 12px; padding-right: 12px; }.wordmark { font-size: 21px; gap: 7px; }.brand-icon { width: 31px; height: 34px; }.team-name { font-size: 18px; }.filter-tabs .filter-tab { gap: 2px; padding: 7px 3px; }.brand-light { letter-spacing: -1.3px; }.sport-label { letter-spacing: 1.4px; }.card-topline, .teams { padding-left: 13px; padding-right: 13px; }.card-bottom { padding-left: 12px; }.score { font-size: 33px; }.badges { gap: 4px; }.badge { padding: 3px 5px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+.score-tabs .filter-tabs { grid-template-columns: 1.2fr .65fr .9fr 1.05fr .85fr; gap: 2px; }
+.filter-tabs .filter-tab { flex-direction: column; flex-wrap: nowrap; white-space: nowrap; gap: 3px; font-size: 12px; padding: 8px 2px; }
+.score-options { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: -5px 0 19px; }
+.alerts-button { display: inline-flex; align-items: center; gap: 7px; padding: 0 13px; min-height: 44px; border: 1px solid #35435a; border-radius: 22px; color: #d6e7b8; font-size: 14px; }
+.toggle-label { display: inline-flex; gap: 9px; min-height: 44px; align-items: center; color: #b9c6d9; font-size: 14px; cursor: pointer; }
+.toggle-label input { width: 18px; height: 18px; accent-color: #cefb70; flex-shrink: 0; }
+.kickoff-toggle { padding: 10px 0; align-items: flex-start; line-height: 1.5; }.kickoff-toggle input { margin-top: 3px; }
+.week-label { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 3px; font-size: 15px; font-weight: 600; }.week-note { font-size: 10px; letter-spacing: 1px; color: #95a5bd; margin-left: 4px; }
+.overnight-note { color: #c5dc9e; background: #1c2a20; padding: 11px 13px; border-radius: 10px; margin: 0 0 14px; font-size: 13px; }
+.game-day-label { color: #b5c1d4; font-size: 11px; }.card-topline { flex-wrap: wrap; gap: 8px; }.game-day-label + .game-status { margin-left: auto; }
+.top25-badge { color: #d9c9ff; background: #322b4b; }.badges { flex-wrap: wrap; }.final-card { opacity: .66; }.game-card:target { outline: 2px solid #cefb70; outline-offset: 3px; scroll-margin-top: 100px; }
+.alert-triggers { padding-left: 22px; margin: 8px 0 12px; }.alert-triggers li { padding: 5px 0; }.alert-enable { margin-top: 18px; }.alert-footnote { color: #8f9bb1; font-size: 13px; }
+.history-heading { margin: 25px 0 10px; color: #f0f5ff; font-weight: 700; }.release-history { list-style: none; padding: 0; }.release-history li { border-top: 1px solid #2b374b; padding: 12px 0; }.release-history li > span { font-size: 12px; color: #8f9bb1; margin-left: 12px; }.release-history p { font-size: 14px; margin: 5px 0; }.version-label { color: #73839e; font-size: 11px; }

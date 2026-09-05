@@ -4,19 +4,20 @@ import type { Scoreboard } from "./football";
 // Only completed public data is shared across Worker requests. An in-flight
 // promise belongs to its originating request and can be canceled with it.
 const cache = new Map<string, { expires: number; data: Scoreboard }>();
-export async function getScoreboard(date: string): Promise<Scoreboard> {
-  const cached = cache.get(date);
+export async function getScoreboard(date: string, endDate = date, accOnly = false): Promise<Scoreboard> {
+  const key = `${date}:${endDate}:${accOnly}`;
+  const cached = cache.get(key);
   if (cached && cached.expires > Date.now()) return cached.data;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const response = await fetch(scoreboardUrl(date), {
+    const response = await fetch(scoreboardUrl(date, endDate, accOnly), {
       headers: { Accept: "application/json" },
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(`ESPN status ${response.status}`);
-    const data = normalizeScoreboard(await response.json(), date);
-    cache.set(date, { expires: Date.now() + 15000, data });
+    const data = normalizeScoreboard(await response.json(), date, undefined, endDate);
+    cache.set(key, { expires: Date.now() + 15000, data });
     if (cache.size > 8) cache.delete(cache.keys().next().value!);
     return data;
   } catch (error) {

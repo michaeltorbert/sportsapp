@@ -23,15 +23,15 @@ async function readJson(url: string, parent: AbortSignal, direct: boolean, fetch
   }
 }
 
-export async function loadScores(date: string, signal: AbortSignal, fetcher: Fetcher = fetch): Promise<Scoreboard> {
+export async function loadScores(date: string, signal: AbortSignal, fetcher: Fetcher = fetch, endDate = date, accOnly = false): Promise<Scoreboard> {
   try {
     // ESPN explicitly allows anonymous browser requests with Access-Control-Allow-Origin: *.
     // Direct access also keeps the live scoreboard independent of hosted egress failures.
-    return normalizeScoreboard(await readJson(scoreboardUrl(date), signal, true, fetcher), date);
+    return normalizeScoreboard(await readJson(scoreboardUrl(date, endDate, accOnly), signal, true, fetcher), date, undefined, endDate);
   } catch (error) {
     if (signal.aborted) throw error;
-    const data = await readJson(`/api/scores?date=${encodeURIComponent(date)}`, signal, false, fetcher) as Scoreboard;
-    if (!data || data.date !== date || !Array.isArray(data.games) || !Number.isFinite(Date.parse(data.fetchedAt)))
+    const data = await readJson(`/api/scores?date=${encodeURIComponent(date)}&end=${endDate}&acc=${accOnly ? "1" : "0"}`, signal, false, fetcher) as Scoreboard;
+    if (!data || data.date !== date || (data.endDate || data.date) !== endDate || !Array.isArray(data.games) || !Number.isFinite(Date.parse(data.fetchedAt)))
       throw new Error("Invalid score response");
     return data;
   }

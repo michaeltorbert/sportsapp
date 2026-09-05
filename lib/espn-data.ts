@@ -11,7 +11,7 @@ function espnLink(value: string | undefined, fallback: string) { try { const u =
 function logoLink(value: string | undefined) { try { const u = new URL(value || ""); return u.protocol === "https:" && u.hostname.endsWith(".espncdn.com") ? u.href : null; } catch { return null; } }
 function team(c: z.infer<typeof competitorSchema>): Team { const rank = c.curatedRank?.current; return { id: c.team.id, name: c.team.shortDisplayName || c.team.location || c.team.displayName || c.team.abbreviation || "Team", abbreviation: c.team.abbreviation || "", logo: logoLink(c.team.logo), conferenceId: c.team.conferenceId === undefined ? null : String(c.team.conferenceId), score: score(c.score), rank: rank && rank >= 1 && rank <= 25 ? rank : null, rankKnown: typeof rank === "number" && rank >= 1, record: c.records?.find(r => r.type === "total" || r.name === "overall")?.summary || "" }; }
 
-export function normalizeScoreboard(raw: unknown, date: string, fetchedAt = new Date().toISOString()): Scoreboard {
+export function normalizeScoreboard(raw: unknown, date: string, fetchedAt = new Date().toISOString(), endDate = date): Scoreboard {
   const envelope = z.object({ events: z.array(z.unknown()) }).parse(raw);
   const games = new Map<string, Game>(); let unreadable = 0;
   for (const item of envelope.events) {
@@ -22,7 +22,8 @@ export function normalizeScoreboard(raw: unknown, date: string, fetchedAt = new 
     const away = c.competitors.find(t => t.homeAway === "away"), home = c.competitors.find(t => t.homeAway === "home");
     const gameDate = c.date || e.date;
     if (!away || !home || !Number.isFinite(Date.parse(gameDate))) { unreadable++; continue; }
-    if (easternDate(new Date(gameDate)) !== date) continue;
+    const etDate = easternDate(new Date(gameDate));
+    if (etDate < date || etDate > endDate) continue;
     const statusName = s.type.name;
     const state: Game["state"] = /CANCELED|CANCELLED|POSTPONED|NO_CONTEST|FORFEIT/.test(statusName) ? "other" : /DELAYED|SUSPENDED|INTERRUPTED/.test(statusName) ? "delayed" : s.type.completed || s.type.state === "post" ? "final" : s.type.state === "in" ? "live" : "upcoming";
     const teams: [Team, Team] = [team(away), team(home)];
@@ -30,14 +31,14 @@ export function normalizeScoreboard(raw: unknown, date: string, fetchedAt = new 
     games.set(e.id, { id: e.id, date: gameDate, timeValid: c.timeValid !== false, state, started, status: s.type.shortDetail || s.type.detail || s.type.description || "Status unavailable", period: s.period || 0, clock: s.clock || 0, teams, broadcast: [...new Set(c.broadcasts?.flatMap(b => b.names || []) || [])].join(" / ") || c.broadcast || "", possession: c.situation?.possession === undefined ? null : String(c.situation.possession), downDistance: c.situation?.downDistanceText || "", redZone: c.situation?.isRedZone === true, url: espnLink(e.links?.find(l => l.rel?.includes("summary"))?.href, `https://www.espn.com/college-football/game/_/gameId/${encodeURIComponent(e.id)}`) });
   }
   if (envelope.events.length && unreadable === envelope.events.length) throw new Error("ESPN returned unreadable games");
-  return { date, fetchedAt, games: [...games.values()], warnings: unreadable ? ["Some games could not be read from ESPN; the list may be incomplete."] : undefined };
+  return { date, endDate, fetchedAt, games: [...games.values()], warnings: unreadable ? ["Some games could not be read from ESPN; the list may be incomplete."] : undefined };
 }
 
 
-export function scoreboardUrl(date: string) {
+export function scoreboardUrl(date: string, endDate = date, accOnly = false) {
   const url = new URL("https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard");
-  url.searchParams.set("dates", date.replaceAll("-", ""));
-  url.searchParams.set("groups", "80");
+  url.searchParams.set("dates", date.replaceAll("-", "") + (endDate !== date ? `-${endDate.replaceAll("-", "")}` : ""));
+  url.searchParams.set("groups", accOnly ? "1" : "80");
   // Oversized limits may silently fall back to 25. ESPN returns the full day with 200.
   url.searchParams.set("limit", "200");
   return url.toString();
