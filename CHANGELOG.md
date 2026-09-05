@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.1.2 · 2026-09-05
+
+- Owner reported the Cloudflare deployment claimed. Temporary management access now returns HTTP 401; scheduled polling still requires an authenticated account action.
+- Set the alert-service URL. The existing readiness gate still prevents enabling notifications until the service records successful background polling.
+- Recheck alert availability every 30 seconds while visible and when returning to the app, with bounded request timeouts. Notification permission remains requested only from the Enable alerts tap.
+- Public endpoint verification from the agent environment returned Cloudflare HTTP 403 / 1010. Cron execution and real device delivery remain unverified.
+
 ## 1.1.1 · 2026-09-05
 
 - Deployed the alert Worker and D1 schema through Cloudflare’s preview-and-claim API. The owner must claim the account before cron can be registered; temporary accounts returned a limit of zero cron triggers. The app remains disconnected until polling is verified.

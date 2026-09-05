@@ -1,10 +1,12 @@
 # Background alerts
 
-Status for v1.1.1: Worker and D1 schema deployed to a temporary Cloudflare account through the official preview-and-claim API. See `deployment.json` for nonsecret resource identifiers. The owner must complete the private claim link before its deadline. Cloudflare rejected cron creation with code 10072 because this temporary account allows zero cron triggers. `public/alerts-config.json` remains null until a permanent account has a working cron and `/config` is ready. Device push has not been tested.
+Status for v1.1.2: the owner reported claiming the Cloudflare deployment on September 5, 2026. The Worker, D1 schema, and VAPID identity were deployed in v1.1.1. The temporary API credential now returns HTTP 401, so it cannot register the cron. No permanent Cloudflare management access is connected. See `deployment.json` for nonsecret resource identifiers.
 
-After the owner claims, reuse the same Worker, D1 database, and VAPID identity. Try the still-valid temporary credential only within its original authorization and expiry; otherwise authenticate with the claimed account or have its owner add the one-minute Cron Trigger in the Cloudflare dashboard. Do not recreate a claimed database or rotate VAPID keys. Claiming does not grant permanent deployment access.
+The app now has the service URL configured and rechecks its readiness every 30 seconds while visible. It will not offer Enable alerts until `/config` is ready. Cron execution and device delivery are unverified. Agent HTTP requests to the public service returned Cloudflare HTTP 403 / 1010; do not bypass that block or claim the endpoint was verified.
 
-The unclaimed account and all its resources expire automatically. Claim links and API tokens are private and must never be committed. If the account expires unclaimed, provision a replacement only after confirming expiry; no active user subscriptions exist in the pending setup.
+Remaining owner action: in Cloudflare Workers & Pages, select `saturday-signal-alerts`, then Settings > Triggers > Cron Triggers and add `* * * * *`. New schedules may take up to 15 minutes to propagate. Once a successful cron poll has occurred, reopen the Home Screen app and enable alerts. Inspect a real phone notification before marking device delivery verified.
+
+Future deployments require an authenticated connection to the claimed account. Reuse the existing Worker, D1 database, and VAPID identity. Never recreate the database or rotate keys as a way to restore management access. Temporary claim links and credentials have been removed.
 
 ## Deployment after a background host is connected
 
@@ -15,7 +17,7 @@ This directory is an independent Worker, outside the Sites runtime. Use Cloudfla
 3. Generate one stable P-256 ECDSA VAPID key pair. Keep the uncompressed 65-byte public point as base64url in `VAPID_PUBLIC_KEY`, and the JWK private `d` scalar as base64url in the Worker secret `VAPID_PRIVATE_KEY`. Set both with Wrangler secrets using protected stdin or a protected temporary secrets file. Never commit private keys or paste them into chat. Keep these keys across deployments so existing subscriptions remain valid.
 4. Deploy with `wrangler deploy --config services/alerts/wrangler.jsonc`. Confirm the one-minute cron is registered. The cron keeps running when every browser is closed; it skips score fetches outside game windows and checks schedules at most every 15 minutes when idle.
 5. Confirm `/config` reports `ready: true` after the cron runs and obtains a valid ESPN scoreboard. Check a real iPhone Home Screen subscription and Android Chrome subscription. Test actual notification delivery before calling push active.
-6. Set the exact deployed HTTPS origin in `public/alerts-config.json` as `serviceUrl`, increment the app version, and publish a new Sites version.
+6. The deployed origin is already configured in `public/alerts-config.json`. Preserve the readiness gate and publish any further changes under a new version.
 
 The API accepts the configured `SITE_ORIGIN`. Subscription endpoints are limited to Apple, Google FCM, and Mozilla push services, and redirects are rejected. Subscription keys are stored only in the alerts database. Public callers cannot list subscribers. A random device token, stored hashed server-side, is required to edit or disable that device’s subscription. HTTP 404/410 responses deactivate expired subscriptions.
 

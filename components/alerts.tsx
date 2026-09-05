@@ -15,28 +15,32 @@ export function Alerts() {
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
   useEffect(() => {
     let alive = true;
+    let checking = false;
     setIos(/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
     const media = matchMedia("(display-mode: standalone)");
     const display = () => setStandalone(media.matches || !!(navigator as Navigator & { standalone?: boolean }).standalone);
     display(); media.addEventListener("change", display);
     setSupported("serviceWorker" in navigator && "PushManager" in window && "Notification" in window);
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).then(() => navigator.serviceWorker.ready).then(r => { if (alive) setRegistration(r); }).catch(() => { if (alive) setMessage("Alert setup could not load. Try reopening the app."); });
-    (async () => {
+    const checkAvailability = async () => {
+      if (checking || document.visibilityState === "hidden") return;
+      checking = true;
       try {
-        const r = await fetch("/alerts-config.json", { cache: "no-store" });
+        const r = await fetch("/alerts-config.json", { cache: "no-store", signal: AbortSignal.timeout(10000) });
         const settings = await r.json();
         if (!settings.serviceUrl) return;
         const url = new URL(settings.serviceUrl);
         if (url.protocol !== "https:") return;
         const base = url.origin;
-        const response = await fetch(`${base}/config`, { credentials: "omit" });
+        const response = await fetch(`${base}/config`, { credentials: "omit", signal: AbortSignal.timeout(10000) });
         if (!response.ok) throw new Error();
         const state = await response.json();
         if (!alive) return;
         setService(base); setConfig(state);
+        setMessage(previous => previous === "The alert service is unavailable. Try again later." ? "" : previous);
         const credentials = saved();
         if (credentials && "Notification" in window && Notification.permission === "granted" && "serviceWorker" in navigator) {
-          const status = await fetch(`${base}/subscriptions/${credentials.id}`, { headers: { Authorization: `Bearer ${credentials.token}` }, credentials: "omit" });
+          const status = await fetch(`${base}/subscriptions/${credentials.id}`, { headers: { Authorization: `Bearer ${credentials.token}` }, credentials: "omit", signal: AbortSignal.timeout(10000) });
           if (status.ok) {
             const details = await status.json();
             const local = await navigator.serviceWorker.getRegistration("/");
@@ -44,10 +48,13 @@ export function Alerts() {
             if (alive) { setEnabled(!!details.active && !!subscription); setKickoff(details.kickoff); }
           }
         }
-      } catch { if (alive) setMessage("The alert service is unavailable. Try again later."); }
-      finally { if (alive) setLoading(false); }
-    })();
-    return () => { alive = false; media.removeEventListener("change", display); };
+      } catch { if (alive) { setConfig(null); setMessage("The alert service is unavailable. Try again later."); } }
+      finally { checking = false; if (alive) setLoading(false); }
+    };
+    void checkAvailability();
+    const timer = window.setInterval(checkAvailability, 30000);
+    document.addEventListener("visibilitychange", checkAvailability);
+    return () => { alive = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", checkAvailability); media.removeEventListener("change", display); };
   }, []);
 
   async function enable() {
