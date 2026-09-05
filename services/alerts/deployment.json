@@ -1,0 +1,13 @@
+{
+  "version": "1.1.1",
+  "status": "awaiting-owner-claim",
+  "serviceUrl": "https://saturday-signal-alerts.scythe-wildflower.workers.dev",
+  "accountId": "092f7a0a1516725ba2217cfb3760b38f",
+  "scriptName": "saturday-signal-alerts",
+  "databaseId": "09529e43-5b88-41ec-920c-a5fcf0695c69",
+  "claimDeadline": "2026-09-05T23:57:04.245Z",
+  "cron": "* * * * *",
+  "cronRegistered": false,
+  "appConnected": false,
+  "deviceDeliveryTested": false
+}

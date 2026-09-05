@@ -1,5 +1,5 @@
 import { normalizeScoreboard, scoreboardUrl } from "../../lib/espn-data";
-import { easternDate, shiftDate } from "../../lib/football";
+import { easternDate, shiftDate, type Game } from "../../lib/football";
 import { nextPollAt, transitions, type AlertEvent, type Snapshot } from "./rules";
 import { encode, hash, sendPush, validSubscription } from "./web-push";
 
@@ -21,6 +21,8 @@ export async function claimDelivery(db: Database, eventId: string, subscriptionI
   return result.meta.changes === 1;
 }
 async function deliver(env: Env, now: number) {
+  const subscriber = await env.DB.prepare("SELECT id FROM subscriptions WHERE active=1 LIMIT 1").first();
+  if (!subscriber) return;
   const { results: events } = await env.DB.prepare("SELECT id,trigger,payload,created_at FROM alert_events WHERE created_at >= ? ORDER BY created_at,id").bind(now - 180000).all<StoredEvent>();
   for (const event of events) {
     let after = "";
@@ -41,6 +43,31 @@ async function deliver(env: Env, now: number) {
     }
   }
 }
+export async function saveGameStates(db: Database, games: Game[], now: number) {
+  const { results } = await db.prepare("SELECT game_id,state_json,observed_at FROM game_states WHERE game_id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(games.map(game => game.id))).all<{ game_id: string; state_json: string; observed_at: number }>();
+  const stored = new Map(results.map(row => [row.game_id, row]));
+  const events: AlertEvent[] = [], changed: { game: Game; json: string }[] = [];
+  for (const game of games) {
+    const previous = stored.get(game.id);
+    const snapshot: Snapshot | null = previous ? { game: JSON.parse(previous.state_json), observedAt: previous.observed_at } : null;
+    const nextEvents = transitions(snapshot, game, now), json = JSON.stringify(game);
+    events.push(...nextEvents);
+    // Clock-based kickoff transitions still advance even when ESPN's game data is unchanged.
+    if (!previous || previous.state_json !== json || nextEvents.length) changed.push({ game, json });
+  }
+  const statements: Statement[] = [];
+  for (let i = 0; i < events.length; i += 16) {
+    const rows = events.slice(i, i + 16);
+    statements.push(db.prepare(`INSERT OR IGNORE INTO alert_events(id,game_id,trigger,game_day,created_at,payload) VALUES ${rows.map(() => "(?,?,?,?,?,?)").join(",")}`).bind(...rows.flatMap(event => [event.id, event.gameId, event.trigger, event.gameDay, event.createdAt, JSON.stringify(event.payload)])));
+  }
+  for (let i = 0; i < changed.length; i += 25) {
+    const rows = changed.slice(i, i + 25);
+    statements.push(db.prepare(`INSERT INTO game_states(game_id,game_day,state_json,observed_at) VALUES ${rows.map(() => "(?,?,?,?)").join(",")} ON CONFLICT(game_id) DO UPDATE SET state_json=excluded.state_json,observed_at=excluded.observed_at`).bind(...rows.flatMap(({ game, json }) => [game.id, easternDate(new Date(game.date)), json, now])));
+  }
+  // A transactional batch keeps the baseline and alert history together. Bulk writes
+  // stay below D1's 100 bound parameters and avoid one query per Saturday game.
+  if (statements.length) await db.batch(statements);
+}
 export async function poll(env: Env, now = Date.now()) {
   if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return;
   await setValue(env.DB, "last_tick", now).run();
@@ -55,16 +82,7 @@ export async function poll(env: Env, now = Date.now()) {
     if (!response.ok) throw new Error(`ESPN returned ${response.status}`);
     const board = normalizeScoreboard(await response.json(), previousDate, new Date(now).toISOString(), date);
     if (board.warnings?.length) throw new Error("Scoreboard is incomplete");
-    for (const game of board.games) {
-      const previous = await env.DB.prepare("SELECT state_json,observed_at FROM game_states WHERE game_id=?").bind(game.id).first<{ state_json: string; observed_at: number }>();
-      const snapshot: Snapshot | null = previous ? { game: JSON.parse(previous.state_json), observedAt: previous.observed_at } : null;
-      const events: AlertEvent[] = transitions(snapshot, game, now);
-      // D1 batch is transactional: do not advance game state without saving its events.
-      await env.DB.batch([
-        ...events.map(event => env.DB.prepare("INSERT OR IGNORE INTO alert_events(id,game_id,trigger,game_day,created_at,payload) VALUES(?,?,?,?,?,?)").bind(event.id, event.gameId, event.trigger, event.gameDay, event.createdAt, JSON.stringify(event.payload))),
-        env.DB.prepare("INSERT INTO game_states(game_id,game_day,state_json,observed_at) VALUES(?,?,?,?) ON CONFLICT(game_id) DO UPDATE SET state_json=excluded.state_json,observed_at=excluded.observed_at").bind(game.id, easternDate(new Date(game.date)), JSON.stringify(game), now),
-      ]);
-    }
+    await saveGameStates(env.DB, board.games, now);
     await deliver(env, now);
     await env.DB.batch([setValue(env.DB, "last_good_score", now), setValue(env.DB, "next_poll", nextPollAt(board.games, now))]);
   } finally {
@@ -90,7 +108,7 @@ async function api(request: Request, env: Env): Promise<Response> {
   if (url.pathname === "/config" && request.method === "GET") {
     const ticks = await env.DB.prepare("SELECT id,value FROM poll_state WHERE id IN ('last_tick','last_good_score')").all<{ id: string; value: number }>();
     const state = Object.fromEntries(ticks.results.map(row => [row.id, row.value]));
-    return json({ ready: !!env.VAPID_PUBLIC_KEY && !!env.VAPID_PRIVATE_KEY && state.last_tick > Date.now() - 180000 && state.last_good_score > Date.now() - 20 * 60000, publicKey: env.VAPID_PUBLIC_KEY || "", version: "1.1.0" });
+    return json({ ready: !!env.VAPID_PUBLIC_KEY && !!env.VAPID_PRIVATE_KEY && state.last_tick > Date.now() - 180000 && state.last_good_score > Date.now() - 20 * 60000, publicKey: env.VAPID_PUBLIC_KEY || "", version: "1.1.1" });
   }
   const token = request.headers.get("Authorization")?.replace(/^Bearer /, "") || "";
   if (request.method === "POST" && url.pathname === "/subscriptions") {

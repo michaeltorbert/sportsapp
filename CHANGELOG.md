@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.1.1 · 2026-09-05
+
+- Deployed the alert Worker and D1 schema through Cloudflare’s preview-and-claim API. The owner must claim the account before cron can be registered; temporary accounts returned a limit of zero cron triggers. The app remains disconnected until polling is verified.
+- Bulk-read and write game state within D1’s query and parameter limits. Skip unchanged game writes while preserving time-based kickoff transitions and atomic event history.
+- Added a 200-game regression test for query limits, unchanged-score writes, and kickoff transition persistence.
+
 ## 1.1.0 · 2026-09-05
 
 - Added Top 25 classification and tab; Watchlist combines ACC, Top 25, one-score, and upset games.

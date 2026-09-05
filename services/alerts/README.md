@@ -1,6 +1,10 @@
 # Background alerts
 
-Status for v1.1.0: implemented and tested locally; not deployed. The Sites controls available in this session expose no one-minute scheduler. The Cloudflare plugin was declined, so this release does not provision an external account or claim push is active. `public/alerts-config.json` intentionally has a null service URL.
+Status for v1.1.1: Worker and D1 schema deployed to a temporary Cloudflare account through the official preview-and-claim API. See `deployment.json` for nonsecret resource identifiers. The owner must complete the private claim link before its deadline. Cloudflare rejected cron creation with code 10072 because this temporary account allows zero cron triggers. `public/alerts-config.json` remains null until a permanent account has a working cron and `/config` is ready. Device push has not been tested.
+
+After the owner claims, reuse the same Worker, D1 database, and VAPID identity. Try the still-valid temporary credential only within its original authorization and expiry; otherwise authenticate with the claimed account or have its owner add the one-minute Cron Trigger in the Cloudflare dashboard. Do not recreate a claimed database or rotate VAPID keys. Claiming does not grant permanent deployment access.
+
+The unclaimed account and all its resources expire automatically. Claim links and API tokens are private and must never be committed. If the account expires unclaimed, provision a replacement only after confirming expiry; no active user subscriptions exist in the pending setup.
 
 ## Deployment after a background host is connected
 
@@ -32,6 +36,8 @@ Run `node --test tests/football.test.mjs tests/alerts.test.mjs` from the reposit
 
 ## References
 
+- [Cloudflare temporary accounts and claiming](https://developers.cloudflare.com/workers/platform/claim-deployments/)
+- [D1 platform limits](https://developers.cloudflare.com/d1/platform/limits/)
 - [Cloudflare Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/)
 - [Cloudflare KV consistency limitations](https://developers.cloudflare.com/kv/concepts/how-kv-works/)
 - [D1 prepared statements and batch transactions](https://developers.cloudflare.com/d1/worker-api/d1-database/)

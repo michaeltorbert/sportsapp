@@ -3,7 +3,28 @@ import assert from "node:assert/strict";
 import { bundle, database, game } from "./helpers.mjs";
 const rules = await bundle("services/alerts/rules.ts");
 const push = await bundle("services/alerts/web-push.ts");
-const { default: worker, claimDelivery } = await bundle("services/alerts/worker.ts");
+const { default: worker, claimDelivery, saveGameStates } = await bundle("services/alerts/worker.ts");
+
+test("a full Saturday fits D1 query limits and unchanged games preserve clock-based transitions", async () => {
+  const { db, sqlite } = database();
+  let queries = 0;
+  const counted = { ...db, prepare(sql) { queries++; const statement = db.prepare(sql), bind = statement.bind; statement.bind = function (...args) { assert.ok(args.length <= 100); return bind.apply(this, args); }; return statement; } };
+  const now = Date.parse("2026-09-06T02:00:00Z");
+  const games = Array.from({ length: 200 }, (_, i) => game({ id: `game${i}`, state: "upcoming", period: 0, started: false, date: new Date(now + 11 * 60000).toISOString() }));
+  games[0].teams[0].conferenceId = "1";
+  await saveGameStates(counted, games, now);
+  assert.ok(queries <= 10);
+  assert.equal(sqlite.prepare("SELECT count(*) AS n FROM game_states").get().n, 200);
+  const writes = sqlite.prepare("SELECT total_changes() AS n").get().n;
+  await saveGameStates(counted, games, now + 30000);
+  assert.equal(sqlite.prepare("SELECT total_changes() AS n").get().n, writes);
+  await saveGameStates(counted, games, now + 60000);
+  assert.deepEqual(sqlite.prepare("SELECT trigger FROM alert_events").all().map(row => row.trigger), ["acc-kickoff"]);
+  const afterKickoff = sqlite.prepare("SELECT total_changes() AS n").get().n;
+  await saveGameStates(counted, games, now + 120000);
+  assert.equal(sqlite.prepare("SELECT total_changes() AS n").get().n, afterKickoff);
+  sqlite.close();
+});
 
 test("alerts fire on transitions, include the start of Q4, and skip an initial baseline", () => {
   const now = Date.parse("2026-09-06T04:00:00Z"), g = game(); g.teams[0].rank = 5;
