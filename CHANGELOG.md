@@ -1,5 +1,15 @@
 # Saturday Signal releases
 
+## 1.1.3 · 2026-09-05 · prepared, not deployed
+
+- Include overtime (`live && period >= 4`) in the one-score and ranked-trailing alert conditions. Ties qualify for one-score alerts, not upset alerts. Overtime notifications use accurate titles.
+- Alert on the first observation of a qualifying live game. Keep first-seen finals and upcoming kickoffs baseline-only, and preserve transition handling for games already stored in D1.
+- Preserve existing trigger IDs and unique event/delivery ledgers, so moving from Q4 into overtime or redeploying cannot reset duplicate protection. No migration or key rotation is required.
+- Correct ESPN date ranges: the feed treats the range end as exclusive, while app windows are inclusive. A live diagnostic found the old Friday-to-Saturday query returned only 8 Friday games. Including Sunday as the exclusive endpoint returned 8 Friday and 68 Saturday games. This also includes Monday correctly in the ACC window.
+- Add safe `/config` readiness reasons and last-tick/last-success timestamps. Presence of a public key alone still does not prove the service is ready.
+- Add regression tests for overtime, initial live catch-up, first-seen final suppression, feed date boundaries, polling persistence, and readiness diagnostics. Add a local read-only ESPN poll diagnostic with no subscribers or push requests.
+- The owner reports the cron was added, but its registration and execution are unverified. The last deployed external Worker is still v1.1.1. Claimed-account management access is unavailable; these source changes do not update that Worker or establish phone delivery.
+
 ## 1.1.2 · 2026-09-05
 
 - Owner reported the Cloudflare deployment claimed. Temporary management access now returns HTTP 401; scheduled polling still requires an authenticated account action.

@@ -3,7 +3,58 @@ import assert from "node:assert/strict";
 import { bundle, database, game } from "./helpers.mjs";
 const rules = await bundle("services/alerts/rules.ts");
 const push = await bundle("services/alerts/web-push.ts");
-const { default: worker, claimDelivery, saveGameStates } = await bundle("services/alerts/worker.ts");
+const { default: worker, claimDelivery, saveGameStates, poll } = await bundle("services/alerts/worker.ts");
+
+test("poll fetches yesterday AND today, catches live games, and ignores first-seen finals", async () => {
+  const { db, sqlite } = database();
+  const originalFetch = globalThis.fetch;
+  const now = Date.parse("2026-09-05T23:00:00Z");
+  const event = (id, date, state) => ({ id, date, status: { period: 4, clock: 120, type: { name: state === "in" ? "STATUS_IN_PROGRESS" : "STATUS_FINAL", state, completed: state === "post" } }, competitions: [{ competitors: [{ id: "a", homeAway: "away", score: "14", curatedRank: { current: 5 }, team: { id: "a" } }, { id: "b", homeAway: "home", score: "21", curatedRank: { current: 99 }, team: { id: "b" } }] }] });
+  let calls = 0;
+  globalThis.fetch = async input => {
+    const url = new URL(input); calls++;
+    assert.equal(url.hostname, "site.api.espn.com");
+    assert.equal(url.searchParams.get("dates"), "20260904-20260906");
+    return Response.json({ events: [event("friday-final", "2026-09-05T01:00:00Z", "post"), event("saturday-live", "2026-09-05T22:00:00Z", "in"), event("saturday-final", "2026-09-05T16:00:00Z", "post"), event("outside-window", "2026-09-06T20:00:00Z", "in")] });
+  };
+  try {
+    const env = { DB: db, SITE_ORIGIN: "https://app.test", VAPID_PUBLIC_KEY: "test-only", VAPID_PRIVATE_KEY: "test-only" };
+    await poll(env, now);
+    assert.equal(sqlite.prepare("SELECT count(*) AS n FROM game_states").get().n, 3);
+    assert.deepEqual(sqlite.prepare("SELECT id FROM alert_events ORDER BY id").all().map(row => row.id), ["saturday-live:one-score-fourth", "saturday-live:ranked-trailing-fourth"]);
+    assert.equal(sqlite.prepare("SELECT value FROM poll_state WHERE id='last_good_score'").get().value, now);
+    assert.equal(sqlite.prepare("SELECT value FROM poll_state WHERE id='next_poll'").get().value, now + 60000);
+    await poll(env, now + 60000);
+    assert.equal(sqlite.prepare("SELECT count(*) AS n FROM alert_events").get().n, 2);
+    assert.equal(calls, 2);
+  } finally { globalThis.fetch = originalFetch; sqlite.close(); }
+});
+
+test("config explains each readiness gate without exposing private configuration", async () => {
+  const { db, sqlite } = database();
+  const now = Date.now();
+  const env = { DB: db, SITE_ORIGIN: "https://app.test", VAPID_PUBLIC_KEY: "public-test", VAPID_PRIVATE_KEY: "private-test" };
+  const read = async (configuration = env) => (await worker.fetch(new Request("https://alerts.test/config"), configuration)).json();
+  const set = (id, value) => sqlite.prepare("INSERT INTO poll_state(id,value) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value").run(id, value);
+  try {
+    assert.equal((await read({ ...env, VAPID_PRIVATE_KEY: "" })).readinessReason, "missing-vapid-config");
+    assert.equal((await read()).readinessReason, "awaiting-first-poll-tick");
+    set("last_tick", now);
+    assert.equal((await read()).readinessReason, "awaiting-first-successful-poll");
+    set("last_good_score", now - 21 * 60000);
+    assert.equal((await read()).readinessReason, "stale-score-feed");
+    set("last_good_score", now);
+    set("last_tick", now - 4 * 60000);
+    assert.equal((await read()).readinessReason, "stale-poll-tick");
+    set("last_tick", now);
+    const config = await read();
+    assert.equal(config.ready, true); assert.equal(config.readinessReason, "ready");
+    assert.equal(config.version, "1.1.3");
+    assert.equal(config.lastSuccessfulPollAt, new Date(now).toISOString());
+    assert.equal(config.lastTickAt, new Date(now).toISOString());
+    assert.ok(!JSON.stringify(config).includes("private-test"));
+  } finally { sqlite.close(); }
+});
 
 test("a full Saturday fits D1 query limits and unchanged games preserve clock-based transitions", async () => {
   const { db, sqlite } = database();
@@ -26,15 +77,37 @@ test("a full Saturday fits D1 query limits and unchanged games preserve clock-ba
   sqlite.close();
 });
 
-test("alerts fire on transitions, include the start of Q4, and skip an initial baseline", () => {
+test("alerts catch up first-seen live Q4 games and keep finals transition-only", () => {
   const now = Date.parse("2026-09-06T04:00:00Z"), g = game(); g.teams[0].rank = 5;
-  assert.deepEqual(rules.transitions(null, g, now), []);
+  assert.deepEqual(rules.transitions(null, g, now).map(e => e.trigger), ["one-score-fourth", "ranked-trailing-fourth"]);
+  assert.deepEqual(rules.transitions(null, { ...g, period: 3 }, now), []);
   const previous = { game: { ...g, period: 3 }, observedAt: now - 60000 };
   assert.deepEqual(rules.transitions(previous, g, now).map(e => e.trigger), ["one-score-fourth", "ranked-trailing-fourth"]);
   assert.deepEqual(rules.transitions({ game: g, observedAt: now - 60000 }, g, now), []);
   const final = { ...g, state: "final" };
+  assert.deepEqual(rules.transitions(null, final, now), []);
   assert.deepEqual(rules.transitions({ game: g, observedAt: now - 60000 }, final, now).map(e => e.trigger), ["upset-final"]);
   assert.deepEqual(rules.transitions({ game: final, observedAt: now - 60000 }, final, now), []);
+});
+test("overtime includes ties and upsets with accurate titles and stable dedupe IDs", async () => {
+  const now = Date.parse("2026-09-06T04:00:00Z"), g = game({ period: 5 }); g.teams[0].rank = 5;
+  const first = rules.transitions(null, g, now);
+  assert.deepEqual(first.map(e => e.trigger), ["one-score-fourth", "ranked-trailing-fourth"]);
+  assert.ok(first.every(e => e.payload.title.endsWith("Overtime")));
+  assert.deepEqual(rules.transitions({ game: { ...g, period: 4 }, observedAt: now - 60000 }, g, now), []);
+  const tied = structuredClone(g); tied.period = 6; tied.teams[0].score = tied.teams[1].score;
+  assert.deepEqual(rules.transitions(null, tied, now).map(e => e.trigger), ["one-score-fourth"]);
+  assert.match(rules.transitions(null, tied, now)[0].payload.body, /Tied/);
+  const wide = structuredClone(g); wide.teams[1].score = wide.teams[0].score + 9;
+  assert.equal(rules.conditions(wide, now)["one-score-fourth"], false);
+  const { db, sqlite } = database();
+  await saveGameStates(db, [{ ...g, period: 4 }], now);
+  await saveGameStates(db, [g], now + 60000);
+  await saveGameStates(db, [wide], now + 120000);
+  await saveGameStates(db, [tied], now + 180000);
+  const events = sqlite.prepare("SELECT id FROM alert_events ORDER BY id").all().map(row => row.id);
+  assert.deepEqual(events, [`${g.id}:one-score-fourth`, `${g.id}:ranked-trailing-fourth`]);
+  sqlite.close();
 });
 test("ACC reminder crosses ten minutes and game windows poll every minute", () => {
   const g = game({ state: "upcoming", period: 0, started: false }); g.teams[0].conferenceId = "1";

@@ -58,7 +58,12 @@ test("ESPN date ranges retain the 10:30pm ET Cal game and parse curatedRank 99",
   const event = { id: "1", date: "2026-09-06T02:30:00Z", status: { period: 1, clock: 50, type: { name: "STATUS_IN_PROGRESS", state: "in" } }, competitions: [{ competitors: [{ id: "1", homeAway: "away", score: "0", curatedRank: { current: 99 }, team: { id: "1", conferenceId: "2" } }, { id: "2", homeAway: "home", score: "7", curatedRank: { current: 24 }, team: { id: "2", conferenceId: 1 } }] }] };
   const board = normalizeScoreboard({ events: [event] }, "2026-09-03", undefined, "2026-09-07");
   assert.equal(board.games.length, 1); assert.equal(board.games[0].teams[0].rank, null); assert.equal(board.games[0].teams[0].rankKnown, true);
+  const monday = { ...event, id: "monday", date: "2026-09-08T00:00:00Z" };
+  const tuesday = { ...event, id: "tuesday", date: "2026-09-08T20:00:00Z" };
+  assert.deepEqual(normalizeScoreboard({ events: [event, monday, tuesday] }, "2026-09-03", undefined, "2026-09-07").games.map(g => g.id), ["1", "monday"]);
   assert.equal(normalizeScoreboard({ events: [event] }, "2026-09-06").games.length, 0);
   const url = new URL(scoreboardUrl("2026-09-03", "2026-09-07", true));
-  assert.equal(url.searchParams.get("dates"), "20260903-20260907"); assert.equal(url.searchParams.get("groups"), "1"); assert.equal(url.searchParams.get("limit"), "200");
+  assert.equal(url.searchParams.get("dates"), "20260903-20260908"); assert.equal(url.searchParams.get("groups"), "1"); assert.equal(url.searchParams.get("limit"), "200");
+  assert.equal(new URL(scoreboardUrl("2026-09-05")).searchParams.get("dates"), "20260905");
+  assert.equal(new URL(scoreboardUrl("2026-12-30", "2026-12-31")).searchParams.get("dates"), "20261230-20270101");
 });

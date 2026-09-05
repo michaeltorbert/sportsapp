@@ -108,7 +108,13 @@ async function api(request: Request, env: Env): Promise<Response> {
   if (url.pathname === "/config" && request.method === "GET") {
     const ticks = await env.DB.prepare("SELECT id,value FROM poll_state WHERE id IN ('last_tick','last_good_score')").all<{ id: string; value: number }>();
     const state = Object.fromEntries(ticks.results.map(row => [row.id, row.value]));
-    return json({ ready: !!env.VAPID_PUBLIC_KEY && !!env.VAPID_PRIVATE_KEY && state.last_tick > Date.now() - 180000 && state.last_good_score > Date.now() - 20 * 60000, publicKey: env.VAPID_PUBLIC_KEY || "", version: "1.1.1" });
+    const now = Date.now();
+    const readinessReason = !env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY ? "missing-vapid-config"
+      : !state.last_tick ? "awaiting-first-poll-tick"
+      : state.last_tick <= now - 180000 ? "stale-poll-tick"
+      : !state.last_good_score ? "awaiting-first-successful-poll"
+      : state.last_good_score <= now - 20 * 60000 ? "stale-score-feed" : "ready";
+    return json({ ready: readinessReason === "ready", readinessReason, lastTickAt: state.last_tick ? new Date(state.last_tick).toISOString() : null, lastSuccessfulPollAt: state.last_good_score ? new Date(state.last_good_score).toISOString() : null, publicKey: env.VAPID_PUBLIC_KEY || "", version: "1.1.3" });
   }
   const token = request.headers.get("Authorization")?.replace(/^Bearer /, "") || "";
   if (request.method === "POST" && url.pathname === "/subscriptions") {

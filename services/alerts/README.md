@@ -1,14 +1,23 @@
 # Background alerts
 
-Status for v1.1.2: the owner reported claiming the Cloudflare deployment on September 5, 2026. The Worker, D1 schema, and VAPID identity were deployed in v1.1.1. The temporary API credential now returns HTTP 401, so it cannot register the cron. No permanent Cloudflare management access is connected. See `deployment.json` for nonsecret resource identifiers.
+Status for v1.1.3: the patch is prepared, not deployed. The owner reported claiming the Cloudflare deployment and adding the one-minute cron on September 5, 2026. The external Worker, D1 schema, and VAPID identity were deployed in v1.1.1. The temporary API credential now returns HTTP 401. No permanent Cloudflare management access is connected. See `deployment.json` for nonsecret resource identifiers.
 
 The app now has the service URL configured and rechecks its readiness every 30 seconds while visible. It will not offer Enable alerts until `/config` is ready. Cron execution and device delivery are unverified. Agent HTTP requests to the public service returned Cloudflare HTTP 403 / 1010; do not bypass that block or claim the endpoint was verified.
 
-Remaining owner action: in Cloudflare Workers & Pages, select `saturday-signal-alerts`, then Settings > Triggers > Cron Triggers and add `* * * * *`. New schedules may take up to 15 minutes to propagate. Once a successful cron poll has occurred, reopen the Home Screen app and enable alerts. Inspect a real phone notification before marking device delivery verified.
+Next diagnostic: in Cloudflare Workers & Pages, select `saturday-signal-alerts`, confirm the existing `* * * * *` trigger under Settings > Triggers, and inspect its scheduled invocations in Logs/Observability. Do not add a duplicate trigger. New schedules may take up to 15 minutes to propagate. Capture the actual invocation error; `ready:false` in v1.1.1 alone cannot distinguish missing keys, a missing/stale heartbeat, or a missing/stale successful score fetch. After an authenticated v1.1.3 update, `/config` adds `readinessReason`, `lastTickAt`, and `lastSuccessfulPollAt` without revealing private keys or subscriptions. A tick is recorded after the key-presence check and is not proof that the score fetch succeeded.
 
 Future deployments require an authenticated connection to the claimed account. Reuse the existing Worker, D1 database, and VAPID identity. Never recreate the database or rotate keys as a way to restore management access. Temporary claim links and credentials have been removed.
 
+## Update this existing deployment
+
+1. Authenticate to the claimed account using a supported secure connection or local Wrangler login. Do not paste API tokens or private keys into chat.
+2. Prepare `services/alerts/wrangler.jsonc` from the example with the **existing** account and database IDs in `deployment.json`. Keep the Worker name, `DB` binding, site origin, VAPID secrets, observability, and `triggers.crons: ["* * * * *"]` unchanged. There is no new migration in v1.1.3.
+3. Deploy with `wrangler deploy --config services/alerts/wrangler.jsonc`. Verify `/config` reports version `1.1.3`, the existing cron is present, and the next scheduled invocation succeeds. `wrangler tail --config services/alerts/wrangler.jsonc --format json` can inspect new invocations while connected.
+4. Reopen the iPhone Home Screen app and enable alerts only after readiness becomes true. Verify a real device notification before marking delivery tested. Saving or publishing the separate Sites frontend does **not** deploy this external Worker.
+
 ## Deployment after a background host is connected
+
+The steps in this section are for a new installation only, not the already-claimed deployment above.
 
 This directory is an independent Worker, outside the Sites runtime. Use Cloudflare Workers Cron Triggers (`* * * * *`) plus **D1**. D1 replaces the proposed KV store because the alert ledger requires unique, atomic writes. No Apple developer account is needed.
 
@@ -23,11 +32,12 @@ The API accepts the configured `SITE_ORIGIN`. Subscription endpoints are limited
 
 ## Trigger semantics
 
-- Fourth-quarter one-score: enters the condition `live && period === 4 && margin <= 8`, including a game already close when the fourth quarter starts.
-- Fourth-quarter upset: enters `live && period === 4 && ranked team trails lower-ranked/unranked opponent`.
+- Fourth-quarter/overtime one-score: enters `live && period >= 4 && margin <= 8`, including ties and a game already close when the fourth quarter starts.
+- Fourth-quarter/overtime upset: enters `live && period >= 4 && ranked team trails lower-ranked/unranked opponent`. A tie is not an upset.
 - Upset final: transitions into a final result where the ranked favorite loses. Final UI category retention does not affect this trigger.
 - Optional ACC kickoff: crosses into the ten-minute pre-kickoff window. The reminder can be up to one polling interval late.
-- The first observation establishes a baseline. Starting the service during the fourth quarter does not replay an existing condition; previously unseen finals do not send retrospective alerts.
+- First observation catches up qualifying live Q4/overtime games. Previously unseen finals and upcoming games establish a baseline, so startup does not replay finished upsets. Previously observed games keep their D1 snapshots across restarts and gaps.
+- Existing trigger IDs `one-score-fourth` and `ranked-trailing-fourth` intentionally cover both Q4 and overtime. Do not rename them or clear their history on upgrade.
 - A unique `(game_id, trigger)` ledger survives restarts, corrections, lead changes, and deployments. Each event/subscription pair is claimed atomically before delivery. Subscriptions created after an event are excluded.
 - Delivery is **at most one send attempt**, not guaranteed device delivery. Ambiguous failures and rejected sends are not retried, because a retry could violate “no repeats.” The database records accepted, rejected, and uncertain attempts. A failure after claiming but before sending can miss an alert. This is the intentional no-repeat tradeoff; distributed push cannot promise exactly-once user-visible delivery.
 - Keep event and delivery ledgers when redeploying. Do not erase history as part of updates. Replacing the D1 database would lose deduplication history.
@@ -35,6 +45,10 @@ The API accepts the configured `SITE_ORIGIN`. Subscription endpoints are limited
 ## Verification
 
 Run `node --test tests/football.test.mjs tests/alerts.test.mjs` from the repository root. Tests include the RFC 8291 published encryption vector, VAPID signature verification, transition sequences and SQL duplicate claims. These do not substitute for a real device push test after deployment.
+
+Run `NODE_USE_ENV_PROXY=1 node scripts/check-alerts-poll.mjs` to execute the current poller against ESPN using an empty in-memory subscription database. Only the ESPN scoreboard request is permitted; no pushes or external database writes occur. On September 5 at 23:46 UTC the patched query read 76 games (8 Friday, 68 Saturday), generated two qualifying one-score candidate events, and scheduled the next poll one minute later. This is a local diagnostic, not evidence of Cloudflare execution or notification delivery.
+
+The endpoint's date-range upper bound is exclusive. `scoreboardUrl` converts the app's inclusive end day into the following date; normalization still filters out games outside the requested Eastern-date window. The old range incorrectly omitted Saturday and falsely selected the idle polling interval. That omission does not by itself explain v1.1.1's `ready:false`, because even a valid all-final board updates the successful-poll timestamp.
 
 ## References
 

@@ -5,24 +5,27 @@ export type AlertEvent = { id: string; gameId: string; gameDay: string; trigger:
 
 export function conditions(game: Game, now: number): Record<Trigger, boolean> {
   const tags = classify({ ...game, retainedCategories: undefined });
-  const fourth = game.state === "live" && game.period === 4;
+  const lateGame = game.state === "live" && game.period >= 4;
   const untilKickoff = Date.parse(game.date) - now;
   return {
-    "one-score-fourth": fourth && tags.close,
-    "ranked-trailing-fourth": fourth && tags.upset,
+    "one-score-fourth": lateGame && tags.close,
+    "ranked-trailing-fourth": lateGame && tags.upset,
     "upset-final": game.state === "final" && tags.upset,
     "acc-kickoff": game.state === "upcoming" && game.timeValid && tags.acc && untilKickoff > 0 && untilKickoff <= 600000,
   };
 }
 export function transitions(previous: Snapshot | null, game: Game, now: number): AlertEvent[] {
-  // Establish a baseline on first observation. Never replay old fourth-quarter or final alerts.
-  if (!previous) return [];
-  const before = conditions(previous.game, previous.observedAt), after = conditions(game, now);
-  return (Object.keys(after) as Trigger[]).filter(trigger => after[trigger] && !before[trigger]).map(trigger => {
+  // Catch up a newly observed live game. Already-finished games and upcoming
+  // kickoffs still establish a baseline, so startup cannot replay old finals.
+  if (!previous && game.state !== "live") return [];
+  const before = previous ? conditions(previous.game, previous.observedAt) : null, after = conditions(game, now);
+  return (Object.keys(after) as Trigger[]).filter(trigger => after[trigger] && !before?.[trigger]).map(trigger => {
     const [away, home] = game.teams;
     const matchup = `${away.name} vs ${home.name}`;
     const score = `${away.abbreviation} ${away.score ?? "–"}, ${home.abbreviation} ${home.score ?? "–"}`;
-    const title = trigger === "one-score-fourth" ? "One-score game · 4th quarter" : trigger === "ranked-trailing-fourth" ? "Upset watch · 4th quarter" : trigger === "upset-final" ? "Upset final" : "ACC kickoff in 10 minutes";
+    const stage = game.period > 4 ? "Overtime" : "4th quarter";
+    const title = trigger === "one-score-fourth" ? `One-score game · ${stage}` : trigger === "ranked-trailing-fourth" ? `Upset watch · ${stage}` : trigger === "upset-final" ? "Upset final" : "ACC kickoff in 10 minutes";
+    // Keep the existing trigger IDs across Q4 and overtime and across upgrades.
     const id = `${game.id}:${trigger}`, day = easternDate(new Date(game.date));
     const body = trigger === "acc-kickoff" ? `${matchup}${game.broadcast ? ` · ${game.broadcast}` : ""}` : `${score}${trigger === "one-score-fourth" ? ` · ${margin(game) === 0 ? "Tied" : `${margin(game)}-point game`}` : ""}`;
     return { id, gameId: game.id, gameDay: day, trigger, createdAt: now, payload: { title, body, eventId: id, url: `/?date=${day}#game-${game.id}` } };

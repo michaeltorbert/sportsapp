@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { easternDate, type Game, type Scoreboard, type Team } from "./football";
+import { easternDate, shiftDate, type Game, type Scoreboard, type Team } from "./football";
 
 const numberLike = z.union([z.string(), z.number()]);
 const statusSchema = z.object({ period: z.number().optional(), clock: z.number().optional(), type: z.object({ name: z.string(), state: z.string(), completed: z.boolean().optional(), shortDetail: z.string().optional(), detail: z.string().optional(), description: z.string().optional() }) });
@@ -37,7 +37,9 @@ export function normalizeScoreboard(raw: unknown, date: string, fetchedAt = new 
 
 export function scoreboardUrl(date: string, endDate = date, accOnly = false) {
   const url = new URL("https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard");
-  url.searchParams.set("dates", date.replaceAll("-", "") + (endDate !== date ? `-${endDate.replaceAll("-", "")}` : ""));
+  // ESPN's range end is exclusive. Our app date windows are inclusive.
+  // A Friday-Saturday request ending in Saturday returns only Friday's board.
+  url.searchParams.set("dates", date.replaceAll("-", "") + (endDate !== date ? `-${shiftDate(endDate, 1).replaceAll("-", "")}` : ""));
   url.searchParams.set("groups", accOnly ? "1" : "80");
   // Oversized limits may silently fall back to 25. ESPN returns the full day with 200.
   url.searchParams.set("limit", "200");
