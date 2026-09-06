@@ -1,12 +1,6 @@
 name: Cloudflare preview
 on:
   workflow_dispatch:
-    inputs:
-      ref:
-        description: Reviewed branch or commit to test on the preview website
-        required: true
-        default: main
-        type: string
 permissions:
   contents: read
 concurrency:
@@ -29,17 +23,17 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '22'
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Record source commit
+        run: echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Build and test preview
         run: |
-          echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-          SOURCE_COMMIT=$(git rev-parse HEAD) npm test
+          npm test
           npm run test:runtime
           npm run deploy:check
       - name: Deploy preview website

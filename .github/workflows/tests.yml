@@ -26,12 +26,13 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Record source commit
+        run: echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Build and test
         shell: bash
         run: |
           set -o pipefail
           mkdir -p .release-evidence
-          export SOURCE_COMMIT="$(git rev-parse HEAD)"
           npm test 2>&1 | tee .release-evidence/tests.log
       - name: Validate production deployment package
         run: |
@@ -42,7 +43,6 @@ jobs:
         env:
           CLOUDFLARE_ENV: preview
         run: |
-          export SOURCE_COMMIT="$(git rev-parse HEAD)"
           npm run build
           npm run test:runtime
           npm run deploy:check

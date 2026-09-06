@@ -4,8 +4,11 @@ import { readFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
+import { readAlertConfig } from "./verify-deployment.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+// Validate the same configuration used by post-deploy checks before any upload.
+readAlertConfig();
 const socket = createServer();
 socket.listen(0, "127.0.0.1");
 await once(socket, "listening");

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+// Keep this gate dependency-free: the release workflow runs it before npm ci.
 export function checkRelease(tag, cwd = process.cwd()) {
   if (!/^v\d+\.\d+\.\d+$/.test(tag || "")) throw new Error("Choose a stable release tag such as v1.2.0.");
   const git = (...args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();

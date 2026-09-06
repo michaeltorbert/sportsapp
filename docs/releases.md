@@ -19,7 +19,7 @@ Publishing a GitHub release with the Codex GitHub App can trigger this workflow.
 
 ## Preview
 
-After the workflow exists on main, run **Cloudflare preview** from GitHub Actions and choose the reviewed branch or commit. It builds/tests that source, deploys only the preview website, and checks its exact commit, page, manifest, service worker, and current scores. It never deploys the alert Worker, writes subscription records, or sends notifications. Preview is a public provider address, not a private review link; do not put private data there.
+After the workflow exists on main, run **Cloudflare preview** from GitHub Actions and select a reviewed, allowed branch in the **Run workflow** branch selector. The workflow checks out its own run ref; there is no separate ref input that could bypass the environment policy. It builds/tests that source, deploys only the preview website, and checks its exact commit, page, manifest, service worker, and current scores. It never deploys the alert Worker, writes subscription records, or sends notifications. Preview is a public provider address, not a private review link; do not put private data there.
 
 For a locally authorized preview deployment:
 
@@ -40,7 +40,7 @@ Use an existing authenticated Wrangler session or a securely supplied token. Nev
 
 1. Merge the reviewed PR after its Tests check passes.
 2. Give every published change a new semantic version in `package.json`, `package-lock.json`, `lib/releases.ts`, and `CHANGELOG.md`. Do not reuse or move existing tags.
-3. Create the immutable version tag at the merged commit and publish its stable GitHub release using the Codex GitHub App. This triggers **Release to Cloudflare**. An existing stable tag can be redeployed through that workflow's manual `tag` input; the same validation applies.
+3. Create the immutable version tag at the merged commit and publish its stable GitHub release using the Codex GitHub App. This triggers **Release to Cloudflare**. To redeploy an existing stable tag manually, dispatch the workflow on that tag as the workflow run ref (for example, through GitHub's workflow-dispatch API with `ref: v1.2.0`). Dispatching on main fails the production tag policy and release validation; there is no separate tag input.
 4. The workflow checks the tag, installs locked dependencies, builds/tests the tagged source, and validates both deployment packages. It then deploys the existing alert Worker with both production origins allowed, followed by the website. No migrations are applied and no secrets are replaced.
 5. The workflow verifies `/api/health` matches both the package version and exact source commit; checks the home page, manifest, service worker, and current score API; and verifies the alert service reports the same release and is ready from both production origins. It retries transient propagation/feed failures for a bounded period and uploads test and verification logs. Failure is reported as a failed workflow, never as a successful release deployment.
 6. Confirm daily/ACC/Top 25 switching and score refreshes in the deployed browser. Reinstall/open the app at the new address and verify one authorized real-device notification before retiring the old installation. CI never sends push messages as a smoke test.
@@ -49,7 +49,17 @@ Keep Sites available during the transition. GitHub release notes should distingu
 
 ## Score-feed behavior
 
-The browser still reads ESPN directly first. The server first uses the date-specific ESPN API; if Cloudflare receives an error such as the observed HTTP 403, it can use ESPN's CDN feed only when that feed's calendar proves coverage of the entire requested Eastern-day range. The CDN ignores date queries. Unknown weeks and partial boundary days are rejected instead of silently returning an empty/wrong scoreboard. Dates outside the current CDN week still rely on the date-specific API or a recent cached success.
+The browser still reads ESPN directly first. The server first uses the date-specific ESPN API; if Cloudflare receives an error such as the observed HTTP 403, it can use ESPN's CDN feed only when that feed's calendar proves coverage of the entire requested Eastern-day range. The CDN ignores date queries. Unknown weeks and partial boundary days are rejected instead of silently returning an empty/wrong scoreboard. Dates outside the current CDN week still rely on the date-specific API or a recent cached success. On a partially covered ESPN week-boundary day, the server may therefore be unavailable if the date API is blocked. Verification intentionally fails in that case; do not downgrade missing scores to a successful release. Repeated retries cannot resolve missing date coverage.
+
+## Toolchain and existing alerts
+
+The stable pinned Cloudflare Vite plugin 1.54.4 and Wrangler 4.129.0 both ship Miniflare `5.20260903.0-alpha` as their upstream local runtime dependency. This is an upstream toolchain choice, not a production application dependency override. Locked installation, build, and compiled-runtime checks run on both macOS locally and Node 22/Linux in CI. Update the toolchain together through a tested PR. Builds have a three-minute limit and a ten-second shutdown grace period.
+
+The live alert Worker settings were read again on September 6, 2026. The committed configuration matches its compatibility date, empty compatibility flags, D1 binding, original SITE_ORIGIN and VAPID_SUBJECT, minute cron, and enabled observability. There were no extra plaintext variables, tail consumers, or placement settings. The VAPID keys were confirmed as secret bindings; their values were not read. Account and database IDs are deployment identifiers, not credentials. Recheck live settings before the first deployment if they change independently of GitHub.
+
+The app uses a normal `<img>` for ESPN team logos and local PWA icons; it has no `next/image`, `<Image>`, or `/_vinext/image` consumers. The removed optimizer was unused starter code.
+
+Website and alert code deliberately share one release version and are deployed as a pair. This keeps the reported release and verification straightforward. A failed second deployment is a partial deployment, requires attention, and is covered by the separate rollback instructions below. Do not add conditional alert deployment without also separating its version and verification contract. Deployment commands explicitly require `dist/server/wrangler.json`, so a missing compiled build cannot silently fall back to the source configuration.
 
 ## Failure and rollback
 

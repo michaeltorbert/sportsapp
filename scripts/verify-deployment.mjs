@@ -2,8 +2,17 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import assert from "node:assert/strict";
+import { parse, printParseErrorCode } from "jsonc-parser";
 
 const root = new URL("../", import.meta.url);
+export function readAlertConfig(source = readFileSync(new URL("services/alerts/wrangler.jsonc", root), "utf8")) {
+  const errors = [];
+  const config = parse(source, errors, { allowTrailingComma: true });
+  assert.equal(errors.length, 0, `Invalid alert configuration: ${errors.map(error => printParseErrorCode(error.error)).join(", ")}`);
+  assert.equal(typeof config?.vars?.SITE_ORIGIN, "string", "Alert SITE_ORIGIN is required");
+  assert.equal(new URL(config.vars.SITE_ORIGIN).origin, config.vars.SITE_ORIGIN, "SITE_ORIGIN must be an exact origin");
+  return config;
+}
 export async function verifyDeployment({ origin, commit, version, fetcher = fetch, alertsUrl, alertOrigins = [] }) {
   assert.match(commit, /^[a-f0-9]{40}$/);
   const request = async (url, options = {}) => {
@@ -37,7 +46,7 @@ export async function verifyDeployment({ origin, commit, version, fetcher = fetc
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const config = JSON.parse(readFileSync(new URL("services/alerts/wrangler.jsonc", root), "utf8"));
+  const config = readAlertConfig();
   const { version } = JSON.parse(readFileSync(new URL("package.json", root), "utf8"));
   const { serviceUrl: alertsUrl } = JSON.parse(readFileSync(new URL("public/alerts-config.json", root), "utf8"));
   const origin = process.env.DEPLOYMENT_URL || "https://saturday-signal.scythe-wildflower.workers.dev";

@@ -5,7 +5,15 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { checkRelease } from "../scripts/check-release.mjs";
-import { verifyDeployment } from "../scripts/verify-deployment.mjs";
+import { readAlertConfig, verifyDeployment } from "../scripts/verify-deployment.mjs";
+
+test("release configuration accepts JSONC comments and trailing commas but rejects malformed origins", () => {
+  const source = '{ // Allowed by Wrangler\n "vars": { "SITE_ORIGIN": "https://old.test", }, }';
+  assert.equal(readAlertConfig(source).vars.SITE_ORIGIN, "https://old.test");
+  for (const invalid of ['{"vars":', '{"vars":{}}', '{"vars":{"SITE_ORIGIN":"https://old.test/path"}}'])
+    assert.throws(() => readAlertConfig(invalid));
+  assert.ok(readAlertConfig().vars.SITE_ORIGIN);
+});
 
 function repository(t) {
   const cwd = mkdtempSync(join(tmpdir(), "release-test-"));

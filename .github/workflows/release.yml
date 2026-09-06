@@ -3,11 +3,6 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: Existing stable release tag to deploy (for example v1.2.0)
-        required: true
-        type: string
 permissions:
   contents: read
 concurrency:
@@ -22,14 +17,14 @@ jobs:
       name: production
       url: https://saturday-signal.scythe-wildflower.workers.dev
     env:
-      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
       CLOUDFLARE_ACCOUNT_ID: '092f7a0a1516725ba2217cfb3760b38f'
       WRANGLER_SEND_METRICS: 'false'
       WRANGLER_LOG_PATH: .wrangler/logs
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          ref: ${{ github.event.release.tag_name || github.ref }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
@@ -37,8 +32,11 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Validate release identity
+        shell: bash
         run: |
-          npm run release:check
+          set -o pipefail
+          mkdir -p .release-evidence
+          npm run release:check 2>&1 | tee .release-evidence/identity.log
           echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - run: npm ci --no-audit --no-fund
       - name: Build and test exact release source
