@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { accWeek, easternDate, gameDay, retainFinalCategories, shiftDate, validDate, type Scoreboard, type Team } from "./football";
 import { loadScores } from "./score-client";
+import { expiredBoardKey, matchingBoard } from "./scoreboard-views";
 
 function readBoard(key: string): Scoreboard | null {
   try {
@@ -12,7 +13,9 @@ function readBoard(key: string): Scoreboard | null {
 export function useScoreboard(weekly: boolean) {
   const [selection, setSelection] = useState<string | null>(null);
   const [today, setToday] = useState(""), [date, setDate] = useState("");
-  const [data, setData] = useState<Scoreboard | null>(null), [error, setError] = useState("");
+  const [daily, setDaily] = useState<Scoreboard | null>(null), [weekBoard, setWeekBoard] = useState<Scoreboard | null>(null);
+  const [dailyError, setDailyError] = useState(""), [weeklyError, setWeeklyError] = useState("");
+  const [overnightError, setOvernightError] = useState("");
   const [refreshing, setRefreshing] = useState(false), [online, setOnline] = useState(true);
   const [now, setNow] = useState(0), [timezone, setTimezone] = useState("local time");
   const held = useRef(""), controller = useRef<AbortController | null>(null);
@@ -23,7 +26,7 @@ export function useScoreboard(weekly: boolean) {
     if (query && validDate(query)) setSelection(query);
     try {
       held.current = localStorage.getItem("ss:game-day") || "";
-      for (const key of Object.keys(localStorage)) if (key.startsWith("ss:board:") && key.slice(9, 19) < shiftDate(easternDate(), -1)) localStorage.removeItem(key);
+      for (const key of Object.keys(localStorage)) if (expiredBoardKey(key, shiftDate(easternDate(), -1))) localStorage.removeItem(key);
     } catch { /* Browsing still works when storage is unavailable. */ }
     setNow(Date.now()); setOnline(navigator.onLine);
     setTimezone(new Intl.DateTimeFormat(undefined, { timeZoneName: "short" }).formatToParts(new Date()).find(p => p.type === "timeZoneName")?.value || "local time");
@@ -47,35 +50,52 @@ export function useScoreboard(weekly: boolean) {
       if (controller.current !== c) return;
       held.current = effective; setToday(effective);
       try { localStorage.setItem("ss:game-day", effective); } catch { /* Optional. */ }
-      const activeDate = weekly ? effective : selection || effective;
-      const range = weekly ? accWeek(effective) : { start: activeDate, end: activeDate };
+      const activeDate = selection || effective;
       setDate(activeDate);
-      const key = `ss:board:${range.start}:${range.end}`;
-      const raw = !weekly && prior?.date === activeDate ? prior : await loadScores(range.start, c.signal, fetch, range.end, weekly);
-      if (controller.current !== c) return;
-      const old = cache.current.get(key) || readBoard(key);
-      const next = retainFinalCategories(raw, old);
-      next.games = next.games.map(g => ({ ...g, teams: g.teams.map(t => ({ ...t, changed: !!old?.games.some(p => p.id === g.id && p.teams.some(o => o.id === t.id && o.score !== null && o.score !== t.score)) })) as [Team, Team] }));
-      cache.current.set(key, next);
-      if (cache.current.size > 8) cache.current.delete(cache.current.keys().next().value!);
-      try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* Optional. */ }
-      setData(next); setError(overnightWarning); setNow(Date.now());
+      setOvernightError(overnightWarning);
+      // Fetch both scopes independently. Switching tabs never discards the other
+      // scope or restarts polling, and a failed scope cannot blank a healthy one.
+      const update = async (range: { start: string; end: string }, accOnly: boolean) => {
+        const setBoard = accOnly ? setWeekBoard : setDaily;
+        const setError = accOnly ? setWeeklyError : setDailyError;
+        const key = `ss:board:${range.start}:${range.end}`;
+        try {
+          const raw = !accOnly && prior?.date === activeDate ? prior : await loadScores(range.start, c.signal, fetch, range.end, accOnly);
+          if (controller.current !== c) return;
+          const old = cache.current.get(key) || readBoard(key);
+          const next = retainFinalCategories(raw, old);
+          next.games = next.games.map(g => ({ ...g, teams: g.teams.map(t => ({ ...t, changed: !!old?.games.some(p => p.id === g.id && p.teams.some(o => o.id === t.id && o.score !== null && o.score !== t.score)) })) as [Team, Team] }));
+          cache.current.set(key, next);
+          if (cache.current.size > 8) cache.current.delete(cache.current.keys().next().value!);
+          try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* Optional. */ }
+          setBoard(next); setError(""); setNow(Date.now());
+        } catch {
+          if (controller.current === c) setError(navigator.onLine ? "Could not refresh scores. Retrying automatically." : "You're offline. Reconnect to refresh scores.");
+        }
+      };
+      await Promise.all([update({ start: activeDate, end: activeDate }, false), update(accWeek(effective), true)]);
     } catch {
-      if (controller.current === c) setError(navigator.onLine ? "Could not refresh scores. Retrying automatically." : "You're offline. Reconnect to refresh scores.");
+      if (controller.current === c) setOvernightError(navigator.onLine ? "Could not refresh scores. Retrying automatically." : "You're offline. Reconnect to refresh scores.");
     } finally {
       window.clearTimeout(timeout);
       if (controller.current === c) { controller.current = null; setRefreshing(false); }
     }
-  }, [selection, weekly]);
+  }, [selection]);
 
   useEffect(() => {
-    setData(null); setError(""); refresh();
+    setDailyError(""); setWeeklyError(""); setOvernightError(""); refresh();
     const interval = window.setInterval(refresh, 30000);
     const resume = () => { setOnline(navigator.onLine); if (!document.hidden && navigator.onLine) refresh(); };
-    const offline = () => { setOnline(false); setError("You're offline. Reconnect to refresh scores."); };
+    const offline = () => { setOnline(false); setOvernightError("You're offline. Reconnect to refresh scores."); };
     document.addEventListener("visibilitychange", resume); window.addEventListener("online", resume); window.addEventListener("offline", offline);
     return () => { window.clearInterval(interval); controller.current?.abort(); controller.current = null; document.removeEventListener("visibilitychange", resume); window.removeEventListener("online", resume); window.removeEventListener("offline", offline); };
   }, [refresh]);
   const chooseDate = (value: string | null) => { setSelection(value); setDate(value || held.current || easternDate()); };
-  return { date, today, data, error, refreshing, online, now, timezone, refresh, setDate: chooseDate, followToday: selection === null };
+  const dailyData = matchingBoard(daily, date);
+  // ACC always covers the current football week; manual dates apply to daily tabs.
+  const range = today ? accWeek(today) : null;
+  const weeklyData = range ? matchingBoard(weekBoard, range.start, range.end) : null;
+  const data = weekly ? weeklyData : dailyData;
+  const error = (weekly ? weeklyError : dailyError) || overnightError;
+  return { date, today, data, dailyData, weeklyData, error, refreshing, online, now, timezone, refresh, setDate: chooseDate, followToday: selection === null };
 }
