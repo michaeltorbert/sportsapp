@@ -106,3 +106,31 @@ test("empty weekly Top 25 copy explains the weekly scope without offering hidden
   assert.match(html, /No Top 25 games this week/);
   assert.doesNotMatch(html, /Choose another date/); assert.equal(badge(html, "top25"), 0);
 });
+
+test("unranked SEC upset cards explain the favorite without inventing a ranking", () => {
+  const florida = game({ id: "florida-ecu" });
+  Object.assign(florida.teams[0], { name: "Florida", conferenceId: "8", rank: null, score: 7 });
+  Object.assign(florida.teams[1], { name: "East Carolina", conferenceId: "151", rank: null, score: 21 });
+  florida.pregameLine = { favoriteId: "a", spread: 14, source: "ESPN" };
+  const boards = fixtures(); boards.daily = scoreboard([florida]);
+  const { html } = render("upset", { boards });
+  assert.deepEqual(cardIds(html), ["florida-ecu"]);
+  assert.match(html, /East Carolina leads Florida · pregame favorite/);
+  assert.match(html, /Upset watch/);
+  assert.doesNotMatch(html, /No\. (null|undefined)/);
+});
+
+test("retained upset finals distinguish a comeback from a completed conference upset", () => {
+  const final = game({ id: "retained", state: "final", retainedCategories: { acc: false, top25: false, close: false, upset: true } });
+  Object.assign(final.teams[0], { name: "Florida", conferenceId: "8", rank: null, score: 28 });
+  Object.assign(final.teams[1], { name: "East Carolina", conferenceId: "151", rank: null, score: 21 });
+  const boards = fixtures(); boards.daily = scoreboard([final]);
+  const comeback = render("upset", { boards }).html;
+  assert.match(comeback, /Earlier upset watch/);
+  assert.doesNotMatch(comeback, /Upset final|East Carolina beat Florida/);
+  final.teams[0].score = 7;
+  const upset = render("upset", { boards }).html;
+  assert.match(upset, /Conference watch/);
+  assert.match(upset, /East Carolina beat Florida · SEC conference watch/);
+  assert.doesNotMatch(upset, /pregame favorite|No\. (null|undefined)/);
+});
