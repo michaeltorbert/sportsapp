@@ -26,8 +26,8 @@ export function urgencyStage(game: Game) {
 /** Product weights calibrated by the pairwise scenarios in watch-priority.test.mjs. */
 export function gamePriority(game: Game) {
   const stage = urgencyStage(game), margin = gameMargin(game);
-  const lopsidedLate = stage >= 3 && Number.isFinite(margin) && margin >= 17;
-  const relevance = teamRelevance(game) * (lopsidedLate ? 0.35 : 1);
+  const lopsided = Number.isFinite(margin) && (margin >= 25 || (stage >= 3 && margin >= 17));
+  const relevance = teamRelevance(game) * (lopsided ? 0.35 : 1);
   const drama = stage * (margin <= 8 ? 6 : margin <= 16 ? 4 : 0) + (stage >= 5 && margin <= 3 ? 4 : 0);
   let upset = 0;
   const expected = gameExpectation(game);

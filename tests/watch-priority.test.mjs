@@ -29,6 +29,10 @@ test("confirmed viewing preferences hold for concrete games in either input orde
     match(`close-${clock}`, { clock, score: 21, otherScore: 28 }),
     match(`down30-${clock}`, { clock, acc: true, rank: 3, otherRank: 20, score: 7, otherScore: 37 }),
   ]);
+  for (const period of [1, 2]) pairs.push([
+    match(`close-vs-early-${period}`, { clock: 360, score: 21, otherScore: 28 }),
+    match(`early-down30-${period}`, { period, acc: true, rank: 3, otherRank: 20, score: 7, otherScore: 37 }),
+  ]);
   for (const [higher, lower] of pairs) {
     for (const order of [[higher, lower], [lower, higher]])
       assert.equal(sortGames(order)[0].id, higher.id, `${higher.id} should beat ${lower.id}: ${JSON.stringify([gamePriority(higher), gamePriority(lower)])}`);
