@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.3.0 · 2026-09-06
+
+- Combine team relevance, live drama, and upset significance into one shared ordering rule. Keep early ties low in urgency and ranked blowouts below close finishes.
+- Add validated pregame favorite evidence and clearly labeled unranked ACC/SEC conference watches. Preserve existing ranking-only phone triggers and explain their differences from watchlist badges.
+- Improve favorite lookup fairness and failure backoff, retain known lines through feed omissions, and keep started-delay upset watches through comeback finals.
+- Add scenario and rendered regression coverage. Track nonblocking continuity and refinement work separately in issues #13 and #14.
+
 ## 1.2.0 · 2026-09-06 · prepared, not deployed
 
 - Prepare the website for Cloudflare Workers at its provider address, with GitHub PR tests, optional preview deployment, and a tagged-release production workflow.
