@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+const packageVersion = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
 test("renders the mobile scoreboard shell and app metadata", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -39,6 +41,6 @@ test("renders the mobile scoreboard shell and app metadata", async () => {
   assert.equal(health.status, 200);
   assert.equal(health.headers.get("cache-control"), "no-store");
   const metadata = await health.json();
-  assert.equal(metadata.version, "1.2.0");
+  assert.equal(metadata.version, packageVersion);
   assert.match(metadata.commit, /^(development|[a-f0-9]{40})$/);
 });
