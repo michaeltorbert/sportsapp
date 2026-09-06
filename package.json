@@ -1,18 +1,23 @@
 {
   "name": "saturday-signal",
-  "version": "1.1.5",
+  "version": "1.2.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
-    "install:ci": "bash scripts/install-ci.sh",
+    "install:ci": "npm ci --no-audit --no-fund",
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
-    "build": "bash scripts/build-verified.sh",
+    "build": "node scripts/run-with-timeout.mjs 3m 10s node_modules/vinext/dist/cli.js build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "npm run build && node --test tests/*.test.mjs",
-    "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "db:generate": "drizzle-kit generate",
+    "deploy:check": "WRANGLER_LOG_PATH=.wrangler/logs wrangler deploy --dry-run",
+    "deploy:app": "WRANGLER_LOG_PATH=.wrangler/logs wrangler deploy",
+    "deploy:alerts": "WRANGLER_LOG_PATH=.wrangler/logs wrangler deploy --config services/alerts/wrangler.jsonc",
+    "release:check": "node scripts/check-release.mjs",
+    "release:verify": "node scripts/verify-deployment.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

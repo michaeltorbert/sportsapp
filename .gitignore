@@ -41,7 +41,9 @@ next-env.d.ts
 /.sites-runtime/
 /outputs/
 /work/
-/services/alerts/wrangler.jsonc
 /services/alerts/.wrangler/
 /services/alerts/.dev.vars*
 /services/alerts/.secrets*
+
+/.dev.vars*
+/.release-evidence/

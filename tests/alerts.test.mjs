@@ -68,7 +68,7 @@ test("config explains each readiness gate without exposing private configuration
     set("last_tick", now);
     const config = await read();
     assert.equal(config.ready, true); assert.equal(config.readinessReason, "ready");
-    assert.equal(config.version, "1.1.4");
+    assert.equal(config.version, "1.2.0");
     assert.equal(config.lastSuccessfulPollAt, new Date(now).toISOString());
     assert.equal(config.lastTickAt, new Date(now).toISOString());
     assert.ok(!JSON.stringify(config).includes("private-test"));
@@ -184,4 +184,33 @@ test("subscriptions validate push keys, require device ownership, and honor opt-
   assert.equal((await worker.fetch(request(path, "DELETE", null, credentials.token), env)).status, 200);
   assert.equal((await (await worker.fetch(request(path, "GET", null, credentials.token), env)).json()).active, false);
   sqlite.close();
+});
+
+test("migration accepts only exact old/new alert origins and keeps device ownership checks", async () => {
+  const { db, sqlite } = database();
+  try {
+    const old = "https://old.test", current = "https://app.workers.dev";
+    const env = { DB: db, SITE_ORIGIN: old, ADDITIONAL_SITE_ORIGINS: current };
+    for (const origin of [old, current]) {
+      const response = await worker.fetch(new Request("https://alerts.test/config", { headers: { Origin: origin } }), env);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("access-control-allow-origin"), origin);
+      const preflight = await worker.fetch(new Request("https://alerts.test/subscriptions", { method: "OPTIONS", headers: { Origin: origin } }), env);
+      assert.equal(preflight.status, 204);
+      assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
+      const rejectedBody = await worker.fetch(new Request("https://alerts.test/subscriptions", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: "not-json" }), env);
+      assert.equal(rejectedBody.status, 400);
+      assert.equal(rejectedBody.headers.get("access-control-allow-origin"), origin);
+      const noToken = await worker.fetch(new Request(`https://alerts.test/subscriptions/${"a".repeat(43)}`, { method: "DELETE", headers: { Origin: origin } }), env);
+      assert.equal(noToken.status, 404);
+    }
+    for (const origin of ["null", "https://app.workers.dev.attacker.test", "https://preview.app.workers.dev", "http://app.workers.dev"]) {
+      const response = await worker.fetch(new Request("https://alerts.test/config", { headers: { Origin: origin } }), env);
+      assert.equal(response.status, 403);
+      assert.equal(response.headers.get("access-control-allow-origin"), null);
+    }
+    assert.equal((await worker.fetch(new Request("https://alerts.test/subscriptions", { method: "POST" }), env)).status, 403);
+    const legacy = await worker.fetch(new Request("https://alerts.test/config", { headers: { Origin: old } }), { DB: db, SITE_ORIGIN: old });
+    assert.equal(legacy.status, 200);
+  } finally { sqlite.close(); }
 });

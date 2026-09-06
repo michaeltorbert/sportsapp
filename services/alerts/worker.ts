@@ -1,3 +1,4 @@
+import { VERSION } from "../../lib/releases";
 import { normalizeScoreboard, scoreboardCdnUrl, scoreboardUrl } from "../../lib/espn-data";
 import { easternDate, shiftDate, type Game } from "../../lib/football";
 import { nextPollAt, transitions, type AlertEvent, type Snapshot } from "./rules";
@@ -11,7 +12,7 @@ export interface Statement {
   run(): Promise<Result>;
 }
 export interface Database { prepare(sql: string): Statement; batch(statements: Statement[]): Promise<Result[]> }
-export type Env = { DB: Database; SITE_ORIGIN: string; VAPID_PUBLIC_KEY: string; VAPID_PRIVATE_KEY: string; VAPID_SUBJECT: string };
+export type Env = { DB: Database; SITE_ORIGIN: string; ADDITIONAL_SITE_ORIGINS?: string; VAPID_PUBLIC_KEY: string; VAPID_PRIVATE_KEY: string; VAPID_SUBJECT: string };
 type StoredSubscription = { id: string; endpoint: string; p256dh: string; auth: string; token_hash: string; kickoff: number; active: number; created_at: number };
 type StoredEvent = { id: string; trigger: string; payload: string; created_at: number };
 const setValue = (db: Database, id: string, value: number) => db.prepare("INSERT INTO poll_state(id,value) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value").bind(id, value);
@@ -110,11 +111,22 @@ async function readBody(request: Request) {
   const buffer = new Uint8Array(size); let offset = 0; for (const chunk of chunks) { buffer.set(chunk, offset); offset += chunk.length; }
   return JSON.parse(new TextDecoder().decode(buffer));
 }
+function allowedOrigin(origin: string | null, env: Env): origin is string {
+  return !!origin && [env.SITE_ORIGIN, ...(env.ADDITIONAL_SITE_ORIGINS || "").split(",").map(value => value.trim())].includes(origin);
+}
+function corsHeaders(origin: string | null, env: Env): Record<string, string> {
+  return {
+    ...(allowedOrigin(origin, env) ? { "Access-Control-Allow-Origin": origin } : {}),
+    "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Cache-Control": "no-store", Vary: "Origin", "X-Content-Type-Options": "nosniff",
+  };
+}
 async function api(request: Request, env: Env): Promise<Response> {
   const origin = request.headers.get("Origin"), url = new URL(request.url);
-  const headers = { "Access-Control-Allow-Origin": env.SITE_ORIGIN, "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization", "Cache-Control": "no-store", Vary: "Origin", "X-Content-Type-Options": "nosniff" };
+  const headers = corsHeaders(origin, env);
   const json = (body: unknown, status = 200) => Response.json(body, { status, headers });
-  if (origin && origin !== env.SITE_ORIGIN) return json({ error: "Origin not allowed" }, 403);
+  if (origin && !allowedOrigin(origin, env)) return json({ error: "Origin not allowed" }, 403);
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
   if (url.pathname === "/config" && request.method === "GET") {
     const ticks = await env.DB.prepare("SELECT id,value FROM poll_state WHERE id IN ('last_tick','last_good_score')").all<{ id: string; value: number }>();
@@ -125,11 +137,11 @@ async function api(request: Request, env: Env): Promise<Response> {
       : state.last_tick <= now - 180000 ? "stale-poll-tick"
       : !state.last_good_score ? "awaiting-first-successful-poll"
       : state.last_good_score <= now - 20 * 60000 ? "stale-score-feed" : "ready";
-    return json({ ready: readinessReason === "ready", readinessReason, lastTickAt: state.last_tick ? new Date(state.last_tick).toISOString() : null, lastSuccessfulPollAt: state.last_good_score ? new Date(state.last_good_score).toISOString() : null, publicKey: env.VAPID_PUBLIC_KEY || "", version: "1.1.4" });
+    return json({ ready: readinessReason === "ready", readinessReason, lastTickAt: state.last_tick ? new Date(state.last_tick).toISOString() : null, lastSuccessfulPollAt: state.last_good_score ? new Date(state.last_good_score).toISOString() : null, publicKey: env.VAPID_PUBLIC_KEY || "", version: VERSION });
   }
   const token = request.headers.get("Authorization")?.replace(/^Bearer /, "") || "";
   if (request.method === "POST" && url.pathname === "/subscriptions") {
-    if (origin !== env.SITE_ORIGIN) return json({ error: "Origin required" }, 403);
+    if (!allowedOrigin(origin, env)) return json({ error: "Origin required" }, 403);
     const body = await readBody(request), sub = await validSubscription(body.subscription);
     if (!sub || typeof body.kickoff !== "boolean") return json({ error: "Invalid subscription" }, 400);
     const id = await hash(sub.endpoint), existing = await env.DB.prepare("SELECT token_hash FROM subscriptions WHERE id=?").bind(id).first<{ token_hash: string }>();
@@ -147,7 +159,7 @@ async function api(request: Request, env: Env): Promise<Response> {
     const sub = await env.DB.prepare("SELECT * FROM subscriptions WHERE id=?").bind(match[1]).first<StoredSubscription>();
     if (!sub || !token || await hash(token) !== sub.token_hash) return json({ error: "Subscription not found" }, 404);
     if (request.method === "GET") return json({ active: !!sub.active, kickoff: !!sub.kickoff });
-    if (origin !== env.SITE_ORIGIN) return json({ error: "Origin required" }, 403);
+    if (!allowedOrigin(origin, env)) return json({ error: "Origin required" }, 403);
     if (request.method === "DELETE") { await env.DB.prepare("UPDATE subscriptions SET active=0,updated_at=? WHERE id=?").bind(Date.now(), sub.id).run(); return json({ ok: true }); }
     if (request.method === "PATCH") { const body = await readBody(request); if (typeof body.kickoff !== "boolean") return json({ error: "Invalid preference" }, 400); await env.DB.prepare("UPDATE subscriptions SET kickoff=?,updated_at=? WHERE id=?").bind(body.kickoff ? 1 : 0, Date.now(), sub.id).run(); return json({ ok: true }); }
   }
@@ -156,7 +168,7 @@ async function api(request: Request, env: Env): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env) {
     try { return await api(request, env); }
-    catch { return Response.json({ error: "Alert service request failed" }, { status: 400, headers: { "Access-Control-Allow-Origin": env.SITE_ORIGIN, "Cache-Control": "no-store" } }); }
+    catch { return Response.json({ error: "Alert service request failed" }, { status: 400, headers: corsHeaders(request.headers.get("Origin"), env) }); }
   },
   async scheduled(_controller: unknown, env: Env, context: { waitUntil(promise: Promise<unknown>): void }) {
     context.waitUntil(poll(env).catch(error => { console.error(JSON.stringify({ event: "alert_poll_failed", message: error instanceof Error ? error.message : "Unknown failure" })); throw error; }));
