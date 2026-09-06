@@ -8,7 +8,7 @@ export async function bundle(entry) {
 }
 export function game(changes = {}) {
   const team = (id, extra = {}) => ({ id, name: `Team ${id}`, abbreviation: id, logo: null, score: 14, rank: null, rankKnown: true, record: "0-0", conferenceId: "2", ...extra });
-  return { id: "game1", date: "2026-09-06T02:30:00Z", timeValid: true, state: "live", status: "4th", period: 4, clock: 180, started: true, teams: [team("a"), team("b", { score: 21, rank: 20 })], broadcast: "ESPN", possession: null, downDistance: "", redZone: false, url: "https://www.espn.com/college-football/game/_/gameId/game1", ...changes };
+  return { id: "game1", date: "2026-09-06T02:30:00Z", timeValid: true, state: "live", status: "4th", period: 4, clock: 180, clockKnown: true, intermission: false, started: true, teams: [team("a"), team("b", { score: 21, rank: 20 })], broadcast: "ESPN", possession: null, downDistance: "", redZone: false, url: "https://www.espn.com/college-football/game/_/gameId/game1", ...changes };
 }
 export function scoreboard(games, date = "2026-09-05", extra = {}) { return { date, endDate: date, fetchedAt: "2026-09-06T04:01:00.000Z", games, ...extra }; }
 export function database() {

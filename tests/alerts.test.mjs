@@ -1,4 +1,6 @@
 import test from "node:test";
+import { readFileSync } from "node:fs";
+const packageVersion = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 import assert from "node:assert/strict";
 import { bundle, database, game } from "./helpers.mjs";
 const rules = await bundle("services/alerts/rules.ts");
@@ -68,7 +70,7 @@ test("config explains each readiness gate without exposing private configuration
     set("last_tick", now);
     const config = await read();
     assert.equal(config.ready, true); assert.equal(config.readinessReason, "ready");
-    assert.equal(config.version, "1.2.0");
+    assert.equal(config.version, packageVersion);
     assert.equal(config.lastSuccessfulPollAt, new Date(now).toISOString());
     assert.equal(config.lastTickAt, new Date(now).toISOString());
     assert.ok(!JSON.stringify(config).includes("private-test"));

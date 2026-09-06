@@ -1,3 +1,4 @@
+import { rankedUpset } from "../../lib/upset";
 import { classify, easternDate, margin, type Game } from "../../lib/football";
 export type Trigger = "one-score-fourth" | "ranked-trailing-fourth" | "upset-final" | "acc-kickoff";
 export type Snapshot = { game: Game; observedAt: number };
@@ -9,8 +10,8 @@ export function conditions(game: Game, now: number): Record<Trigger, boolean> {
   const untilKickoff = Date.parse(game.date) - now;
   return {
     "one-score-fourth": lateGame && tags.close,
-    "ranked-trailing-fourth": lateGame && tags.upset,
-    "upset-final": game.state === "final" && tags.upset,
+    "ranked-trailing-fourth": lateGame && rankedUpset(game),
+    "upset-final": game.state === "final" && rankedUpset(game),
     "acc-kickoff": game.state === "upcoming" && game.timeValid && tags.acc && untilKickoff > 0 && untilKickoff <= 600000,
   };
 }

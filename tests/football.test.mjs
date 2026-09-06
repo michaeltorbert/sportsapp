@@ -19,12 +19,12 @@ test("ACC and Top 25 include either team; upset requires the ranked favorite to 
   g.teams[1].rankKnown = true; g.teams[1].score = 14; assert.equal(classify(g).upset, false);
   g.teams[0].rank = null; assert.equal(classify(g).top25, false);
 });
-test("all tabs share ACC / Top 25 / rest, quarter, margin, then clock priority; finals last", () => {
+test("live games combine interest and drama, use stable finish bands, and keep finals last", () => {
   const g = (id, acc, ranked, period, margin, clock, state = "live") => {
     const x = game({ id, period, clock, state }); x.teams[0].conferenceId = acc ? "1" : "2"; x.teams[0].score = 0; x.teams[1].score = margin; x.teams[1].rank = ranked ? 5 : null; return x;
   };
   const games = [g("other", false, false, 5, 0, 0), g("ranked", false, true, 4, 0, 0), g("acc-q3", true, false, 3, 0, 0), g("acc-big", true, false, 4, 21, 0), g("acc-clock", true, false, 4, 7, 120), g("acc-first", true, false, 4, 7, 10), g("final", true, true, 5, 0, 0, "final"), g("upcoming", true, true, 0, 0, 0, "upcoming")];
-  assert.deepEqual(sortGames(games).map(g => g.id), ["acc-first", "acc-clock", "acc-big", "acc-q3", "ranked", "other", "upcoming", "final"]);
+  assert.deepEqual(sortGames(games).map(g => g.id), ["ranked", "acc-first", "acc-clock", "other", "acc-q3", "acc-big", "upcoming", "final"]);
 });
 test("finals retain their last live category through a reload", () => {
   const live = game(); live.teams[0].rank = 5;
