@@ -36,7 +36,7 @@ export function gameExpectation(game: Game): Expectation | null {
 }
 
 export function upsetWatch(game: Game) {
-  if (game.state !== "live" && game.state !== "final") return null;
+  if (game.state !== "live" && game.state !== "final" && !(game.state === "delayed" && game.started)) return null;
   const expected = gameExpectation(game);
   return expected && expected.team.score !== null && expected.opponent.score !== null && expected.team.score < expected.opponent.score ? expected : null;
 }
@@ -54,9 +54,8 @@ export function rankedUpset(game: Game) {
 export function upsetExplanation(game: Game) {
   const watch = upsetWatch(game);
   if (!watch) return null;
-  const rank = teamRank(watch.team);
-  const team = rank === null ? watch.team.name : `No. ${rank} ${watch.team.name}`;
+  const name = (team: Team) => teamRank(team) === null ? team.name : `No. ${teamRank(team)} ${team.name}`;
   const action = game.state === "final" ? "beat" : "leads";
   const context = watch.basis === "line" ? "pregame favorite" : watch.basis === "conference" ? `${watch.team.conferenceId === SEC ? "SEC" : "ACC"} conference watch` : "rank-based upset";
-  return `${watch.opponent.name} ${action} ${team} · ${context}`;
+  return `${name(watch.opponent)} ${action} ${name(watch.team)} · ${context}`;
 }

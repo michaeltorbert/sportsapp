@@ -2,9 +2,11 @@ import { z } from "zod";
 import type { Game, PregameLine, Scoreboard } from "./football";
 import { preferredConference, teamRank } from "./upset";
 
-const side = z.object({ favorite: z.boolean(), team: z.object({ id: z.string().optional() }).passthrough().optional(), teamId: z.string().optional() });
+const teamId = z.union([z.string().min(1), z.number().int().nonnegative()]).transform(String);
+const spread = z.union([z.number(), z.string().trim().regex(/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/).transform(Number)]).pipe(z.number().finite());
+const side = z.object({ favorite: z.boolean(), team: z.object({ id: teamId.optional() }).passthrough().optional(), teamId: teamId.optional() });
 const oddsSchema = z.object({
-  spread: z.number().finite(), homeTeamOdds: side, awayTeamOdds: side,
+  spread, homeTeamOdds: side, awayTeamOdds: side,
   provider: z.object({ id: z.union([z.string(), z.number()]).optional(), name: z.string().optional(), priority: z.number().finite().optional() }).optional(),
   isLive: z.boolean().optional(), live: z.boolean().optional(), type: z.string().optional(),
 });
@@ -47,18 +49,23 @@ export function summaryPregameLine(raw: unknown, game: Game) {
 
 type Cached = { line?: PregameLine; expires: number };
 // Finished public results only: no in-flight promise is shared across requests.
-const caches = new WeakMap<typeof fetch, Map<string, Cached>>();
+type Attempt = { order: number; retryAfter: number };
+type EnrichmentState = { cache: Map<string, Cached>; attempts: Map<string, Attempt>; sequence: number };
+const states = new WeakMap<typeof fetch, EnrichmentState>();
 function key(game: Game) { return `${game.id}:${game.date}:${game.teams.map(t => t.id).join(":")}`; }
 
 /** Optional enrichment has a 1.5s total budget; failed odds never discard scores. */
 export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal, fetcher: typeof fetch = fetch): Promise<Scoreboard> {
   if (parent.aborted || board.stale) return board;
-  const cache = caches.get(fetcher) || new Map<string, Cached>();
-  caches.set(fetcher, cache);
-  const candidates = board.games.filter(g => !g.pregameLine && (g.state === "live" || g.state === "final")
+  const state = states.get(fetcher) || { cache: new Map<string, Cached>(), attempts: new Map<string, Attempt>(), sequence: 0 };
+  states.set(fetcher, state);
+  const { cache, attempts } = state;
+  const candidates = board.games.filter(g => !g.pregameLine && (g.state === "live" || g.state === "final" || (g.state === "delayed" && g.started))
     && g.teams.some(t => preferredConference(t) || teamRank(t) !== null)
+    && (attempts.get(key(g))?.retryAfter ?? 0) <= Date.now()
     && (!cache.has(key(g)) || cache.get(key(g))!.expires <= Date.now()))
-    .sort((a, b) => Number(b.state === "live") - Number(a.state === "live") || a.id.localeCompare(b.id)).slice(0, 12);
+    .sort((a, b) => Number(b.state === "live") - Number(a.state === "live")
+      || (attempts.get(key(a))?.order ?? 0) - (attempts.get(key(b))?.order ?? 0) || a.id.localeCompare(b.id)).slice(0, 12);
   if (candidates.length) {
     const controller = new AbortController(), abort = () => controller.abort();
     parent.addEventListener("abort", abort, { once: true });
@@ -68,14 +75,24 @@ export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal,
       await Promise.all(Array.from({ length: Math.min(4, candidates.length) }, async () => {
         while (index < candidates.length && !controller.signal.aborted) {
           const game = candidates[index++];
+          let failed = true;
           try {
             const response = await fetcher(`https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=${encodeURIComponent(game.id)}`, { signal: controller.signal, mode: "cors", credentials: "omit", cache: "no-store" });
             if (!response.ok) continue;
             const line = summaryPregameLine(await response.json(), game);
             if (controller.signal.aborted) continue;
+            failed = false;
             cache.set(key(game), { line, expires: Date.now() + (line ? 6 * 3600000 : 300000) });
             if (cache.size > 250) cache.delete(cache.keys().next().value!);
           } catch { /* Missing favorite evidence is allowed; score refresh still succeeds. */ }
+          finally {
+            // Operational retry order is separate from evidence that no line exists.
+            // Let later games proceed after errors/deadlines, but not caller cancellation.
+            if (!parent.aborted) {
+              attempts.delete(key(game)); attempts.set(key(game), { order: ++state.sequence, retryAfter: failed ? Date.now() + 60000 : 0 });
+              if (attempts.size > 250) attempts.delete(attempts.keys().next().value!);
+            }
+          }
         }
       }));
     } finally { clearTimeout(timer); parent.removeEventListener("abort", abort); }

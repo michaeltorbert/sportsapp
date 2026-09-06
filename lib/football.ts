@@ -14,9 +14,10 @@ export function classify(game: Game): Categories {
   const acc = a.conferenceId === "1" || b.conferenceId === "1";
   const top25 = [a, b].some(t => t.rank !== null && t.rank >= 1 && t.rank <= 25);
   const active = game.state === "live" || game.state === "final";
+  const upsetActive = active || (game.state === "delayed" && game.started);
   const kept = game.state === "final" ? game.retainedCategories : undefined;
-  if (!active || a.score === null || b.score === null) return kept || { acc, top25, close: false, upset: false };
-  const close = Math.abs(a.score - b.score) <= 8;
+  if (!upsetActive || a.score === null || b.score === null) return kept || { acc, top25, close: false, upset: false };
+  const close = active && Math.abs(a.score - b.score) <= 8;
   if (a.score === b.score) return { acc, top25, close, upset: kept?.upset || false };
   const upset = upsetWatch(game) !== null;
   return { acc, top25, close: close || !!kept?.close, upset: upset || !!kept?.upset };
@@ -55,8 +56,9 @@ export function gameDay(now: Date, previous: Scoreboard | null, heldDate?: strin
 export function retainFinalCategories(next: Scoreboard, previous: Scoreboard | null): Scoreboard {
   return { ...next, games: next.games.map(raw => {
     const game = { ...raw };
-    const old = previous?.games.find(g => g.id === game.id && g.date === game.date && g.teams.every((t, i) => t.id === game.teams[i].id));
-    if (!game.pregameLine && game.started && old?.pregameLine) game.pregameLine = old.pregameLine;
+    const old = previous?.games.find(g => g.id === game.id && g.teams.every((t, i) => t.id === game.teams[i].id));
+    // Categories belong to the event; betting evidence also belongs to its scheduled matchup.
+    if (!game.pregameLine && old?.pregameLine && old.date === game.date) game.pregameLine = old.pregameLine;
     return game.state === "final" && old && (old.state === "live" || old.state === "final")
       ? { ...game, retainedCategories: classify(old) } : game;
   }) };

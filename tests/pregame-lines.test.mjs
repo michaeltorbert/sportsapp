@@ -28,6 +28,9 @@ test("parse explicit pregame favorites, away spreads, pick'em and summary teamId
   assert.equal(parsePregameLine([pickem], "a", "b").favoriteId, null);
   const referenced = odds({ homeTeamOdds: { favorite: true, teamId: "b", team: { $ref: "https://sports.core.api.espn.com/team/b" } } });
   assert.equal(parsePregameLine([referenced], "a", "b").favoriteId, "b");
+  assert.deepEqual(parsePregameLine([odds({ spread: "-7.5", homeTeamOdds: { favorite: true, teamId: 2 }, awayTeamOdds: { favorite: false, teamId: 1 } })], "1", "2"), { favoriteId: "2", spread: 7.5, source: "ESPN sample" });
+  for (const spread of ["", " ", "NaN", "Infinity", "7 points", null, false])
+    assert.equal(parsePregameLine([odds({ spread })], "a", "b"), undefined);
 });
 
 test("malformed, live, conflicting and mismatched odds never establish a favorite", () => {
@@ -95,6 +98,13 @@ test("first visit after kickoff obtains a pregame line without losing scores; co
   assert.equal(failed.games[0].pregameLine, undefined); assert.deepEqual(failed.games[0].teams.map(t => t.score), [21, 7]);
 });
 
+test("a game paused after kickoff can recover its line without triggering live urgency", async () => {
+  const paused = game({ id: "paused", state: "delayed", started: true });
+  const board = await enrichPregameLines(scoreboard([paused]), new AbortController().signal, async () => Response.json(summary(paused)));
+  assert.equal(board.games[0].pregameLine.favoriteId, "b");
+  assert.equal(gamePriority(board.games[0]).stage, 0);
+});
+
 test("optional line requests are bounded and caller cancellation cannot retain their results", async () => {
   const games = Array.from({ length: 30 }, (_, i) => game({ id: `bounded-${i}` }));
   let calls = 0, running = 0, maxRunning = 0;
@@ -108,4 +118,50 @@ test("optional line requests are bounded and caller cancellation cannot retain t
   const pending = enrichPregameLines(scoreboard([game({ id: "canceled" })]), c.signal, () => new Promise(r => { resolve = r; }));
   c.abort(); resolve(Response.json(summary(game({ id: "canceled" }))));
   assert.equal((await pending).games[0].pregameLine, undefined);
+});
+
+test("failed summary requests yield slots to healthy later games and back off briefly", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-09-06T20:00:00Z") });
+  const games = Array.from({ length: 13 }, (_, i) => game({ id: `retry-${String(i).padStart(2, "0")}` }));
+  const healthy = games.at(-1);
+  healthy.teams.forEach(t => { t.conferenceId = "8"; t.rank = null; });
+  healthy.teams[0].score = 21; healthy.teams[1].score = 7;
+  const calls = [];
+  const fetcher = async url => {
+    const id = new URL(url).searchParams.get("event"); calls.push(id);
+    return id === healthy.id ? Response.json(summary(healthy)) : new Response(null, { status: 404 });
+  };
+  const board = scoreboard(games), signal = new AbortController().signal;
+  await enrichPregameLines(board, signal, fetcher);
+  assert.equal(calls.length, 12); assert.ok(!calls.includes(healthy.id));
+  const second = await enrichPregameLines(board, signal, fetcher);
+  assert.ok(calls.includes(healthy.id));
+  assert.equal(calls.length, 13, "failed requests have a one-minute operational backoff");
+  assert.equal(second.games.at(-1).pregameLine.favoriteId, "b");
+  assert.equal(second.games[0].pregameLine, undefined, "retry state must not manufacture missing-line evidence");
+  t.mock.timers.tick(60001);
+  await enrichPregameLines(board, signal, fetcher);
+  assert.equal(calls.length, 25, "failed providers may recover on a later retry");
+});
+
+test("timed-out summaries rotate, while caller cancellation does not count as provider failure", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const games = Array.from({ length: 5 }, (_, i) => game({ id: `slow-${i}` }));
+  const calls = [];
+  const fetcher = async (url, options) => {
+    const id = new URL(url).searchParams.get("event"); calls.push(id);
+    if (id === "slow-4") return Response.json(summary(games[4]));
+    return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true }));
+  };
+  const board = scoreboard(games), canceled = new AbortController();
+  const abandoned = enrichPregameLines(board, canceled.signal, fetcher);
+  canceled.abort(); await abandoned;
+  const first = enrichPregameLines(board, new AbortController().signal, fetcher);
+  assert.deepEqual(calls.slice(4), calls.slice(0, 4), "caller cancellation should not penalize those providers");
+  t.mock.timers.tick(1500); await first;
+  const second = enrichPregameLines(board, new AbortController().signal, fetcher);
+  await new Promise(setImmediate);
+  t.mock.timers.tick(1500);
+  const enriched = await second;
+  assert.ok(calls.includes("slow-4")); assert.equal(enriched.games[4].pregameLine.favoriteId, "b");
 });

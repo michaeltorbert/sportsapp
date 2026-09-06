@@ -99,6 +99,10 @@ test("every filter preserves shared relative order, chronology and immutable inp
 test("pregame lines survive kickoff and reload, but cannot migrate to a different matchup", () => {
   const pre = match("sec", { sec: true, state: "upcoming", started: false, pregameLine: { favoriteId: "a", spread: 7, source: "ESPN" } });
   const live = match("sec", { sec: true });
+  for (const state of ["upcoming", "live", "delayed"]) {
+    const transition = { ...live, state, started: false, period: 0 };
+    assert.equal(retainFinalCategories(scoreboard([transition]), scoreboard([pre])).games[0].pregameLine.favoriteId, "a");
+  }
   let board = retainFinalCategories(scoreboard([live]), scoreboard([pre]));
   assert.equal(board.games[0].pregameLine.favoriteId, "a");
   board = retainFinalCategories(scoreboard([{ ...live, state: "final" }]), JSON.parse(JSON.stringify(board)));
@@ -108,6 +112,12 @@ test("pregame lines survive kickoff and reload, but cannot migrate to a differen
   const comeback = match("sec", { sec: true, state: "final", score: 35, otherScore: 24 });
   const retained = retainFinalCategories(scoreboard([comeback]), board).games[0];
   assert.equal(classify(retained).upset, true); assert.equal(upsetExplanation(retained), null);
+  const rescheduled = { ...comeback, date: "2026-09-06T21:00:00Z" };
+  const moved = retainFinalCategories(scoreboard([rescheduled]), board).games[0];
+  assert.equal(classify(moved).upset, true, "same-event categories survive schedule updates");
+  assert.equal(moved.pregameLine, undefined, "a reschedule must not assert the original betting baseline still applies");
+  const ranked = match("both-ranked", { rank: 24, otherRank: 25 });
+  assert.match(upsetExplanation(ranked), /No\. 25 Opponent leads No\. 24 Favorite/);
 });
 
 test("expanded list eligibility does not redefine ranked push triggers or their dedupe IDs", () => {
@@ -120,4 +130,14 @@ test("expanded list eligibility does not redefine ranked push triggers or their 
   g.teams[0].rank = 5; g.pregameLine.favoriteId = "b";
   assert.equal(classify(g).upset, false); assert.equal(conditions(g, Date.now())["ranked-trailing-fourth"], true);
   assert.ok(transitions(null, g, Date.now()).some(e => e.id === "sec:ranked-trailing-fourth"));
+});
+
+test("unranked SEC upset watches remain visible during a delay after kickoff", () => {
+  const paused = match("paused-sec", { sec: true, state: "delayed", started: true, score: 7, otherScore: 21 });
+  for (const filter of ["watch", "upset"])
+    assert.deepEqual(viewGames(scoreboard([paused]), filter).map(g => g.id), [paused.id]);
+  assert.equal(gamePriority(paused).stage, 0);
+  assert.equal(classify({ ...paused, started: false }).upset, false, "an unstarted delay is not a game in progress");
+  paused.teams[0].rank = 5;
+  assert.equal(conditions(paused, Date.now())["ranked-trailing-fourth"], false);
 });

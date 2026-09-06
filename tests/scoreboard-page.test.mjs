@@ -22,7 +22,7 @@ const output = await build({
         export const Tabs=wrapper,TabsList=wrapper,Empty=wrapper,EmptyHeader=wrapper,EmptyMedia=wrapper,EmptyTitle=wrapper,EmptyDescription=wrapper,Sheet=wrapper,SheetTrigger=wrapper,SheetHeader=wrapper,SheetTitle=wrapper,SheetDescription=wrapper;
         export const TabsContent=({value,children})=>value===globalThis.scorePageTest.filter?wrapper({children}):null;
         export const TabsTrigger=({value,children})=>globalThis.scorePageTest.element('button',{'data-tab':value},children);
-        export const SheetContent=()=>null,Skeleton=()=>null,Alerts=()=>null;
+        export const SheetContent=({children})=>globalThis.scorePageTest.showHelp?wrapper({children}):null,Skeleton=()=>null,Alerts=()=>null;
       ` };
     });
   } }],
@@ -50,10 +50,10 @@ function fixtures() {
   };
 }
 
-function render(filter, { hideFinals = false, focusedGame = "", boards = fixtures() } = {}) {
+function render(filter, { hideFinals = false, focusedGame = "", showHelp = false, boards = fixtures() } = {}) {
   let state = 0, selectedScope;
   globalThis.scorePageTest = {
-    ...jsxRuntime, filter, element: React.createElement,
+    ...jsxRuntime, filter, showHelp, element: React.createElement,
     useState(initial) { return [[filter, hideFinals, focusedGame][state++] ?? initial, () => {}]; },
     scoreboard(scope) { selectedScope = scope; return { date: "2026-08-29", today: "2026-09-05", boards, data: boards[scope], error: "", refreshing: false, online: true, now: Date.now(), timezone: "EDT", refresh() {}, setDate() {}, followToday: true }; },
   };
@@ -133,4 +133,26 @@ test("retained upset finals distinguish a comeback from a completed conference u
   assert.match(upset, /Conference watch/);
   assert.match(upset, /East Carolina beat Florida · SEC conference watch/);
   assert.doesNotMatch(upset, /pregame favorite|No\. (null|undefined)/);
+});
+
+test("Help discloses ranking-only alerts when the line-based list excludes a ranked underdog", () => {
+  const underdog = game({ id: "ranked-underdog", pregameLine: { favoriteId: "b", spread: 3, source: "ESPN" } });
+  Object.assign(underdog.teams[0], { rank: 12, score: 17 });
+  Object.assign(underdog.teams[1], { rank: 15, score: 20 });
+  const boards = fixtures(); boards.daily = scoreboard([underdog]);
+  const { html } = render("watch", { boards, showHelp: true });
+  assert.deepEqual(cardIds(html), ["ranked-underdog"]);
+  assert.doesNotMatch(html, /class="badge upset-badge"|class="upset-reason"/);
+  assert.match(html, /Push alerts use rankings alone, so a ranked betting underdog can trigger an upset alert without an upset badge here/);
+  assert.deepEqual(cardIds(render("upset", { boards }).html), []);
+});
+
+test("live conference watches use the same honest badge as conference finals", () => {
+  const g = game({ id: "conference-live" });
+  Object.assign(g.teams[0], { conferenceId: "8", rank: null, score: 7 });
+  Object.assign(g.teams[1], { conferenceId: "151", rank: null, score: 21 });
+  const boards = fixtures(); boards.daily = scoreboard([g]);
+  const { html } = render("upset", { boards });
+  assert.match(html, /class="badge upset-badge">Conference watch/);
+  assert.match(html, /SEC conference watch/);
 });
