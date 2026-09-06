@@ -9,8 +9,8 @@ import { useScoreboard } from "@/lib/use-scoreboard";
 import { VERSION, releases } from "@/lib/releases";
 import { Alerts } from "@/components/alerts";
 import { accWeek, classify, easternDate, shiftDate, type Game, type Team } from "@/lib/football";
-
 import { viewGames, type Filter } from "@/lib/scoreboard-views";
+
 const filters: { id: Filter; label: string }[] = [{ id: "watch", label: "Watchlist" }, { id: "acc", label: "ACC" }, { id: "top25", label: "Top 25" }, { id: "close", label: "One score" }, { id: "upset", label: "Upsets" }];
 const headings = { watch: "Your watchlist.", acc: "ACC this week.", top25: "Top 25 scoreboard.", close: "One-score games.", upset: "Upset watch." };
 const summaries = { watch: "ACC · Top 25 · One-score games · Upset watch", acc: "Thursday through Monday, including nonconference games", top25: "Every matchup involving a team ranked in ESPN’s Top 25", close: "FBS games tied or within 8 points, plus retained finals", upset: "Top 25 teams trailing lower-ranked opponents, plus retained finals" };

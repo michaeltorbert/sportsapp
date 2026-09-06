@@ -8,7 +8,7 @@ export function viewGames(board: Scoreboard | null, filter: Filter, hideFinals =
     if (hideFinals && game.state === "final") return false;
     const categories = classify(game);
     return filter === "watch"
-      ? game.id === focusedGame || Object.values(categories).some(Boolean)
+      ? game.id === focusedGame || categories.acc || categories.top25 || categories.close || categories.upset
       : categories[filter];
   }));
 }

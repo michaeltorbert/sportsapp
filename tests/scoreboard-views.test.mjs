@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { bundle, game, scoreboard } from "./helpers.mjs";
 const { viewGames, matchingBoard, expiredBoardKey } = await bundle("lib/scoreboard-views.ts");
+const { loadScores } = await bundle("lib/score-client.ts");
 
 test("daily badges and weekly ACC counts use their own boards and honor Hide finals", () => {
   const live = game();
@@ -28,6 +29,39 @@ test("a changed day or ACC week cannot display counts from the previous scope", 
   assert.equal(matchingBoard(weekly, "2026-09-03", "2026-09-07"), weekly);
   assert.equal(matchingBoard(weekly, "2026-09-10", "2026-09-14"), null);
   assert.equal(matchingBoard(weekly, "2026-09-03"), null);
+});
+
+test("Watchlist excludes nonqualifying games unless explicitly focused", () => {
+  const unqualified = game();
+  for (const team of unqualified.teams) team.rank = null;
+  unqualified.teams[1].score = unqualified.teams[0].score + 9;
+  const board = scoreboard([unqualified]);
+  assert.deepEqual(viewGames(board, "watch"), []);
+  assert.deepEqual(viewGames(board, "watch", false, unqualified.id), [unqualified]);
+});
+
+test("real score client and parser preserve the weekly range used by ACC counts", async () => {
+  const event = { id: "weekly", date: "2026-09-06T02:30:00Z", status: { type: { name: "STATUS_IN_PROGRESS", state: "in" } }, competitions: [{ competitors: [
+    { id: "a", homeAway: "away", score: "14", team: { id: "a", conferenceId: "2" } },
+    { id: "b", homeAway: "home", score: "21", team: { id: "b", conferenceId: "1" } },
+  ] }] };
+  const controller = new AbortController();
+  const board = await loadScores("2026-09-03", controller.signal, async url => {
+    const query = new URL(url).searchParams;
+    assert.equal(query.get("groups"), "1");
+    assert.equal(query.get("dates"), "20260903-20260908");
+    return Response.json({ events: [event] });
+  }, "2026-09-07", true);
+  assert.equal(board.endDate, "2026-09-07");
+  assert.equal(viewGames(matchingBoard(board, "2026-09-03", "2026-09-07"), "acc").length, 1);
+
+  let calls = 0;
+  const fallback = await loadScores("2026-09-03", controller.signal, async url => {
+    if (++calls === 1) throw new Error("Direct feed unavailable");
+    assert.match(url, /end=2026-09-07&acc=1/);
+    return Response.json(board);
+  }, "2026-09-07", true);
+  assert.equal(viewGames(matchingBoard(fallback, "2026-09-03", "2026-09-07"), "acc").length, 1);
 });
 
 test("storage cleanup retains ACC history through the weekend and expires completed ranges", () => {
