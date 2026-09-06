@@ -59,7 +59,7 @@ export function retainFinalCategories(next: Scoreboard, previous: Scoreboard | n
     const old = previous?.games.find(g => g.id === game.id && g.teams.every((t, i) => t.id === game.teams[i].id));
     // Categories belong to the event; betting evidence also belongs to its scheduled matchup.
     if (!game.pregameLine && old?.pregameLine && old.date === game.date) game.pregameLine = old.pregameLine;
-    return game.state === "final" && old && (old.state === "live" || old.state === "final")
+    return game.state === "final" && old && (old.state === "live" || old.state === "final" || (old.state === "delayed" && old.started))
       ? { ...game, retainedCategories: classify(old) } : game;
   }) };
 }

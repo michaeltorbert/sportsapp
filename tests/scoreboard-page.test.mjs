@@ -4,7 +4,8 @@ import React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
 import { renderToStaticMarkup } from "react-dom/server";
 import { build } from "esbuild";
-import { game, scoreboard } from "./helpers.mjs";
+import { bundle, game, scoreboard } from "./helpers.mjs";
+const { retainFinalCategories } = await bundle("lib/football.ts");
 
 // Exercise the real page and game cards with controlled hook data and lightweight
 // UI wrappers. The catalog primitives have separate tests; no browser/feed is used.
@@ -155,4 +156,11 @@ test("live conference watches use the same honest badge as conference finals", (
   const { html } = render("upset", { boards });
   assert.match(html, /class="badge upset-badge">Conference watch/);
   assert.match(html, /SEC conference watch/);
+  const paused = { ...g, state: "delayed", started: true };
+  const final = structuredClone(g); final.state = "final"; final.teams[0].score = 35;
+  boards.daily = retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(scoreboard([paused]))));
+  const completed = render("upset", { boards }).html;
+  assert.deepEqual(cardIds(completed), [g.id]);
+  assert.match(completed, /Earlier upset watch/);
+  assert.doesNotMatch(completed, /class="upset-reason"/);
 });

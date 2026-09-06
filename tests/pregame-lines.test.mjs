@@ -105,6 +105,19 @@ test("a game paused after kickoff can recover its line without triggering live u
   assert.equal(gamePriority(board.games[0]).stage, 0);
 });
 
+test("overlapping board refreshes cannot erase a valid line with a missing-line response", async () => {
+  const g = game({ id: "shared-scopes" }), pending = [];
+  const fetcher = () => new Promise(resolve => pending.push(resolve));
+  const first = enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  const second = enrichPregameLines(scoreboard([g], "2026-09-03", { endDate: "2026-09-07" }), new AbortController().signal, fetcher);
+  pending[0](Response.json(summary(g)));
+  const daily = await first;
+  pending[1](Response.json(summary(g, [])));
+  const weekly = await second;
+  assert.deepEqual(weekly.games[0].pregameLine, daily.games[0].pregameLine);
+  assert.equal(weekly.games[0].pregameLine.favoriteId, "b");
+});
+
 test("optional line requests are bounded and caller cancellation cannot retain their results", async () => {
   const games = Array.from({ length: 30 }, (_, i) => game({ id: `bounded-${i}` }));
   let calls = 0, running = 0, maxRunning = 0;

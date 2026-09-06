@@ -82,7 +82,10 @@ export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal,
             const line = summaryPregameLine(await response.json(), game);
             if (controller.signal.aborted) continue;
             failed = false;
-            cache.set(key(game), { line, expires: Date.now() + (line ? 6 * 3600000 : 300000) });
+            const known = cache.get(key(game));
+            // Concurrent tab refreshes may finish out of order; absence cannot erase valid evidence.
+            if (line || !known?.line || known.expires <= Date.now())
+              cache.set(key(game), { line, expires: Date.now() + (line ? 6 * 3600000 : 300000) });
             if (cache.size > 250) cache.delete(cache.keys().next().value!);
           } catch { /* Missing favorite evidence is allowed; score refresh still succeeds. */ }
           finally {

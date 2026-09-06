@@ -138,6 +138,14 @@ test("unranked SEC upset watches remain visible during a delay after kickoff", (
     assert.deepEqual(viewGames(scoreboard([paused]), filter).map(g => g.id), [paused.id]);
   assert.equal(gamePriority(paused).stage, 0);
   assert.equal(classify({ ...paused, started: false }).upset, false, "an unstarted delay is not a game in progress");
+  const final = match("paused-sec", { sec: true, state: "final", score: 35, otherScore: 21 });
+  const stored = JSON.parse(JSON.stringify(scoreboard([paused])));
+  const retained = retainFinalCategories(scoreboard([final]), stored);
+  assert.equal(classify(retained.games[0]).upset, true, "a saved paused watch survives a comeback final");
+  assert.deepEqual(viewGames(retained, "upset").map(g => g.id), [paused.id]);
+  assert.equal(upsetExplanation(retained.games[0]), null);
+  stored.games[0].started = false;
+  assert.equal(retainFinalCategories(scoreboard([final]), stored).games[0].retainedCategories, undefined);
   paused.teams[0].rank = 5;
   assert.equal(conditions(paused, Date.now())["ranked-trailing-fourth"], false);
 });
