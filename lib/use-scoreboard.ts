@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { accWeek, easternDate, gameDay, retainFinalCategories, shiftDate, validDate, type Scoreboard, type Team } from "./football";
 import { loadScores } from "./score-client";
-import { matchingBoard } from "./scoreboard-views";
+import { expiredBoardKey, matchingBoard } from "./scoreboard-views";
 
 function readBoard(key: string): Scoreboard | null {
   try {
@@ -26,7 +26,7 @@ export function useScoreboard(weekly: boolean) {
     if (query && validDate(query)) setSelection(query);
     try {
       held.current = localStorage.getItem("ss:game-day") || "";
-      for (const key of Object.keys(localStorage)) if (key.startsWith("ss:board:") && key.slice(9, 19) < shiftDate(easternDate(), -1)) localStorage.removeItem(key);
+      for (const key of Object.keys(localStorage)) if (expiredBoardKey(key, shiftDate(easternDate(), -1))) localStorage.removeItem(key);
     } catch { /* Browsing still works when storage is unavailable. */ }
     setNow(Date.now()); setOnline(navigator.onLine);
     setTimezone(new Intl.DateTimeFormat(undefined, { timeZoneName: "short" }).formatToParts(new Date()).find(p => p.type === "timeZoneName")?.value || "local time");
@@ -92,6 +92,7 @@ export function useScoreboard(weekly: boolean) {
   }, [refresh]);
   const chooseDate = (value: string | null) => { setSelection(value); setDate(value || held.current || easternDate()); };
   const dailyData = matchingBoard(daily, date);
+  // ACC always covers the current football week; manual dates apply to daily tabs.
   const range = today ? accWeek(today) : null;
   const weeklyData = range ? matchingBoard(weekBoard, range.start, range.end) : null;
   const data = weekly ? weeklyData : dailyData;

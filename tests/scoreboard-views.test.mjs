@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bundle, game, scoreboard } from "./helpers.mjs";
-const { viewGames, matchingBoard } = await bundle("lib/scoreboard-views.ts");
+const { viewGames, matchingBoard, expiredBoardKey } = await bundle("lib/scoreboard-views.ts");
 
 test("daily badges and weekly ACC counts use their own boards and honor Hide finals", () => {
   const live = game();
@@ -28,4 +28,15 @@ test("a changed day or ACC week cannot display counts from the previous scope", 
   assert.equal(matchingBoard(weekly, "2026-09-03", "2026-09-07"), weekly);
   assert.equal(matchingBoard(weekly, "2026-09-10", "2026-09-14"), null);
   assert.equal(matchingBoard(weekly, "2026-09-03"), null);
+});
+
+test("storage cleanup retains ACC history through the weekend and expires completed ranges", () => {
+  const weekly = "ss:board:2026-09-03:2026-09-07";
+  for (const cutoff of ["2026-09-04", "2026-09-05", "2026-09-06", "2026-09-07"]) {
+    assert.equal(expiredBoardKey(weekly, cutoff), false);
+  }
+  assert.equal(expiredBoardKey(weekly, "2026-09-08"), true);
+  assert.equal(expiredBoardKey("ss:board:2026-09-04:2026-09-04", "2026-09-05"), true);
+  assert.equal(expiredBoardKey("ss:board:2026-09-05:2026-09-05", "2026-09-05"), false);
+  assert.equal(expiredBoardKey("ss:hide-finals", "2026-09-05"), false);
 });

@@ -4,6 +4,7 @@
 
 - Keep daily and weekly ACC scoreboards available together so tab counts do not disappear when switching views. Each count follows its destination tab and the Hide finals setting.
 - Refresh both scopes independently, preserve successful scores when the other feed fails, and exclude cached boards from the wrong day or week.
+- Keep weekly category history through the end of the ACC range when clearing old device data, so weekend reloads do not discard it.
 - Clarify that one-score and upset views include retained finals. Show the overnight Today notice only on daily views; preserve the existing overnight rollover rules.
 - Add regression checks for tab switching, date changes, independent refresh failures, overnight reuse, and final visibility.
 
