@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.1.5 · 2026-09-06
+
+- Keep daily and weekly ACC scoreboards available together so tab counts do not disappear when switching views. Each count follows its destination tab and the Hide finals setting.
+- Refresh both scopes independently, preserve successful scores when the other feed fails, and exclude cached boards from the wrong day or week.
+- Clarify that one-score and upset views include retained finals. Show the overnight Today notice only on daily views; preserve the existing overnight rollover rules.
+- Add regression checks for tab switching, date changes, independent refresh failures, overnight reuse, and final visibility.
+
 ## 1.1.4 · 2026-09-06
 
 - Fix hosted background polling after live Worker logs proved ESPN's site API returns HTTP 403 from Cloudflare's network.

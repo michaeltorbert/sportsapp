@@ -8,12 +8,12 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { useScoreboard } from "@/lib/use-scoreboard";
 import { VERSION, releases } from "@/lib/releases";
 import { Alerts } from "@/components/alerts";
-import { accWeek, classify, easternDate, shiftDate, sortGames, type Game, type Team } from "@/lib/football";
+import { accWeek, classify, easternDate, shiftDate, type Game, type Team } from "@/lib/football";
 
-type Filter = "watch" | "acc" | "top25" | "close" | "upset";
+import { viewGames, type Filter } from "@/lib/scoreboard-views";
 const filters: { id: Filter; label: string }[] = [{ id: "watch", label: "Watchlist" }, { id: "acc", label: "ACC" }, { id: "top25", label: "Top 25" }, { id: "close", label: "One score" }, { id: "upset", label: "Upsets" }];
 const headings = { watch: "Your watchlist.", acc: "ACC this week.", top25: "Top 25 scoreboard.", close: "One-score games.", upset: "Upset watch." };
-const summaries = { watch: "ACC · Top 25 · One-score games · Upset watch", acc: "Thursday through Monday, including nonconference games", top25: "Every matchup involving a team ranked in ESPN’s Top 25", close: "Live FBS games tied or separated by 8 points or fewer", upset: "A lower-ranked or unranked team leads a Top 25 team" };
+const summaries = { watch: "ACC · Top 25 · One-score games · Upset watch", acc: "Thursday through Monday, including nonconference games", top25: "Every matchup involving a team ranked in ESPN’s Top 25", close: "FBS games tied or within 8 points, plus retained finals", upset: "Top 25 teams trailing lower-ranked opponents, plus retained finals" };
 function localTime(date: string) { return Number.isFinite(Date.parse(date)) ? new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(date)) : "Time TBD"; }
 
 function TeamRow({ team, game, opponent }: { team: Team; game: Game; opponent: Team }) {
@@ -44,7 +44,7 @@ function Help() { return <Sheet><SheetTrigger asChild><button className="icon-bu
 
 export default function Home() {
   const [filter, setFilter] = useState<Filter>("watch");
-  const { date, today, data, error, refreshing, online, now, timezone, refresh, setDate, followToday } = useScoreboard(filter === "acc");
+  const { date, today, data, dailyData, weeklyData, error, refreshing, online, now, timezone, refresh, setDate, followToday } = useScoreboard(filter === "acc");
   const [hideFinals, setHideFinals] = useState(false);
   const [focusedGame, setFocusedGame] = useState("");
   const focusedOnce = useRef(false);
@@ -55,9 +55,9 @@ export default function Home() {
   }, []);
   useEffect(() => { if (data && focusedGame && !focusedOnce.current) { const card = document.getElementById(`game-${focusedGame}`); if (card) { card.scrollIntoView({ block: "center" }); focusedOnce.current = true; } } }, [data, focusedGame]);
   const toggleFinals = (value: boolean) => { setHideFinals(value); try { localStorage.setItem("ss:hide-finals", String(value)); } catch { /* Optional. */ } };
-  const games = data?.games || [];
-  const qualifying = (f: Filter) => sortGames(games.filter(g => { const c = classify(g); return f === "watch" ? g.id === focusedGame || c.acc || c.top25 || c.close || c.upset : c[f]; }));
-  const visible = qualifying(filter).filter(g => !hideFinals || g.state !== "final");
+  const boardFor = (f: Filter) => f === "acc" ? weeklyData : dailyData;
+  const qualifying = (f: Filter) => viewGames(boardFor(f), f, hideFinals, focusedGame);
+  const visible = qualifying(filter);
   const week = today ? accWeek(today) : null;
   const shortDate = (d: string) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${d}T12:00:00Z`));
   const overnight = followToday && today && today !== easternDate();
@@ -72,9 +72,9 @@ export default function Home() {
   return <main className="app-shell">
     <header className="app-header"><a className="wordmark" href="/" aria-label="Saturday Signal home"><span className="brand-icon"><Signal size={22} strokeWidth={3} /></span><span>saturday<span className="brand-light">signal</span><span className="sport-label">COLLEGE FOOTBALL</span></span></a><div className="header-actions"><button className={`icon-button ${refreshing ? "refreshing" : ""}`} aria-label="Refresh scores" onClick={refresh} disabled={refreshing || !date}><RefreshCw size={20} /></button><Help /></div></header>
     <div className="date-bar">{filter === "acc" ? <div className="week-label"><CalendarDays size={16} /><span>{week ? `${shortDate(week.start)} – ${shortDate(week.end)}` : "This football week"}</span><span className="week-note">THU–MON · ET</span></div> : <><div className="date-navigation"><button className="icon-button" aria-label="Previous day" disabled={!date} onClick={() => setDate(shiftDate(date, -1))}><ChevronLeft size={19} /></button><label className="date-picker"><CalendarDays size={15} /><span>{dateText}</span><input type="date" value={date} onChange={e => { if (e.target.value) setDate(e.target.value); }} aria-label="Scoreboard date, Eastern time" /></label><button className="icon-button" aria-label="Next day" disabled={!date} onClick={() => setDate(shiftDate(date, 1))}><ChevronRight size={19} /></button></div><button className={`today-button ${followToday ? "is-today" : ""}`} onClick={() => { setDate(null); if (followToday) refresh(); }} disabled={!today}>Today</button></>}</div>
-    {overnight && <p className="overnight-note">Late games are still on. Today is staying on {shortDate(today)}.</p>}
+    {overnight && filter !== "acc" && <p className="overnight-note">Late games are still on. Today is staying on {shortDate(today)}.</p>}
     <Tabs value={filter} onValueChange={v => setFilter(v as Filter)} className="score-tabs">
-      <TabsList className="filter-tabs" aria-label="Game categories">{filters.map(f => <TabsTrigger className={`filter-tab filter-${f.id}`} value={f.id} key={f.id}><span>{f.label}</span><span className="tab-count">{data && (f.id === "acc") === (filter === "acc") ? qualifying(f.id).filter(g => !hideFinals || g.state !== "final").length : "·"}</span></TabsTrigger>)}</TabsList>
+      <TabsList className="filter-tabs" aria-label="Game categories">{filters.map(f => <TabsTrigger className={`filter-tab filter-${f.id}`} value={f.id} key={f.id}><span>{f.label}</span><span className="tab-count">{boardFor(f.id) ? qualifying(f.id).length : "–"}</span></TabsTrigger>)}</TabsList>
       <div className="watch-header"><h1>{headings[filter]}</h1><p>{summaries[filter]}</p><div className="feed-status" role="status"><span className={`feed-dot ${stale || !online || error ? "feed-warning" : !data ? "feed-loading" : ""}`} />{!online ? "Offline" : error && !data ? "Scores unavailable" : data ? `${stale ? "Last update" : "Updated"} ${age < 15 ? "just now" : age < 60 ? `${age}s ago` : `${Math.floor(age / 60)}m ago`}` : "Connecting to ESPN…"}{data && <span className="refresh-note">{stale ? "Checking for new scores" : "Auto-refresh on"}</span>}</div></div>
       <div className="score-options"><Alerts /><label className="toggle-label"><input type="checkbox" checked={hideFinals} onChange={e => toggleFinals(e.target.checked)} /><span>Hide finals</span></label></div>
       {warning && <div className="feed-banner" role="alert"><CloudOff size={18} /><span>{warning}{data && " Displayed scores may be out of date."}</span><button onClick={refresh} disabled={refreshing}>Retry</button></div>}
