@@ -35,4 +35,10 @@ test("renders the mobile scoreboard shell and app metadata", async () => {
   assert.doesNotMatch(html, /Starter Project/);
   const invalid = await worker.fetch(new Request("http://localhost/api/scores?date=2026-02-30"), { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } }, { waitUntil() {}, passThroughOnException() {} });
   assert.equal(invalid.status, 400);
+  const health = await worker.fetch(new Request("http://localhost/api/health"), {}, { waitUntil() {} });
+  assert.equal(health.status, 200);
+  assert.equal(health.headers.get("cache-control"), "no-store");
+  const metadata = await health.json();
+  assert.equal(metadata.version, "1.2.0");
+  assert.match(metadata.commit, /^(development|[a-f0-9]{40})$/);
 });

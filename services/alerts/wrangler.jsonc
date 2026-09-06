@@ -1,0 +1,28 @@
+{
+  "name": "saturday-signal-alerts",
+  "main": "worker.ts",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "triggers": {
+    "crons": [
+      "* * * * *"
+    ]
+  },
+  "vars": {
+    "SITE_ORIGIN": "https://saturday-signal.mtorbert.chatgpt.site",
+    "VAPID_SUBJECT": "https://saturday-signal.mtorbert.chatgpt.site",
+    "ADDITIONAL_SITE_ORIGINS": "https://saturday-signal.scythe-wildflower.workers.dev"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "saturday-signal-alerts",
+      "database_id": "09529e43-5b88-41ec-920c-a5fcf0695c69",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "$schema": "../../node_modules/wrangler/config-schema.json"
+}

@@ -61,3 +61,22 @@ export function scoreboardCdnUrl() {
   url.searchParams.set("group", "80");
   return url.toString();
 }
+
+// The CDN ignores `dates` and serves its selected football week. Only use it
+// when its own calendar proves the entire requested Eastern-day range is covered.
+export function normalizeCdnRange(raw: unknown, date: string, endDate = date, accOnly = false): Scoreboard {
+  const entry = z.object({ value: z.string(), startDate: z.string().datetime({ offset: true }), endDate: z.string().datetime({ offset: true }) });
+  const { content: { sbData } } = z.object({ content: z.object({ sbData: z.object({
+    season: z.object({ type: z.number() }), week: z.object({ number: z.number() }),
+    leagues: z.array(z.object({ calendar: z.array(z.object({ value: z.string(), entries: z.array(entry) })) })),
+  }) }) }).parse(raw);
+  const range = sbData.leagues[0]?.calendar.find(period => period.value === String(sbData.season.type))
+    ?.entries.find(week => week.value === String(sbData.week.number));
+  // Exclude boundary days conservatively: ESPN week boundaries are not ET midnight.
+  if (!range || date <= easternDate(new Date(range.startDate)) || endDate >= easternDate(new Date(range.endDate)))
+    throw new Error("CDN does not cover the requested dates");
+  const board = normalizeScoreboard(raw, date, undefined, endDate);
+  if (board.warnings?.length) throw new Error("CDN scoreboard is incomplete");
+  if (accOnly) board.games = board.games.filter(game => game.teams.some(team => team.conferenceId === "1"));
+  return board;
+}

@@ -1,0 +1,56 @@
+name: Tests
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+      WRANGLER_LOG_PATH: .wrangler/logs
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Record source commit
+        run: echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Build and test
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .release-evidence
+          npm test 2>&1 | tee .release-evidence/tests.log
+      - name: Validate production deployment package
+        run: |
+          npm run test:runtime
+          npm run deploy:check
+          npm run deploy:alerts -- --dry-run
+      - name: Validate preview deployment package
+        env:
+          CLOUDFLARE_ENV: preview
+        run: |
+          npm run build
+          npm run test:runtime
+          npm run deploy:check
+      - name: Save test evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tests-${{ github.sha }}
+          path: .release-evidence/tests.log
+          include-hidden-files: true
+          retention-days: 14

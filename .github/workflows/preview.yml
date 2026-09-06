@@ -1,0 +1,46 @@
+name: Cloudflare preview
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cloudflare-preview
+  cancel-in-progress: false
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: preview
+      url: https://saturday-signal-preview.scythe-wildflower.workers.dev
+    env:
+      CLOUDFLARE_ENV: preview
+      CLOUDFLARE_ACCOUNT_ID: '092f7a0a1516725ba2217cfb3760b38f'
+      WRANGLER_SEND_METRICS: 'false'
+      WRANGLER_LOG_PATH: .wrangler/logs
+      DEPLOYMENT_URL: https://saturday-signal-preview.scythe-wildflower.workers.dev
+      VERIFY_ALERTS: 'false'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Record source commit
+        run: echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Build and test preview
+        run: |
+          npm test
+          npm run test:runtime
+          npm run deploy:check
+      - name: Deploy preview website
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "Set CLOUDFLARE_API_TOKEN in the preview environment."; exit 1; }
+          npm run deploy:app
+      - name: Verify preview website
+        run: npm run release:verify

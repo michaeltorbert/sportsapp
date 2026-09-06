@@ -8,10 +8,14 @@ Next verification: reopen the iPhone Home Screen app and tap Enable alerts after
 
 Future deployments require an authenticated connection to the claimed account. Reuse the existing Worker, D1 database, and VAPID identity. Never recreate the database or rotate keys as a way to restore management access. Temporary claim links and credentials have been removed.
 
+## Prepared v1.2.0 migration
+
+The versioned `wrangler.jsonc` adds `ADDITIONAL_SITE_ORIGINS` for the exact new production website while retaining `SITE_ORIGIN` for the existing Sites publication. No wildcard or preview origin is allowed. The release workflow deploys this existing Worker before the website. This is prepared source; `deployment.json` continues to describe the last verified live v1.1.4 deployment until a migration deployment is checked. See [the release guide](../../docs/releases.md).
+
 ## Update this existing deployment
 
 1. Authenticate to the claimed account using a supported secure connection or local Wrangler login. Do not paste API tokens or private keys into chat.
-2. Prepare `services/alerts/wrangler.jsonc` from the example with the **existing** account and database IDs in `deployment.json`. Keep the Worker name, `DB` binding, site origin, VAPID secrets, observability, and `triggers.crons: ["* * * * *"]` unchanged. There is no new migration in v1.1.4.
+2. Use the versioned `services/alerts/wrangler.jsonc` with the **existing** account and database IDs in `deployment.json`. Preserve the Worker name, `DB` binding, both production origins, VAPID secrets, observability, and `triggers.crons: ["* * * * *"]`. There is no database migration in v1.2.0.
 3. Deploy with `wrangler deploy --config services/alerts/wrangler.jsonc`. Verify `/config` reports the intended version, the existing cron is present, and the next scheduled invocation succeeds. `wrangler tail --config services/alerts/wrangler.jsonc --format json` can inspect new invocations while connected.
 4. Reopen the iPhone Home Screen app and enable alerts only after readiness becomes true. Verify a real device notification before marking delivery tested. Saving or publishing the separate Sites frontend does **not** deploy this external Worker.
 

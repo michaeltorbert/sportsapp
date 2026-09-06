@@ -1,93 +1,41 @@
-# vinext-starter
+# Saturday Signal
 
-A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
+College-football scores, weekly ACC and Top 25 views, and optional Web Push alerts.
 
-## Prerequisites
+The migration in this branch targets **Cloudflare Workers**, using the free provider address `https://saturday-signal.scythe-wildflower.workers.dev`. A purchased domain is not required. GitHub is the source of truth for issues, reviews, tests, tags, and releases.
 
-- Node.js `>=22.13.0`
-- Linux with `flock`, `curl`, and GNU `timeout`
+The previous Sites publication remains at `https://saturday-signal.mtorbert.chatgpt.site` until the Cloudflare release is verified. This branch does not deploy or disable either site by itself.
 
-## Sites Lifecycle
+## Development and checks
 
-The Sites lifecycle CLI runs the locked dependency install before returning this checkout. Edit the source under `app/`, then checkpoint when a coherent milestone is ready to inspect or share. The remote Sites builder runs `npm run build` against the pushed commit. Do not repeat install or build as a normal pre-checkpoint step.
+Use Node.js 22.13 or newer. CI uses Node 22.
 
-This starter does not use `wrangler.jsonc`.
-
-`install:ci` is intentionally a single, non-retrying `npm ci`. It refuses a concurrent install for the same project, consumes a matching image-seeded npm cache with `--prefer-offline` while retaining registry fallback for a missing cache object, otherwise downloads and verifies the complete vinext tarball recorded in `package-lock.json`, limits npm to one socket, and terminates a stalled install. `build` applies a short timeout. These helpers target Linux and use GNU `timeout`; they are not native macOS scripts.
-
-Scripts that need writable project-scoped home, npm, XDG, and temporary paths use `scripts/sites-env.sh`. The `dev` and `start` scripts honor the caller's runtime environment and keep Wrangler logs inside the checkout. The generated `.sites-runtime/` directory is disposable and ignored by Git.
-
-## Included Shape
-
-- edit site code under `app/`
-- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-OpenAI workspace sites can read the current user's email from `oai-authenticated-user-email`.
-
-SIWC-authenticated workspace sites may also receive `oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty `name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by `oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```sh
+npm ci
+npm run dev
+export SOURCE_COMMIT=$(git rev-parse HEAD)
+npm test
+npm run test:runtime
+npm run deploy:check
+npm run deploy:alerts -- --dry-run
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+`npm test` builds the app and runs the regression suite. `npm run test:runtime` then starts the compiled Worker locally and checks routing, assets, and build identity without requesting live scores. Deployment dry runs validate the actual compiled website and the alert Worker without publishing or accessing the production database. The default development server is at `http://localhost:5173`.
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs optional or required ChatGPT sign-in:
+`wrangler.jsonc` owns website configuration. The Cloudflare Vite plugin emits the deployable Worker, static assets, and a generated Wrangler configuration in `dist/server/wrangler.json`; deployment commands explicitly require that compiled configuration. Always rebuild after changing environment or source. The website has no database binding. Alerts retain their existing separate Worker and D1 database.
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send anonymous visitors through Sign in with ChatGPT.
-- In a Server Component, start sign-in with `<a href={chatGPTSignInPath(returnTo)} target="_top">`. The auth helper module is server-only; do not import it into a Client Component.
-- Do not use `fetch`, XHR, a client-side router, or a framework link that can prefetch the sign-in route. SIWC must start as a top-level navigation.
-- Never request the AuthAPI authorization endpoint directly. The dispatch-owned `/signin-with-chatgpt` route must start the SIWC flow.
-- Use `chatGPTSignOutPath(returnTo)` for browser sign-out links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because they depend on per-request identity headers.
+The existing repository-wide ESLint backlog is tracked in [issue #1](https://github.com/michaeltorbert/sportsapp/issues/1). The new CI checks run the build, tests, and deployment validation; they do not claim that the unrelated lint backlog is fixed.
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the OAuth cookies, and identity header injection. Do not implement app routes for those reserved paths. Routes that do not import and call the helper remain anonymous-compatible.
+## Deployment
 
-SIWC establishes identity only; it does not prove workspace membership. Use the Sites hosting platform's access policy controls for workspace-wide restrictions, or enforce explicit server-side membership or allowlist checks.
+See [the release guide](docs/releases.md) for GitHub environment setup, preview validation, production releases, verification, and rollback. GitHub Actions run tests on PRs. Production deployment is triggered by publishing a stable GitHub release, not by merging a PR.
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write actions tied to the current ChatGPT user. Leave public content anonymous.
+The application reports its version and exact built source commit at `/api/health`. The release workflow checks both after deployment, checks static assets and the score API, and checks alert readiness from the old and new production addresses.
 
-## Diagnostic Commands
+## Alerts and address changes
 
-- `npm run install:ci`: perform the one bounded lockfile install
-- `npm run dev`: start the Vite/Vinext development server
-- `npm run build`: build the deployable Sites artifact
-- `npm run start`: start the built Vinext application
-- `npm test`: build and verify the rendered development-preview metadata
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+The existing alert service remains `https://saturday-signal-alerts.scythe-wildflower.workers.dev`. Its versioned [configuration](services/alerts/wrangler.jsonc) reuses the current database and cron. Existing VAPID secrets and notification history must be preserved. See [alert-service details](services/alerts/README.md).
 
-Use build commands for targeted diagnosis after a remote failure, not as part of the normal checkpoint path.
+The old and new production addresses are explicitly allowed during migration. Arbitrary Workers subdomains and preview addresses are not allowed. The preview website therefore validates scores and page behavior without enrolling devices in the production alert service.
 
-The timeout defaults can be overridden for a controlled canary with `SITES_INSTALL_TIMEOUT`, `SITES_INSTALL_KILL_AFTER`, `SITES_BUILD_TIMEOUT`, and `SITES_BUILD_KILL_AFTER`. A timeout fails the command; the helpers never retry an unchanged install or build.
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+Browser settings and push subscriptions belong to the site address. Users moving to the Cloudflare address need to reopen or install that app and enable notifications there; existing subscriptions cannot be silently transferred. Disable alerts in the old installation before enabling the new one to avoid receiving notifications from both installations. Actual phone delivery must be verified on a device after the cutover.

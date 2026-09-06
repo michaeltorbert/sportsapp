@@ -1,4 +1,4 @@
-import { normalizeScoreboard, scoreboardUrl } from "./espn-data";
+import { normalizeScoreboard, normalizeCdnRange, scoreboardCdnUrl, scoreboardUrl } from "./espn-data";
 import type { Scoreboard } from "./football";
 
 // Only completed public data is shared across Worker requests. An in-flight
@@ -11,12 +11,19 @@ export async function getScoreboard(date: string, endDate = date, accOnly = fals
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const response = await fetch(scoreboardUrl(date, endDate, accOnly), {
-      headers: { Accept: "application/json" },
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error(`ESPN status ${response.status}`);
-    const data = normalizeScoreboard(await response.json(), date, undefined, endDate);
+    let data: Scoreboard;
+    try {
+      const response = await fetch(scoreboardUrl(date, endDate, accOnly), {
+        headers: { Accept: "application/json" }, signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`ESPN status ${response.status}`);
+      data = normalizeScoreboard(await response.json(), date, undefined, endDate);
+    } catch (error) {
+      if (controller.signal.aborted) throw error;
+      const response = await fetch(scoreboardCdnUrl(), { headers: { Accept: "application/json" }, signal: controller.signal });
+      if (!response.ok) throw new Error(`ESPN CDN status ${response.status}`);
+      data = normalizeCdnRange(await response.json(), date, endDate, accOnly);
+    }
     cache.set(key, { expires: Date.now() + 15000, data });
     if (cache.size > 8) cache.delete(cache.keys().next().value!);
     return data;

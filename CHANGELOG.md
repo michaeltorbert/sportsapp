@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.2.0 · 2026-09-06 · prepared, not deployed
+
+- Prepare the website for Cloudflare Workers at its provider address, with GitHub PR tests, optional preview deployment, and a tagged-release production workflow.
+- Verify each deployed website against its exact source commit and version, static assets, score API, and alert readiness. Preserve the existing alert Worker, database, cron and VAPID identity; allow both old and new production origins during migration.
+- Add a guarded current-week CDN fallback for the server score API when Cloudflare cannot reach ESPN’s date-specific endpoint. Reject unproven date coverage rather than show the wrong week.
+- Include the previously merged weekly Top 25 schedule change, including future ACC and non-ACC ranked matchups.
+
 ## 1.1.5 · 2026-09-06
 
 - Keep daily and weekly ACC scoreboards available together so tab counts do not disappear when switching views. Each count follows its destination tab and the Hide finals setting.
@@ -68,4 +75,4 @@ Source: `2f64d4e68ef099685648573828fd272b4e9555ca`. Sites saved version 1.
 
 ## Release policy
 
-Every published change gets a new semantic version, changelog entry, source commit, immutable Git tag, and saved Sites version. Never move an existing release tag. Deployments use the exact pushed source commit. To roll back, deploy an earlier saved Sites version; preserve the newer source and history.
+Every published change gets a new semantic version, changelog entry, source commit, immutable Git tag, and GitHub release. Never move an existing release tag. Starting with v1.2.0, the GitHub release workflow deploys the exact tagged source to Cloudflare and verifies the deployed version and commit. See `docs/releases.md` for setup and rollback. Existing Sites publications remain available during migration; new releases do not require a Sites source push or saved version.

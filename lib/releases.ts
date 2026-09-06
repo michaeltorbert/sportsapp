@@ -1,5 +1,6 @@
-export const VERSION = "1.1.5";
+export const VERSION = "1.2.0";
 export const releases = [
+  { version: "1.2.0", date: "September 6, 2026", changes: "Prepared Cloudflare hosting with automated release checks and support for alerts at the new address. Added upcoming Top 25 games across the football week." },
   { version: "1.1.5", date: "September 6, 2026", changes: "Kept daily and weekly ACC tab counts available when switching views. Clarified retained finals and limited the overnight Today notice to daily views." },
   { version: "1.1.4", date: "September 6, 2026", changes: "Restored background score polling through ESPN's complete CDN feed, with the prior score API retained as a fallback." },
   { version: "1.1.3", date: "September 5, 2026", changes: "Fixed inclusive score-feed date ranges. Prepared overtime alerts, first-seen live-game catch-up, and clearer service diagnostics. Cloudflare update pending." },
