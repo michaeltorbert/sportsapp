@@ -1,4 +1,4 @@
-import { normalizeScoreboard, scoreboardUrl } from "../../lib/espn-data";
+import { normalizeScoreboard, scoreboardCdnUrl, scoreboardUrl } from "../../lib/espn-data";
 import { easternDate, shiftDate, type Game } from "../../lib/football";
 import { nextPollAt, transitions, type AlertEvent, type Snapshot } from "./rules";
 import { encode, hash, sendPush, validSubscription } from "./web-push";
@@ -78,10 +78,21 @@ export async function poll(env: Env, now = Date.now()) {
   if (locked.meta.changes !== 1) return;
   try {
     const date = easternDate(new Date(now)), previousDate = shiftDate(date, -1);
-    const response = await fetch(scoreboardUrl(previousDate, date), { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
-    if (!response.ok) throw new Error(`ESPN returned ${response.status}`);
-    const board = normalizeScoreboard(await response.json(), previousDate, new Date(now).toISOString(), date);
-    if (board.warnings?.length) throw new Error("Scoreboard is incomplete");
+    const failures: string[] = [];
+    let board: ReturnType<typeof normalizeScoreboard> | null = null;
+    for (const [source, url] of [["cdn", scoreboardCdnUrl()], ["site-api", scoreboardUrl(previousDate, date)]] as const) {
+      try {
+        const response = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const candidate = normalizeScoreboard(await response.json(), previousDate, new Date(now).toISOString(), date);
+        if (candidate.warnings?.length) throw new Error("scoreboard is incomplete");
+        board = candidate;
+        break;
+      } catch (error) {
+        failures.push(`${source}: ${error instanceof Error ? error.message : "unknown failure"}`);
+      }
+    }
+    if (!board) throw new Error(`ESPN score feeds failed (${failures.join("; ")})`);
     await saveGameStates(env.DB, board.games, now);
     await deliver(env, now);
     await env.DB.batch([setValue(env.DB, "last_good_score", now), setValue(env.DB, "next_poll", nextPollAt(board.games, now))]);
@@ -114,7 +125,7 @@ async function api(request: Request, env: Env): Promise<Response> {
       : state.last_tick <= now - 180000 ? "stale-poll-tick"
       : !state.last_good_score ? "awaiting-first-successful-poll"
       : state.last_good_score <= now - 20 * 60000 ? "stale-score-feed" : "ready";
-    return json({ ready: readinessReason === "ready", readinessReason, lastTickAt: state.last_tick ? new Date(state.last_tick).toISOString() : null, lastSuccessfulPollAt: state.last_good_score ? new Date(state.last_good_score).toISOString() : null, publicKey: env.VAPID_PUBLIC_KEY || "", version: "1.1.3" });
+    return json({ ready: readinessReason === "ready", readinessReason, lastTickAt: state.last_tick ? new Date(state.last_tick).toISOString() : null, lastSuccessfulPollAt: state.last_good_score ? new Date(state.last_good_score).toISOString() : null, publicKey: env.VAPID_PUBLIC_KEY || "", version: "1.1.4" });
   }
   const token = request.headers.get("Authorization")?.replace(/^Bearer /, "") || "";
   if (request.method === "POST" && url.pathname === "/subscriptions") {

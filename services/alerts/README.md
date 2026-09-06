@@ -1,18 +1,18 @@
 # Background alerts
 
-Status for v1.1.3: the patch is prepared, not deployed. The owner reported claiming the Cloudflare deployment and adding the one-minute cron on September 5, 2026. The external Worker, D1 schema, and VAPID identity were deployed in v1.1.1. The temporary API credential now returns HTTP 401. No permanent Cloudflare management access is connected. See `deployment.json` for nonsecret resource identifiers.
+Status for v1.1.4: the existing Worker is deployed and healthy. Authenticated Wrangler access confirmed the claimed Scythe Wildflower account, the existing D1 database and VAPID secrets, and the one-minute cron. Live logs identified the old failure as ESPN site API HTTP 403 from Cloudflare's network. The Worker now uses ESPN's CDN scoreboard feed first and retains the site API as a fallback. `/config` reported `ready: true`; D1 contained fresh tick/success timestamps and all 76 Friday/Saturday games. See `deployment.json` for nonsecret resource identifiers.
 
-The app now has the service URL configured and rechecks its readiness every 30 seconds while visible. It will not offer Enable alerts until `/config` is ready. Cron execution and device delivery are unverified. Agent HTTP requests to the public service returned Cloudflare HTTP 403 / 1010; do not bypass that block or claim the endpoint was verified.
+The app has the service URL configured and rechecks readiness every 30 seconds while visible. Background polling is verified. No active device subscriptions existed at the v1.1.4 verification point, so real-device delivery is still untested and must not be marked complete until an iPhone Home Screen installation successfully subscribes and receives a legitimate test or game alert.
 
-Next diagnostic: in Cloudflare Workers & Pages, select `saturday-signal-alerts`, confirm the existing `* * * * *` trigger under Settings > Triggers, and inspect its scheduled invocations in Logs/Observability. Do not add a duplicate trigger. New schedules may take up to 15 minutes to propagate. Capture the actual invocation error; `ready:false` in v1.1.1 alone cannot distinguish missing keys, a missing/stale heartbeat, or a missing/stale successful score fetch. After an authenticated v1.1.3 update, `/config` adds `readinessReason`, `lastTickAt`, and `lastSuccessfulPollAt` without revealing private keys or subscriptions. A tick is recorded after the key-presence check and is not proof that the score fetch succeeded.
+Next verification: reopen the iPhone Home Screen app and tap Enable alerts after its readiness refresh. Confirm a new active subscription in D1, then verify one real device notification without notifying unrelated subscribers. Do not add a duplicate cron, recreate the database, rotate VAPID keys, or erase event history.
 
 Future deployments require an authenticated connection to the claimed account. Reuse the existing Worker, D1 database, and VAPID identity. Never recreate the database or rotate keys as a way to restore management access. Temporary claim links and credentials have been removed.
 
 ## Update this existing deployment
 
 1. Authenticate to the claimed account using a supported secure connection or local Wrangler login. Do not paste API tokens or private keys into chat.
-2. Prepare `services/alerts/wrangler.jsonc` from the example with the **existing** account and database IDs in `deployment.json`. Keep the Worker name, `DB` binding, site origin, VAPID secrets, observability, and `triggers.crons: ["* * * * *"]` unchanged. There is no new migration in v1.1.3.
-3. Deploy with `wrangler deploy --config services/alerts/wrangler.jsonc`. Verify `/config` reports version `1.1.3`, the existing cron is present, and the next scheduled invocation succeeds. `wrangler tail --config services/alerts/wrangler.jsonc --format json` can inspect new invocations while connected.
+2. Prepare `services/alerts/wrangler.jsonc` from the example with the **existing** account and database IDs in `deployment.json`. Keep the Worker name, `DB` binding, site origin, VAPID secrets, observability, and `triggers.crons: ["* * * * *"]` unchanged. There is no new migration in v1.1.4.
+3. Deploy with `wrangler deploy --config services/alerts/wrangler.jsonc`. Verify `/config` reports the intended version, the existing cron is present, and the next scheduled invocation succeeds. `wrangler tail --config services/alerts/wrangler.jsonc --format json` can inspect new invocations while connected.
 4. Reopen the iPhone Home Screen app and enable alerts only after readiness becomes true. Verify a real device notification before marking delivery tested. Saving or publishing the separate Sites frontend does **not** deploy this external Worker.
 
 ## Deployment after a background host is connected

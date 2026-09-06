@@ -11,8 +11,15 @@ function espnLink(value: string | undefined, fallback: string) { try { const u =
 function logoLink(value: string | undefined) { try { const u = new URL(value || ""); return u.protocol === "https:" && u.hostname.endsWith(".espncdn.com") ? u.href : null; } catch { return null; } }
 function team(c: z.infer<typeof competitorSchema>): Team { const rank = c.curatedRank?.current; return { id: c.team.id, name: c.team.shortDisplayName || c.team.location || c.team.displayName || c.team.abbreviation || "Team", abbreviation: c.team.abbreviation || "", logo: logoLink(c.team.logo), conferenceId: c.team.conferenceId === undefined ? null : String(c.team.conferenceId), score: score(c.score), rank: rank && rank >= 1 && rank <= 25 ? rank : null, rankKnown: typeof rank === "number" && rank >= 1, record: c.records?.find(r => r.type === "total" || r.name === "overall")?.summary || "" }; }
 
+const eventsEnvelopeSchema = z.object({ events: z.array(z.unknown()) });
+function eventsEnvelope(raw: unknown) {
+  const direct = eventsEnvelopeSchema.safeParse(raw);
+  if (direct.success) return direct.data;
+  return z.object({ content: z.object({ sbData: eventsEnvelopeSchema }) }).parse(raw).content.sbData;
+}
+
 export function normalizeScoreboard(raw: unknown, date: string, fetchedAt = new Date().toISOString(), endDate = date): Scoreboard {
-  const envelope = z.object({ events: z.array(z.unknown()) }).parse(raw);
+  const envelope = eventsEnvelope(raw);
   const games = new Map<string, Game>(); let unreadable = 0;
   for (const item of envelope.events) {
     const parsed = eventSchema.safeParse(item);
@@ -43,5 +50,14 @@ export function scoreboardUrl(date: string, endDate = date, accOnly = false) {
   url.searchParams.set("groups", accOnly ? "1" : "80");
   // Oversized limits may silently fall back to 25. ESPN returns the full day with 200.
   url.searchParams.set("limit", "200");
+  return url.toString();
+}
+
+export function scoreboardCdnUrl() {
+  const url = new URL("https://cdn.espn.com/core/college-football/scoreboard");
+  url.searchParams.set("xhr", "1");
+  // The CDN endpoint uses singular `group`; plural `groups` silently returns
+  // the default 25-game board instead of the complete FBS week.
+  url.searchParams.set("group", "80");
   return url.toString();
 }

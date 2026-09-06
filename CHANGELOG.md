@@ -1,5 +1,13 @@
 # Saturday Signal releases
 
+## 1.1.4 · 2026-09-06
+
+- Fix hosted background polling after live Worker logs proved ESPN's site API returns HTTP 403 from Cloudflare's network.
+- Use ESPN's public CDN scoreboard envelope as the primary Worker feed. Request singular `group=80`, which returns the complete FBS week; plural `groups=80` silently returns the default 25-game board.
+- Preserve the site API as a fallback and keep normalization's Eastern-date filter. A Cloudflare remote preview returned 99 weekly FBS games, including the same 8 Friday and 68 Saturday games verified by the local v1.1.3 diagnostic.
+- Add regression coverage for the CDN envelope, complete-feed parameter, fallback path, and local workspace paths containing spaces. Replace the Linux-only build timeout with a Node-based bounded runner so the verified build works on macOS too. No database migration, key rotation, subscription reset, or trigger-ID change is required.
+- Deployed the existing Worker in place. Cloudflare confirmed the one-minute schedule; `/config` reported `ready: true` on v1.1.4, and D1 contained fresh tick/success timestamps plus all 76 games. No active device subscriptions existed at verification time, so real iPhone delivery remains untested.
+
 ## 1.1.3 · 2026-09-05 · prepared, not deployed
 
 - Include overtime (`live && period >= 4`) in the one-score and ranked-trailing alert conditions. Ties qualify for one-score alerts, not upset alerts. Overtime notifications use accurate titles.

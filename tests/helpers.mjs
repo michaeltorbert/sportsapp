@@ -1,8 +1,9 @@
 import { build } from "esbuild";
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 export async function bundle(entry) {
-  const output = await build({ entryPoints: [entry], absWorkingDir: new URL("..", import.meta.url).pathname, bundle: true, platform: "node", format: "esm", write: false });
+  const output = await build({ entryPoints: [entry], absWorkingDir: fileURLToPath(new URL("..", import.meta.url)), bundle: true, platform: "node", format: "esm", write: false });
   return import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString("base64")}`);
 }
 export function game(changes = {}) {

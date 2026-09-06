@@ -13,9 +13,9 @@ test("poll fetches yesterday AND today, catches live games, and ignores first-se
   let calls = 0;
   globalThis.fetch = async input => {
     const url = new URL(input); calls++;
-    assert.equal(url.hostname, "site.api.espn.com");
-    assert.equal(url.searchParams.get("dates"), "20260904-20260906");
-    return Response.json({ events: [event("friday-final", "2026-09-05T01:00:00Z", "post"), event("saturday-live", "2026-09-05T22:00:00Z", "in"), event("saturday-final", "2026-09-05T16:00:00Z", "post"), event("outside-window", "2026-09-06T20:00:00Z", "in")] });
+    assert.equal(url.hostname, "cdn.espn.com");
+    assert.equal(url.searchParams.get("group"), "80");
+    return Response.json({ content: { sbData: { events: [event("friday-final", "2026-09-05T01:00:00Z", "post"), event("saturday-live", "2026-09-05T22:00:00Z", "in"), event("saturday-final", "2026-09-05T16:00:00Z", "post"), event("outside-window", "2026-09-06T20:00:00Z", "in")] } } });
   };
   try {
     const env = { DB: db, SITE_ORIGIN: "https://app.test", VAPID_PUBLIC_KEY: "test-only", VAPID_PRIVATE_KEY: "test-only" };
@@ -27,6 +27,25 @@ test("poll fetches yesterday AND today, catches live games, and ignores first-se
     await poll(env, now + 60000);
     assert.equal(sqlite.prepare("SELECT count(*) AS n FROM alert_events").get().n, 2);
     assert.equal(calls, 2);
+  } finally { globalThis.fetch = originalFetch; sqlite.close(); }
+});
+
+test("poll falls back to the site API when the CDN feed is unavailable", async () => {
+  const { db, sqlite } = database();
+  const originalFetch = globalThis.fetch;
+  const now = Date.parse("2026-09-05T23:00:00Z");
+  const hosts = [];
+  globalThis.fetch = async input => {
+    const url = new URL(input); hosts.push(url.hostname);
+    if (url.hostname === "cdn.espn.com") return new Response("Unavailable", { status: 503 });
+    assert.equal(url.hostname, "site.api.espn.com");
+    assert.equal(url.searchParams.get("dates"), "20260904-20260906");
+    return Response.json({ events: [] });
+  };
+  try {
+    await poll({ DB: db, SITE_ORIGIN: "https://app.test", VAPID_PUBLIC_KEY: "test-only", VAPID_PRIVATE_KEY: "test-only" }, now);
+    assert.deepEqual(hosts, ["cdn.espn.com", "site.api.espn.com"]);
+    assert.equal(sqlite.prepare("SELECT value FROM poll_state WHERE id='last_good_score'").get().value, now);
   } finally { globalThis.fetch = originalFetch; sqlite.close(); }
 });
 
@@ -49,7 +68,7 @@ test("config explains each readiness gate without exposing private configuration
     set("last_tick", now);
     const config = await read();
     assert.equal(config.ready, true); assert.equal(config.readinessReason, "ready");
-    assert.equal(config.version, "1.1.3");
+    assert.equal(config.version, "1.1.4");
     assert.equal(config.lastSuccessfulPollAt, new Date(now).toISOString());
     assert.equal(config.lastTickAt, new Date(now).toISOString());
     assert.ok(!JSON.stringify(config).includes("private-test"));

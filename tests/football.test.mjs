@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { bundle, game, scoreboard } from "./helpers.mjs";
 const { classify, sortGames, accWeek, easternDate, gameDay, retainFinalCategories } = await bundle("lib/football.ts");
-const { normalizeScoreboard, scoreboardUrl } = await bundle("lib/espn-data.ts");
+const { normalizeScoreboard, scoreboardCdnUrl, scoreboardUrl } = await bundle("lib/espn-data.ts");
 
 test("one-score classification includes ties and eight points in every live quarter", () => {
   for (const period of [1, 2, 3, 4, 5]) for (const margin of [0, 8, 9]) {
@@ -66,4 +66,7 @@ test("ESPN date ranges retain the 10:30pm ET Cal game and parse curatedRank 99",
   assert.equal(url.searchParams.get("dates"), "20260903-20260908"); assert.equal(url.searchParams.get("groups"), "1"); assert.equal(url.searchParams.get("limit"), "200");
   assert.equal(new URL(scoreboardUrl("2026-09-05")).searchParams.get("dates"), "20260905");
   assert.equal(new URL(scoreboardUrl("2026-12-30", "2026-12-31")).searchParams.get("dates"), "20261230-20270101");
+  const cdn = new URL(scoreboardCdnUrl());
+  assert.equal(cdn.hostname, "cdn.espn.com"); assert.equal(cdn.searchParams.get("group"), "80"); assert.equal(cdn.searchParams.get("groups"), null);
+  assert.equal(normalizeScoreboard({ content: { sbData: { events: [event] } } }, "2026-09-03", undefined, "2026-09-07").games.length, 1);
 });
