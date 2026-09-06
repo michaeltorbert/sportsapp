@@ -28,6 +28,7 @@ export CLOUDFLARE_ACCOUNT_ID=092f7a0a1516725ba2217cfb3760b38f
 export CLOUDFLARE_ENV=preview
 export SOURCE_COMMIT=$(git rev-parse HEAD)
 npm test
+npm run test:runtime
 npm run deploy:check
 npm run deploy:app
 DEPLOYMENT_URL=https://saturday-signal-preview.scythe-wildflower.workers.dev VERIFY_ALERTS=false npm run release:verify

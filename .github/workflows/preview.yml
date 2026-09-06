@@ -40,6 +40,7 @@ jobs:
         run: |
           echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           SOURCE_COMMIT=$(git rev-parse HEAD) npm test
+          npm run test:runtime
           npm run deploy:check
       - name: Deploy preview website
         env:

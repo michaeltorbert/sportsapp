@@ -14,11 +14,12 @@ Use Node.js 22.13 or newer. CI uses Node 22.
 npm ci
 npm run dev
 npm test
+npm run test:runtime
 npm run deploy:check
 npm run deploy:alerts -- --dry-run
 ```
 
-`npm test` builds the app and runs the regression suite. Deployment dry runs validate the actual compiled website and the alert Worker without publishing or accessing the production database. The default development server is at `http://localhost:5173`.
+`npm test` builds the app and runs the regression suite. `npm run test:runtime` then starts the compiled Worker locally and checks routing, assets, and build identity without requesting live scores. Deployment dry runs validate the actual compiled website and the alert Worker without publishing or accessing the production database. The default development server is at `http://localhost:5173`.
 
 `wrangler.jsonc` owns website configuration. The Cloudflare Vite plugin emits the deployable Worker, static assets, and a generated Wrangler configuration in `dist/server/wrangler.json`; Wrangler automatically follows `.wrangler/deploy/config.json` after a build. Always rebuild after changing environment or source. The website has no database binding. Alerts retain their existing separate Worker and D1 database.
 

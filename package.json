@@ -17,7 +17,8 @@
     "deploy:app": "WRANGLER_LOG_PATH=.wrangler/logs wrangler deploy",
     "deploy:alerts": "WRANGLER_LOG_PATH=.wrangler/logs wrangler deploy --config services/alerts/wrangler.jsonc",
     "release:check": "node scripts/check-release.mjs",
-    "release:verify": "node scripts/verify-deployment.mjs"
+    "release:verify": "node scripts/verify-deployment.mjs",
+    "test:runtime": "node scripts/check-worker-runtime.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -46,7 +47,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.37.1",
+    "@cloudflare/vite-plugin": "1.54.4",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
@@ -62,7 +63,7 @@
     "typescript": "5.9.3",
     "vinext": "0.0.50",
     "vite": "8.0.13",
-    "wrangler": "4.92.0"
+    "wrangler": "4.129.0"
   },
   "type": "module"
 }

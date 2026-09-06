@@ -47,6 +47,7 @@ jobs:
           set -o pipefail
           mkdir -p .release-evidence
           npm test 2>&1 | tee .release-evidence/tests.log
+          npm run test:runtime
           npm run deploy:check
           npm run deploy:alerts -- --dry-run
       - name: Deploy existing alert service, then website
@@ -67,4 +68,5 @@ jobs:
         with:
           name: release-${{ github.run_id }}-${{ github.run_attempt }}
           path: .release-evidence/*.log
+          include-hidden-files: true
           retention-days: 30

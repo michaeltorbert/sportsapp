@@ -35,13 +35,16 @@ jobs:
           npm test 2>&1 | tee .release-evidence/tests.log
       - name: Validate production deployment package
         run: |
+          npm run test:runtime
           npm run deploy:check
           npm run deploy:alerts -- --dry-run
       - name: Validate preview deployment package
         env:
           CLOUDFLARE_ENV: preview
         run: |
+          export SOURCE_COMMIT="$(git rev-parse HEAD)"
           npm run build
+          npm run test:runtime
           npm run deploy:check
       - name: Save test evidence
         if: always()
@@ -49,4 +52,5 @@ jobs:
         with:
           name: tests-${{ github.sha }}
           path: .release-evidence/tests.log
+          include-hidden-files: true
           retention-days: 14
