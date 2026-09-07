@@ -53,13 +53,24 @@ export function gameDay(now: Date, previous: Scoreboard | null, heldDate?: strin
   // A failed or incomplete refresh is not evidence that the last game ended.
   return heldDate === yesterday ? yesterday : calendar;
 }
+const inProgress = (game: Game) => game.state === "live" || game.state === "final" || (game.state === "delayed" && game.started);
+// The categories a predecessor snapshot established. A delay after kickoff is
+// transparent to one-score history: it neither adds nor erases the last live
+// observation it carries. Everything else, including upset, follows the delayed
+// snapshot's own current classification, exactly as before.
+function observedCategories(old: Game): Categories {
+  const current = classify(old);
+  return old.state === "delayed" ? { ...current, close: !!old.retainedCategories?.close } : current;
+}
 export function retainFinalCategories(next: Scoreboard, previous: Scoreboard | null): Scoreboard {
   return { ...next, games: next.games.map(raw => {
     const game = { ...raw };
     const old = previous?.games.find(g => g.id === game.id && g.teams.every((t, i) => t.id === game.teams[i].id));
     // Categories belong to the event; betting evidence also belongs to its scheduled matchup.
     if (!game.pregameLine && old?.pregameLine && old.date === game.date) game.pregameLine = old.pregameLine;
-    return game.state === "final" && old && (old.state === "live" || old.state === "final" || (old.state === "delayed" && old.started))
-      ? { ...game, retainedCategories: classify(old) } : game;
+    // Finals read their retained categories. A started delay only carries them,
+    // unread, so the eventual final still knows the game was once one score.
+    return old && inProgress(old) && (game.state === "final" || (game.state === "delayed" && game.started))
+      ? { ...game, retainedCategories: observedCategories(old) } : game;
   }) };
 }

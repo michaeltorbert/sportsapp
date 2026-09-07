@@ -136,6 +136,24 @@ test("expanded list eligibility does not redefine ranked push triggers or their 
   assert.ok(transitions(null, g, Date.now()).some(e => e.id === "sec:ranked-trailing-fourth"));
 });
 
+test("one-score history carried through a started delay stays out of Delayed badges and phone triggers", () => {
+  const now = Date.now();
+  const live = match("paused-close", { score: 21, otherScore: 24 });
+  const paused = { ...structuredClone(live), state: "delayed" };
+  const carried = retainFinalCategories(scoreboard([paused]), scoreboard([live])).games[0];
+  assert.equal(classify(carried).close, false);
+  assert.deepEqual(viewGames(scoreboard([carried]), "close"), []);
+  assert.deepEqual(viewGames(scoreboard([carried]), "watch"), []);
+  assert.equal(conditions(carried, now)["one-score-fourth"], false);
+  const final = { ...structuredClone(live), state: "final" }; final.teams[1].score = 38;
+  assert.deepEqual(transitions({ game: carried, observedAt: now - 60000 }, final, now), [], "a final after a delay creates no one-score event");
+  const retained = retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(scoreboard([carried])))).games[0];
+  assert.equal(classify(retained).close, true);
+  assert.deepEqual(viewGames(scoreboard([retained]), "close").map(g => g.id), [live.id]);
+  assert.equal(conditions(retained, now)["one-score-fourth"], false, "retained history never becomes a phone trigger");
+  assert.deepEqual(transitions(null, live, now).map(e => e.id), ["paused-close:one-score-fourth"], "the live trigger and its dedupe ID are unchanged");
+});
+
 test("unranked SEC upset watches remain visible during a delay after kickoff", () => {
   const paused = match("paused-sec", { sec: true, state: "delayed", started: true, score: 7, otherScore: 21 });
   for (const filter of ["watch", "upset"])

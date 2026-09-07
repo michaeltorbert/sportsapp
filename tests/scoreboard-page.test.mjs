@@ -148,6 +148,25 @@ test("Help discloses ranking-only alerts when the line-based list excludes a ran
   assert.deepEqual(cardIds(render("upset", { boards }).html), []);
 });
 
+test("a final after a one-score pause shows its retained badge, while the pause itself shows none", () => {
+  const live = game({ id: "paused-close" }); live.teams.forEach(team => { team.rank = null; });
+  live.teams[0].score = 7; live.teams[1].score = 14;
+  const paused = { ...live, state: "delayed", status: "Delayed" };
+  const boards = fixtures();
+  boards.daily = retainFinalCategories(scoreboard([paused]), scoreboard([live]));
+  const delayed = render("close", { boards }).html;
+  assert.deepEqual(cardIds(delayed), []); assert.equal(badge(delayed, "close"), 0);
+  const watched = render("watch", { boards, focusedGame: "paused-close", showHelp: true }).html;
+  assert.match(watched, /Play paused\. Watching for an update\./);
+  assert.doesNotMatch(watched, /class="badge close-badge"/);
+  assert.match(watched, /A delay after kickoff does not erase that history/);
+  const final = structuredClone(live); final.state = "final"; final.status = "Final"; final.teams[1].score = 28;
+  boards.daily = retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(boards.daily)));
+  const completed = render("close", { boards }).html;
+  assert.deepEqual(cardIds(completed), ["paused-close"]); assert.equal(badge(completed, "close"), 1);
+  assert.match(completed, /class="badge close-badge">One-score watch/);
+});
+
 test("live conference watches use the same honest badge as conference finals", () => {
   const g = game({ id: "conference-live" });
   Object.assign(g.teams[0], { conferenceId: "8", rank: null, score: 7 });

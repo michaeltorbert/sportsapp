@@ -1,5 +1,9 @@
 # Saturday Signal releases
 
+## Unreleased
+
+- Keep a final's one-score history when a delay after kickoff was the last snapshot before the result, including across a saved-board reload, without counting the paused game as live or changing phone alerts (#13).
+
 ## 1.3.1 · 2026-09-06
 
 - Add an authenticated single-device TEST notification route using the existing push sender and VAPID identity, with permanent request deduplication and an atomic per-device cooldown. Test deliveries remain separate from football events.

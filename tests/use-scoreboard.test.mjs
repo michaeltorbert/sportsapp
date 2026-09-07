@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { build } from "esbuild";
 import { bundle, game, scoreboard } from "./helpers.mjs";
-const { easternDate, shiftDate, accWeek } = await bundle("lib/football.ts");
-const { scoreboardScope } = await bundle("lib/scoreboard-views.ts");
+const { easternDate, shiftDate, accWeek, classify } = await bundle("lib/football.ts");
+const { scoreboardScope, viewGames } = await bundle("lib/scoreboard-views.ts");
 
 // Drive hook lifecycle and controlled feed responses without a browser or network.
 const output = await build({
@@ -141,6 +141,50 @@ test("saved ACC and full-FBS weekly history cannot cross-contaminate final categ
   await v.refresh(); const again = await h.settle();
   assert.equal(again.boards.acc.games[0].retainedCategories.close, true);
   assert.equal(again.boards.top25.games[0].retainedCategories.close, false);
+});
+
+test("one-score history written by a live-to-delay refresh survives a fresh hook's reload into the final, per scope and day", async t => {
+  const calendar = easternDate(), yesterday = shiftDate(calendar, -1);
+  const close = game(); close.teams[0].score = 7; close.teams[1].score = 14;
+  const wide = game(); wide.teams[0].score = 7; wide.teams[1].score = 28;
+  const paused = { ...structuredClone(close), state: "delayed", status: "Delayed" };
+  const final = { ...structuredClone(wide), state: "final", status: "Final" };
+  // Daily: live one-score, then paused. Top 25: live but wide, then paused.
+  // ACC: first observed already paused, never live on this device.
+  let phase = "live";
+  const snapshot = scope => structuredClone(phase === "live" && scope === "daily" ? close : phase === "live" && scope === "top25" ? wide : paused);
+  let saved;
+  await t.test("the real hook stores the delayed boards with their carried history", async t => {
+    const h = harness(t, async (date, signal, fetcher, end = date, accOnly = false) => {
+      const scope = requestScope(date, end, accOnly);
+      return scoreboard(scope === "daily" && date === yesterday ? [] : [snapshot(scope)], date, { endDate: end });
+    });
+    h.render(); const initial = await h.settle();
+    assert.equal(classify(initial.boards.daily.games[0]).close, true);
+    phase = "delay"; await initial.refresh(); const delayed = await h.settle();
+    for (const scope of ["daily", "acc", "top25"]) {
+      assert.equal(delayed.boards[scope].games[0].state, "delayed");
+      assert.equal(classify(delayed.boards[scope].games[0]).close, false, `${scope}: a paused game is never a live one-score game`);
+      assert.deepEqual(viewGames(delayed.boards[scope], "close"), []);
+    }
+    saved = Object.fromEntries(Object.keys(h.storage).map(key => [key, h.storage.getItem(key)]));
+    assert.ok(Object.keys(saved).filter(key => key.startsWith("ss:board:")).length >= 3, "each scope persisted its own board");
+  });
+  await t.test("a fresh hook reads only that opaque saved JSON before the final arrives", async t => {
+    const h = harness(t, async (date, signal, fetcher, end = date, accOnly = false) => {
+      const scope = requestScope(date, end, accOnly);
+      return scoreboard(scope === "daily" && date === yesterday ? [] : [structuredClone(final)], date, { endDate: end });
+    }, saved);
+    h.render(); const v = await h.settle();
+    assert.equal(classify(v.boards.daily.games[0]).close, true, "live one-score → delay → reload → final keeps the history");
+    assert.deepEqual(viewGames(v.boards.daily, "close").map(g => g.id), [close.id]);
+    assert.equal(classify(v.boards.top25.games[0]).close, false, "the same event observed wide before its delay has no one-score history");
+    assert.equal(classify(v.boards.acc.games[0]).close, false, "a delay never observed live on this device invents nothing");
+    v.setDate(shiftDate(calendar, -3)); h.render(); const other = await h.settle();
+    assert.equal(other.boards.daily.date, shiftDate(calendar, -3));
+    assert.equal(other.boards.daily.games[0].retainedCategories, undefined, "history belongs to the board day it was observed on");
+    assert.equal(classify(other.boards.daily.games[0]).close, false);
+  });
 });
 
 test("switching tabs during a Top 25 request neither aborts it nor repeats polling", async t => {
