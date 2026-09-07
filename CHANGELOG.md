@@ -1,5 +1,9 @@
 # Saturday Signal releases
 
+## Unreleased
+
+- Restore the standalone TypeScript check with Wrangler-generated Workers runtime and binding declarations that match the website's configuration, and add `npm run typecheck` (#6).
+
 ## 1.3.1 · 2026-09-06
 
 - Add an authenticated single-device TEST notification route using the existing push sender and VAPID identity, with permanent request deduplication and an atomic per-device cooldown. Test deliveries remain separate from football events.
