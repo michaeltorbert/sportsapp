@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { Bell, BellRing } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
+import { usePushEnvironment } from "@/lib/browser-state";
+
 type Config = { ready: boolean; publicKey: string };
 type Credentials = { id: string; token: string };
 // Response bodies are typed explicitly: the Workers runtime declarations make
@@ -12,7 +14,7 @@ type SubscriptionStatus = { active: boolean; kickoff: boolean };
 function saved(): Credentials | null { try { return JSON.parse(localStorage.getItem("ss:push") || "null"); } catch { return null; } }
 function keyBytes(value: string) { return Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4)), c => c.charCodeAt(0)); }
 export function Alerts() {
-  const [ios, setIos] = useState(false), [standalone, setStandalone] = useState(false), [supported, setSupported] = useState(true);
+  const { ios, standalone, supported } = usePushEnvironment();
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
   const [service, setService] = useState(""), [config, setConfig] = useState<Config | null>(null);
   const [enabled, setEnabled] = useState(false), [kickoff, setKickoff] = useState(false);
@@ -20,11 +22,6 @@ export function Alerts() {
   useEffect(() => {
     let alive = true;
     let checking = false;
-    setIos(/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
-    const media = matchMedia("(display-mode: standalone)");
-    const display = () => setStandalone(media.matches || !!(navigator as Navigator & { standalone?: boolean }).standalone);
-    display(); media.addEventListener("change", display);
-    setSupported("serviceWorker" in navigator && "PushManager" in window && "Notification" in window);
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).then(() => navigator.serviceWorker.ready).then(r => { if (alive) setRegistration(r); }).catch(() => { if (alive) setMessage("Alert setup could not load. Try reopening the app."); });
     const checkAvailability = async () => {
       if (checking || document.visibilityState === "hidden") return;
@@ -58,7 +55,7 @@ export function Alerts() {
     void checkAvailability();
     const timer = window.setInterval(checkAvailability, 30000);
     document.addEventListener("visibilitychange", checkAvailability);
-    return () => { alive = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", checkAvailability); media.removeEventListener("change", display); };
+    return () => { alive = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", checkAvailability); };
   }, []);
 
   async function enable() {

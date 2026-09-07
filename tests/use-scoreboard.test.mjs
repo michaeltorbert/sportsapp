@@ -11,7 +11,7 @@ const output = await build({
   plugins: [{ name: "hook-test-runtime", setup(build) {
     build.onResolve({ filter: /^(react|\.\/score-client)$/ }, args => ({ path: args.path, namespace: "test" }));
     build.onLoad({ filter: /.*/, namespace: "test" }, args => ({ contents: args.path === "react"
-      ? "export const useState=(...a)=>globalThis.scoreHookTest.useState(...a), useRef=(...a)=>globalThis.scoreHookTest.useRef(...a), useEffect=(...a)=>globalThis.scoreHookTest.useEffect(...a), useCallback=(...a)=>globalThis.scoreHookTest.useCallback(...a);"
+      ? "export const useSyncExternalStore=(...a)=>globalThis.scoreHookTest.useSyncExternalStore(...a), useState=(...a)=>globalThis.scoreHookTest.useState(...a), useRef=(...a)=>globalThis.scoreHookTest.useRef(...a), useEffect=(...a)=>globalThis.scoreHookTest.useEffect(...a), useCallback=(...a)=>globalThis.scoreHookTest.useCallback(...a);"
       : "export const loadScores=(...a)=>globalThis.scoreHookTest.loadScores(...a);" }));
   } }],
 });
@@ -24,6 +24,7 @@ function harness(t, loadScores, saved = {}) {
   const replace = (name, value) => { globals.set(name, Object.getOwnPropertyDescriptor(globalThis, name)); Object.defineProperty(globalThis, name, { configurable: true, value }); };
   const same = (a, b) => a && b && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
   const runtime = {
+    useSyncExternalStore(subscribe, snapshot) { return snapshot(); },
     useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], v => { slots[i] = typeof v === "function" ? v(slots[i]) : v; }]; },
     useRef(initial) { const i = cursor++; return slots[i] ||= { current: initial }; },
     useCallback(fn, deps) { const i = cursor++; if (!same(slots[i]?.deps, deps)) slots[i] = { fn, deps }; return slots[i].fn; },
@@ -44,7 +45,7 @@ function harness(t, loadScores, saved = {}) {
   // eslint-disable-next-line react-hooks/rules-of-hooks -- The controlled lifecycle harness supplies the hook runtime.
   const render = () => { cursor = 0; value = useScoreboard(scope); while (pending.length) pending.shift()(); return value; };
   t.after(() => { slots.forEach(slot => slot?.cleanup?.()); for (const [name, descriptor] of globals) { if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globalThis[name]; } });
-  return { render, storage, switchTo(s) { scope = s; return render(); }, async settle() { for (let i = 0; i < 6; i++) { await new Promise(resolve => setImmediate(resolve)); render(); } return value; } };
+  return { render, storage, switchTo(s) { scope = s; return render(); }, async settle() { for (let i = 0; i < 6; i++) { await new Promise(resolve => setTimeout(resolve, 0)); render(); } return value; } };
 }
 
 const requestScope = (date, end, accOnly) => accOnly ? "acc" : date !== end ? "top25" : "daily";

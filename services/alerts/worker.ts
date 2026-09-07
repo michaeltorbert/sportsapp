@@ -54,7 +54,17 @@ async function testNotification(request: Request, env: Env, sub: StoredSubscript
   const eventId = `test:${body.testId}`;
   const read = () => env.DB.prepare("SELECT status,attempted_at FROM deliveries WHERE event_id=? AND subscription_id=?").bind(eventId, sub.id).first<{ status: string; attempted_at: number }>();
   const result = (row: { status: string; attempted_at: number }, attempted: boolean) => ({
-    body: { testId: body.testId, attempted, status: row.status, attemptedAt: new Date(row.attempted_at).toISOString(), receiptConfirmed: false },
+    body: {
+      testId: body.testId,
+      // attempted describes this request only; a saved claim cannot establish
+      // whether an earlier request reached sendPush before being interrupted.
+      attempted,
+      attemptHistory: !attempted && row.status === "claimed" ? "unknown" : "attempted",
+      ...(!attempted && row.status === "claimed" ? {
+        warning: "An earlier request may have attempted this notification. This request did not attempt another send. Do not send another test.",
+      } : {}),
+      status: row.status, attemptedAt: new Date(row.attempted_at).toISOString(), receiptConfirmed: false,
+    },
     status: row.status === "claimed" ? 202 : 200,
   });
   const previous = await read();

@@ -69,10 +69,12 @@ test("one labeled encrypted test reaches only its owner, preserves game history,
   assert.equal(first.status, 200);
   assert.equal(result.testId, testId); assert.equal(result.attemptedAt, new Date(now).toISOString());
   assert.equal(result.status, "accepted"); assert.equal(result.attempted, true); assert.equal(result.receiptConfirmed, false);
+  assert.equal(result.attemptHistory, "attempted"); assert.equal(result.warning, undefined);
   assert.equal(f.calls.length, 1); assert.equal(f.calls[0].url, `https://web.push.apple.com/${f.id}`);
   assert.deepEqual(await decodePayload(f, f.calls[0].init.body), { title: "Saturday Signal: TEST", body: "This is a test notification, not a game alert. Tap to open Saturday Signal.", eventId: `test:${testId}`, url: "https://app.test/" });
   const replay = await (await f.request(testId)).json();
   assert.equal(replay.attempted, false); assert.equal(replay.status, "accepted");
+  assert.equal(replay.attemptHistory, "attempted"); assert.equal(replay.warning, undefined);
   assert.equal((await f.request(crypto.randomUUID())).status, 429);
   assert.equal(f.sqlite.prepare("SELECT state_json FROM game_states").get().state_json, history);
   assert.equal(f.sqlite.prepare("SELECT count(*) n FROM alert_events").get().n, 1);
@@ -112,6 +114,8 @@ test("a pending or interrupted test claim returns 202 and cannot send again", as
   f.sqlite.prepare("INSERT INTO deliveries VALUES(?,?,?,?)").run(`test:${testId}`, f.id, "claimed", Date.now() - 3600000);
   const response = await f.request(testId), body = await response.json();
   assert.equal(response.status, 202); assert.equal(body.status, "claimed"); assert.equal(body.attempted, false);
+  assert.equal(body.attemptHistory, "unknown"); assert.equal(body.receiptConfirmed, false);
+  assert.match(body.warning, /earlier request may have attempted.*This request did not attempt another send.*Do not send another test/);
   assert.equal(f.calls.length, 0);
 });
 
@@ -122,12 +126,15 @@ test("a failed expiry update cannot report clean persistence or permit a resend"
   assert.equal(failed.status, 503);
   assert.equal(failure.testId, testId); assert.equal(failure.attempted, true);
   assert.equal(failure.status, "claimed"); assert.equal(failure.receiptConfirmed, false);
+  assert.equal(failure.attemptHistory, "attempted");
   assert.match(failure.error, /attempt was made.*Do not send another test/);
   assert.equal(f.calls.length, 1);
   assert.equal(f.sqlite.prepare("SELECT status FROM deliveries WHERE event_id=?").get(`test:${testId}`).status, "claimed");
   assert.equal(f.sqlite.prepare("SELECT active FROM subscriptions WHERE id=?").get(f.id).active, 1);
-  const retry = await f.request(testId);
-  assert.equal(retry.status, 202); assert.equal((await retry.json()).attempted, false);
+  const retry = await f.request(testId), replay = await retry.json();
+  assert.equal(retry.status, 202); assert.equal(replay.attempted, false);
+  assert.equal(replay.attemptHistory, "unknown"); assert.equal(replay.receiptConfirmed, false);
+  assert.match(replay.warning, /earlier request may have attempted.*Do not send another test/);
   assert.equal(f.calls.length, 1);
 });
 
