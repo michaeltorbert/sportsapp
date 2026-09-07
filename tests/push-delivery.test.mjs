@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
-import { bundle, database, game } from "./helpers.mjs";
+import { bundle, cdnFeed, database, game } from "./helpers.mjs";
 
 const { poll, saveGameStates } = await bundle("services/alerts/worker.ts");
 const { encode } = await bundle("services/alerts/web-push.ts");
@@ -57,7 +57,7 @@ function intercept(t, { events = [liveEvent()], send = () => new Response(null, 
     const url = new URL(input);
     if (url.hostname === "cdn.espn.com") {
       feeds.push(url.href);
-      return Response.json({ content: { sbData: { events } } });
+      return Response.json(cdnFeed(events));
     }
     assert.equal(url.hostname, "fcm.googleapis.com", "Unexpected network destination must not escape interception");
     const headers = new Headers(init.headers);
@@ -178,7 +178,7 @@ test("partial CDN data falls back without saving or notifying from its incomplet
   t.mock.method(globalThis, "fetch", async input => {
     const host = new URL(input).hostname;
     hosts.push(host);
-    if (host === "cdn.espn.com") return Response.json({ events: [liveEvent("partial-only"), { invalid: true }] });
+    if (host === "cdn.espn.com") return Response.json(cdnFeed([liveEvent("partial-only"), { invalid: true }]));
     assert.equal(host, "site.api.espn.com");
     return Response.json({ events: [] });
   });
@@ -308,4 +308,42 @@ test("notification clicks use the home page for missing, malformed, or out-of-or
     await sw.dispatch("notificationclick", { notification: { data: { url }, close() {} } });
     assert.deepEqual(sw.calls.at(-1), ["openWindow", `${origin}/`]);
   }
+});
+
+for (const coverage of ["wrong-week", "missing-calendar"]) test(`${coverage} CDN games are discarded while API live catch-up delivers once`, async t => {
+  const f = fixture(t); f.subscription("device");
+  const raw = cdnFeed([liveEvent("cdn-must-not-save")]);
+  if (coverage === "missing-calendar") delete raw.content.sbData.leagues;
+  else {
+    const selected = raw.content.sbData.leagues[0].calendar[0].entries[0];
+    selected.startDate = "2026-08-15T07:00Z";
+    selected.endDate = "2026-08-22T06:59Z";
+  }
+  const hosts = [], attempts = [];
+  t.mock.method(globalThis, "fetch", async (input, init) => {
+    const url = new URL(input); hosts.push(url.hostname);
+    if (url.hostname === "cdn.espn.com") return Response.json(raw);
+    if (url.hostname === "site.api.espn.com") {
+      assert.equal(url.searchParams.get("dates"), "20260904-20260906");
+      return Response.json({ events: [liveEvent("api-live")] });
+    }
+    assert.equal(url.hostname, "fcm.googleapis.com", "No request escapes interception");
+    assert.equal(init.method, "POST");
+    assert.equal(new Headers(init.headers).get("content-encoding"), "aes128gcm");
+    assert.ok(init.body instanceof Uint8Array && init.body.length > 86);
+    attempts.push(url.pathname);
+    return new Response(null, { status: 201 });
+  });
+  await poll(f.env, now);
+  assert.deepEqual(hosts, ["cdn.espn.com", "site.api.espn.com", "fcm.googleapis.com"]);
+  await poll(f.env, now + 60000);
+  assert.deepEqual(hosts.slice(3), ["cdn.espn.com", "site.api.espn.com"]);
+  assert.equal(attempts.length, 1);
+  assert.deepEqual(f.sqlite.prepare("SELECT game_id FROM game_states").all().map(row => row.game_id), ["api-live"]);
+  assert.deepEqual(f.sqlite.prepare("SELECT id FROM alert_events").all().map(row => row.id), ["api-live:one-score-fourth"]);
+  assert.deepEqual({ ...f.sqlite.prepare("SELECT * FROM deliveries").get() }, {
+    event_id: "api-live:one-score-fourth", subscription_id: "device", status: "accepted", attempted_at: now,
+  });
+  assert.equal(f.sqlite.prepare("SELECT count(*) AS n FROM deliveries").get().n, 1);
+  assert.equal(f.sqlite.prepare("SELECT value FROM poll_state WHERE id='last_good_score'").get().value, now + 60000);
 });

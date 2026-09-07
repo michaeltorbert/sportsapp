@@ -2,7 +2,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 const packageVersion = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 import assert from "node:assert/strict";
-import { bundle, database, game } from "./helpers.mjs";
+import { bundle, cdnFeed, database, game } from "./helpers.mjs";
 const rules = await bundle("services/alerts/rules.ts");
 const push = await bundle("services/alerts/web-push.ts");
 const { default: worker, claimDelivery, saveGameStates, poll } = await bundle("services/alerts/worker.ts");
@@ -17,7 +17,7 @@ test("poll fetches yesterday AND today, catches live games, and ignores first-se
     const url = new URL(input); calls++;
     assert.equal(url.hostname, "cdn.espn.com");
     assert.equal(url.searchParams.get("group"), "80");
-    return Response.json({ content: { sbData: { events: [event("friday-final", "2026-09-05T01:00:00Z", "post"), event("saturday-live", "2026-09-05T22:00:00Z", "in"), event("saturday-final", "2026-09-05T16:00:00Z", "post"), event("outside-window", "2026-09-06T20:00:00Z", "in")] } } });
+    return Response.json(cdnFeed([event("friday-final", "2026-09-05T01:00:00Z", "post"), event("saturday-live", "2026-09-05T22:00:00Z", "in"), event("saturday-final", "2026-09-05T16:00:00Z", "post"), event("outside-window", "2026-09-06T20:00:00Z", "in")]));
   };
   try {
     const env = { DB: db, SITE_ORIGIN: "https://app.test", VAPID_PUBLIC_KEY: "test-only", VAPID_PRIVATE_KEY: "test-only" };
@@ -215,6 +215,60 @@ test("migration accepts only exact old/new alert origins and keeps device owners
     const legacy = await worker.fetch(new Request("https://alerts.test/config", { headers: { Origin: old } }), { DB: db, SITE_ORIGIN: old });
     assert.equal(legacy.status, 200);
   } finally { sqlite.close(); }
+});
+
+for (const [label, instant, alter] of [
+  ["wrong week", "2026-09-13T21:00Z", () => {}],
+  ["missing calendar", "2026-09-05T21:00Z", raw => { delete raw.content.sbData.leagues; }],
+  ["wrong selected week", "2026-09-05T21:00Z", raw => { raw.content.sbData.week.number = 2; }],
+  ["start boundary", "2026-08-23T21:00Z", () => {}],
+  ["end boundary", "2026-09-08T21:00Z", () => {}],
+]) test(`poll rejects ${label} CDN coverage and requests the exact API range`, async t => {
+  const { db, sqlite } = database(); t.after(() => sqlite.close());
+  const now = Date.parse(instant), raw = cdnFeed(); alter(raw);
+  const hosts = [];
+  t.mock.method(globalThis, "fetch", async input => {
+    const url = new URL(input); hosts.push(url.hostname);
+    if (url.hostname === "cdn.espn.com") return Response.json(raw);
+    assert.equal(url.hostname, "site.api.espn.com");
+    const day = instant.slice(0, 10), yesterday = new Date(Date.parse(day) - 86400000).toISOString().slice(0, 10), tomorrow = new Date(Date.parse(day) + 86400000).toISOString().slice(0, 10);
+    assert.equal(url.searchParams.get("dates"), `${yesterday.replaceAll("-", "")}-${tomorrow.replaceAll("-", "")}`);
+    return Response.json({ events: [] });
+  });
+  await poll({ DB: db, VAPID_PUBLIC_KEY: "test", VAPID_PRIVATE_KEY: "test" }, now);
+  assert.deepEqual(hosts, ["cdn.espn.com", "site.api.espn.com"]);
+  assert.equal(sqlite.prepare("SELECT value FROM poll_state WHERE id='last_good_score'").get().value, now);
+});
+
+test("covered empty CDN succeeds without API; rejected coverage plus 403 preserves all history and releases lock", async t => {
+  const { db, sqlite } = database(); t.after(() => sqlite.close());
+  const env = { DB: db, VAPID_PUBLIC_KEY: "test", VAPID_PRIVATE_KEY: "test" };
+  const first = Date.parse("2026-09-05T21:00Z"), failed = Date.parse("2026-09-13T21:00Z");
+  let recover = false; const hosts = [];
+  t.mock.method(globalThis, "fetch", async input => {
+    const host = new URL(input).hostname; hosts.push(host);
+    if (host === "cdn.espn.com") return Response.json(cdnFeed());
+    assert.equal(host, "site.api.espn.com", "No push may escape this test");
+    return recover ? Response.json({ events: [] }) : new Response("Forbidden", { status: 403 });
+  });
+  await poll(env, first); assert.deepEqual(hosts, ["cdn.espn.com"]);
+  await saveGameStates(db, [game()], first);
+  sqlite.prepare("INSERT INTO subscriptions VALUES(?,?,?,?,?,?,?,?,?)").run("device", "https://fcm.googleapis.com/test", "test", "test", "owner", 1, 1, first, first);
+  sqlite.prepare("INSERT INTO deliveries VALUES(?,?,?,?)").run("old", "device", "accepted", first);
+  const history = () => ["game_states", "alert_events", "subscriptions", "deliveries"].map(table => sqlite.prepare(`SELECT * FROM ${table}`).all());
+  const before = history(), scheduling = sqlite.prepare("SELECT * FROM poll_state WHERE id <> 'last_tick' ORDER BY id").all();
+  await assert.rejects(poll(env, failed), /cdn: CDN does not cover.*site-api: HTTP 403/);
+  assert.deepEqual(history(), before);
+  assert.deepEqual(sqlite.prepare("SELECT * FROM poll_state WHERE id <> 'last_tick' ORDER BY id").all(), scheduling);
+  assert.equal(sqlite.prepare("SELECT value FROM poll_state WHERE id='last_tick'").get().value, failed);
+  assert.equal(sqlite.prepare("SELECT count(*) AS n FROM poll_lock").get().n, 0);
+  t.mock.timers.enable({ apis: ["Date"], now: failed });
+  const config = await (await worker.fetch(new Request("https://alerts.test/config"), env)).json();
+  assert.equal(config.ready, false);
+  assert.equal(config.readinessReason, "stale-score-feed");
+  recover = true; await poll(env, failed + 1);
+  assert.equal(sqlite.prepare("SELECT value FROM poll_state WHERE id='last_good_score'").get().value, failed + 1);
+  assert.deepEqual(history(), before);
 });
 
 test("saved close history does not change live phone conditions or trigger IDs", () => {
