@@ -1,7 +1,9 @@
 # Saturday Signal releases
 
-## Unreleased
+## 1.3.2 · 2026-09-07
 
+- Reject alert feeds that cannot prove complete date coverage, retaining the verified fallback and existing alert ownership, trigger IDs, deduplication, subscriptions, and delivery history (#18).
+- Preserve one-score game history through delays and reloads without changing live phone-alert conditions (#13).
 - Restore the standalone TypeScript check with Wrangler-generated Workers runtime and binding declarations that match the website's configuration, and add `npm run typecheck` (#6).
 
 ## 1.3.1 · 2026-09-06
