@@ -5,6 +5,10 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 
 type Config = { ready: boolean; publicKey: string };
 type Credentials = { id: string; token: string };
+// Response bodies are typed explicitly: the Workers runtime declarations make
+// `Response.json()` generic, so an unannotated result is `unknown`.
+type ServiceSettings = { serviceUrl?: string };
+type SubscriptionStatus = { active: boolean; kickoff: boolean };
 function saved(): Credentials | null { try { return JSON.parse(localStorage.getItem("ss:push") || "null"); } catch { return null; } }
 function keyBytes(value: string) { return Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4)), c => c.charCodeAt(0)); }
 export function Alerts() {
@@ -27,14 +31,14 @@ export function Alerts() {
       checking = true;
       try {
         const r = await fetch("/alerts-config.json", { cache: "no-store", signal: AbortSignal.timeout(10000) });
-        const settings = await r.json();
+        const settings: ServiceSettings = await r.json();
         if (!settings.serviceUrl) return;
         const url = new URL(settings.serviceUrl);
         if (url.protocol !== "https:") return;
         const base = url.origin;
         const response = await fetch(`${base}/config`, { credentials: "omit", signal: AbortSignal.timeout(10000) });
         if (!response.ok) throw new Error();
-        const state = await response.json();
+        const state: Config = await response.json();
         if (!alive) return;
         setService(base); setConfig(state);
         setMessage(previous => previous === "The alert service is unavailable. Try again later." ? "" : previous);
@@ -42,7 +46,7 @@ export function Alerts() {
         if (credentials && "Notification" in window && Notification.permission === "granted" && "serviceWorker" in navigator) {
           const status = await fetch(`${base}/subscriptions/${credentials.id}`, { headers: { Authorization: `Bearer ${credentials.token}` }, credentials: "omit", signal: AbortSignal.timeout(10000) });
           if (status.ok) {
-            const details = await status.json();
+            const details: SubscriptionStatus = await status.json();
             const local = await navigator.serviceWorker.getRegistration("/");
             const subscription = await local?.pushManager.getSubscription();
             if (alive) { setEnabled(!!details.active && !!subscription); setKickoff(details.kickoff); }

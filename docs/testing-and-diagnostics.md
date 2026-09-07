@@ -39,7 +39,7 @@ If scheduler evidence needs confirmation, use a bounded `wrangler tail saturday-
 
 ## Automated coverage
 
-Run `SOURCE_COMMIT=$(git rev-parse HEAD) npm test` for the build and shared Node suite, then the browser script described in `docs/browser-testing.md`. Run `npm run test:runtime`, `npm run deploy:check`, and `npm run deploy:alerts -- --dry-run` before reviewing deployment-affecting changes. Preview configuration checks require their own rebuild with `CLOUDFLARE_ENV=preview`; rebuild without it before a production deployment.
+Run `npm run typecheck` for the standalone TypeScript check, including confirmation that the committed Workers declarations match `wrangler.jsonc`. Run `SOURCE_COMMIT=$(git rev-parse HEAD) npm test` for the build and shared Node suite, then the browser script described in `docs/browser-testing.md`. Run `npm run test:runtime`, `npm run deploy:check`, and `npm run deploy:alerts -- --dry-run` before reviewing deployment-affecting changes. Preview configuration checks require their own rebuild with `CLOUDFLARE_ENV=preview`; rebuild without it before a production deployment.
 
 The push tests use in-memory SQLite, generated temporary cryptographic material and intercepted fetch calls. They never contact a push provider. Service-worker tests execute the actual `public/sw.js`. Mock permission/subscription tests and desktop WebKit with a mobile viewport remain simulations, distinct from installed iPhone Safari verification. Keep [#13](https://github.com/michaeltorbert/sportsapp/issues/13) and [#14](https://github.com/michaeltorbert/sportsapp/issues/14) separate from this coverage change; do not reintroduce older ordering expectations.
 
