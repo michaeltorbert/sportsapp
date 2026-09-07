@@ -197,3 +197,32 @@ test("saved delay history survives a fresh hook and stays isolated by date and s
   assert.equal(classify(anotherDate.boards.daily.games[0]).close, false);
   assert.equal(classify(anotherDate.boards.acc.games[0]).close, true);
 });
+
+test("the running hook saves live-to-delay history for a fresh hook's final result", async t => {
+  const calendar = easternDate(), yesterday = shiftDate(calendar, -1);
+  const key = `ss:board:${calendar}:${calendar}`;
+  let saved;
+  await t.test("live polling writes the delayed observation to storage", async t => {
+    let state = "live";
+    const h = harness(t, async (date, signal, fetcher, end = date) =>
+      scoreboard(date === yesterday && date === end ? [] : [game({ state })], date, { endDate: end }));
+    h.render(); const live = await h.settle();
+    assert.equal(classify(live.boards.daily.games[0]).close, true);
+    state = "delayed";
+    await live.refresh(); const delayed = await h.settle();
+    assert.equal(classify(delayed.boards.daily.games[0]).close, false);
+    const persisted = JSON.parse(h.storage.getItem(key));
+    assert.equal(persisted.games[0].state, "delayed");
+    assert.equal(persisted.games[0].lastActiveClose, true);
+    saved = { ...h.storage };
+  });
+  await t.test("a new hook restores the saved delay when the next result is final", async t => {
+    const final = game({ state: "final" }); final.teams[1].score = 42;
+    const h = harness(t, async (date, signal, fetcher, end = date) =>
+      scoreboard(date === yesterday && date === end ? [] : [structuredClone(final)], date, { endDate: end }), saved);
+    h.render(); const reloaded = await h.settle();
+    assert.equal(reloaded.boards.daily.games[0].state, "final");
+    assert.equal(classify(reloaded.boards.daily.games[0]).close, true);
+    assert.equal(JSON.parse(h.storage.getItem(key)).games[0].retainedCategories.close, true);
+  });
+});

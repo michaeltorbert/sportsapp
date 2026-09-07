@@ -120,3 +120,14 @@ test("delay history belongs to the same event, competitors and board range", () 
   assert.equal(classify(retainFinalCategories(scoreboard([rescheduled]), saved).games[0]).close, true);
   assert.equal(classify(retainFinalCategories({ ...scoreboard([final]), endDate: undefined }, saved).games[0]).close, true, "omitted daily end date is the same range");
 });
+
+test("pregame betting evidence shares the board-range guard with category history", () => {
+  const pregameLine = { favoriteId: "a", spread: 7, source: "ESPN" };
+  const previous = scoreboard([game({ state: "upcoming", started: false, pregameLine })]);
+  const live = game();
+  assert.deepEqual(retainFinalCategories(scoreboard([live]), previous).games[0].pregameLine, pregameLine);
+  assert.deepEqual(retainFinalCategories({ ...scoreboard([live]), endDate: undefined }, previous).games[0].pregameLine, pregameLine);
+  for (const next of [scoreboard([live], "2026-09-06"), scoreboard([live], previous.date, { endDate: "2026-09-07" })]) {
+    assert.equal(retainFinalCategories(next, previous).games[0].pregameLine, undefined, "a matching event and kickoff cannot import betting evidence from another board range");
+  }
+});
