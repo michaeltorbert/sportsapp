@@ -183,7 +183,7 @@ test("actual hook delay writes survive opaque storage transfer into a fresh hook
   t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-09-05T21:00:00Z") });
   const calendar = easternDate(), yesterday = shiftDate(calendar, -1), week = accWeek(calendar);
   let phase = "live", saved;
-  const load = async (date, signal, fetcher, end = date, accOnly = false) => {
+  const load = async (date, signal, fetcher, end = date) => {
     if (date === yesterday && end === date) return scoreboard([], date);
     const g = game({ state: phase === "final" ? "final" : phase });
     // Only daily observes close live play; weekly scopes see a wide game.
