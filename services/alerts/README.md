@@ -46,9 +46,15 @@ The API accepts the configured `SITE_ORIGIN`. Subscription endpoints are limited
 - Delivery is **at most one send attempt**, not guaranteed device delivery. Ambiguous failures and rejected sends are not retried, because a retry could violate “no repeats.” The database records accepted, rejected, and uncertain attempts. A failure after claiming but before sending can miss an alert. This is the intentional no-repeat tradeoff; distributed push cannot promise exactly-once user-visible delivery.
 - Keep event and delivery ledgers when redeploying. Do not erase history as part of updates. Replacing the D1 database would lose deduplication history.
 
+## Score-feed coverage
+
+Each poll needs yesterday and today in Eastern time. ESPN's CDN feed ignores requested dates and serves its currently selected football week, so the poller accepts a CDN board only when the feed's own calendar entry for that season type and week proves it covers both days, using the same `normalizeCdnRange` validator as the website's server fallback. A syntactically valid board for another week, a response without a readable season/week/calendar, or a partial board is rejected rather than read as an empty successful poll. Calendar boundary days are excluded conservatively because ESPN week boundaries are not Eastern midnight: on the days where the selected entry starts or ends, the CDN is rejected and the poller tries the date-specific site API instead.
+
+If both sources fail, including a rejected CDN board plus the site API's Cloudflare HTTP 403, the poll fails: game states, alert history, deliveries, `last_good_score`, and `next_poll` are untouched, `last_tick` advances, the lock is released, and `/config` reports `stale-score-feed` once the last success is more than twenty minutes old. Readiness is never manufactured from an unproven board. This conservative failure is deliberate; a game on a partially covered boundary day with the site API blocked receives no alert, and the readiness gate makes that visible.
+
 ## Verification
 
-Run `node --test tests/football.test.mjs tests/alerts.test.mjs` from the repository root. Tests include the RFC 8291 published encryption vector, VAPID signature verification, transition sequences and SQL duplicate claims. These do not substitute for a real device push test after deployment.
+Run `node --test tests/football.test.mjs tests/alerts.test.mjs tests/alert-coverage.test.mjs tests/push-delivery.test.mjs` from the repository root. Tests include the RFC 8291 published encryption vector, VAPID signature verification, transition sequences, SQL duplicate claims, and CDN calendar coverage: wrong-week, missing-calendar, partial-boundary, and correctly covered fixtures, plus the rejected-CDN-and-403 failed poll. These do not substitute for a real device push test after deployment.
 
 Run `NODE_USE_ENV_PROXY=1 node scripts/check-alerts-poll.mjs` to execute the current poller against ESPN using an empty in-memory subscription database. Only the ESPN scoreboard request is permitted; no pushes or external database writes occur. On September 5 at 23:46 UTC the patched query read 76 games (8 Friday, 68 Saturday), generated two qualifying one-score candidate events, and scheduled the next poll one minute later. This is a local diagnostic, not evidence of Cloudflare execution or notification delivery.
 

@@ -11,7 +11,8 @@ test("CDN fallback refuses unproven, different-week, and partial boundary-day co
   for (const [start, end] of [["2026-09-09", "2026-09-13"], ["2026-08-22", "2026-08-22"], ["2026-09-08", "2026-09-08"]])
     assert.throws(() => normalizeCdnRange(feed(), start, end), /does not cover/);
   const missing = feed(); delete missing.content.sbData.leagues;
-  assert.throws(() => normalizeCdnRange(missing, "2026-09-06"));
+  assert.throws(() => normalizeCdnRange(missing, "2026-09-06"), /CDN calendar unavailable/);
+  assert.throws(() => normalizeCdnRange({ events: [] }, "2026-09-06"), /CDN calendar unavailable/);
 });
 test("CDN range normalization filters Eastern dates and ACC teams, and rejects partial data", () => {
   const raw = feed();

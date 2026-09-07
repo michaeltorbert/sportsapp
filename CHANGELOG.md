@@ -1,5 +1,9 @@
 # Saturday Signal releases
 
+## Unreleased
+
+- Alert polling accepts ESPN's CDN board only when its calendar proves yesterday and today are covered, falls back to the date-specific API otherwise, and treats both failing as a failed poll that preserves game states, alert history and the last successful poll time (#18).
+
 ## 1.3.1 · 2026-09-06
 
 - Add an authenticated single-device TEST notification route using the existing push sender and VAPID identity, with permanent request deduplication and an atomic per-device cooldown. Test deliveries remain separate from football events.

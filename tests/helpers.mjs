@@ -11,6 +11,15 @@ export function game(changes = {}) {
   return { id: "game1", date: "2026-09-06T02:30:00Z", timeValid: true, state: "live", status: "4th", period: 4, clock: 180, clockKnown: true, intermission: false, started: true, teams: [team("a"), team("b", { score: 21, rank: 20 })], broadcast: "ESPN", possession: null, downDistance: "", redZone: false, url: "https://www.espn.com/college-football/game/_/gameId/game1", ...changes };
 }
 export function scoreboard(games, date = "2026-09-05", extra = {}) { return { date, endDate: date, fetchedAt: "2026-09-06T04:01:00.000Z", games, ...extra }; }
+// ESPN's CDN envelope: the selected week plus the calendar that proves its coverage.
+// Week 1 covers Aug 22 – Sep 8 (ET boundary 3:00 AM Tuesday); week 2 covers Sep 8 – Sep 15.
+export function cdnFeed(events = [], { week = 1, seasonType = 2 } = {}) {
+  const calendar = [{ value: "2", entries: [
+    { value: "1", startDate: "2026-08-22T07:00Z", endDate: "2026-09-08T06:59Z" },
+    { value: "2", startDate: "2026-09-08T07:00Z", endDate: "2026-09-15T06:59Z" },
+  ] }];
+  return { content: { sbData: { season: { type: seasonType }, week: { number: week }, leagues: [{ calendar }], events } } };
+}
 export function database() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(readFileSync(new URL("../services/alerts/migrations/0001_alerts.sql", import.meta.url), "utf8"));

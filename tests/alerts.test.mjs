@@ -2,12 +2,12 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 const packageVersion = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 import assert from "node:assert/strict";
-import { bundle, database, game } from "./helpers.mjs";
+import { bundle, cdnFeed, database, game } from "./helpers.mjs";
 const rules = await bundle("services/alerts/rules.ts");
 const push = await bundle("services/alerts/web-push.ts");
 const { default: worker, claimDelivery, saveGameStates, poll } = await bundle("services/alerts/worker.ts");
 
-test("poll fetches yesterday AND today, catches live games, and ignores first-seen finals", async () => {
+test("poll fetches yesterday AND today from a calendar-covered CDN week, catches live games, and ignores first-seen finals", async () => {
   const { db, sqlite } = database();
   const originalFetch = globalThis.fetch;
   const now = Date.parse("2026-09-05T23:00:00Z");
@@ -15,9 +15,9 @@ test("poll fetches yesterday AND today, catches live games, and ignores first-se
   let calls = 0;
   globalThis.fetch = async input => {
     const url = new URL(input); calls++;
-    assert.equal(url.hostname, "cdn.espn.com");
+    assert.equal(url.hostname, "cdn.espn.com", "a covered CDN week must never fall through to the site API");
     assert.equal(url.searchParams.get("group"), "80");
-    return Response.json({ content: { sbData: { events: [event("friday-final", "2026-09-05T01:00:00Z", "post"), event("saturday-live", "2026-09-05T22:00:00Z", "in"), event("saturday-final", "2026-09-05T16:00:00Z", "post"), event("outside-window", "2026-09-06T20:00:00Z", "in")] } } });
+    return Response.json(cdnFeed([event("friday-final", "2026-09-05T01:00:00Z", "post"), event("saturday-live", "2026-09-05T22:00:00Z", "in"), event("saturday-final", "2026-09-05T16:00:00Z", "post"), event("outside-window", "2026-09-06T20:00:00Z", "in")]));
   };
   try {
     const env = { DB: db, SITE_ORIGIN: "https://app.test", VAPID_PUBLIC_KEY: "test-only", VAPID_PRIVATE_KEY: "test-only" };

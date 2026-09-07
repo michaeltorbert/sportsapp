@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
-import { bundle, database, game } from "./helpers.mjs";
+import { bundle, cdnFeed, database, game } from "./helpers.mjs";
 
 const { poll, saveGameStates } = await bundle("services/alerts/worker.ts");
 const { encode } = await bundle("services/alerts/web-push.ts");
@@ -57,7 +57,7 @@ function intercept(t, { events = [liveEvent()], send = () => new Response(null, 
     const url = new URL(input);
     if (url.hostname === "cdn.espn.com") {
       feeds.push(url.href);
-      return Response.json({ content: { sbData: { events } } });
+      return Response.json(cdnFeed(events));
     }
     assert.equal(url.hostname, "fcm.googleapis.com", "Unexpected network destination must not escape interception");
     const headers = new Headers(init.headers);
@@ -178,7 +178,7 @@ test("partial CDN data falls back without saving or notifying from its incomplet
   t.mock.method(globalThis, "fetch", async input => {
     const host = new URL(input).hostname;
     hosts.push(host);
-    if (host === "cdn.espn.com") return Response.json({ events: [liveEvent("partial-only"), { invalid: true }] });
+    if (host === "cdn.espn.com") return Response.json(cdnFeed([liveEvent("partial-only"), { invalid: true }]));
     assert.equal(host, "site.api.espn.com");
     return Response.json({ events: [] });
   });

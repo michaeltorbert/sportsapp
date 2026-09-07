@@ -1,5 +1,5 @@
 import { VERSION } from "../../lib/releases";
-import { normalizeScoreboard, scoreboardCdnUrl, scoreboardUrl } from "../../lib/espn-data";
+import { normalizeCdnRange, normalizeScoreboard, scoreboardCdnUrl, scoreboardUrl } from "../../lib/espn-data";
 import { easternDate, shiftDate, type Game } from "../../lib/football";
 import { nextPollAt, transitions, type AlertEvent, type Snapshot } from "./rules";
 import { encode, hash, sendPush, validSubscription } from "./web-push";
@@ -126,11 +126,19 @@ export async function poll(env: Env, now = Date.now()) {
     const date = easternDate(new Date(now)), previousDate = shiftDate(date, -1);
     const failures: string[] = [];
     let board: ReturnType<typeof normalizeScoreboard> | null = null;
-    for (const [source, url] of [["cdn", scoreboardCdnUrl()], ["site-api", scoreboardUrl(previousDate, date)]] as const) {
+    // The CDN ignores requested dates and serves its selected week, so a valid but
+    // wrong-week response would otherwise read as an empty, successful board. Accept
+    // it only when its own calendar proves yesterday and today are fully covered;
+    // otherwise try the date-specific API. Both failing is a failed poll.
+    const sources = [
+      ["cdn", scoreboardCdnUrl(), (raw: unknown) => normalizeCdnRange(raw, previousDate, date)],
+      ["site-api", scoreboardUrl(previousDate, date), (raw: unknown) => normalizeScoreboard(raw, previousDate, new Date(now).toISOString(), date)],
+    ] as const;
+    for (const [source, url, normalize] of sources) {
       try {
         const response = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const candidate = normalizeScoreboard(await response.json(), previousDate, new Date(now).toISOString(), date);
+        const candidate = normalize(await response.json());
         if (candidate.warnings?.length) throw new Error("scoreboard is incomplete");
         board = candidate;
         break;
