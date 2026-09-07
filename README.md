@@ -12,6 +12,7 @@ Use Node.js 22.13 or newer. CI uses Node 22.
 
 ```sh
 npm ci
+npm run typecheck
 npm run dev
 export SOURCE_COMMIT=$(git rev-parse HEAD)
 npm test
@@ -25,6 +26,8 @@ npm run deploy:alerts -- --dry-run
 `wrangler.jsonc` owns website configuration. The Cloudflare Vite plugin emits the deployable Worker, static assets, and a generated Wrangler configuration in `dist/server/wrangler.json`; deployment commands explicitly require that compiled configuration. Always rebuild after changing environment or source. The website has no database binding. Alerts retain their existing separate Worker and D1 database.
 
 The existing repository-wide ESLint backlog is tracked in [issue #1](https://github.com/michaeltorbert/sportsapp/issues/1). The new CI checks run the build, tests, and deployment validation; they do not claim that the unrelated lint backlog is fixed.
+
+`npm ci` generates ignored Worker declarations using the pinned Wrangler version and the website's compatibility date, flags, and bindings. `npm run typecheck` regenerates them before checking TypeScript, so configuration changes are reflected immediately. If installation scripts were disabled, run `npm run types:generate` before invoking TypeScript directly. The optional D1 example keeps its binding type local; it does not declare a production website database.
 
 ## Deployment
 

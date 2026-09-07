@@ -27,14 +27,14 @@ export function Alerts() {
       checking = true;
       try {
         const r = await fetch("/alerts-config.json", { cache: "no-store", signal: AbortSignal.timeout(10000) });
-        const settings = await r.json();
+        const settings = await r.json() as { serviceUrl?: string };
         if (!settings.serviceUrl) return;
         const url = new URL(settings.serviceUrl);
         if (url.protocol !== "https:") return;
         const base = url.origin;
         const response = await fetch(`${base}/config`, { credentials: "omit", signal: AbortSignal.timeout(10000) });
         if (!response.ok) throw new Error();
-        const state = await response.json();
+        const state = await response.json() as Config;
         if (!alive) return;
         setService(base); setConfig(state);
         setMessage(previous => previous === "The alert service is unavailable. Try again later." ? "" : previous);
@@ -42,7 +42,7 @@ export function Alerts() {
         if (credentials && "Notification" in window && Notification.permission === "granted" && "serviceWorker" in navigator) {
           const status = await fetch(`${base}/subscriptions/${credentials.id}`, { headers: { Authorization: `Bearer ${credentials.token}` }, credentials: "omit", signal: AbortSignal.timeout(10000) });
           if (status.ok) {
-            const details = await status.json();
+            const details = await status.json() as { active: boolean; kickoff: boolean };
             const local = await navigator.serviceWorker.getRegistration("/");
             const subscription = await local?.pushManager.getSubscription();
             if (alive) { setEnabled(!!details.active && !!subscription); setKickoff(details.kickoff); }
