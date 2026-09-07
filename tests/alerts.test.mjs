@@ -216,3 +216,12 @@ test("migration accepts only exact old/new alert origins and keeps device owners
     assert.equal(legacy.status, 200);
   } finally { sqlite.close(); }
 });
+
+test("saved close history does not change live phone conditions or trigger IDs", () => {
+  const wide = game({ lastActiveClose: true }); wide.teams[1].score = 35;
+  for (const state of ["live", "delayed", "final"]) {
+    assert.equal(rules.conditions({ ...wide, state }, Date.now())["one-score-fourth"], false);
+  }
+  const close = game({ lastActiveClose: false });
+  assert.ok(rules.transitions(null, close, Date.now()).some(event => event.id === `${close.id}:one-score-fourth`));
+});

@@ -4,7 +4,7 @@ import { gamePriority, teamRelevance } from "./watch-priority";
 export type Team = { id: string; name: string; abbreviation: string; logo: string | null; score: number | null; rank: number | null; rankKnown?: boolean; record: string; conferenceId: string | null; changed?: boolean };
 export type Categories = { acc: boolean; top25: boolean; close: boolean; upset: boolean };
 export type PregameLine = { favoriteId: string | null; spread: number; source: string };
-export type Game = { id: string; date: string; timeValid: boolean; state: "live" | "delayed" | "upcoming" | "final" | "other"; status: string; period: number; clock: number; clockKnown?: boolean; intermission?: boolean; pregameLine?: PregameLine; started: boolean; teams: [Team, Team]; broadcast: string; possession: string | null; downDistance: string; redZone: boolean; url: string; retainedCategories?: Categories };
+export type Game = { id: string; date: string; timeValid: boolean; state: "live" | "delayed" | "upcoming" | "final" | "other"; status: string; period: number; clock: number; clockKnown?: boolean; intermission?: boolean; pregameLine?: PregameLine; started: boolean; teams: [Team, Team]; broadcast: string; possession: string | null; downDistance: string; redZone: boolean; url: string; retainedCategories?: Categories; lastActiveClose?: boolean };
 export type Scoreboard = { date: string; endDate?: string; fetchedAt: string; games: Game[]; stale?: boolean; warnings?: string[] };
 export function easternDate(now = new Date()) { return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(now); }
 export function shiftDate(date: string, days: number) { const d = new Date(`${date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
@@ -54,12 +54,23 @@ export function gameDay(now: Date, previous: Scoreboard | null, heldDate?: strin
   return heldDate === yesterday ? yesterday : calendar;
 }
 export function retainFinalCategories(next: Scoreboard, previous: Scoreboard | null): Scoreboard {
+  const sameRange = previous?.date === next.date && (previous.endDate || previous.date) === (next.endDate || next.date);
   return { ...next, games: next.games.map(raw => {
     const game = { ...raw };
-    const old = previous?.games.find(g => g.id === game.id && g.teams.every((t, i) => t.id === game.teams[i].id));
+    // Only our matching prior observation can supply delay history.
+    delete game.lastActiveClose;
+    const old = sameRange ? previous?.games.find(g => g.id === game.id && g.teams.every((t, i) => t.id === game.teams[i].id)) : undefined;
     // Categories belong to the event; betting evidence also belongs to its scheduled matchup.
     if (!game.pregameLine && old?.pregameLine && old.date === game.date) game.pregameLine = old.pregameLine;
-    return game.state === "final" && old && (old.state === "live" || old.state === "final" || (old.state === "delayed" && old.started))
-      ? { ...game, retainedCategories: classify(old) } : game;
+    const delayedClose = sameRange && old?.state === "delayed" && old.started ? old.lastActiveClose === true : false;
+    if (sameRange && game.state === "delayed" && game.started && old) {
+      if (old.state === "live") game.lastActiveClose = classify(old).close;
+      else if (old.state === "delayed" && old.started && typeof old.lastActiveClose === "boolean") game.lastActiveClose = old.lastActiveClose;
+    }
+    if (game.state === "final" && old && (old.state === "live" || old.state === "final" || (old.state === "delayed" && old.started))) {
+      const categories = classify(old);
+      return { ...game, retainedCategories: { ...categories, close: categories.close || delayedClose } };
+    }
+    return game;
   }) };
 }

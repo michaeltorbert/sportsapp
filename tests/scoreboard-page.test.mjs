@@ -164,3 +164,16 @@ test("live conference watches use the same honest badge as conference finals", (
   assert.match(completed, /Earlier upset watch/);
   assert.doesNotMatch(completed, /class="upset-reason"/);
 });
+
+test("a delayed close observation stays out of One score until its retained final", () => {
+  const live = game({ id: "delay-close" });
+  const delay = { ...live, state: "delayed" };
+  const paused = retainFinalCategories(scoreboard([delay]), scoreboard([live]));
+  const boards = fixtures(); boards.daily = paused;
+  assert.deepEqual(cardIds(render("close", { boards }).html), []);
+  const final = structuredClone(live); final.state = "final"; final.teams[1].score = 35;
+  boards.daily = retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(paused)));
+  const html = render("close", { boards }).html;
+  assert.deepEqual(cardIds(html), [live.id]);
+  assert.match(html, /One-score watch/);
+});

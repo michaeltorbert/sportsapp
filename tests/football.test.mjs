@@ -70,3 +70,43 @@ test("ESPN date ranges retain the 10:30pm ET Cal game and parse curatedRank 99",
   assert.equal(cdn.hostname, "cdn.espn.com"); assert.equal(cdn.searchParams.get("group"), "80"); assert.equal(cdn.searchParams.get("groups"), null);
   assert.equal(normalizeScoreboard({ content: { sbData: { events: [event] } } }, "2026-09-03", undefined, "2026-09-07").games.length, 1);
 });
+
+test("latest live close survives repeated started delays, reload and schedule correction without changing delayed upset", () => {
+  const live = game(); live.teams[0].rank = 5;
+  const delay = { ...structuredClone(live), state: "delayed", date: "2026-09-06T03:00:00Z" };
+  delay.teams[0].score = 35; // Favorite recovered during delay; do not preserve its earlier upset.
+  let saved = retainFinalCategories(scoreboard([delay]), scoreboard([live]));
+  assert.equal(classify(saved.games[0]).close, false);
+  assert.equal(classify(saved.games[0]).upset, false);
+  saved = retainFinalCategories(scoreboard([delay]), JSON.parse(JSON.stringify(saved)));
+  const final = { ...delay, state: "final" };
+  const result = retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(saved)));
+  assert.equal(classify(result.games[0]).close, true);
+  assert.equal(classify(result.games[0]).upset, false);
+  assert.equal(classify(retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(result))).games[0]).close, true);
+  const resumed = retainFinalCategories(scoreboard([{ ...delay, state: "live" }]), saved);
+  assert.equal(classify(retainFinalCategories(scoreboard([final]), resumed).games[0]).close, false);
+  const unknown = structuredClone(delay); unknown.state = "live"; unknown.teams[0].score = null;
+  assert.equal(classify(retainFinalCategories(scoreboard([final]), retainFinalCategories(scoreboard([unknown]), saved)).games[0]).close, false);
+});
+
+test("delays cannot invent close history or carry it across identity, board range or unstarted boundaries", () => {
+  const live = game(), delay = { ...live, state: "delayed" }, final = structuredClone(live);
+  final.state = "final"; final.teams[1].score = 35;
+  assert.equal(classify(retainFinalCategories(scoreboard([final]), scoreboard([delay])).games[0]).close, false);
+  const held = retainFinalCategories(scoreboard([delay]), scoreboard([live]));
+  const variations = [
+    { ...delay, started: false }, { ...delay, id: "other" },
+    { ...delay, teams: [...delay.teams].reverse() },
+    { ...delay, teams: [{ ...delay.teams[0], id: "replacement" }, delay.teams[1]] },
+  ];
+  for (const changed of variations) {
+    const paused = retainFinalCategories(scoreboard([changed]), held);
+    assert.equal(classify(retainFinalCategories(scoreboard([final]), paused).games[0]).close, false);
+  }
+  for (const different of [scoreboard([delay], "2026-09-06"), scoreboard([delay], "2026-09-05", { endDate: "2026-09-07" })]) {
+    const paused = retainFinalCategories(different, held);
+    assert.equal(classify(retainFinalCategories(scoreboard([final], different.date, { endDate: different.endDate }), paused).games[0]).close, false);
+  }
+  assert.equal(classify(retainFinalCategories(scoreboard([final]), null).games[0]).close, false);
+});
