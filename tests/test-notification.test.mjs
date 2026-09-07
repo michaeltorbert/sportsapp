@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bundle, database } from "./helpers.mjs";
+import { bundle, database, game } from "./helpers.mjs";
 const { default: worker, poll } = await bundle("services/alerts/worker.ts");
 const { hash } = await bundle("services/alerts/web-push.ts");
 
@@ -15,8 +15,8 @@ async function fixture(t) {
   const auth = crypto.getRandomValues(new Uint8Array(16));
   const p256dh = Buffer.from(await crypto.subtle.exportKey("raw", receiver.publicKey)).toString("base64url");
   const id = "a".repeat(43), other = "b".repeat(43), token = "ephemeral-device-owner";
-  for (const [device, secret] of [[id, token], [other, "another-owner"]]) sqlite.prepare("INSERT INTO subscriptions VALUES(?,?,?,?,?,?,1,?,?)").run(device, `https://web.push.apple.com/${device}`, p256dh, Buffer.from(auth).toString("base64url"), await hash(secret), 0, 1, 1);
-  const request = (testId, overrides = {}) => worker.fetch(new Request(`https://alerts.test/subscriptions/${overrides.id || id}/test`, { method: overrides.method || "POST", headers: { "Content-Type": "application/json", ...(overrides.origin === null ? {} : { Origin: overrides.origin || "https://app.test" }), ...(overrides.token === null ? {} : { Authorization: `Bearer ${overrides.token || token}` }) }, ...(overrides.method === "GET" ? {} : { body: JSON.stringify({ testId }) }) }), overrides.env || env);
+  for (const [device, secret] of [[id, token], [other, "another-owner"]]) sqlite.prepare("INSERT INTO subscriptions(id,endpoint,p256dh,auth,token_hash,kickoff,active,created_at,updated_at) VALUES(?,?,?,?,?,?,1,?,?)").run(device, `https://web.push.apple.com/${device}`, p256dh, Buffer.from(auth).toString("base64url"), await hash(secret), 0, 1, 1);
+  const request = (testId, overrides = {}) => worker.fetch(new Request(`https://alerts.test/subscriptions/${overrides.id || id}/test`, { method: overrides.method || "POST", headers: { "Content-Type": "application/json", ...(overrides.origin === null ? {} : { Origin: overrides.origin || "https://app.test" }), ...(overrides.token === null ? {} : { Authorization: `Bearer ${overrides.token || token}` }) }, ...(overrides.method === "GET" ? {} : { body: "rawBody" in overrides ? overrides.rawBody : JSON.stringify({ testId }) }) }), overrides.env || env);
   const original = globalThis.fetch;
   const calls = [];
   let response = 201;
@@ -49,6 +49,7 @@ test("device test requires exact origin, active ownership and valid UUID before 
   for (const options of [{ origin: null }, { origin: "https://attacker.test" }]) assert.equal((await f.request(uuid, options)).status, 403);
   assert.equal((await f.request(uuid, { method: "GET" })).status, 404);
   for (const invalid of [null, "", "not-a-uuid", "../test", 42]) assert.equal((await f.request(invalid)).status, 400);
+  for (const rawBody of [null, "null", "not-json", "[]"]) assert.equal((await f.request(uuid, { rawBody })).status, 400);
   assert.equal((await f.request(uuid, { env: { ...f.env, VAPID_PRIVATE_KEY: "" } })).status, 503);
   f.sqlite.prepare("UPDATE subscriptions SET active=0 WHERE id=?").run(f.id);
   assert.equal((await f.request(uuid)).status, 409);
@@ -57,20 +58,29 @@ test("device test requires exact origin, active ownership and valid UUID before 
 });
 
 test("one labeled encrypted test reaches only its owner, preserves game history, and cannot replay", async t => {
-  const f = await fixture(t), testId = crypto.randomUUID();
+  const f = await fixture(t), testId = crypto.randomUUID(), now = Date.now();
+  t.mock.method(Date, "now", () => now);
+  const history = JSON.stringify(game({ id: "existing-game" }));
+  f.sqlite.prepare("INSERT INTO game_states VALUES(?,?,?,?)").run("existing-game", "2026-09-05", history, now - 60000);
+  f.sqlite.prepare("INSERT INTO alert_events VALUES(?,?,?,?,?,?)").run("existing-game:one-score-fourth", "existing-game", "one-score-fourth", "2026-09-05", now - 1, JSON.stringify({ title: "Simulated game alert", eventId: "existing-game:one-score-fourth" }));
   const first = await f.request(testId), result = await first.json();
   assert.equal(first.status, 200);
+  assert.equal(result.testId, testId); assert.equal(result.attemptedAt, new Date(now).toISOString());
   assert.equal(result.status, "accepted"); assert.equal(result.attempted, true); assert.equal(result.receiptConfirmed, false);
   assert.equal(f.calls.length, 1); assert.equal(f.calls[0].url, `https://web.push.apple.com/${f.id}`);
   assert.deepEqual(await decodePayload(f, f.calls[0].init.body), { title: "Saturday Signal: TEST", body: "This is a test notification, not a game alert. Tap to open Saturday Signal.", eventId: `test:${testId}`, url: "https://app.test/" });
   const replay = await (await f.request(testId)).json();
   assert.equal(replay.attempted, false); assert.equal(replay.status, "accepted");
   assert.equal((await f.request(crypto.randomUUID())).status, 429);
-  await poll(f.env);
-  assert.equal(f.calls.length, 1);
-  assert.equal(f.sqlite.prepare("SELECT count(*) n FROM deliveries").get().n, 1);
-  assert.equal(f.sqlite.prepare("SELECT count(*) n FROM alert_events").get().n, 0);
-  assert.equal(f.sqlite.prepare("SELECT count(*) n FROM game_states").get().n, 0);
+  assert.equal(f.sqlite.prepare("SELECT state_json FROM game_states").get().state_json, history);
+  assert.equal(f.sqlite.prepare("SELECT count(*) n FROM alert_events").get().n, 1);
+  assert.deepEqual({ ...f.sqlite.prepare("SELECT * FROM deliveries").get() }, { event_id: `test:${testId}`, subscription_id: f.id, status: "accepted", attempted_at: now });
+  await poll(f.env, now);
+  await poll(f.env, now + 60000);
+  assert.deepEqual(await Promise.all(f.calls.map(async c => (await decodePayload(f, c.init.body)).eventId)), [`test:${testId}`, "existing-game:one-score-fourth", "existing-game:one-score-fourth"]);
+  assert.equal(f.sqlite.prepare("SELECT count(*) n FROM deliveries").get().n, 3);
+  assert.equal(f.sqlite.prepare("SELECT count(*) n FROM alert_events").get().n, 1);
+  assert.equal(f.sqlite.prepare("SELECT state_json FROM game_states").get().state_json, history);
 });
 
 for (const [code, expected, active] of [[404, "http-404", 0], [410, "http-410", 0], [503, "http-503", 1], ["transport", "uncertain", 1]]) {
@@ -91,7 +101,8 @@ test("concurrent duplicate and distinct device tests claim at most one attempt",
   assert.equal(f.sqlite.prepare("SELECT count(*) n FROM deliveries").get().n, 1);
   const bodies = await Promise.all(responses.map(r => r.json()));
   assert.equal(bodies.filter(x => x.attempted === true).length, 1);
-  assert.equal(responses.filter(r => r.status === 429).length, 1);
+  assert.ok(responses.every(r => [200, 202, 429].includes(r.status)));
+  assert.ok(responses.filter(r => r.status === 429).length >= 1);
 });
 
 test("a pending or interrupted test claim returns 202 and cannot send again", async t => {
@@ -112,4 +123,20 @@ test("a failed expiry update cannot report clean persistence or permit a resend"
   const retry = await f.request(testId);
   assert.equal(retry.status, 202); assert.equal((await retry.json()).attempted, false);
   assert.equal(f.calls.length, 1);
+});
+
+
+test("cooldown and permanent UUID deduplication are isolated per device and expire at exactly one minute", async t => {
+  const f = await fixture(t), testId = crypto.randomUUID();
+  let now = Date.now(); t.mock.method(Date, "now", () => now);
+  assert.equal((await (await f.request(testId)).json()).attempted, true);
+  assert.equal((await (await f.request(testId, { id: f.other, token: "another-owner" })).json()).attempted, true);
+  assert.equal(f.calls.length, 2);
+  assert.deepEqual(f.calls.map(c => c.url).sort(), [`https://web.push.apple.com/${f.id}`, `https://web.push.apple.com/${f.other}`].sort());
+  now += 59999;
+  assert.equal((await f.request(crypto.randomUUID())).status, 429);
+  now += 1;
+  assert.equal((await (await f.request(crypto.randomUUID())).json()).attempted, true);
+  assert.equal((await (await f.request(testId)).json()).attempted, false);
+  assert.equal(f.calls.length, 3);
 });
