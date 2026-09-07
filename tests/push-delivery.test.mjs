@@ -144,7 +144,7 @@ for (const [failure, respond] of [
   ["HTTP errors", () => new Response(null, { status: 503 })],
   ["transport failures", () => { throw new TypeError("Simulated feed connection failure"); }],
   ["malformed JSON", () => new Response("not-json")],
-  ["partial feeds", () => Response.json({ events: [liveEvent("new-game"), { invalid: true }] })],
+  ["partial feeds", () => Response.json(cdnFeed([liveEvent("new-game"), { invalid: true }]))],
 ]) {
   test(`both score sources returning ${failure} preserves history and last success, and releases the poll lock`, async t => {
     const f = fixture(t);

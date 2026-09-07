@@ -110,3 +110,28 @@ test("delays cannot invent close history or carry it across identity, board rang
   }
   assert.equal(classify(retainFinalCategories(scoreboard([final]), null).games[0]).close, false);
 });
+
+
+test("resumed live play and inactive states end the earlier delay history", () => {
+  const saved = retainFinalCategories(scoreboard([game({ state: "delayed" })]), scoreboard([game()]));
+  for (const state of ["live", "upcoming", "other", "delayed"]) {
+    const resumed = { ...saved.games[0], state, started: state !== "delayed" }; resumed.teams = structuredClone(resumed.teams); resumed.teams[1].score = 42;
+    const next = retainFinalCategories(scoreboard([resumed]), saved);
+    assert.equal(next.games[0].lastActiveClose, undefined, state);
+    const paused = retainFinalCategories(scoreboard([{ ...resumed, state: "delayed", started: true }]), JSON.parse(JSON.stringify(next)));
+    const final = retainFinalCategories(scoreboard([{ ...resumed, state: "final" }]), paused);
+    assert.equal(classify(final.games[0]).close, false, state);
+  }
+});
+
+
+test("pregame betting evidence shares the board-range guard with category history", () => {
+  const pregameLine = { favoriteId: "a", spread: 7, source: "ESPN" };
+  const previous = scoreboard([game({ state: "upcoming", started: false, pregameLine })]);
+  const live = game();
+  assert.deepEqual(retainFinalCategories(scoreboard([live]), previous).games[0].pregameLine, pregameLine);
+  assert.deepEqual(retainFinalCategories({ ...scoreboard([live]), endDate: undefined }, previous).games[0].pregameLine, pregameLine);
+  for (const next of [scoreboard([live], "2026-09-06"), scoreboard([live], previous.date, { endDate: "2026-09-07" })]) {
+    assert.equal(retainFinalCategories(next, previous).games[0].pregameLine, undefined, "a matching event and kickoff cannot import betting evidence from another board range");
+  }
+});

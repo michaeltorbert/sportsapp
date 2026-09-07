@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bundle, database, game } from "./helpers.mjs";
+import { bundle, cdnFeed, database, game } from "./helpers.mjs";
 const { default: worker, poll } = await bundle("services/alerts/worker.ts");
 const { hash } = await bundle("services/alerts/web-push.ts");
 
@@ -21,7 +21,9 @@ async function fixture(t) {
   const calls = [];
   let response = 201;
   globalThis.fetch = async (url, init) => {
-    if (String(url).includes("espn.com")) return Response.json({ events: [] });
+    const host = new URL(url).hostname;
+    if (host === "cdn.espn.com") return Response.json(cdnFeed());
+    assert.equal(host, "web.push.apple.com", "Unexpected destination must not escape interception");
     calls.push({ url, init });
     if (response === "transport") throw new TypeError("Simulated connection loss");
     return new Response(null, { status: response });
@@ -58,7 +60,7 @@ test("device test requires exact origin, active ownership and valid UUID before 
 });
 
 test("one labeled encrypted test reaches only its owner, preserves game history, and cannot replay", async t => {
-  const f = await fixture(t), testId = crypto.randomUUID(), now = Date.now();
+  const f = await fixture(t), testId = crypto.randomUUID(), now = Date.parse("2026-09-05T23:00:00Z");
   t.mock.method(Date, "now", () => now);
   const history = JSON.stringify(game({ id: "existing-game" }));
   f.sqlite.prepare("INSERT INTO game_states VALUES(?,?,?,?)").run("existing-game", "2026-09-05", history, now - 60000);
