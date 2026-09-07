@@ -170,7 +170,12 @@ test("a delayed close observation stays out of One score until its retained fina
   const delay = { ...live, state: "delayed" };
   const paused = retainFinalCategories(scoreboard([delay]), scoreboard([live]));
   const boards = fixtures(); boards.daily = paused;
-  assert.deepEqual(cardIds(render("close", { boards }).html), []);
+  const delayed = render("close", { boards }).html;
+  assert.deepEqual(cardIds(delayed), []);
+  assert.equal(badge(delayed, "close"), 0);
+  const watched = render("watch", { boards, focusedGame: live.id }).html;
+  assert.match(watched, /Play paused\. Watching for an update\./);
+  assert.doesNotMatch(watched, /class="badge close-badge"/);
   const final = structuredClone(live); final.state = "final"; final.teams[1].score = 35;
   boards.daily = retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(paused)));
   const html = render("close", { boards }).html;

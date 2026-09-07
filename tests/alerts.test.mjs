@@ -223,6 +223,7 @@ for (const [label, instant, alter] of [
   ["wrong selected week", "2026-09-05T21:00Z", raw => { raw.content.sbData.week.number = 2; }],
   ["start boundary", "2026-08-23T21:00Z", () => {}],
   ["end boundary", "2026-09-08T21:00Z", () => {}],
+  ["selected-week boundary despite adjacent entry", "2026-09-08T21:00Z", raw => { raw.content.sbData.leagues[0].calendar[0].entries.push({ value: "2", startDate: "2026-09-08T07:00Z", endDate: "2026-09-15T06:59Z" }); }],
 ]) test(`poll rejects ${label} CDN coverage and requests the exact API range`, async t => {
   const { db, sqlite } = database(); t.after(() => sqlite.close());
   const now = Date.parse(instant), raw = cdnFeed(); alter(raw);
@@ -278,4 +279,26 @@ test("saved close history does not change live phone conditions or trigger IDs",
   }
   const close = game({ lastActiveClose: false });
   assert.ok(rules.transitions(null, close, Date.now()).some(event => event.id === `${close.id}:one-score-fourth`));
+});
+
+for (const [label, instant, week, accepted] of [
+  ["Tuesday before week switch", "2026-09-08T16:00Z", 1, false],
+  ["Tuesday after week switch", "2026-09-08T16:00Z", 2, false],
+  ["Wednesday with boundary yesterday", "2026-09-09T16:00Z", 2, false],
+  ["Thursday fully covered", "2026-09-10T16:00Z", 2, true],
+]) test(`selected-week rollover: ${label}`, async t => {
+  const { db, sqlite } = database(); t.after(() => sqlite.close());
+  const raw = cdnFeed(), now = Date.parse(instant), hosts = [];
+  raw.content.sbData.week.number = week;
+  raw.content.sbData.leagues[0].calendar[0].entries.push({ value: "2", startDate: "2026-09-08T07:00Z", endDate: "2026-09-15T06:59Z" });
+  t.mock.method(globalThis, "fetch", async input => {
+    const host = new URL(input).hostname; hosts.push(host);
+    if (host === "cdn.espn.com") return Response.json(raw);
+    assert.equal(host, "site.api.espn.com", "No push may escape interception");
+    return Response.json({ events: [] });
+  });
+  await poll({ DB: db, VAPID_PUBLIC_KEY: "test", VAPID_PRIVATE_KEY: "test" }, now);
+  assert.deepEqual(hosts, accepted ? ["cdn.espn.com"] : ["cdn.espn.com", "site.api.espn.com"]);
+  assert.equal(sqlite.prepare("SELECT value FROM poll_state WHERE id='last_good_score'").get().value, now);
+  assert.equal(sqlite.prepare("SELECT count(*) AS n FROM poll_lock").get().n, 0);
 });

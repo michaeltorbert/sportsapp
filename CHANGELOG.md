@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.3.3 · 2026-09-07
+
+- Restore the required TypeScript/declaration check to pull-request CI.
+- Preserve unique feed-boundary, saved-history, and intercepted-notification regression checks from superseded PRs.
+- Document conservative alert-feed failures and paused-game history, and correct the full alert regression command (#24).
+- Preserve existing alert behavior, ownership, subscriptions, VAPID keys, trigger IDs, and delivery deduplication.
+
 ## 1.3.2 · 2026-09-07
 
 - Reject alert feeds that cannot prove complete date coverage, retaining the verified fallback and existing alert ownership, trigger IDs, deduplication, subscriptions, and delivery history (#18).

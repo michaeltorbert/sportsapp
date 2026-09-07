@@ -1,5 +1,6 @@
-export const VERSION = "1.3.2";
+export const VERSION = "1.3.3";
 export const releases = [
+  { version: "1.3.3", date: "September 7, 2026", changes: "Restored automated TypeScript checks and strengthened regression coverage and support documentation for alert feeds and paused-game history." },
   { version: "1.3.2", date: "September 7, 2026", changes: "Improved alert-feed coverage checks and preserved one-score game history across delays and reloads. Repaired the standalone TypeScript check." },
   { version: "1.3.1", date: "September 6, 2026", changes: "Added a secure single-device notification test for support checks, with duplicate protection. Expanded automated checks for mobile navigation, overnight rollover, alert recovery, and notification handling." },
   { version: "1.3.0", date: "September 6, 2026", changes: "Prioritized games by team relevance, live drama, and upset significance. Added meaningful unranked ACC/SEC upset watches and improved favorite-data recovery and paused-game history. Existing phone-alert rules are preserved." },
