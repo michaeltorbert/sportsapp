@@ -77,9 +77,12 @@ async function testNotification(request: Request, env: Env, sub: StoredSubscript
       eventId, url: `${origin}/`,
     }, { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY, subject: env.VAPID_SUBJECT });
     status = code >= 200 && code < 300 ? "accepted" : `http-${code}`;
-    if (code === 404 || code === 410) await env.DB.prepare("UPDATE subscriptions SET active=0,updated_at=? WHERE id=?").bind(now, sub.id).run();
   } catch { /* Preserve the claim after an ambiguous failure; never resend automatically. */ }
-  await env.DB.prepare("UPDATE deliveries SET status=? WHERE event_id=? AND subscription_id=?").bind(status, eventId, sub.id).run();
+  const changes = [env.DB.prepare("UPDATE deliveries SET status=? WHERE event_id=? AND subscription_id=?").bind(status, eventId, sub.id)];
+  if (status === "http-404" || status === "http-410") changes.push(env.DB.prepare("UPDATE subscriptions SET active=0,updated_at=? WHERE id=?").bind(now, sub.id));
+  // If persistence fails, leave the original claim intact and fail the request.
+  // A repeat can inspect that claim, but cannot repeat the possibly completed send.
+  await env.DB.batch(changes);
   return result({ status, attempted_at: now }, true);
 }
 export async function saveGameStates(db: Database, games: Game[], now: number) {

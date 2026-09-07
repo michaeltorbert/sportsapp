@@ -93,3 +93,23 @@ test("concurrent duplicate and distinct device tests claim at most one attempt",
   assert.equal(bodies.filter(x => x.attempted === true).length, 1);
   assert.equal(responses.filter(r => r.status === 429).length, 1);
 });
+
+test("a pending or interrupted test claim returns 202 and cannot send again", async t => {
+  const f = await fixture(t), testId = crypto.randomUUID();
+  f.sqlite.prepare("INSERT INTO deliveries VALUES(?,?,?,?)").run(`test:${testId}`, f.id, "claimed", Date.now() - 3600000);
+  const response = await f.request(testId), body = await response.json();
+  assert.equal(response.status, 202); assert.equal(body.status, "claimed"); assert.equal(body.attempted, false);
+  assert.equal(f.calls.length, 0);
+});
+
+test("a failed expiry update cannot report clean persistence or permit a resend", async t => {
+  const f = await fixture(t), testId = crypto.randomUUID(); f.respond(410);
+  f.sqlite.exec("CREATE TRIGGER reject_expiry BEFORE UPDATE OF active ON subscriptions BEGIN SELECT RAISE(ABORT,'simulated D1 failure'); END;");
+  assert.equal((await f.request(testId)).status, 400);
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.sqlite.prepare("SELECT status FROM deliveries WHERE event_id=?").get(`test:${testId}`).status, "claimed");
+  assert.equal(f.sqlite.prepare("SELECT active FROM subscriptions WHERE id=?").get(f.id).active, 1);
+  const retry = await f.request(testId);
+  assert.equal(retry.status, 202); assert.equal((await retry.json()).attempted, false);
+  assert.equal(f.calls.length, 1);
+});
