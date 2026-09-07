@@ -18,7 +18,8 @@
     "deploy:alerts": "WRANGLER_LOG_PATH=.wrangler/logs wrangler deploy --config services/alerts/wrangler.jsonc",
     "release:check": "node scripts/check-release.mjs",
     "release:verify": "node scripts/verify-deployment.mjs",
-    "test:runtime": "node scripts/check-worker-runtime.mjs"
+    "test:runtime": "node scripts/check-worker-runtime.mjs",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -48,6 +49,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.54.4",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",

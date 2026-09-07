@@ -39,6 +39,10 @@ jobs:
           npm run test:runtime
           npm run deploy:check
           npm run deploy:alerts -- --dry-run
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium webkit
+      - name: Test mobile browser regressions (simulated scores and push)
+        run: npm run test:browser
       - name: Validate preview deployment package
         env:
           CLOUDFLARE_ENV: preview
@@ -51,6 +55,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: tests-${{ github.sha }}
-          path: .release-evidence/tests.log
+          path: |
+            .release-evidence/tests.log
+            output/playwright/
           include-hidden-files: true
           retention-days: 14
