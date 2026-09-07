@@ -44,6 +44,44 @@ async function deliver(env: Env, now: number) {
     }
   }
 }
+// Tests use the delivery ledger only: never create a football event for a device test.
+// The caller must prove ownership of one active subscription and supply a stable UUID.
+async function testNotification(request: Request, env: Env, sub: StoredSubscription, origin: string) {
+  const body = await readBody(request);
+  if (typeof body.testId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(body.testId)) {
+    return { body: { error: "A UUID v4 testId is required" }, status: 400 };
+  }
+  const eventId = `test:${body.testId}`;
+  const read = () => env.DB.prepare("SELECT status,attempted_at FROM deliveries WHERE event_id=? AND subscription_id=?").bind(eventId, sub.id).first<{ status: string; attempted_at: number }>();
+  const result = (row: { status: string; attempted_at: number }, attempted: boolean) => ({
+    body: { testId: body.testId, attempted, status: row.status, attemptedAt: new Date(row.attempted_at).toISOString(), receiptConfirmed: false },
+    status: row.status === "claimed" ? 202 : 200,
+  });
+  const previous = await read();
+  if (previous) return result(previous, false);
+  if (!sub.active) return { body: { error: "Enable alerts on this device first" }, status: 409 };
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return { body: { error: "Push configuration is unavailable" }, status: 503 };
+  const now = Date.now();
+  // One atomic statement prevents parallel UUIDs from bypassing a per-device cooldown.
+  const claim = await env.DB.prepare("INSERT OR IGNORE INTO deliveries(event_id,subscription_id,status,attempted_at) SELECT ?,?,'claimed',? WHERE NOT EXISTS (SELECT 1 FROM deliveries WHERE subscription_id=? AND event_id LIKE 'test:%' AND attempted_at>?)")
+    .bind(eventId, sub.id, now, sub.id, now - 60000).run();
+  if (claim.meta.changes !== 1) {
+    const concurrent = await read();
+    return concurrent ? result(concurrent, false) : { body: { error: "Wait one minute before requesting another test" }, status: 429 };
+  }
+  let status = "uncertain";
+  try {
+    const code = await sendPush({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, {
+      title: "Saturday Signal: TEST",
+      body: "This is a test notification, not a game alert. Tap to open Saturday Signal.",
+      eventId, url: `${origin}/`,
+    }, { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY, subject: env.VAPID_SUBJECT });
+    status = code >= 200 && code < 300 ? "accepted" : `http-${code}`;
+    if (code === 404 || code === 410) await env.DB.prepare("UPDATE subscriptions SET active=0,updated_at=? WHERE id=?").bind(now, sub.id).run();
+  } catch { /* Preserve the claim after an ambiguous failure; never resend automatically. */ }
+  await env.DB.prepare("UPDATE deliveries SET status=? WHERE event_id=? AND subscription_id=?").bind(status, eventId, sub.id).run();
+  return result({ status, attempted_at: now }, true);
+}
 export async function saveGameStates(db: Database, games: Game[], now: number) {
   const { results } = await db.prepare("SELECT game_id,state_json,observed_at FROM game_states WHERE game_id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(games.map(game => game.id))).all<{ game_id: string; state_json: string; observed_at: number }>();
   const stored = new Map(results.map(row => [row.game_id, row]));
@@ -154,10 +192,16 @@ async function api(request: Request, env: Env): Promise<Response> {
     if (actual?.token_hash !== await hash(secret)) return json({ error: "Subscription already registered" }, 409);
     return json({ id, token: secret });
   }
-  const match = /^\/subscriptions\/([A-Za-z0-9_-]{43})$/.exec(url.pathname);
+  const match = /^\/subscriptions\/([A-Za-z0-9_-]{43})(\/test)?$/.exec(url.pathname);
   if (match) {
     const sub = await env.DB.prepare("SELECT * FROM subscriptions WHERE id=?").bind(match[1]).first<StoredSubscription>();
     if (!sub || !token || await hash(token) !== sub.token_hash) return json({ error: "Subscription not found" }, 404);
+    if (match[2]) {
+      if (request.method !== "POST") return json({ error: "Not found" }, 404);
+      if (!allowedOrigin(origin, env)) return json({ error: "Origin required" }, 403);
+      const test = await testNotification(request, env, sub, origin);
+      return json(test.body, test.status);
+    }
     if (request.method === "GET") return json({ active: !!sub.active, kickoff: !!sub.kickoff });
     if (!allowedOrigin(origin, env)) return json({ error: "Origin required" }, 403);
     if (request.method === "DELETE") { await env.DB.prepare("UPDATE subscriptions SET active=0,updated_at=? WHERE id=?").bind(Date.now(), sub.id).run(); return json({ ok: true }); }
