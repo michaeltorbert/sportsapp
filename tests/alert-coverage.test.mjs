@@ -3,12 +3,18 @@ import assert from "node:assert/strict";
 import { bundle, database, game } from "./helpers.mjs";
 import { alertCdn } from "./fixtures/alert-cdn.mjs";
 const { poll, saveGameStates } = await bundle("services/alerts/worker.ts");
+const { easternDate, shiftDate } = await bundle("lib/football.ts");
 
 const cases = [
   ["wrong week", "2026-09-13T21:00:00Z", () => alertCdn()],
   ["missing calendar", "2026-09-05T23:00:00Z", () => { const raw = alertCdn(); delete raw.content.sbData.leagues; return raw; }],
   ["partial start boundary", "2026-08-23T21:00:00Z", () => alertCdn()],
   ["partial end boundary", "2026-09-08T21:00:00Z", () => alertCdn()],
+  ["selected-week boundary despite adjacent calendar entry", "2026-09-08T21:00:00Z", () => {
+    const raw = alertCdn();
+    raw.content.sbData.leagues[0].calendar[0].entries.push({ value: "2", startDate: "2026-09-08T07:00Z", endDate: "2026-09-15T06:59Z" });
+    return raw;
+  }],
 ];
 
 for (const [reason, instant, feed] of cases) {
@@ -31,9 +37,9 @@ for (const [reason, instant, feed] of cases) {
         const url = new URL(input); calls.push(url.hostname);
         if (url.hostname === "cdn.espn.com") return Response.json(feed());
         assert.equal(url.hostname, "site.api.espn.com", "No notification may escape interception");
-        const today = instant.slice(0, 10), yesterday = new Date(now - 86400000).toISOString().slice(0, 10);
-        const tomorrow = new Date(now + 86400000).toISOString().slice(0, 10);
-        assert.equal(url.searchParams.get("dates"), `${yesterday.replaceAll("-", "")}-${tomorrow.replaceAll("-", "")}`, `Expected complete yesterday/today range ending ${today}`);
+        const today = easternDate(new Date(now)), yesterday = shiftDate(today, -1);
+        const tomorrow = shiftDate(today, 1);
+        assert.equal(url.searchParams.get("dates"), `${yesterday.replaceAll("-", "")}-${tomorrow.replaceAll("-", "")}`, `Expected Eastern yesterday/today range with exclusive end ${tomorrow}`);
         assert.equal(url.searchParams.get("groups"), "80");
         return apiStatus === 200 ? Response.json({ events: [] }) : new Response("Forbidden", { status: apiStatus });
       });

@@ -26,6 +26,7 @@ async function fixture(t) {
       startDate: new Date(Date.now() - 7 * 86400000).toISOString(),
       endDate: new Date(Date.now() + 7 * 86400000).toISOString(),
     }));
+    assert.equal(new URL(url).hostname, "web.push.apple.com", "Only the configured push service may reach notification interception");
     calls.push({ url, init });
     if (response === "transport") throw new TypeError("Simulated connection loss");
     return new Response(null, { status: response });
@@ -62,7 +63,7 @@ test("device test requires exact origin, active ownership and valid UUID before 
 });
 
 test("one labeled encrypted test reaches only its owner, preserves game history, and cannot replay", async t => {
-  const f = await fixture(t), testId = crypto.randomUUID(), now = Date.now();
+  const f = await fixture(t), testId = crypto.randomUUID(), now = Date.parse("2026-09-05T23:00:00Z");
   t.mock.method(Date, "now", () => now);
   const history = JSON.stringify(game({ id: "existing-game" }));
   f.sqlite.prepare("INSERT INTO game_states VALUES(?,?,?,?)").run("existing-game", "2026-09-05", history, now - 60000);
