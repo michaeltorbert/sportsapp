@@ -34,6 +34,12 @@ This directory is an independent Worker, outside the Sites runtime. Use Cloudfla
 
 The API accepts the configured `SITE_ORIGIN`. Subscription endpoints are limited to Apple, Google FCM, and Mozilla push services, and redirects are rejected. Subscription keys are stored only in the alerts database. Public callers cannot list subscribers. A random device token, stored hashed server-side, is required to edit or disable that device’s subscription. HTTP 404/410 responses deactivate expired subscriptions.
 
+## Score-feed coverage and failures
+
+The poller requests yesterday and today in Eastern time. Because the CDN ignores requested dates, it is accepted only when its selected season/week calendar entry proves coverage of the entire window. Calendar boundary days are excluded conservatively. A window crossing entries is rejected even when an adjacent entry appears in the payload; that entry does not prove the selected scoreboard includes its games.
+
+A rejected CDN response falls back to the date-specific site API, which can still make the poll succeed. If both sources fail, the error retains separate `cdn` and `site-api` diagnostics. For example, a coverage rejection followed by API HTTP 403 is a failed poll, not successful readiness. Game states, subscriptions, alert and delivery history, `last_good_score`, and `next_poll` remain unchanged, while the current tick is recorded and the owned poll lock is released. The next scheduled tick can retry the already-due poll; it does not introduce retries of recorded notification attempts. `/config` continues to distinguish fresh cron ticks from the last successful score poll, using its existing readiness thresholds.
+
 ## Trigger semantics
 
 - Fourth-quarter/overtime one-score: enters `live && period >= 4 && margin <= 8`, including ties and a game already close when the fourth quarter starts.
