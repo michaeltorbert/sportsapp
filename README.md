@@ -29,6 +29,8 @@ The existing repository-wide ESLint backlog is tracked in [issue #1](https://git
 
 `npm ci` generates ignored Worker declarations using the pinned Wrangler version and the website's compatibility date, flags, and bindings. `npm run typecheck` regenerates them before checking TypeScript, so configuration changes are reflected immediately. If installation scripts were disabled, run `npm run types:generate` before invoking TypeScript directly. The optional D1 example keeps its binding type local; it does not declare a production website database.
 
+CI intentionally runs typechecking before the build to catch errors in checked-in source and generated Worker bindings early; build, runtime, and browser checks follow. The generated `Cloudflare.Env` describes the website's `wrangler.jsonc`. The separate alerts Worker retains its own `Env` type.
+
 ## Deployment
 
 See [the release guide](docs/releases.md) for GitHub environment setup, preview validation, production releases, verification, and rollback. GitHub Actions run tests on PRs. Production deployment is triggered by publishing a stable GitHub release, not by merging a PR.
