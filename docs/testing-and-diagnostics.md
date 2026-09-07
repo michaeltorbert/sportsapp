@@ -45,13 +45,15 @@ The push tests use in-memory SQLite, generated temporary cryptographic material 
 
 ## One authorized device test
 
-The proposed `POST /subscriptions/{id}/test` route must be reviewed, merged, released and verified before use. It is absent from production 1.3.0. It uses the existing subscription owner Bearer token, an exact allowed Origin header and JSON `{ "testId": "<UUID v4>" }`. There is no broadcast route or caller-supplied notification content/destination. The response exposes only the test ID, attempt status/time, whether this request claimed the attempt, and `receiptConfirmed: false`.
+The proposed `POST /subscriptions/{id}/test` route must be reviewed, merged, released and verified before use. It is absent from production 1.3.0. It uses the existing subscription owner Bearer token, an exact allowed Origin header and JSON `{ "testId": "<UUID v4>" }`. There is no broadcast route or caller-supplied notification text. The tap destination is the root page of that allowed Origin; use the verified installation's origin. The response exposes the test ID, attempt status/time, whether this request claimed the attempt, and `receiptConfirmed: false`.
 
 Use only credentials obtained directly from the intended installed app under an authorized Safari inspection. Confirm the inspected page origin, current version, local PushSubscription and its matching saved owner record. Never paste the owner token, push endpoint or keys into chat, GitHub, command arguments or review packets. A database count or Apple provider hostname cannot identify the phone. If inspection cannot establish ownership, stop for the minimum device assistance rather than choosing an active row.
 
 After identity and the user's readiness are confirmed, close the installed app. Send one request from the local operator environment with the credentials held securely in memory, the verified installation's Origin and a newly generated test ID. Retain that ID and never automatically retry an ambiguous request or switch to a new ID to force a retry. A repeated request with the same ID returns the existing claim/status and cannot send again. Different IDs have an atomic one-minute per-device cooldown; that limit does not authorize additional sends.
 
 The route uses the production `sendPush` function and existing VAPID identity. It writes only a `test:<UUID>` row in the existing delivery ledger; it never creates an `alert_events` row, modifies game history, or injects a football event. Expired 404/410 subscriptions are deactivated consistently with normal delivery. A claim is preserved after a transport, encryption or signing failure. `uncertain` cannot prove whether the provider was contacted. A `claimed` row after interruption must also be treated as possibly attempted, not safe to resend. Provider `accepted` does not establish visible receipt.
+
+A post-attempt database failure returns HTTP 503 with `attempted: true`, `status: "claimed"`, and an explicit instruction not to send another test. The terminal result was not saved; the preserved claim prevents a same-ID resend. Do not interpret any HTTP status alone as proof that a notification was or was not delivered. Local concurrency tests exercise request interleaving against one in-memory SQLite connection; they do not prove live D1 concurrency.
 
 Record separately in #9:
 

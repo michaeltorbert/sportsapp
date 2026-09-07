@@ -82,7 +82,11 @@ async function testNotification(request: Request, env: Env, sub: StoredSubscript
   if (status === "http-404" || status === "http-410") changes.push(env.DB.prepare("UPDATE subscriptions SET active=0,updated_at=? WHERE id=?").bind(now, sub.id));
   // If persistence fails, leave the original claim intact and fail the request.
   // A repeat can inspect that claim, but cannot repeat the possibly completed send.
-  await env.DB.batch(changes);
+  try { await env.DB.batch(changes); }
+  catch {
+    return { status: 503, body: { ...result({ status: "claimed", attempted_at: now }, true).body,
+      error: "An attempt was made but its result could not be saved. Do not send another test." } };
+  }
   return result({ status, attempted_at: now }, true);
 }
 export async function saveGameStates(db: Database, games: Game[], now: number) {

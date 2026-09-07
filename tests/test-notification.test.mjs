@@ -116,7 +116,11 @@ test("a pending or interrupted test claim returns 202 and cannot send again", as
 test("a failed expiry update cannot report clean persistence or permit a resend", async t => {
   const f = await fixture(t), testId = crypto.randomUUID(); f.respond(410);
   f.sqlite.exec("CREATE TRIGGER reject_expiry BEFORE UPDATE OF active ON subscriptions BEGIN SELECT RAISE(ABORT,'simulated D1 failure'); END;");
-  assert.equal((await f.request(testId)).status, 400);
+  const failed = await f.request(testId), failure = await failed.json();
+  assert.equal(failed.status, 503);
+  assert.equal(failure.testId, testId); assert.equal(failure.attempted, true);
+  assert.equal(failure.status, "claimed"); assert.equal(failure.receiptConfirmed, false);
+  assert.match(failure.error, /attempt was made.*Do not send another test/);
   assert.equal(f.calls.length, 1);
   assert.equal(f.sqlite.prepare("SELECT status FROM deliveries WHERE event_id=?").get(`test:${testId}`).status, "claimed");
   assert.equal(f.sqlite.prepare("SELECT active FROM subscriptions WHERE id=?").get(f.id).active, 1);
