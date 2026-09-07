@@ -270,3 +270,12 @@ test("covered empty CDN succeeds without API; rejected coverage plus 403 preserv
   assert.equal(sqlite.prepare("SELECT value FROM poll_state WHERE id='last_good_score'").get().value, failed + 1);
   assert.deepEqual(history(), before);
 });
+
+test("saved close history does not change live phone conditions or trigger IDs", () => {
+  const wide = game({ lastActiveClose: true }); wide.teams[1].score = 35;
+  for (const state of ["live", "delayed", "final"]) {
+    assert.equal(rules.conditions({ ...wide, state }, Date.now())["one-score-fourth"], false);
+  }
+  const close = game({ lastActiveClose: false });
+  assert.ok(rules.transitions(null, close, Date.now()).some(event => event.id === `${close.id}:one-score-fourth`));
+});

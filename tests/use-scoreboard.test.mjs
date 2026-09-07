@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { build } from "esbuild";
 import { bundle, game, scoreboard } from "./helpers.mjs";
-const { easternDate, shiftDate, accWeek } = await bundle("lib/football.ts");
+const { classify, easternDate, shiftDate, accWeek } = await bundle("lib/football.ts");
 const { scoreboardScope } = await bundle("lib/scoreboard-views.ts");
 
 // Drive hook lifecycle and controlled feed responses without a browser or network.
@@ -177,4 +177,35 @@ test("Tuesday rollover keeps Monday's week while unfinished and hides obsolete w
   pendingWeeks.forEach(resolve => resolve()); await refresh;
   const next = await h.settle();
   assert.equal(next.boards.acc.date, "2026-09-10"); assert.equal(next.boards.top25.endDate, "2026-09-14");
+});
+
+test("actual hook delay writes survive opaque storage transfer into a fresh hook and isolate scopes", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-09-05T21:00:00Z") });
+  const calendar = easternDate(), yesterday = shiftDate(calendar, -1), week = accWeek(calendar);
+  let phase = "live", saved;
+  const load = async (date, signal, fetcher, end = date) => {
+    if (date === yesterday && end === date) return scoreboard([], date);
+    const g = game({ state: phase === "final" ? "final" : phase });
+    // Only daily observes close live play; weekly scopes see a wide game.
+    if (phase === "final" || (phase === "live" && end !== date)) g.teams[1].score = 35;
+    return scoreboard([g], date, { endDate: end });
+  };
+  await t.test("first mount observes live then writes started delay", async sub => {
+    const h = harness(sub, load); h.render(); const live = await h.settle();
+    assert.equal(classify(live.boards.daily.games[0]).close, true);
+    phase = "delayed"; await live.refresh(); const delayed = await h.settle();
+    assert.equal(classify(delayed.boards.daily.games[0]).close, false);
+    saved = { ...h.storage }; // Opaque persisted strings, no reconstruction of metadata.
+    assert.equal(typeof saved[`ss:board:${calendar}:${calendar}`], "string");
+  });
+  phase = "final";
+  await t.test("fresh mount restores the persisted observation only for its own scope", async sub => {
+    const h = harness(sub, load, saved); h.render(); const final = await h.settle();
+    assert.equal(classify(final.boards.daily.games[0]).close, true);
+    assert.equal(classify(final.boards.acc.games[0]).close, false);
+    assert.equal(classify(final.boards.top25.games[0]).close, false);
+    final.setDate("2026-09-03"); h.render(); const other = await h.settle();
+    assert.equal(classify(other.boards.daily.games[0]).close, false);
+    assert.equal(other.boards.acc.date, week.start);
+  });
 });
