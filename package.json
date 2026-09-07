@@ -19,7 +19,9 @@
     "release:check": "node scripts/check-release.mjs",
     "release:verify": "node scripts/verify-deployment.mjs",
     "test:runtime": "node scripts/check-worker-runtime.mjs",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "types:generate": "WRANGLER_LOG_PATH=.wrangler/types.log wrangler types --config wrangler.jsonc",
+    "typecheck": "tsc --noEmit --incremental false"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
