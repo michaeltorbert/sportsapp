@@ -1,4 +1,5 @@
 import test from "node:test";
+import { alertCdn } from "./fixtures/alert-cdn.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
@@ -57,7 +58,7 @@ function intercept(t, { events = [liveEvent()], send = () => new Response(null, 
     const url = new URL(input);
     if (url.hostname === "cdn.espn.com") {
       feeds.push(url.href);
-      return Response.json({ content: { sbData: { events } } });
+      return Response.json(alertCdn(events));
     }
     assert.equal(url.hostname, "fcm.googleapis.com", "Unexpected network destination must not escape interception");
     const headers = new Headers(init.headers);
@@ -144,7 +145,7 @@ for (const [failure, respond] of [
   ["HTTP errors", () => new Response(null, { status: 503 })],
   ["transport failures", () => { throw new TypeError("Simulated feed connection failure"); }],
   ["malformed JSON", () => new Response("not-json")],
-  ["partial feeds", () => Response.json({ events: [liveEvent("new-game"), { invalid: true }] })],
+  ["partial feeds", () => Response.json(alertCdn([liveEvent("new-game"), { invalid: true }]))],
 ]) {
   test(`both score sources returning ${failure} preserves history and last success, and releases the poll lock`, async t => {
     const f = fixture(t);
@@ -178,7 +179,7 @@ test("partial CDN data falls back without saving or notifying from its incomplet
   t.mock.method(globalThis, "fetch", async input => {
     const host = new URL(input).hostname;
     hosts.push(host);
-    if (host === "cdn.espn.com") return Response.json({ events: [liveEvent("partial-only"), { invalid: true }] });
+    if (host === "cdn.espn.com") return Response.json(alertCdn([liveEvent("partial-only"), { invalid: true }]));
     assert.equal(host, "site.api.espn.com");
     return Response.json({ events: [] });
   });

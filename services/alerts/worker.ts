@@ -1,5 +1,5 @@
 import { VERSION } from "../../lib/releases";
-import { normalizeScoreboard, scoreboardCdnUrl, scoreboardUrl } from "../../lib/espn-data";
+import { normalizeCdnRange, normalizeScoreboard, scoreboardCdnUrl, scoreboardUrl } from "../../lib/espn-data";
 import { easternDate, shiftDate, type Game } from "../../lib/football";
 import { nextPollAt, transitions, type AlertEvent, type Snapshot } from "./rules";
 import { encode, hash, sendPush, validSubscription } from "./web-push";
@@ -130,7 +130,12 @@ export async function poll(env: Env, now = Date.now()) {
       try {
         const response = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const candidate = normalizeScoreboard(await response.json(), previousDate, new Date(now).toISOString(), date);
+        const raw = await response.json();
+        // The CDN ignores requested dates; require coverage of both Eastern days,
+        // including conservative calendar boundaries, before advancing readiness.
+        const candidate = source === "cdn"
+          ? normalizeCdnRange(raw, previousDate, date)
+          : normalizeScoreboard(raw, previousDate, new Date(now).toISOString(), date);
         if (candidate.warnings?.length) throw new Error("scoreboard is incomplete");
         board = candidate;
         break;

@@ -1,4 +1,5 @@
 import test from "node:test";
+import { alertCdn } from "./fixtures/alert-cdn.mjs";
 import { readFileSync } from "node:fs";
 const packageVersion = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 import assert from "node:assert/strict";
@@ -17,7 +18,7 @@ test("poll fetches yesterday AND today, catches live games, and ignores first-se
     const url = new URL(input); calls++;
     assert.equal(url.hostname, "cdn.espn.com");
     assert.equal(url.searchParams.get("group"), "80");
-    return Response.json({ content: { sbData: { events: [event("friday-final", "2026-09-05T01:00:00Z", "post"), event("saturday-live", "2026-09-05T22:00:00Z", "in"), event("saturday-final", "2026-09-05T16:00:00Z", "post"), event("outside-window", "2026-09-06T20:00:00Z", "in")] } } });
+    return Response.json(alertCdn([event("friday-final", "2026-09-05T01:00:00Z", "post"), event("saturday-live", "2026-09-05T22:00:00Z", "in"), event("saturday-final", "2026-09-05T16:00:00Z", "post"), event("outside-window", "2026-09-06T20:00:00Z", "in")]));
   };
   try {
     const env = { DB: db, SITE_ORIGIN: "https://app.test", VAPID_PUBLIC_KEY: "test-only", VAPID_PRIVATE_KEY: "test-only" };

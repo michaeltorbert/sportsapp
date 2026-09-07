@@ -1,4 +1,5 @@
 import test from "node:test";
+import { alertCdn } from "./fixtures/alert-cdn.mjs";
 import assert from "node:assert/strict";
 import { bundle, database, game } from "./helpers.mjs";
 const { default: worker, poll } = await bundle("services/alerts/worker.ts");
@@ -21,7 +22,10 @@ async function fixture(t) {
   const calls = [];
   let response = 201;
   globalThis.fetch = async (url, init) => {
-    if (String(url).includes("espn.com")) return Response.json({ events: [] });
+    if (new URL(url).hostname === "cdn.espn.com") return Response.json(alertCdn([], {
+      startDate: new Date(Date.now() - 7 * 86400000).toISOString(),
+      endDate: new Date(Date.now() + 7 * 86400000).toISOString(),
+    }));
     calls.push({ url, init });
     if (response === "transport") throw new TypeError("Simulated connection loss");
     return new Response(null, { status: response });
