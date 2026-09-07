@@ -262,6 +262,10 @@ test("covered empty CDN succeeds without API; rejected coverage plus 403 preserv
   assert.deepEqual(sqlite.prepare("SELECT * FROM poll_state WHERE id <> 'last_tick' ORDER BY id").all(), scheduling);
   assert.equal(sqlite.prepare("SELECT value FROM poll_state WHERE id='last_tick'").get().value, failed);
   assert.equal(sqlite.prepare("SELECT count(*) AS n FROM poll_lock").get().n, 0);
+  t.mock.timers.enable({ apis: ["Date"], now: failed });
+  const config = await (await worker.fetch(new Request("https://alerts.test/config"), env)).json();
+  assert.equal(config.ready, false);
+  assert.equal(config.readinessReason, "stale-score-feed");
   recover = true; await poll(env, failed + 1);
   assert.equal(sqlite.prepare("SELECT value FROM poll_state WHERE id='last_good_score'").get().value, failed + 1);
   assert.deepEqual(history(), before);
