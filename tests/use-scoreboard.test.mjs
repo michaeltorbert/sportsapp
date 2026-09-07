@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { build } from "esbuild";
 import { bundle, game, scoreboard } from "./helpers.mjs";
-const { easternDate, shiftDate, accWeek } = await bundle("lib/football.ts");
+const { easternDate, shiftDate, accWeek, classify, retainFinalCategories } = await bundle("lib/football.ts");
 const { scoreboardScope } = await bundle("lib/scoreboard-views.ts");
 
 // Drive hook lifecycle and controlled feed responses without a browser or network.
@@ -177,4 +177,23 @@ test("Tuesday rollover keeps Monday's week while unfinished and hides obsolete w
   pendingWeeks.forEach(resolve => resolve()); await refresh;
   const next = await h.settle();
   assert.equal(next.boards.acc.date, "2026-09-10"); assert.equal(next.boards.top25.endDate, "2026-09-14");
+});
+
+test("saved delay history survives a fresh hook and stays isolated by date and scope", async t => {
+  const calendar = easternDate(), yesterday = shiftDate(calendar, -1), week = accWeek(calendar);
+  const dailyKey = `ss:board:${calendar}:${calendar}`, accKey = `ss:board:${week.start}:${week.end}`, topKey = `ss:board:top25:${week.start}:${week.end}`;
+  const live = game(), delayed = game({ state: "delayed" }), final = game({ state: "final" }); final.teams[1].score = 42;
+  const paused = (date, end = date) => retainFinalCategories(scoreboard([delayed], date, { endDate: end }), scoreboard([live], date, { endDate: end }));
+  const h = harness(t, async (date, signal, fetcher, end = date) => scoreboard(date === yesterday && date === end ? [] : [structuredClone(final)], date, { endDate: end }), {
+    [dailyKey]: JSON.stringify(paused(calendar)),
+    [accKey]: JSON.stringify(paused(week.start, week.end)),
+    [topKey]: JSON.stringify(scoreboard([delayed], week.start, { endDate: week.end })),
+  });
+  h.render(); const fresh = await h.settle();
+  for (const scope of ["daily", "acc"]) assert.equal(classify(fresh.boards[scope].games[0]).close, true, scope);
+  assert.equal(classify(fresh.boards.top25.games[0]).close, false);
+  assert.equal(JSON.parse(h.storage.getItem(dailyKey)).games[0].retainedCategories.close, true);
+  fresh.setDate(shiftDate(calendar, -3)); h.render(); const anotherDate = await h.settle();
+  assert.equal(classify(anotherDate.boards.daily.games[0]).close, false);
+  assert.equal(classify(anotherDate.boards.acc.games[0]).close, true);
 });

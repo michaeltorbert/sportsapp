@@ -70,3 +70,53 @@ test("ESPN date ranges retain the 10:30pm ET Cal game and parse curatedRank 99",
   assert.equal(cdn.hostname, "cdn.espn.com"); assert.equal(cdn.searchParams.get("group"), "80"); assert.equal(cdn.searchParams.get("groups"), null);
   assert.equal(normalizeScoreboard({ content: { sbData: { events: [event] } } }, "2026-09-03", undefined, "2026-09-07").games.length, 1);
 });
+
+test("last live one-score history crosses repeated delays and reload without making delays live", () => {
+  const live = game();
+  const delayed = game({ state: "delayed" }); delayed.teams[1].score = 42;
+  const final = { ...delayed, state: "final" };
+  let saved = scoreboard([live]);
+  for (let i = 0; i < 3; i++) {
+    saved = JSON.parse(JSON.stringify(retainFinalCategories(scoreboard([delayed]), saved)));
+    assert.equal(saved.games[0].lastActiveClose, true);
+    assert.equal(classify(saved.games[0]).close, false);
+  }
+  const completed = retainFinalCategories(scoreboard([final]), saved);
+  assert.equal(classify(completed.games[0]).close, true);
+  assert.equal(classify(retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(completed))).games[0]).close, true);
+});
+
+test("delay scores never invent live close history", () => {
+  const wide = game(); wide.teams[1].score = 42;
+  const delayed = game({ state: "delayed" });
+  const final = { ...wide, state: "final" };
+  for (const previous of [null, scoreboard([wide]), scoreboard([delayed])]) {
+    const saved = JSON.parse(JSON.stringify(retainFinalCategories(scoreboard([delayed]), previous)));
+    assert.equal(classify(saved.games[0]).close, false);
+    assert.equal(classify(retainFinalCategories(scoreboard([final]), saved).games[0]).close, false);
+  }
+});
+
+test("resumed live play and inactive states end the earlier delay history", () => {
+  const saved = retainFinalCategories(scoreboard([game({ state: "delayed" })]), scoreboard([game()]));
+  for (const state of ["live", "upcoming", "other", "delayed"]) {
+    const resumed = { ...saved.games[0], state, started: state !== "delayed" }; resumed.teams = structuredClone(resumed.teams); resumed.teams[1].score = 42;
+    const next = retainFinalCategories(scoreboard([resumed]), saved);
+    assert.equal(next.games[0].lastActiveClose, undefined, state);
+    const paused = retainFinalCategories(scoreboard([{ ...resumed, state: "delayed", started: true }]), JSON.parse(JSON.stringify(next)));
+    const final = retainFinalCategories(scoreboard([{ ...resumed, state: "final" }]), paused);
+    assert.equal(classify(final.games[0]).close, false, state);
+  }
+});
+
+test("delay history belongs to the same event, competitors and board range", () => {
+  const saved = retainFinalCategories(scoreboard([game({ state: "delayed" })]), scoreboard([game()]));
+  const final = game({ state: "final" }); final.teams[1].score = 42;
+  const differentTeam = structuredClone(final); differentTeam.teams[0].id = "replacement";
+  for (const next of [scoreboard([{ ...final, id: "different" }]), scoreboard([differentTeam]), scoreboard([final], "2026-09-06"), scoreboard([final], "2026-09-05", { endDate: "2026-09-07" })]) {
+    assert.equal(classify(retainFinalCategories(next, saved).games[0]).close, false);
+  }
+  const rescheduled = { ...final, date: "2026-09-06T21:00:00Z" };
+  assert.equal(classify(retainFinalCategories(scoreboard([rescheduled]), saved).games[0]).close, true);
+  assert.equal(classify(retainFinalCategories({ ...scoreboard([final]), endDate: undefined }, saved).games[0]).close, true, "omitted daily end date is the same range");
+});
