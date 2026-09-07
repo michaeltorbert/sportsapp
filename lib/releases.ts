@@ -1,5 +1,6 @@
-export const VERSION = "1.3.0";
+export const VERSION = "1.3.1";
 export const releases = [
+  { version: "1.3.1", date: "September 6, 2026", changes: "Added a secure single-device notification test for support checks, with duplicate protection. Expanded automated checks for mobile navigation, overnight rollover, alert recovery, and notification handling." },
   { version: "1.3.0", date: "September 6, 2026", changes: "Prioritized games by team relevance, live drama, and upset significance. Added meaningful unranked ACC/SEC upset watches and improved favorite-data recovery and paused-game history. Existing phone-alert rules are preserved." },
   { version: "1.2.0", date: "September 6, 2026", changes: "Prepared Cloudflare hosting with automated release checks and support for alerts at the new address. Added upcoming Top 25 games across the football week." },
   { version: "1.1.5", date: "September 6, 2026", changes: "Kept daily and weekly ACC tab counts available when switching views. Clarified retained finals and limited the overnight Today notice to daily views." },

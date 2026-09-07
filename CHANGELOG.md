@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.3.1 · 2026-09-06
+
+- Add an authenticated single-device TEST notification route using the existing push sender and VAPID identity, with permanent request deduplication and an atomic per-device cooldown. Test deliveries remain separate from football events.
+- Add regression coverage for encrypted push outcomes, eligibility, polling failure and locking, and actual service-worker display/click behavior.
+- Run one deterministic mobile Chromium/WebKit suite in existing CI, covering tabs, scopes, saved preferences, failed refreshes, midnight rollover and simulated alert recovery.
+- Document reproducible local Cloudflare diagnostics and the separate real-iPhone verification procedure. Provider acceptance and automated simulations do not establish visible phone delivery.
+
 ## 1.3.0 · 2026-09-06
 
 - Combine team relevance, live drama, and upset significance into one shared ordering rule. Keep early ties low in urgency and ranked blowouts below close finishes.
