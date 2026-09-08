@@ -1,5 +1,6 @@
+import { completeCdnRange } from "../../lib/espn-cdn";
 import { VERSION } from "../../lib/releases";
-import { normalizeCdnRange, normalizeScoreboard, scoreboardCdnUrl, scoreboardUrl } from "../../lib/espn-data";
+import { normalizeScoreboard, scoreboardCdnUrl, scoreboardUrl } from "../../lib/espn-data";
 import { easternDate, shiftDate, type Game } from "../../lib/football";
 import { nextPollAt, transitions, type AlertEvent, type Snapshot } from "./rules";
 import { encode, hash, sendPush, validSubscription } from "./web-push";
@@ -141,7 +142,7 @@ export async function poll(env: Env, now = Date.now()) {
         const response = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const raw = await response.json();
-        const candidate = source === "cdn" ? normalizeCdnRange(raw, previousDate, date)
+        const candidate = source === "cdn" ? await completeCdnRange(raw, previousDate, date, false, AbortSignal.timeout(15000))
           : normalizeScoreboard(raw, previousDate, new Date(now).toISOString(), date);
         if (candidate.warnings?.length) throw new Error("scoreboard is incomplete");
         board = candidate;
