@@ -107,7 +107,7 @@ export function createAppUpdater(loadedValue: string | undefined, publish: (stat
   }
   const resume = () => { if (available()) void check(); };
   const pageshow = (event: PageTransitionEvent) => { if (event.persisted) resume(); };
-  const onVisibility = () => { document.hidden ? expireAnnouncementIntent() : resume(); };
+  const onVisibility = () => { if (document.hidden) expireAnnouncementIntent(); else resume(); };
   window.addEventListener("focus", resume); window.addEventListener("online", resume); window.addEventListener("offline", expireAnnouncementIntent); window.addEventListener("pageshow", pageshow);
   document.addEventListener("visibilitychange", onVisibility);
   const initial = setTimeout(resume, 3000), interval = setInterval(resume, 300_000);
