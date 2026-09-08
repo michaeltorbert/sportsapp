@@ -83,6 +83,7 @@ export const test = base.extend({
           return json({ events }, state.failScores ? 503 : 200);
         }
       }
+      if (url.hostname === "cdn.espn.com") return json({ error: "simulated CDN unavailable" }, 503);
       if (url.origin === testInfo.project.use.baseURL) {
         if (url.pathname === "/alerts-config.json") return json({ serviceUrl: ALERT_ORIGIN });
         // The simulated direct feed only falls back in explicit failure cases.

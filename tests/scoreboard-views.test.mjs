@@ -64,7 +64,7 @@ test("real score client and parser preserve the weekly range used by ACC counts"
 
   let calls = 0;
   const fallback = await loadScores("2026-09-03", controller.signal, async url => {
-    if (++calls === 1) throw new Error("Direct feed unavailable");
+    if (++calls <= 2) throw new Error("Direct feed unavailable");
     assert.match(url, /end=2026-09-07&acc=1/);
     return Response.json(board);
   }, "2026-09-07", true);
@@ -87,7 +87,7 @@ test("Top 25's full-FBS weekly feed and fallback retain Monday games and exclude
   assert.ok(viewGames(board, "top25").every(g => g.state === "upcoming"));
   let calls = 0;
   const fallback = await loadScores("2026-09-03", controller.signal, async url => {
-    if (++calls === 1) throw new Error("Direct feed unavailable");
+    if (++calls <= 2) throw new Error("Direct feed unavailable");
     assert.match(url, /end=2026-09-07&acc=0/);
     return Response.json(board);
   }, "2026-09-07");
