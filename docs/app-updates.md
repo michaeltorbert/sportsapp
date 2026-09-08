@@ -44,10 +44,16 @@ check remains separate. Two agreeing observations reduce rollout noise but do
 not prove global edge consistency; a stale document remains usable and can
 present another explicit retry without a reload loop.
 
-If the browser cancels an explicit replacement and leaves the working document
-open, its refresh controls recover after 15 seconds with a retry message. This
-recovery never navigates; the user must choose Refresh app again. Controls use
-aria-disabled during verification so keyboard focus stays in place on failure.
-Background checks remain quiet until an update is confirmed or a shown notice
-is cleared. Help reports the outcome of an explicit check, and a later failed
-background check clears any obsolete current-status claim.
+If an explicit replacement is cancelled or still in progress after 15 seconds
+and the working document remains open, refresh controls recover with a message
+that the refresh has not completed yet. Slow and cancelled navigations are not
+distinguished. This recovery never navigates; the user must choose Refresh app
+again. The recovery timer is not cleared on beforeunload, because that event can
+fire for a navigation that is later cancelled. Controls use aria-disabled during
+verification so keyboard focus stays in place on failure. Background checks
+remain quiet until an update is confirmed or a shown notice is cleared. Help
+reports the outcome of an explicit check, and a later failed background check
+clears any obsolete current-status claim. A manual check that is hidden or
+offline before its confirmation is announced does not treat a much later resume
+as a recent manual result. The candidate and a deliberate manual override of
+Later remain.

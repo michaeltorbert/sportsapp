@@ -1,9 +1,9 @@
 # Saturday Signal
 
 - GitHub repository: `michaeltorbert/sportsapp`; verify `origin` agrees before writes.
-- Codex GitHub writes use the `games-codex` App profile (`codex-bot-mt`). Claude-attributed writes use `claude` (`claude-bot-mt`). Do not use the personal GitHub identity.
-- AI-created Git commits must explicitly set both author and committer to the implementing AI's verified GitHub App bot, including its numeric-ID noreply email. Codex uses `codex-bot-mt[bot] <275535971+codex-bot-mt[bot]@users.noreply.github.com>`. Claude must use its own verified bot identity. Never inherit the user's global Git identity. Before pushing, inspect both identities on every PR commit; after pushing, verify that GitHub resolves both author and committer to the intended bot.
-- Every PR has exactly one actual-author marker, normally `<!-- ai-author: codex -->`.
+- Codex GitHub writes use the `games-codex` App profile (`codex-bot-mt`). Claude-attributed writes use `claude` (`claude-bot-mt`). Grok-attributed writes use `grok` (`grok-bot-mt`). Do not use the personal GitHub identity.
+- AI-created Git commits must explicitly set both author and committer to the implementing AI's verified GitHub App bot, including its numeric-ID noreply email. Codex uses `codex-bot-mt[bot] <275535971+codex-bot-mt[bot]@users.noreply.github.com>`. Claude must use its own verified bot identity. Grok uses `grok-bot-mt[bot]` <326317446+grok-bot-mt[bot]@users.noreply.github.com>. Never inherit the user's global Git identity. Before pushing, inspect both identities on every PR commit; after pushing, verify that GitHub resolves both author and committer to the intended bot.
+- Every PR has exactly one actual-author marker: `<!-- ai-author: codex -->`, `<!-- ai-author: claude -->`, `<!-- ai-author: grok -->`, or `<!-- ai-author: human -->`.
 - Run `npm test`, `npm run test:runtime`, `npm run deploy:check`, and `npm run deploy:alerts -- --dry-run` for deployment changes. Set `SOURCE_COMMIT` to the current commit before building. Preview builds use `CLOUDFLARE_ENV=preview`; rebuild without it for production.
 - Production is Cloudflare Workers in the existing Scythe Wildflower account. Versioned Wrangler configuration and `docs/releases.md` describe the release path; GitHub is the source of truth. A PR or merge alone does not deploy production.
 - Preserve the existing alerts Worker, D1 database, cron, VAPID secrets, trigger IDs, subscriptions, and delivery ledger. No reset or key rotation during a hosting migration.

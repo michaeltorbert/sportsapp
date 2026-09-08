@@ -1,5 +1,6 @@
-export const VERSION = "1.4.0";
+export const VERSION = "1.4.1";
 export const releases = [
+  { version: "1.4.1", date: "September 8, 2026", changes: "Improved update-check feedback after going offline or returning to the app, preserved deliberate update checks, and made update retry messages clearer." },
   { version: "1.4.0", date: "September 7, 2026", changes: "Get a notice when an app update is available, or check from Help. Refresh when ready while keeping your current view and saved preferences." },
   { version: "1.3.4", date: "September 7, 2026", changes: "Improved browser initialization and home navigation. Clarified when a previous device-test notification may already have been attempted, without sending it again." },
   { version: "1.3.3", date: "September 7, 2026", changes: "Restored automated TypeScript checks and strengthened regression coverage and support documentation for alert feeds and paused-game history." },

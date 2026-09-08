@@ -7,11 +7,20 @@ export function createAppUpdater(loadedValue: string | undefined, publish: (stat
   let state: UpdateState = { target: null, status: loaded ? "" : "App update checking is unavailable for this build.", refreshing: false };
   let flight: Promise<ReturnType<typeof metadata>> | null = null, controller: AbortController | null = null;
   let last = -Infinity, scheduled: ReturnType<typeof setTimeout> | undefined, confirmation: ReturnType<typeof setTimeout> | undefined;
+  // Pending processing preserves the Help override; feedback belongs only to
+  // an explicit check and expires when the app is suspended.
   let manualPending = false, manualFeedback = false;
   let requestSequence = 0, handledSequence = 0;
   let navigationRecovery: ReturnType<typeof setTimeout> | undefined;
   const available = () => !document.hidden && navigator.onLine;
   const emit = (patch: Partial<UpdateState>) => { if (alive) { state = { ...state, ...patch }; publish(state); } };
+  // Drop only the "announce this as a recent manual check" flag. Candidate
+  // progress and a deliberate Help override of Later stay intact.
+  const expireAnnouncementIntent = () => {
+    if (!manualFeedback) return;
+    manualFeedback = false;
+    if (state.status === "Checking for an app update…" || state.status === "An app update is being verified.") emit({ status: "" });
+  };
   try { const saved: unknown = JSON.parse(sessionStorage.getItem("ss:app-update-dismissed") || "[]"); if (Array.isArray(saved)) for (const item of saved) { const commit = validCommit(item); if (commit) dismissed.add(commit); } } catch { /* Tab-local fallback. */ }
   const request = () => {
     if (flight) return flight;
@@ -34,7 +43,6 @@ export function createAppUpdater(loadedValue: string | undefined, publish: (stat
     if (manual) manualCandidate = result.commit;
     candidate = observe(candidate, loaded, result.commit, Date.now());
     clearTimeout(confirmation); confirmation = undefined;
-    if (manual) manualFeedback = true;
     if (!candidate) {
       confirmed = null;
       emit({ target: null, status: manualFeedback || state.target ? "The app is up to date." : "" });
@@ -53,10 +61,10 @@ export function createAppUpdater(loadedValue: string | undefined, publish: (stat
   async function check(manual = false) {
     if (!alive || busy) return;
     if (!loaded) { emit({ status: "App update checking is unavailable for this build." }); return; }
-    if (!available()) { if (manual) emit({ status: "Unable to check for an app update. Reconnect and return to the app." }); return; }
+    if (!available()) { if (manual) emit({ status: "Unable to check for an app update. Reconnect and return to the app." }); else expireAnnouncementIntent(); return; }
     if (manual) { manualPending = true; manualFeedback = true; emit({ status: "Checking for an app update…" }); }
     if (!flight && Date.now() - last < 2000) {
-      if (!scheduled) scheduled = setTimeout(() => { scheduled = undefined; void check(manualPending); }, 2000 - (Date.now() - last));
+      if (!scheduled) scheduled = setTimeout(() => { scheduled = undefined; void check(); }, 2000 - (Date.now() - last));
       return;
     }
     const pending = request(), sequence = requestSequence;
@@ -66,7 +74,7 @@ export function createAppUpdater(loadedValue: string | undefined, publish: (stat
     const requested = manualPending; manualPending = false;
     if (result) accept(result, requested);
     else {
-      emit({ status: requested || manualFeedback ? "Unable to check for an app update. Please try again." : "" });
+      emit({ status: manualFeedback ? "Unable to check for an app update. Please try again." : "" });
       manualFeedback = false;
     }
   }
@@ -81,14 +89,16 @@ export function createAppUpdater(loadedValue: string | undefined, publish: (stat
       const result = await request();
       if (!alive) return;
       if (!result || !available()) throw new Error("Unavailable");
-      if (result.commit === loaded) accept(result, true);
+      if (result.commit === loaded) { manualFeedback = true; accept(result, true); }
       else {
         navigate(result.commit);
-        // If the document stays open (for example, cancelled navigation), permit
-        // a later explicit retry. This timer never starts navigation itself.
+        // If the document stays open, permit a later explicit retry. A slow
+        // replace and a cancelled one look the same here. This timer never
+        // starts navigation itself, and is not cleared on beforeunload because
+        // an attempted navigation can still be cancelled.
         navigationRecovery = setTimeout(() => {
           navigationRecovery = undefined; busy = false;
-          emit({ refreshing: false, status: "The app is still open. Refresh did not finish. You can try again." });
+          emit({ refreshing: false, status: "The app is still open. Refresh has not completed yet. You can try again." });
         }, 15_000);
         return;
       }
@@ -97,13 +107,14 @@ export function createAppUpdater(loadedValue: string | undefined, publish: (stat
   }
   const resume = () => { if (available()) void check(); };
   const pageshow = (event: PageTransitionEvent) => { if (event.persisted) resume(); };
-  window.addEventListener("focus", resume); window.addEventListener("online", resume); window.addEventListener("pageshow", pageshow);
-  document.addEventListener("visibilitychange", resume);
+  const onVisibility = () => { if (document.hidden) expireAnnouncementIntent(); else resume(); };
+  window.addEventListener("focus", resume); window.addEventListener("online", resume); window.addEventListener("offline", expireAnnouncementIntent); window.addEventListener("pageshow", pageshow);
+  document.addEventListener("visibilitychange", onVisibility);
   const initial = setTimeout(resume, 3000), interval = setInterval(resume, 300_000);
   emit({});
   return {
     check: () => check(true), refresh,
     dismiss() { if (!confirmed || busy) return; dismissed.add(confirmed); manualCandidate = ""; manualFeedback = false; try { sessionStorage.setItem("ss:app-update-dismissed", JSON.stringify([...dismissed])); } catch { /* Optional. */ } emit({ target: null, status: "" }); },
-    dispose() { alive = false; controller?.abort(); clearTimeout(navigationRecovery); clearTimeout(initial); clearInterval(interval); clearTimeout(scheduled); clearTimeout(confirmation); window.removeEventListener("focus", resume); window.removeEventListener("online", resume); window.removeEventListener("pageshow", pageshow); document.removeEventListener("visibilitychange", resume); },
+    dispose() { alive = false; controller?.abort(); clearTimeout(navigationRecovery); clearTimeout(initial); clearInterval(interval); clearTimeout(scheduled); clearTimeout(confirmation); window.removeEventListener("focus", resume); window.removeEventListener("online", resume); window.removeEventListener("offline", expireAnnouncementIntent); window.removeEventListener("pageshow", pageshow); document.removeEventListener("visibilitychange", onVisibility); },
   };
 }
