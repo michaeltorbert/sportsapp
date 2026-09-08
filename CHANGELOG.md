@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.3.4 · 2026-09-07
+
+- Resolve repository lint errors with hydration-safe browser state and framework home navigation that restores Today (#1).
+- Distinguish current device-test attempts from uncertain prior claims, explicitly warn against resending, and cover replay safety (#20).
+- Preserve alert authorization, exact origins, UUID deduplication, cooldown, subscriptions, VAPID keys, and delivery history.
+
 ## 1.3.3 · 2026-09-07
 
 - Restore the required TypeScript/declaration check to pull-request CI.
