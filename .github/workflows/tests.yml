@@ -45,6 +45,8 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
       - name: Test mobile browser regressions (simulated scores and push)
         run: npm run test:browser
+      - name: Test explicit app updates across two local builds
+        run: npm run test:updater
       - name: Validate preview deployment package
         env:
           CLOUDFLARE_ENV: preview

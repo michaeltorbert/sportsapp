@@ -15,7 +15,7 @@ const output = await build({
     build.onResolve({ filter: /^(next\/link|react(?:\/jsx-runtime)?|lucide-react|@\/components\/.*|@\/lib\/use-scoreboard)$/ }, args => ({ path: args.path, namespace: "page-test" }));
     build.onLoad({ filter: /.*/, namespace: "page-test" }, args => {
       if (args.path === "next/link") return { contents: "export default ({children,...props})=>globalThis.scorePageTest.element('a',props,children);" };
-      if (args.path === "react") return { contents: "export const useState=(...a)=>globalThis.scorePageTest.useState(...a),useRef=v=>({current:v}),useEffect=()=>{};" };
+      if (args.path === "react") return { contents: "export const useState=(...a)=>globalThis.scorePageTest.useState(...a),useRef=v=>({current:v}),useEffect=()=>{},useSyncExternalStore=()=>null;" };
       if (args.path === "react/jsx-runtime") return { contents: "export const jsx=(...a)=>globalThis.scorePageTest.jsx(...a),jsxs=(...a)=>globalThis.scorePageTest.jsxs(...a),Fragment=globalThis.scorePageTest.Fragment;" };
       if (args.path === "@/lib/use-scoreboard") return { contents: "export const useScoreboard=scope=>globalThis.scorePageTest.scoreboard(scope);" };
       if (args.path === "lucide-react") return { contents: "export const ArrowUpRight=()=>null,CalendarDays=()=>null,ChevronLeft=()=>null,ChevronRight=()=>null,CircleHelp=()=>null,CloudOff=()=>null,Radio=()=>null,RefreshCw=()=>null,Signal=()=>null,TriangleAlert=()=>null,Tv=()=>null,Zap=()=>null;" };
@@ -24,7 +24,7 @@ const output = await build({
         export const Tabs=wrapper,TabsList=wrapper,Empty=wrapper,EmptyHeader=wrapper,EmptyMedia=wrapper,EmptyTitle=wrapper,EmptyDescription=wrapper,Sheet=wrapper,SheetTrigger=wrapper,SheetHeader=wrapper,SheetTitle=wrapper,SheetDescription=wrapper;
         export const TabsContent=({value,children})=>value===globalThis.scorePageTest.filter?wrapper({children}):null;
         export const TabsTrigger=({value,children})=>globalThis.scorePageTest.element('button',{'data-tab':value},children);
-        export const SheetContent=({children})=>globalThis.scorePageTest.showHelp?wrapper({children}):null,Skeleton=()=>null,Alerts=()=>null;
+        export const SheetContent=({children})=>globalThis.scorePageTest.showHelp?wrapper({children}):null,Skeleton=()=>null,Alerts=()=>null,AppUpdateNotice=()=>null;
       ` };
     });
   } }],

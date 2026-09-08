@@ -20,7 +20,8 @@
     "release:check": "node scripts/check-release.mjs",
     "release:verify": "node scripts/verify-deployment.mjs",
     "test:runtime": "node scripts/check-worker-runtime.mjs",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "test:updater": "node scripts/check-app-update.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
