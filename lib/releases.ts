@@ -1,5 +1,6 @@
-export const VERSION = "1.4.1";
+export const VERSION = "1.4.2";
 export const releases = [
+  { version: "1.4.2", date: "September 8, 2026", changes: "Restored complete score coverage across overnight football-week boundaries, helping scheduled alert checks recover when the primary score feed is unavailable." },
   { version: "1.4.1", date: "September 8, 2026", changes: "Improved update-check feedback after going offline or returning to the app, preserved deliberate update checks, and made update retry messages clearer." },
   { version: "1.4.0", date: "September 7, 2026", changes: "Get a notice when an app update is available, or check from Help. Refresh when ready while keeping your current view and saved preferences." },
   { version: "1.3.4", date: "September 7, 2026", changes: "Improved browser initialization and home navigation. Clarified when a previous device-test notification may already have been attempted, without sending it again." },

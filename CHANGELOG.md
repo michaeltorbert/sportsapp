@@ -1,5 +1,10 @@
 # Saturday Signal releases
 
+## 1.4.2 · 2026-09-08
+
+- Restore complete overnight score coverage by validating and joining adjacent ESPN football weeks when the primary feed is unavailable (#41).
+- Preserve strict coverage checks and existing alert subscriptions, ownership, keys, and delivery history; log primary-feed failures for diagnosis.
+
 ## 1.4.1 · 2026-09-08
 
 - Clear pending update-check announcements when the app is hidden or offline, while preserving deliberate checks and dismissal overrides (#36, #39).
