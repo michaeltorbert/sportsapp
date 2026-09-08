@@ -9,7 +9,7 @@ assert.match(expectedCommit, /^[a-f0-9]{40}$/, "Static homepage requires an exac
 const version = JSON.parse(await readFile(new URL("package.json", root), "utf8")).version;
 const index = JSON.parse(await readFile(new URL("dist/server/vinext-prerender.json", root), "utf8"));
 assert.ok(index.routes.some(route => route.route === "/" && route.status === "rendered" && route.revalidate === false), "Homepage must be completely prerendered");
-for (const route of index.routes.filter(route => route.route.startsWith("/api/"))) assert.equal(route.reason, "api", "APIs must remain dynamic");
+for (const name of ["/api/health", "/api/scores"]) assert.ok(index.routes.some(route => route.route === name && route.status === "skipped" && route.reason === "api"), `${name} must remain dynamic`);
 const html = await readFile(new URL("dist/server/prerendered-routes/index.html", root), "utf8");
 assert.match(html, /<html[\s>]/i);
 assert.match(html, /<\/html>/i);
@@ -17,6 +17,8 @@ assert.match(html, /__VINEXT_RSC_DONE__/);
 assert.match(html, /__VINEXT_RSC_CHUNKS__/);
 assert.match(html, /Your watchlist/);
 assert.match(html, /Connecting to ESPN/);
+// This build-time check requires the current compiled health route to remain
+// importable in Node without Cloudflare-only bindings. Workerd is checked separately.
 const { default: worker } = await import(new URL("dist/server/index.js", root));
 const response = await worker.fetch(new Request("http://localhost/api/health"), {}, { waitUntil() {} });
 assert.equal(response.status, 200);
