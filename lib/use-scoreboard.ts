@@ -4,6 +4,8 @@ import { accWeek, easternDate, gameDay, retainFinalCategories, shiftDate, validD
 import { loadScores } from "./score-client";
 import { expiredBoardKey, matchingBoard, type BoardScope } from "./scoreboard-views";
 
+import { useInitialSearch, useOnline, useTimezone } from "./browser-state";
+
 function readBoard(key: string): Scoreboard | null {
   try {
     const board = JSON.parse(localStorage.getItem(key) || "null");
@@ -11,25 +13,25 @@ function readBoard(key: string): Scoreboard | null {
   } catch { return null; }
 }
 export function useScoreboard(scope: BoardScope) {
-  const [selection, setSelection] = useState<string | null>(null);
+  const search = useInitialSearch();
+  const query = new URLSearchParams(search || "").get("date");
+  const [chosenDate, setSelection] = useState<string | null | undefined>(undefined);
+  const selection = chosenDate === undefined ? (query && validDate(query) ? query : null) : chosenDate;
   const [today, setToday] = useState(""), [date, setDate] = useState("");
   const [boards, setBoards] = useState<Record<BoardScope, Scoreboard | null>>({ daily: null, acc: null, top25: null });
   const [errors, setErrors] = useState<Record<BoardScope, string>>({ daily: "", acc: "", top25: "" });
   const [overnightError, setOvernightError] = useState("");
-  const [refreshing, setRefreshing] = useState(false), [online, setOnline] = useState(true);
-  const [now, setNow] = useState(0), [timezone, setTimezone] = useState("local time");
+  const [refreshing, setRefreshing] = useState(false);
+  const online = useOnline(), timezone = useTimezone();
+  const [now, setNow] = useState(0);
   const held = useRef(""), controller = useRef<AbortController | null>(null);
   const cache = useRef(new Map<string, Scoreboard>());
 
   useEffect(() => {
-    const query = new URLSearchParams(location.search).get("date");
-    if (query && validDate(query)) setSelection(query);
     try {
       held.current = localStorage.getItem("ss:game-day") || "";
       for (const key of Object.keys(localStorage)) if (expiredBoardKey(key, shiftDate(easternDate(), -1))) localStorage.removeItem(key);
     } catch { /* Browsing still works when storage is unavailable. */ }
-    setNow(Date.now()); setOnline(navigator.onLine);
-    setTimezone(new Intl.DateTimeFormat(undefined, { timeZoneName: "short" }).formatToParts(new Date()).find(p => p.type === "timeZoneName")?.value || "local time");
     const timer = window.setInterval(() => setNow(Date.now()), 15000);
     return () => window.clearInterval(timer);
   }, []);
@@ -84,14 +86,17 @@ export function useScoreboard(scope: BoardScope) {
   }, [selection]);
 
   useEffect(() => {
-    setErrors({ daily: "", acc: "", top25: "" }); setOvernightError(""); refresh();
+    if (search === null) return;
+    // Schedule the initial poll alongside the interval, with matching cleanup.
+    // Hydration must resolve the initial query before any scores are requested.
+    const initial = window.setTimeout(refresh, 0);
     const interval = window.setInterval(refresh, 30000);
-    const resume = () => { setOnline(navigator.onLine); if (!document.hidden && navigator.onLine) refresh(); };
-    const offline = () => { setOnline(false); setOvernightError("You're offline. Reconnect to refresh scores."); };
+    const resume = () => { if (!document.hidden && navigator.onLine) refresh(); };
+    const offline = () => { setOvernightError("You're offline. Reconnect to refresh scores."); };
     document.addEventListener("visibilitychange", resume); window.addEventListener("online", resume); window.addEventListener("offline", offline);
-    return () => { window.clearInterval(interval); controller.current?.abort(); controller.current = null; document.removeEventListener("visibilitychange", resume); window.removeEventListener("online", resume); window.removeEventListener("offline", offline); };
-  }, [refresh]);
-  const chooseDate = (value: string | null) => { setSelection(value); setDate(value || held.current || easternDate()); };
+    return () => { window.clearTimeout(initial); window.clearInterval(interval); controller.current?.abort(); controller.current = null; document.removeEventListener("visibilitychange", resume); window.removeEventListener("online", resume); window.removeEventListener("offline", offline); };
+  }, [refresh, search]);
+  const chooseDate = (value: string | null) => { setErrors({ daily: "", acc: "", top25: "" }); setOvernightError(""); setSelection(value); setDate(value || held.current || easternDate()); };
   // Weekly views follow the current football week; manual dates apply to daily tabs.
   const range = today ? accWeek(today) : null;
   const matching = {

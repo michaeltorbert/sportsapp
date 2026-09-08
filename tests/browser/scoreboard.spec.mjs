@@ -110,3 +110,15 @@ test("a manually selected date survives automatic midnight rollover until Today 
   await expect(dateInput(page)).toHaveValue("2026-09-06");
   await expect(page.locator("#game-today-game")).toBeVisible();
 });
+
+
+test("home wordmark returns a manually selected date to Today", async ({ page, harness }) => {
+  await harness.open({ path: "/?date=2026-09-04" });
+  await expect(dateInput(page)).toHaveValue("2026-09-04");
+  await page.getByRole("button", { name: "Previous day" }).tap();
+  await expect(dateInput(page)).toHaveValue("2026-09-03");
+  await page.getByRole("link", { name: "Saturday Signal home" }).tap();
+  await expect(dateInput(page)).toHaveValue("2026-09-05");
+  await expect(page).toHaveURL(/\/$/);
+  await expect(cards(page)).toHaveCount(3);
+});
