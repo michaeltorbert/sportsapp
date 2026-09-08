@@ -143,10 +143,21 @@ test("keyboard verification keeps focus, ignores repeated activation and recover
 // These transitions simulate lifecycle signals, not OS suspension or a lost
 // connection. Keeping the network mocked lets an in-flight response settle
 // deterministically while the real browser renders the Help status.
+// Sample throughout a bounded real-time window: a single successful negative
+// assertion can precede the Node route callback or React response processing.
+async function expectStable(assertion, duration = 200) {
+  const until = Date.now() + duration;
+  do {
+    await assertion();
+    await new Promise(resolve => setTimeout(resolve, 25));
+  } while (Date.now() < until);
+  await assertion();
+}
 async function suspendUpdater(page, mode, suspended) {
   await page.evaluate(({ mode, suspended }) => {
     if (mode === "hidden") {
       Object.defineProperty(document, "hidden", { configurable: true, value: suspended });
+      Object.defineProperty(document, "visibilityState", { configurable: true, value: suspended ? "hidden" : "visible" });
       document.dispatchEvent(new Event("visibilitychange"));
     } else {
       Object.defineProperty(navigator, "onLine", { configurable: true, value: !suspended });
@@ -168,41 +179,47 @@ for (const mode of ["hidden", "offline"]) {
         state.commit = loaded;
         await page.clock.fastForward(2100);
         const baseline = state.count;
+        const baselineResponse = page.waitForResponse(response => new URL(response.url()).pathname === "/api/health");
         await page.evaluate(() => window.dispatchEvent(new Event("focus")));
         await expect.poll(() => state.count).toBe(baseline + 1);
+        await (await baselineResponse).finished();
         await expect(page.locator(".app-update")).toHaveCount(0);
         if (timing === "in-flight") await page.clock.fastForward(2100);
-        let release;
-        const settled = page.waitForResponse(response => new URL(response.url()).pathname === "/api/health");
-        await page.route("**/api/health", async route => {
-          state.count++;
-          await new Promise(resolve => { release = resolve; });
+        let release, controlledRequest, controlledCalls = 0;
+        const held = new Promise(resolve => { release = resolve; });
+        const controlledRoute = async route => {
+          state.count++; controlledCalls++;
+          controlledRequest ??= route.request();
+          // Every accidental duplicate shares the same release, so none hangs.
+          // The explicit count assertion below rejects any duplicate request.
+          await held;
           await route.fulfill({ status: outcome === "failure" ? 503 : 200, json: { version: "1", commit: outcome === "dismissed target" ? B : loaded } });
-        });
+        };
+        await page.route("**/api/health", controlledRoute);
         await page.getByRole("button", { name: "How this scoreboard works" }).click();
         const help = page.locator(".help-body"), check = page.getByRole("button", { name: "Check for app update", exact: true });
         await check.click();
         await expect(help).toContainText("Checking for an app update…");
-        if (timing === "in-flight") await expect.poll(() => typeof release).toBe("function");
-        else expect(release).toBeUndefined();
+        if (timing === "in-flight") await expect.poll(() => controlledCalls).toBe(1);
+        else await expectStable(() => expect(controlledCalls).toBe(0));
         await suspendUpdater(page, mode, true);
         await expect(help).not.toContainText("Checking for an app update…");
         if (timing === "queued") {
           await page.clock.fastForward(2100);
-          expect(release).toBeUndefined();
+          await expectStable(() => expect(controlledCalls).toBe(0));
           await suspendUpdater(page, mode, false);
-          await expect.poll(() => typeof release).toBe("function");
+          await expect.poll(() => controlledCalls).toBe(1);
         }
-        release(); await (await settled).finished();
+        release(); await (await controlledRequest.response()).finished();
+        await expectStable(() => expect(controlledCalls).toBe(1));
         // A new request is no longer held after this controlled response.
         await page.unroute("**/api/health");
         state.commit = outcome === "dismissed target" ? B : loaded;
         await page.route("**/api/health", route => { state.count++; return route.fulfill({ status: outcome === "failure" ? 503 : 200, json: { version: "1", commit: state.commit } }); });
-        await page.waitForTimeout(50);
-        await expect(help).not.toContainText("The app is up to date.");
-        await expect(help).not.toContainText("Unable to check");
-        await expect(help).not.toContainText("being verified");
-        await expect(page.locator(".app-update")).toHaveCount(0);
+        await expectStable(async () => {
+          expect(await help.getByRole("status").textContent()).toBe("");
+          expect(await page.locator(".app-update").count()).toBe(0);
+        });
         if (timing === "in-flight") await suspendUpdater(page, mode, false);
         if (outcome === "dismissed target") {
           await page.clock.fastForward(10100);
@@ -234,20 +251,23 @@ for (const mode of ["hidden", "offline"]) {
       await expect(help).not.toContainText("being verified");
       const suspendedCount = state.count;
       await page.clock.fastForward(10100);
-      expect(state.count).toBe(suspendedCount);
+      await expectStable(() => expect(state.count).toBe(suspendedCount));
       await expect(page.locator(".app-update")).toHaveCount(0);
       state.commit = outcome === "loaded" ? loaded : B;
       await suspendUpdater(page, mode, false);
       await expect.poll(() => state.count).toBe(suspendedCount + 1);
       if (outcome === "loaded") {
-        await expect(help).not.toContainText("The app is up to date.");
-        await expect(page.locator(".app-update")).toHaveCount(0);
+        await expectStable(async () => {
+          expect(await help.getByRole("status").textContent()).toBe("");
+          expect(await page.locator(".app-update").count()).toBe(0);
+        });
       } else {
         // Immediate availability proves the ten-second candidate survived;
         // removing B from dismissal storage proves the explicit Later override.
         await expect(help).toContainText("An app update is available.");
         expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("ss:app-update-dismissed")))).not.toContain(B);
       }
+      expect(harness.state.alertRequests.filter(request => request.method !== "GET")).toEqual([]);
     });
   }
 }
