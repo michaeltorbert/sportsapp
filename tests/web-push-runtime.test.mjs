@@ -1,15 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { Miniflare } from "miniflare";
+import { readAlertConfig } from "../scripts/verify-deployment.mjs";
 
 // Exercise workerd's actual fetch rather than injecting a JavaScript fetch stub.
 // All outbound requests terminate in the local handler; keys are ephemeral.
 test("workerd sends push once and does not follow a provider redirect", async () => {
   const root = fileURLToPath(new URL("../", import.meta.url));
-  const config = JSON.parse(readFileSync(new URL("../services/alerts/wrangler.jsonc", import.meta.url), "utf8"));
+  const config = readAlertConfig();
   const built = await build({ stdin: { resolveDir: root, loader: "ts", contents: `
     import { sendPush, encode } from './services/alerts/web-push.ts';
     export default { async fetch() {
