@@ -8,6 +8,10 @@ Vinext's client requests React Server Component navigation through `/.rsc`; this
 
 `check-static-home.mjs` replaces only the local test Worker's root handler with a failing response. Successful static root requests therefore prove that routing bypasses Worker execution; timing alone is not the evidence. The same check verifies dynamic API handling, unknown-path 404 and RSC content type. Packaging fails if HTML, hydration payload markers or referenced assets are missing, and removes a stale packaged index before validation.
 
+The root HTML cache contract is `public, max-age=0, must-revalidate`, asserted by the workerd guard. Production release verification must confirm that header alongside the exact deployed version/commit and existing website, scoreboard and alert gates.
+
+The guard explicitly selects the compiled top-level Wrangler environment, as deployment does. Vinext flattens the selected source environment (including preview when selected for that build) into this compiled configuration; the check does not select a source environment again. Asset validation targets the pinned Vite/React output with double-quoted `/assets/` references.
+
 The guard wrapper is created outside the deployment tree and rebundled solely for that routing proof. The existing runtime check and browser tests exercise the actual built deployment artifact separately. Homepage rendering does not fetch ESPN; the historical homepage benchmark is therefore unaffected by the corrected fixture-installation order in the separate score benchmark.
 
 This removes homepage rendering work from normal asset delivery. Score API resource limits require separate investigation; this change does not establish that those requests fit the production CPU allowance.
