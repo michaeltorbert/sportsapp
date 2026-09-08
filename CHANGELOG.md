@@ -1,5 +1,10 @@
 # Saturday Signal releases
 
+## 1.4.3 · 2026-09-08
+
+- Reuse the Eastern date formatter during score processing to reduce measured CPU work (#38). Production resource-limit verification remains required; this does not establish a fix for cold homepage rendering.
+- Fix notification sends rejected by the Workers runtime before reaching the push provider; preserve known response statuses and add sanitized diagnostics without changing ownership, deduplication or delivery retry behavior (#9, #48).
+
 ## 1.4.2 · 2026-09-08
 
 - Restore complete overnight score coverage by validating and joining adjacent ESPN football weeks when the primary feed is unavailable (#41).

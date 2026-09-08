@@ -6,7 +6,14 @@ export type Categories = { acc: boolean; top25: boolean; close: boolean; upset: 
 export type PregameLine = { favoriteId: string | null; spread: number; source: string };
 export type Game = { id: string; date: string; timeValid: boolean; state: "live" | "delayed" | "upcoming" | "final" | "other"; status: string; period: number; clock: number; clockKnown?: boolean; intermission?: boolean; pregameLine?: PregameLine; started: boolean; teams: [Team, Team]; broadcast: string; possession: string | null; downDistance: string; redZone: boolean; url: string; retainedCategories?: Categories; lastActiveClose?: boolean };
 export type Scoreboard = { date: string; endDate?: string; fetchedAt: string; games: Game[]; stale?: boolean; warnings?: string[] };
-export function easternDate(now = new Date()) { return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(now); }
+// Reuse one formatter. Workers charge CPU for Intl.DateTimeFormat construction,
+// and score normalization calls this once per event. Lazy so unused homepage
+// SSR does not load ICU at module evaluation.
+let easternDayFormat: Intl.DateTimeFormat | undefined;
+export function easternDate(now = new Date()) {
+  easternDayFormat ??= new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
+  return easternDayFormat.format(now);
+}
 export function shiftDate(date: string, days: number) { const d = new Date(`${date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
 export function validDate(date: string) { return /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(`${date}T12:00:00Z`)) && new Date(`${date}T12:00:00Z`).toISOString().slice(0, 10) === date; }
 export function classify(game: Game): Categories {

@@ -50,6 +50,16 @@ test("ET midnight holds Saturday for Cal, then advances only when every game is 
   assert.equal(gameDay(after, scoreboard([cal, late])), "2026-09-06");
   assert.equal(gameDay(after, scoreboard([])), "2026-09-06");
 });
+test("reused Eastern formatter follows winter, summer, DST and year boundaries", () => {
+  const cases = [
+    ["2026-01-01T04:59:59Z", "2025-12-31"], ["2026-01-01T05:00:00Z", "2026-01-01"],
+    ["2026-03-08T06:59:59Z", "2026-03-08"], ["2026-03-08T07:00:00Z", "2026-03-08"],
+    ["2026-07-01T03:59:59Z", "2026-06-30"], ["2026-07-01T04:00:00Z", "2026-07-01"],
+    ["2026-11-01T05:59:59Z", "2026-11-01"], ["2026-11-01T06:00:00Z", "2026-11-01"],
+    ["2026-11-02T04:59:59Z", "2026-11-01"], ["2026-11-02T05:00:00Z", "2026-11-02"],
+  ];
+  for (const [instant, expected] of [...cases, ...cases.toReversed()]) assert.equal(easternDate(new Date(instant)), expected, instant);
+});
 test("failed, stale or partial overnight feeds cannot release an already held day", () => {
   const now = new Date("2026-09-06T04:05:00Z");
   for (const prior of [null, scoreboard([], "2026-09-05", { stale: true }), scoreboard([], "2026-09-05", { warnings: ["incomplete"] })]) assert.equal(gameDay(now, prior, "2026-09-05"), "2026-09-05");
