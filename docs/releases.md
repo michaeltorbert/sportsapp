@@ -7,19 +7,32 @@
 - Existing alert Worker: `https://saturday-signal-alerts.scythe-wildflower.workers.dev`
 - Existing Cloudflare account: Scythe Wildflower, `092f7a0a1516725ba2217cfb3760b38f`
 
-The account subdomain and existing alert Worker were verified through the Cloudflare API on September 6, 2026. The website names are prepared targets; they are not live until deployed. No custom domain, DNS change, new database, or VAPID key rotation is needed.
+Production version `1.4.2`, commit `90ae229866827dc6aa8e7448f5defd97f0a2b012`, passed the established [release workflow](https://github.com/michaeltorbert/sportsapp/actions/runs/34233973282) on September 8, 2026. The first [preview run](https://github.com/michaeltorbert/sportsapp/actions/runs/34234423073) selected that same commit but failed verification after creating `saturday-signal-preview-preview`; the intended preview address remained unavailable. Subsequent preview run results are recorded in [issue #11](https://github.com/michaeltorbert/sportsapp/issues/11). A deployed identity or passing build alone does not establish score coverage or alert readiness. No custom domain, DNS change, new database, or VAPID key rotation is needed.
 
 ## One-time GitHub setup
 
-Create GitHub environments named `production` and `preview`. Add an environment secret named `CLOUDFLARE_API_TOKEN` to each environment you intend to deploy. Use a Cloudflare deployment token scoped to the existing account, with Worker deployment permissions and access to reference the existing D1 binding. Do not copy a local Wrangler OAuth credential into GitHub. Keep tokens out of source, issue bodies, PRs, and release notes.
+Use separate GitHub environments named `production` and `preview`, each with its own encrypted environment secret named `CLOUDFLARE_API_TOKEN`. Production requires deployment permissions for the website and existing alert Worker, including access to reference its existing D1 binding. Preview needs a dedicated token scoped to the existing account with Workers Scripts Edit (Write) permission only; its configuration has no D1 binding and does not require D1 permissions. This permission is account-scoped, with no documented per-Worker resource restriction, so the token itself does not isolate the preview Worker from either the production website or `saturday-signal-alerts`. The reviewed `main`-only workflow and environment policy narrow its intended use; verify operationally that production remains unchanged after deployment. Do not reuse the production credential. Do not copy a local Wrangler OAuth credential into GitHub. Provision the secret directly through a secure GitHub environment-secret interface; keep its value out of chat, source, issue bodies, PRs, command arguments, logs, and release notes.
 
-The production environment should allow stable release tags (`v*`). The release script further requires `vMAJOR.MINOR.PATCH`, a tag matching the package, lockfile and displayed versions, a matching changelog entry, a clean checkout, and a commit already merged into `origin/main`. The preview environment should allow only trusted branches selected for testing. Both deployment workflows are serialized and never cancel an in-flight deployment.
+The production environment should allow stable release tags (`v*`). The release script further requires `vMAJOR.MINOR.PATCH`, a tag matching the package, lockfile and displayed versions, a matching changelog entry, a clean checkout, and a commit already merged into `origin/main`. The preview environment allows only the exact branch `main`; deploy reviewed changes after they have merged there. Both deployment workflows are serialized and never cancel an in-flight deployment.
 
 Publishing a GitHub release with the Codex GitHub App can trigger this workflow. A workflow-created release using only GitHub's default `GITHUB_TOKEN` does not trigger another workflow; use the appropriate GitHub App identity for release creation. Pin the official action commits and review updates through PRs.
 
 ## Preview
 
-After the workflow exists on main, run **Cloudflare preview** from GitHub Actions and select a reviewed, allowed branch in the **Run workflow** branch selector. The workflow checks out its own run ref; there is no separate ref input that could bypass the environment policy. It builds/tests that source, deploys only the preview website, and checks its exact commit, page, manifest, service worker, and current scores. It never deploys the alert Worker, writes subscription records, or sends notifications. Preview is a public provider address, not a private review link; do not put private data there.
+The `preview` environment allows only the exact branch `main`, so this deployment tests reviewed changes after merge rather than offering a pre-merge branch preview. At 13:33:44 UTC on September 8, 2026, a dedicated account-scoped Workers Scripts Edit token without D1 permission was created and stored as the encrypted preview environment secret `CLOUDFLARE_API_TOKEN`. It expires December 7, 2026; @michaeltorbert owns renewal. The first workflow run deployed an incorrectly suffixed Worker, demonstrating deployment permission but not acceptance at the intended preview destination. Track each run’s acceptance and renewal in [issue #11](https://github.com/michaeltorbert/sportsapp/issues/11), without recording any token value.
+
+Renew before expiry by securely replacing the environment secret, then verify a new preview run. If exposure is suspected, immediately revoke the affected token in Cloudflare, securely provision a replacement with the same reviewed scope, and replace the GitHub environment secret before another dispatch. Do not broaden permissions merely to make a failed run pass; inspect the specific failure first.
+
+For every preview run:
+
+1. Select **main** in **Cloudflare preview → Run workflow** after the intended changes have been reviewed and merged. Record the intended commit and the production website and alert Worker deployment/configuration baseline before dispatch.
+2. Retain the run URL and authoritative `head_sha`. Require the run head and preview `/api/health` version/commit to match the intended reviewed source. If `main` advanced during dispatch, stop acceptance and review the actual run commit before deciding whether to dispatch again. A successful run for another commit does not verify the intended commit.
+3. Require a successful workflow. It checks out its own run ref, builds/tests that source, deploys only the preview website, and checks the exact commit, page, manifest, service worker, and current scores. There is no separate ref input that bypasses the environment policy.
+4. Check daily/ACC/Top 25 switching and score refresh in the deployed browser, plus the manifest, service worker, and referenced app assets. Preview is a public provider address; do not put private data there.
+5. Before calling preview verified, compare the retained baseline with production website `/api/health`, production deployment identity, alert Worker deployment identity/configuration, and both allowed-origin `/config` responses. Require unchanged deployment versions and configuration. Readiness timestamps may advance through normal scheduled polling; ordinary production cron activity is not a preview write. Investigate unexplained differences and leave acceptance incomplete.
+6. Confirm the preview workflow performed no subscription or delivery mutations. It does not deploy the alert Worker or send notifications. Preserve the exact alert-origin allowlist: preview is not an allowed alert origin, so unavailable alert setup there is expected. Do not subscribe, invoke notification tests, or add wildcard preview origins.
+
+A missing credential, failed workflow, or incomplete acceptance check leaves preview setup incomplete even if a build or deployment step passed.
 
 For a locally authorized preview deployment:
 
@@ -29,10 +42,12 @@ export CLOUDFLARE_ENV=preview
 export SOURCE_COMMIT=$(git rev-parse HEAD)
 npm test
 npm run test:runtime
-npm run deploy:check
-npm run deploy:app
+node scripts/deploy-preview.mjs --dry-run
+node scripts/deploy-preview.mjs
 DEPLOYMENT_URL=https://saturday-signal-preview.scythe-wildflower.workers.dev VERIFY_ALERTS=false npm run release:verify
 ```
+
+The preview helper validates both the compiled and Wrangler-resolved Worker names before a dry run or deployment. It clears the build-time `CLOUDFLARE_ENV` selection and explicitly selects the compiled top-level environment, preventing a second `-preview` suffix. Use this helper for preview; the generic production deployment command does not perform these preview checks.
 
 Use an existing authenticated Wrangler session or a securely supplied token. Never deploy a preview build as production: rebuild with `CLOUDFLARE_ENV` unset first.
 
@@ -45,11 +60,11 @@ Use an existing authenticated Wrangler session or a securely supplied token. Nev
 5. The workflow verifies `/api/health` matches both the package version and exact source commit; checks the home page, manifest, service worker, and current score API; and verifies the alert service reports the same release and is ready from both production origins. It retries transient propagation/feed failures for a bounded period and uploads test and verification logs. Failure is reported as a failed workflow, never as a successful release deployment.
 6. Confirm daily/ACC/Top 25 switching and score refreshes in the deployed browser. Reinstall/open the app at the new address and verify one authorized real-device notification before retiring the old installation. CI never sends push messages as a smoke test.
 
-Keep Sites available during the transition. GitHub release notes should distinguish a published source release from a verified deployment until the workflow succeeds. The first production run needs the environment secret; this PR does not configure credentials or publish the migration.
+Keep Sites available during the transition. GitHub release notes should distinguish a published source release from a verified deployment until the workflow succeeds. Production already has a deployment history; preserve its environment credential and release process when operating the optional preview environment.
 
 ## Score-feed behavior
 
-The browser still reads ESPN directly first. The server first uses the date-specific ESPN API; if Cloudflare receives an error such as the observed HTTP 403, it can use ESPN's CDN feed only when that feed's calendar proves coverage of the entire requested Eastern-day range. The CDN ignores date queries. Unknown weeks and partial boundary days are rejected instead of silently returning an empty/wrong scoreboard. Dates outside the current CDN week still rely on the date-specific API or a recent cached success. On a partially covered ESPN week-boundary day, the server may therefore be unavailable if the date API is blocked. Verification intentionally fails in that case; do not downgrade missing scores to a successful release. Repeated retries cannot resolve missing date coverage.
+The browser still reads ESPN directly first. The server first uses the date-specific ESPN API; if Cloudflare receives an error such as the observed HTTP 403, it can use ESPN's CDN feed only when calendar metadata proves coverage of the entire requested Eastern-day range. The CDN ignores date queries. For an overnight week boundary, the fallback explicitly requests the intersecting calendar weeks by season, season type, and week, then validates each returned identity and calendar boundary before joining their events. The combined calendar must be continuous and cover the full range. The shared [`completeCdnRange`](https://github.com/michaeltorbert/sportsapp/blob/1dded72c8bfb87fd53e0a9f2cfd9174bf8988f35/lib/espn-cdn.ts) implementation and its request bound are documented in [PR #45](https://github.com/michaeltorbert/sportsapp/pull/45). Partial boundary days, gaps, mismatched weeks, invalid payloads, and unsupported ranges still fail instead of becoming a successful empty or wrong scoreboard. Dates outside supported CDN coverage still rely on the date-specific API or a recent cached success. Release verification continues to fail when complete score coverage is unavailable; repeated retries cannot establish missing coverage.
 
 ## Toolchain and existing alerts
 
@@ -65,7 +80,7 @@ Website and alert code deliberately share one release version and are deployed a
 
 A deployment error stops the workflow. A verification error marks the run failed; it does **not** automatically undo a deployment. Read the logs before deciding whether to retry a transient ESPN failure or roll back application code. The current release remains visible on GitHub even if deployment fails.
 
-Use the Cloudflare dashboard or `wrangler rollback --name saturday-signal` with a verified prior version. For a release that also changed the alert Worker, assess its rollback separately with `wrangler rollback --name saturday-signal-alerts`; do not roll back its database or delete notification history. Prefer a new corrective release when configuration compatibility is uncertain. On the first Cloudflare website deployment there is no prior website version; the unchanged Sites publication is the fallback.
+Use the Cloudflare dashboard or `wrangler rollback --name saturday-signal` with a verified prior version. For a release that also changed the alert Worker, assess its rollback separately with `wrangler rollback --name saturday-signal-alerts`; do not roll back its database or delete notification history. Prefer a new corrective release when configuration compatibility is uncertain. Production now has a verified 1.4.2 deployment and deployment history; select and verify the specific rollback target before acting. The Sites-only fallback applies to a first-ever website deployment with no prior Worker version, not the current production state.
 
 ## References
 

@@ -35,12 +35,12 @@ jobs:
         run: |
           npm test
           npm run test:runtime
-          npm run deploy:check
+          node scripts/deploy-preview.mjs --dry-run
       - name: Deploy preview website
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           test -n "$CLOUDFLARE_API_TOKEN" || { echo "Set CLOUDFLARE_API_TOKEN in the preview environment."; exit 1; }
-          npm run deploy:app
+          node scripts/deploy-preview.mjs
       - name: Verify preview website
         run: npm run release:verify
