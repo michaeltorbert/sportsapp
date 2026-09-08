@@ -13,15 +13,15 @@ const root = resolve(import.meta.dirname, ".."), temp = await mkdtemp(join(tmpdi
 const A = "a".repeat(40), B = "b".repeat(40), children = [], browsers = [];
 const evidence = { syntheticIdentities: { A, B }, scenarios: [], sourceManifest: [] };
 let proxy;
-async function run(args, cwd, commit) {
-  const child = spawn(process.execPath, args, { cwd, detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, SOURCE_COMMIT: commit, CLOUDFLARE_ENV: "", WRANGLER_SEND_METRICS: "false", WRANGLER_LOG_PATH: ".wrangler/logs", BROWSER: "none" } });
+async function run(args, cwd, commit, command = process.execPath) {
+  const child = spawn(command, args, { cwd, detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, SOURCE_COMMIT: commit, CLOUDFLARE_ENV: "", WRANGLER_SEND_METRICS: "false", WRANGLER_LOG_PATH: ".wrangler/logs", BROWSER: "none" } });
   children.push(child); let output = "";
   child.stdout.on("data", d => { output = (output + d).slice(-20000); }); child.stderr.on("data", d => { output = (output + d).slice(-20000); });
   return { child, output: () => output };
 }
 async function freePort() { const s = createServer(); s.listen(0, "127.0.0.1"); await once(s, "listening"); const port = s.address().port; await new Promise(r => s.close(r)); return port; }
 async function worker(dir, commit) {
-  const build = await run(["scripts/run-with-timeout.mjs", "3m", "10s", "node_modules/vinext/dist/cli.js", "build"], dir, commit);
+  const build = await run(["run", "build"], dir, commit, "npm");
   const [code] = await once(build.child, "exit"); if (code !== 0) throw new Error(build.output());
   const port = await freePort(); const runtime = await run(["node_modules/wrangler/bin/wrangler.js", "dev", "--config", "dist/server/wrangler.json", "--local", "--ip", "127.0.0.1", "--port", String(port), "--inspector-port", "0"], dir, commit);
   for (let n = 0; n < 120; n++) {
