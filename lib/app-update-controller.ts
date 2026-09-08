@@ -7,6 +7,8 @@ export function createAppUpdater(loadedValue: string | undefined, publish: (stat
   let state: UpdateState = { target: null, status: loaded ? "" : "App update checking is unavailable for this build.", refreshing: false };
   let flight: Promise<ReturnType<typeof metadata>> | null = null, controller: AbortController | null = null;
   let last = -Infinity, scheduled: ReturnType<typeof setTimeout> | undefined, confirmation: ReturnType<typeof setTimeout> | undefined;
+  // Pending processing preserves the Help override; feedback belongs only to
+  // an explicit check and expires when the app is suspended.
   let manualPending = false, manualFeedback = false;
   let requestSequence = 0, handledSequence = 0;
   let navigationRecovery: ReturnType<typeof setTimeout> | undefined;
@@ -17,7 +19,7 @@ export function createAppUpdater(loadedValue: string | undefined, publish: (stat
   const expireAnnouncementIntent = () => {
     if (!manualFeedback) return;
     manualFeedback = false;
-    if (state.status === "An app update is being verified.") emit({ status: "" });
+    if (state.status === "Checking for an app update…" || state.status === "An app update is being verified.") emit({ status: "" });
   };
   try { const saved: unknown = JSON.parse(sessionStorage.getItem("ss:app-update-dismissed") || "[]"); if (Array.isArray(saved)) for (const item of saved) { const commit = validCommit(item); if (commit) dismissed.add(commit); } } catch { /* Tab-local fallback. */ }
   const request = () => {
@@ -41,7 +43,6 @@ export function createAppUpdater(loadedValue: string | undefined, publish: (stat
     if (manual) manualCandidate = result.commit;
     candidate = observe(candidate, loaded, result.commit, Date.now());
     clearTimeout(confirmation); confirmation = undefined;
-    if (manual) manualFeedback = true;
     if (!candidate) {
       confirmed = null;
       emit({ target: null, status: manualFeedback || state.target ? "The app is up to date." : "" });
@@ -63,7 +64,7 @@ export function createAppUpdater(loadedValue: string | undefined, publish: (stat
     if (!available()) { if (manual) emit({ status: "Unable to check for an app update. Reconnect and return to the app." }); else expireAnnouncementIntent(); return; }
     if (manual) { manualPending = true; manualFeedback = true; emit({ status: "Checking for an app update…" }); }
     if (!flight && Date.now() - last < 2000) {
-      if (!scheduled) scheduled = setTimeout(() => { scheduled = undefined; void check(manualPending); }, 2000 - (Date.now() - last));
+      if (!scheduled) scheduled = setTimeout(() => { scheduled = undefined; void check(); }, 2000 - (Date.now() - last));
       return;
     }
     const pending = request(), sequence = requestSequence;
@@ -73,7 +74,7 @@ export function createAppUpdater(loadedValue: string | undefined, publish: (stat
     const requested = manualPending; manualPending = false;
     if (result) accept(result, requested);
     else {
-      emit({ status: requested || manualFeedback ? "Unable to check for an app update. Please try again." : "" });
+      emit({ status: manualFeedback ? "Unable to check for an app update. Please try again." : "" });
       manualFeedback = false;
     }
   }
@@ -88,7 +89,7 @@ export function createAppUpdater(loadedValue: string | undefined, publish: (stat
       const result = await request();
       if (!alive) return;
       if (!result || !available()) throw new Error("Unavailable");
-      if (result.commit === loaded) accept(result, true);
+      if (result.commit === loaded) { manualFeedback = true; accept(result, true); }
       else {
         navigate(result.commit);
         // If the document stays open, permit a later explicit retry. A slow

@@ -31,12 +31,12 @@ test("refresh URL preserves actual view and unrelated URL data without replaying
 });
 
 const { createAppUpdater } = await bundle("lib/app-update-controller.ts");
-function environment(t) {
+function environment(t, dismissed = []) {
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"], now: 100000 });
   const window = new EventTarget(), document = new EventTarget(); document.hidden = false;
   t.mock.method(globalThis, "fetch", async () => ({ ok: true, json: async () => ({ commit: B, version: "1" }) }));
   const originals = new Map(), navigator = { onLine: true };
-  for (const [key, value] of Object.entries({ window, document, navigator, sessionStorage: { getItem: () => null, setItem() {} } })) {
+  for (const [key, value] of Object.entries({ window, document, navigator, sessionStorage: { getItem: () => JSON.stringify(dismissed), setItem() {} } })) {
     originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key)); Object.defineProperty(globalThis, key, { value, configurable: true });
   }
   t.after(() => { updater.dispose(); for (const [key, desc] of originals) { if (desc) Object.defineProperty(globalThis, key, desc); else delete globalThis[key]; } });
@@ -187,4 +187,82 @@ test("one shared background/manual response preserves manual current feedback", 
   window.dispatchEvent(new Event("focus")); const manual = updater.check();
   release({ ok: true, json: async () => ({ commit: A, version: "1" }) }); await manual; await settle();
   assert.equal(fetch.mock.callCount(), 1); assert.equal(states.at(-1).status, "The app is up to date.");
+});
+
+const responseFor = commit => ({ ok: true, json: async () => ({ commit, version: "1" }) });
+function suspend(env, mode, suspended) {
+  if (mode === "hidden") {
+    env.document.hidden = suspended;
+    env.document.dispatchEvent(new Event("visibilitychange"));
+  } else {
+    env.navigator.onLine = !suspended;
+    env.window.dispatchEvent(new Event(suspended ? "offline" : "online"));
+  }
+}
+for (const mode of ["hidden", "offline"]) {
+  for (const timing of ["throttled", "in-flight"]) {
+    for (const outcome of ["loaded", "new", "failure"]) {
+      test(`${timing} manual ${outcome} result stays quiet after ${mode} suspension; fresh checks announce`, async t => {
+        const env = environment(t), { updater, states, navigations } = env;
+        if (timing === "throttled") {
+          fetch.mock.mockImplementation(async () => responseFor(A));
+          await updater.check();
+        }
+        let release;
+        fetch.mock.mockImplementation(() => new Promise(resolve => { release = resolve; }));
+        const pending = updater.check();
+        assert.equal(states.at(-1).status, "Checking for an app update…");
+        suspend(env, mode, true);
+        assert.equal(states.at(-1).status, "");
+        if (timing === "throttled") {
+          t.mock.timers.tick(10000); await settle();
+          assert.equal(fetch.mock.callCount(), 1);
+          suspend(env, mode, false);
+        }
+        release(outcome === "failure" ? { ok: false } : responseFor(outcome === "loaded" ? A : B));
+        await pending; await settle();
+        assert.equal(states.at(-1).status, "");
+        assert.equal(states.at(-1).target, null);
+        if (timing === "in-flight") { suspend(env, mode, false); await settle(); }
+        // A new explicit check may announce even while its request is throttled.
+        fetch.mock.mockImplementation(async () => outcome === "failure" ? { ok: false } : responseFor(outcome === "loaded" ? A : B));
+        await updater.check();
+        t.mock.timers.tick(2000); await settle();
+        assert.equal(states.at(-1).status, outcome === "failure" ? "Unable to check for an app update. Please try again." : outcome === "loaded" ? "The app is up to date." : "An app update is being verified.");
+        assert.deepEqual(navigations, []);
+      });
+    }
+    test(`${timing} manual dismissal override survives ${mode} suspension before response`, async t => {
+      const env = environment(t, [B]), { updater, states, navigations, window } = env;
+      if (timing === "throttled") {
+        fetch.mock.mockImplementation(async () => responseFor(A));
+        window.dispatchEvent(new Event("focus")); await settle();
+      }
+      let release;
+      fetch.mock.mockImplementation(() => new Promise(resolve => { release = resolve; }));
+      const pending = updater.check();
+      suspend(env, mode, true);
+      if (timing === "throttled") {
+        t.mock.timers.tick(10000); await settle();
+        suspend(env, mode, false);
+      }
+      release(responseFor(B)); await pending; await settle();
+      assert.equal(states.at(-1).status, "");
+      assert.equal(states.at(-1).target, null);
+      fetch.mock.mockImplementation(async () => responseFor(B));
+      t.mock.timers.tick(10000); await settle();
+      if (timing === "in-flight") { suspend(env, mode, false); await settle(); }
+      assert.equal(states.at(-1).target, B);
+      assert.equal(states.at(-1).status, "An app update is available.");
+      assert.deepEqual(navigations, []);
+    });
+  }
+}
+test("explicit refresh still announces when verification finds the loaded commit", async t => {
+  const { updater, states, navigations } = environment(t);
+  fetch.mock.mockImplementation(async () => responseFor(A));
+  await updater.refresh();
+  assert.equal(states.at(-1).status, "The app is up to date.");
+  assert.equal(states.at(-1).refreshing, false);
+  assert.deepEqual(navigations, []);
 });
