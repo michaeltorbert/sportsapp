@@ -95,3 +95,20 @@ test("parent cancellation during CDN does not start a hosted fallback", async ()
   }), /Canceled/);
   assert.equal(calls.length, 2);
 });
+
+test("a prior-season date outside the CDN calendar uses hosted data instead of an empty success", async () => {
+  const calls = [];
+  const expected = { date: "2025-09-05", endDate: "2025-09-05", fetchedAt: "2026-09-08T18:00:00Z", games: [] };
+  const result = await loadScores(expected.date, new AbortController().signal, async (url, options) => {
+    calls.push(String(url));
+    if (String(url).startsWith("/api/scores?")) {
+      assert.equal(options.mode, "same-origin");
+      return Response.json(expected);
+    }
+    if (new URL(url).hostname === "site.api.espn.com") return new Response(null, { status: 503 });
+    return Response.json(feed(2));
+  });
+  assert.deepEqual(result, expected);
+  assert.equal(calls.length, 3);
+  assert.equal(calls.at(-1), "/api/scores?date=2025-09-05&end=2025-09-05&acc=0");
+});

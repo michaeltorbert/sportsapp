@@ -62,7 +62,7 @@ export const test = base.extend({
   harness: async ({ page, browser, browserName, request }, provide, testInfo) => {
     const state = {
       events: standardEvents(), failScores: false, ready: true, failConfig: false,
-      active: true, kickoff: true, conflict: false, alertRequests: [], scoreRequests: [], unexpectedExternal: [], errors: [],
+      active: true, kickoff: true, conflict: false, alertRequests: [], scoreRequests: [], cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], unexpectedExternal: [], errors: [],
     };
     page.on("pageerror", error => state.errors.push(error.message));
     await page.route("**/*", async route => {
@@ -83,12 +83,18 @@ export const test = base.extend({
           return json({ events }, state.failScores ? 503 : 200);
         }
       }
-      if (url.hostname === "cdn.espn.com") return json({ error: "simulated CDN unavailable" }, 503);
+      if (url.hostname === "cdn.espn.com") {
+        state.cdnRequests.push(url.search);
+        return state.cdnFeed ? json(state.cdnFeed) : json({ error: "simulated CDN unavailable" }, 503);
+      }
       if (url.origin === testInfo.project.use.baseURL) {
         if (url.pathname === "/alerts-config.json") return json({ serviceUrl: ALERT_ORIGIN });
         // The simulated direct feed only falls back in explicit failure cases.
         // Intercept here so the local Worker can never query a real score feed.
-        if (url.pathname === "/api/scores") return json({ error: "simulated feed unavailable" }, 503);
+        if (url.pathname === "/api/scores") {
+          state.hostedScoreRequests.push(url.search);
+          return json({ error: "simulated feed unavailable" }, 503);
+        }
         return route.continue();
       }
       state.unexpectedExternal.push(req.url());
@@ -110,7 +116,7 @@ export const test = base.extend({
       browser: browserName, engineVersion: browser.version(), viewport: page.viewportSize(),
       userAgent: await page.evaluate(() => navigator.userAgent), hasTouch: testInfo.project.use.hasTouch,
       simulated: ["ESPN responses", "alert-service responses", "notification permission", "PushManager", "service-worker registration", "installed standalone state"],
-      alertRequests: state.alertRequests, scoreRequests: state.scoreRequests, unexpectedExternal: state.unexpectedExternal,
+      alertRequests: state.alertRequests, scoreRequests: state.scoreRequests, cdnRequests: state.cdnRequests, hostedScoreRequests: state.hostedScoreRequests, unexpectedExternal: state.unexpectedExternal,
     }, null, 2) });
     expect(state.unexpectedExternal, "No unmocked external request is permitted").toEqual([]);
     expect(state.errors, "No browser runtime errors").toEqual([]);
