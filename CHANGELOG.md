@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.4.1 · 2026-09-08
+
+- Clear pending update-check announcements when the app is hidden or offline, while preserving deliberate checks and dismissal overrides (#36, #39).
+- Use committed view state when restoring the app after an update, and clarify delayed navigation and retry feedback.
+- Add suspension and retry regression coverage; preserve alert subscriptions, delivery history, and notification rules.
+
 ## 1.4.0 · 2026-09-07
 
 - Offer Refresh app/Later when a new deployment is confirmed, with a manual update check in Help (#17, #35).
