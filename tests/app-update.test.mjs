@@ -35,13 +35,13 @@ function environment(t) {
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"], now: 100000 });
   const window = new EventTarget(), document = new EventTarget(); document.hidden = false;
   t.mock.method(globalThis, "fetch", async () => ({ ok: true, json: async () => ({ commit: B, version: "1" }) }));
-  const originals = new Map();
-  for (const [key, value] of Object.entries({ window, document, navigator: { onLine: true }, sessionStorage: { getItem: () => null, setItem() {} } })) {
+  const originals = new Map(), navigator = { onLine: true };
+  for (const [key, value] of Object.entries({ window, document, navigator, sessionStorage: { getItem: () => null, setItem() {} } })) {
     originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key)); Object.defineProperty(globalThis, key, { value, configurable: true });
   }
   t.after(() => { updater.dispose(); for (const [key, desc] of originals) { if (desc) Object.defineProperty(globalThis, key, desc); else delete globalThis[key]; } });
   const states = [], navigations = [], updater = createAppUpdater(A, s => states.push(s), c => navigations.push(c));
-  return { updater, states, navigations, window };
+  return { updater, states, navigations, window, document, navigator };
 }
 const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 test("single flight shares manual result; refresh waits then verifies anew and guards repeated taps", async t => {
@@ -125,10 +125,61 @@ test("cancelled navigation recovers without navigating again and superseded manu
   release({ ok: true, json: async () => ({ commit: B, version: "1" }) }); await settle();
   release({ ok: true, json: async () => ({ commit: B, version: "1" }) }); await Promise.all([check, refresh]);
   await updater.refresh(); assert.deepEqual(navigations, [B]);
-  t.mock.timers.tick(15000); await settle(); assert.equal(states.at(-1).refreshing, false); assert.match(states.at(-1).status, /did not finish/); assert.deepEqual(navigations, [B]);
+  t.mock.timers.tick(15000); await settle(); assert.equal(states.at(-1).refreshing, false); assert.match(states.at(-1).status, /not completed yet/); assert.doesNotMatch(states.at(-1).status, /did not finish|failed/); assert.deepEqual(navigations, [B]);
   fetch.mock.mockImplementation(async () => ({ ok: false }));
   window.dispatchEvent(new Event("focus")); await settle(); assert.equal(states.at(-1).status, "");
   await updater.refresh(); assert.match(states.at(-1).status, /could not be verified/);
+});
+test("delayed navigation recovery offers retry without implying failure, including after beforeunload", async t => {
+  const { updater, states, navigations, window } = environment(t);
+  await updater.check(); t.mock.timers.tick(10000); await settle();
+  await updater.refresh(); assert.deepEqual(navigations, [B]);
+  window.dispatchEvent(new Event("beforeunload"));
+  assert.equal(states.at(-1).refreshing, true);
+  t.mock.timers.tick(15000); await settle();
+  assert.equal(states.at(-1).refreshing, false);
+  assert.equal(states.at(-1).status, "The app is still open. Refresh has not completed yet. You can try again.");
+  assert.deepEqual(navigations, [B]);
+  await updater.refresh(); assert.deepEqual(navigations, [B, B]);
+});
+test("suspended confirmation expires announcement intent without a late current-status claim", async t => {
+  const { updater, states, document } = environment(t);
+  await updater.check();
+  assert.equal(states.at(-1).status, "An app update is being verified.");
+  document.hidden = true;
+  document.dispatchEvent(new Event("visibilitychange"));
+  assert.equal(states.at(-1).status, "");
+  t.mock.timers.tick(10000); await settle();
+  assert.equal(states.at(-1).target, null);
+  assert.equal(states.at(-1).status, "");
+  fetch.mock.mockImplementation(async () => ({ ok: true, json: async () => ({ commit: A, version: "1" }) }));
+  document.hidden = false;
+  document.dispatchEvent(new Event("visibilitychange"));
+  await settle();
+  assert.equal(states.at(-1).status, "");
+  assert.equal(states.at(-1).target, null);
+});
+test("suspended confirmation preserves candidate and manual dismissal override", async t => {
+  const { updater, states, window, document } = environment(t);
+  await updater.check(); t.mock.timers.tick(10000); await settle(); updater.dismiss();
+  assert.equal(states.at(-1).target, null);
+  fetch.mock.mockImplementation(async () => ({ ok: true, json: async () => ({ commit: C, version: "1" }) }));
+  t.mock.timers.tick(2000); window.dispatchEvent(new Event("focus")); await settle();
+  assert.equal(states.at(-1).target, null);
+  fetch.mock.mockImplementation(async () => ({ ok: true, json: async () => ({ commit: B, version: "1" }) }));
+  t.mock.timers.tick(2000); await updater.check();
+  assert.equal(states.at(-1).status, "An app update is being verified.");
+  assert.equal(states.at(-1).target, null);
+  document.hidden = true;
+  document.dispatchEvent(new Event("visibilitychange"));
+  assert.equal(states.at(-1).status, "");
+  t.mock.timers.tick(10000); await settle();
+  assert.equal(states.at(-1).target, null);
+  document.hidden = false;
+  document.dispatchEvent(new Event("visibilitychange"));
+  await settle();
+  assert.equal(states.at(-1).target, B);
+  assert.equal(states.at(-1).status, "An app update is available.");
 });
 test("one shared background/manual response preserves manual current feedback", async t => {
   const { updater, states, window } = environment(t); let release;
