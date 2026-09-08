@@ -8,6 +8,7 @@ import { build } from "esbuild";
 import { chromium, webkit } from "@playwright/test";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+assert.ok(!execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: root, encoding: "utf8" }).trim(), "Run from a clean checkout, including nonignored untracked files");
 const [date, endDate = date] = process.argv.slice(2);
 assert.match(date || "", /^\d{4}-\d{2}-\d{2}$/, "Usage: node scripts/check-browser-cdn-live.mjs YYYY-MM-DD [YYYY-MM-DD]");
 assert.match(endDate, /^\d{4}-\d{2}-\d{2}$/);
@@ -18,7 +19,7 @@ server.listen(0, "127.0.0.1"); await once(server, "listening");
 const origin = process.env.BASE_ORIGIN || `http://127.0.0.1:${server.address().port}`;
 const output = {
   commit: execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim(),
-  dirty: !!execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], { cwd: root, encoding: "utf8" }).trim(),
+  dirty: false,
   startedUtc: new Date().toISOString(), date, endDate, origin: new URL(origin).origin, engines: [],
   limitations: ["Fresh desktop contexts, not an installed phone.", "Primary requests forced to fail; CDN is live. This tests the checkout's score client, not deployed client identity.", "No subscription or notification requests are allowed."],
 };
