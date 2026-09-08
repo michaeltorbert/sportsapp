@@ -90,3 +90,9 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .top25-badge { color: #d9c9ff; background: #322b4b; }.badges { flex-wrap: wrap; }.final-card { opacity: .66; }.game-card:target { outline: 2px solid #cefb70; outline-offset: 3px; scroll-margin-top: 100px; }
 .alert-triggers { padding-left: 22px; margin: 8px 0 12px; }.alert-triggers li { padding: 5px 0; }.alert-enable { margin-top: 18px; }.alert-footnote { color: #8f9bb1; font-size: 13px; }
 .history-heading { margin: 25px 0 10px; color: #f0f5ff; font-weight: 700; }.release-history { list-style: none; padding: 0; }.release-history li { border-top: 1px solid #2b374b; padding: 12px 0; }.release-history li > span { font-size: 12px; color: #8f9bb1; margin-left: 12px; }.release-history p { font-size: 14px; margin: 5px 0; }.version-label { color: #73839e; font-size: 11px; }
+
+.app-update { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; padding: 1rem; margin: 1rem 0 .5rem; border: 1px solid var(--border); border-radius: .75rem; }
+.app-update-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+.app-update button { min-height: 44px; padding: .4rem .75rem; border: 1px solid currentColor; border-radius: .4rem; }
+.app-update button[aria-disabled="true"] { opacity: .5; }
+.app-update-status { font-size: .875rem; margin: .5rem 0 1rem; }
