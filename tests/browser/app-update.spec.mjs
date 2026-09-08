@@ -139,3 +139,135 @@ test("keyboard verification keeps focus, ignores repeated activation and recover
   await page.keyboard.press("Enter"); await expect(page.locator(".app-update")).toHaveCount(0);
   await expect(page.getByText("An app update is available.", { exact: true })).toHaveCount(0);
 });
+
+// These transitions simulate lifecycle signals, not OS suspension or a lost
+// connection. Keeping the network mocked lets an in-flight response settle
+// deterministically while the real browser renders the Help status.
+// Sample throughout a bounded real-time window: a single successful negative
+// assertion can precede the Node route callback or React response processing.
+async function expectStable(assertion, duration = 200) {
+  const until = Date.now() + duration;
+  do {
+    await assertion();
+    await new Promise(resolve => setTimeout(resolve, 25));
+  } while (Date.now() < until);
+  await assertion();
+}
+async function suspendUpdater(page, mode, suspended) {
+  await page.evaluate(({ mode, suspended }) => {
+    if (mode === "hidden") {
+      Object.defineProperty(document, "hidden", { configurable: true, value: suspended });
+      Object.defineProperty(document, "visibilityState", { configurable: true, value: suspended ? "hidden" : "visible" });
+      document.dispatchEvent(new Event("visibilitychange"));
+    } else {
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: !suspended });
+      window.dispatchEvent(new Event(suspended ? "offline" : "online"));
+    }
+  }, { mode, suspended });
+}
+for (const mode of ["hidden", "offline"]) {
+  for (const timing of ["queued", "in-flight"]) {
+    for (const outcome of ["loaded", "failure", "dismissed target"]) {
+      test(`Help ${timing} ${outcome} response expires across ${mode} suspension`, async ({ page, harness }) => {
+        const state = await mockHealth(page);
+        await harness.open();
+        const loaded = await page.locator("main").getAttribute("data-app-commit");
+        await detect(page, state);
+        await page.getByRole("button", { name: "Later", exact: true }).click();
+        expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("ss:app-update-dismissed")))).toContain(B);
+        // Clear the confirmed candidate with an ordinary background observation.
+        state.commit = loaded;
+        await page.clock.fastForward(2100);
+        const baseline = state.count;
+        const baselineResponse = page.waitForResponse(response => new URL(response.url()).pathname === "/api/health");
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+        await expect.poll(() => state.count).toBe(baseline + 1);
+        await (await baselineResponse).finished();
+        await expect(page.locator(".app-update")).toHaveCount(0);
+        if (timing === "in-flight") await page.clock.fastForward(2100);
+        let release, controlledRequest, controlledCalls = 0;
+        const held = new Promise(resolve => { release = resolve; });
+        const controlledRoute = async route => {
+          state.count++; controlledCalls++;
+          controlledRequest ??= route.request();
+          // Every accidental duplicate shares the same release, so none hangs.
+          // The explicit count assertion below rejects any duplicate request.
+          await held;
+          await route.fulfill({ status: outcome === "failure" ? 503 : 200, json: { version: "1", commit: outcome === "dismissed target" ? B : loaded } });
+        };
+        await page.route("**/api/health", controlledRoute);
+        await page.getByRole("button", { name: "How this scoreboard works" }).click();
+        const help = page.locator(".help-body"), check = page.getByRole("button", { name: "Check for app update", exact: true });
+        await check.click();
+        await expect(help).toContainText("Checking for an app update…");
+        if (timing === "in-flight") await expect.poll(() => controlledCalls).toBe(1);
+        else await expectStable(() => expect(controlledCalls).toBe(0));
+        await suspendUpdater(page, mode, true);
+        await expect(help).not.toContainText("Checking for an app update…");
+        if (timing === "queued") {
+          await page.clock.fastForward(2100);
+          await expectStable(() => expect(controlledCalls).toBe(0));
+          await suspendUpdater(page, mode, false);
+          await expect.poll(() => controlledCalls).toBe(1);
+        }
+        release(); await (await controlledRequest.response()).finished();
+        await expectStable(() => expect(controlledCalls).toBe(1));
+        // A new request is no longer held after this controlled response.
+        await page.unroute("**/api/health");
+        state.commit = outcome === "dismissed target" ? B : loaded;
+        await page.route("**/api/health", route => { state.count++; return route.fulfill({ status: outcome === "failure" ? 503 : 200, json: { version: "1", commit: state.commit } }); });
+        await expectStable(async () => {
+          expect(await help.getByRole("status").textContent()).toBe("");
+          expect(await page.locator(".app-update").count()).toBe(0);
+        });
+        if (timing === "in-flight") await suspendUpdater(page, mode, false);
+        if (outcome === "dismissed target") {
+          await page.clock.fastForward(10100);
+          await expect(help).toContainText("An app update is available.");
+          expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("ss:app-update-dismissed")))).not.toContain(B);
+        } else {
+          await check.click(); await page.clock.fastForward(2100);
+          await expect(help).toContainText(outcome === "failure" ? "Unable to check for an app update. Please try again." : "The app is up to date.");
+        }
+        expect(harness.state.alertRequests.filter(request => request.method !== "GET")).toEqual([]);
+      });
+    }
+  }
+  for (const outcome of ["loaded", "dismissed target"]) {
+    test(`Help confirmation wait expires across ${mode}; ${outcome} resumes correctly`, async ({ page, harness }) => {
+      const state = await mockHealth(page); await harness.open();
+      const loaded = await page.locator("main").getAttribute("data-app-commit");
+      await detect(page, state); await page.getByRole("button", { name: "Later", exact: true }).click();
+      state.commit = C; await page.clock.fastForward(2100);
+      const before = state.count;
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect.poll(() => state.count).toBe(before + 1);
+      await page.clock.fastForward(2100); state.commit = B;
+      await page.getByRole("button", { name: "How this scoreboard works" }).click();
+      await page.getByRole("button", { name: "Check for app update", exact: true }).click();
+      const help = page.locator(".help-body");
+      await expect(help).toContainText("An app update is being verified.");
+      await suspendUpdater(page, mode, true);
+      await expect(help).not.toContainText("being verified");
+      const suspendedCount = state.count;
+      await page.clock.fastForward(10100);
+      await expectStable(() => expect(state.count).toBe(suspendedCount));
+      await expect(page.locator(".app-update")).toHaveCount(0);
+      state.commit = outcome === "loaded" ? loaded : B;
+      await suspendUpdater(page, mode, false);
+      await expect.poll(() => state.count).toBe(suspendedCount + 1);
+      if (outcome === "loaded") {
+        await expectStable(async () => {
+          expect(await help.getByRole("status").textContent()).toBe("");
+          expect(await page.locator(".app-update").count()).toBe(0);
+        });
+      } else {
+        // Immediate availability proves the ten-second candidate survived;
+        // removing B from dismissal storage proves the explicit Later override.
+        await expect(help).toContainText("An app update is available.");
+        expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("ss:app-update-dismissed")))).not.toContain(B);
+      }
+      expect(harness.state.alertRequests.filter(request => request.method !== "GET")).toEqual([]);
+    });
+  }
+}
