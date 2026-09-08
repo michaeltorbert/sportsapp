@@ -1,5 +1,13 @@
 # Saturday Signal releases
 
+## 1.4.0 · 2026-09-07
+
+- Offer Refresh app/Later when a new deployment is confirmed, with a manual update check in Help (#17, #35).
+- Preserve the selected date, category, Hide finals, focus target, unrelated URL state, and saved preferences during an explicit refresh.
+- Add quiet background checks, per-deployment dismissal, accessible feedback, and recovery when navigation is cancelled.
+- Validate updates with two local builds and simulated mobile browser flows. Installed-iOS behavior and real notification delivery are not established by these tests.
+- Track nonblocking feedback and slow-navigation copy refinements in #36.
+
 ## 1.3.4 · 2026-09-07
 
 - Resolve repository lint errors with hydration-safe browser state and framework home navigation that restores Today (#1).
