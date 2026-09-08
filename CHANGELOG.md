@@ -1,5 +1,10 @@
 # Saturday Signal releases
 
+## 1.4.4 · 2026-09-08
+
+- Serve the prebuilt homepage through static assets to avoid repeated Worker rendering on app opens (#38, #50).
+- Preserve client-side dates, preferences, scores and update restoration; keep score and health APIs dynamic and verify asset-first routing in workerd.
+
 ## 1.4.3 · 2026-09-08
 
 - Reuse the Eastern date formatter during score processing to reduce measured CPU work (#38). Production resource-limit verification remains required; this does not establish a fix for cold homepage rendering.
