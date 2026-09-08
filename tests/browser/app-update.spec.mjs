@@ -6,7 +6,9 @@ async function mockHealth(page, initial = B) {
   return state;
 }
 async function detect(page, state) {
-  await page.clock.fastForward(3100); await expect.poll(() => state.count).toBeGreaterThan(0);
+  const received = page.waitForResponse(response => new URL(response.url()).pathname === "/api/health");
+  await page.clock.fastForward(3100); await (await received).finished(); await expect.poll(() => state.count).toBeGreaterThan(0);
+  await page.waitForTimeout(50);
   await page.clock.fastForward(10100); await expect(page.getByRole("button", { name: "Refresh app", exact: true })).toBeVisible();
 }
 test("confirms twice, dismisses per target, manual override shares Help owner and failure is truthful", async ({ page, harness }, testInfo) => {
@@ -28,6 +30,7 @@ test("confirms twice, dismisses per target, manual override shares Help owner an
 test("refresh preserves actual notification view without rescroll or alert mutation; Home clears tab and focus", async ({ page, harness }) => {
   const state = await mockHealth(page);
   await harness.open({ path: "/?date=2026-09-05&keep=yes#game-acc-final", push: { existing: true, credentials: true, permission: "granted" } });
+  const savedPush = await page.evaluate(() => localStorage.getItem("ss:push"));
   await page.getByLabel("Hide finals").check();
   await page.getByRole("button", { name: "Next day" }).click();
   await page.getByRole("tab", { name: /^Upsets/ }).click();
@@ -39,6 +42,8 @@ test("refresh preserves actual notification view without rescroll or alert mutat
   await expect(page.getByLabel("Hide finals")).toBeChecked();
   await expect.poll(() => page.url()).not.toContain("_ss_update");
   expect(new URL(page.url()).hash).toBe(""); expect(new URL(page.url()).searchParams.get("keep")).toBe("yes");
+  expect(await page.evaluate(() => localStorage.getItem("ss:push"))).toBe(savedPush);
+  expect(await page.evaluate(() => Object.keys(localStorage).some(key => key.startsWith("ss:board:")))).toBe(true);
   expect(harness.state.alertRequests.filter(r => r.method !== "GET")).toEqual([]);
   expect(await page.evaluate(() => window.__pushSimulation)).toEqual({ permissionRequests: 0, subscribes: 0, unsubscribes: 0 });
   await page.getByRole("link", { name: "Saturday Signal home" }).click();
@@ -91,4 +96,46 @@ test("update keeps notification-only Watchlist membership, never rescrolls, and 
   expect(await page.evaluate(() => window.__scrolls)).toBe(0);
   await page.getByRole("link", { name: "Saturday Signal home" }).click();
   await expect(page.locator("#game-notification-only")).toHaveCount(0);
+});
+test("updater preserves initial manual date before slow scores finish", async ({ page, harness }) => {
+  const state = await mockHealth(page);
+  // Hold score fetches before the network layer, including the fallback. This
+  // avoids WebKit reporting CORS errors for fulfilled requests from a departed
+  // document, and still exercises the real score client's timeout/fallback.
+  await page.addInitScript(() => {
+    const fetchOriginal = window.fetch.bind(window), pending = []; let allowed = false;
+    window.__releaseScores = () => { allowed = true; for (const resume of pending) resume(); };
+    window.fetch = (input, options) => {
+      if (allowed || !/scoreboard|\/api\/scores/.test(String(input))) return fetchOriginal(input, options);
+      return new Promise((resolve, reject) => {
+        const abort = () => reject(new DOMException("Simulated slow scores aborted", "AbortError"));
+        if (options?.signal?.aborted) { abort(); return; }
+        options?.signal?.addEventListener("abort", abort, { once: true });
+        pending.push(() => { if (!options?.signal?.aborted) resolve(fetchOriginal(input, options)); });
+      });
+    };
+  });
+  await harness.open({ path: "/?date=2026-09-04&keep=slow", waitForScores: false });
+  await expect(page.getByRole("button", { name: "Refresh scores" })).toBeDisabled();
+  await detect(page, state); await expect(dateInput(page)).toHaveValue("");
+  const navigation = page.waitForEvent("load");
+  await page.getByRole("button", { name: "Refresh app", exact: true }).click(); await navigation;
+  expect(new URL(page.url()).searchParams.get("date")).toBe("2026-09-04");
+  await page.evaluate(() => window.__releaseScores()); await expect(dateInput(page)).toHaveValue("2026-09-04");
+});
+test("keyboard verification keeps focus, ignores repeated activation and recovers after failure", async ({ page, harness }) => {
+  const state = await mockHealth(page); await harness.open(); await detect(page, state);
+  let release;
+  await page.route("**/api/health", async route => { state.count++; await new Promise(resolve => { release = resolve; }); await route.fulfill({ status: 503, json: {} }); });
+  const button = page.getByRole("button", { name: "Refresh app", exact: true });
+  await button.focus(); const before = state.count;
+  await page.keyboard.press("Enter"); await expect(button).toHaveAttribute("aria-disabled", "true");
+  await expect(button).toBeFocused(); await page.keyboard.press("Enter"); expect(state.count).toBe(before + 1);
+  release(); await expect(button).toHaveAttribute("aria-disabled", "false"); await expect(button).toBeFocused();
+  await expect(page.locator(".app-update-status")).toContainText("Refresh could not be verified");
+  // WebKit follows the platform preference for tabbing to buttons. Exercise
+  // keyboard activation and focus retention independently of that preference.
+  await page.getByRole("button", { name: "Later", exact: true }).focus();
+  await page.keyboard.press("Enter"); await expect(page.locator(".app-update")).toHaveCount(0);
+  await expect(page.getByText("An app update is available.", { exact: true })).toHaveCount(0);
 });

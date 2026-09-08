@@ -72,15 +72,23 @@ try {
     const page = await context.newPage(); await page.clock.install({ time: new Date(NOW) });
     const refreshPage = async () => { await Promise.all([page.waitForEvent("load"), page.getByRole("button", { name: "Refresh app", exact: true }).click()]); await expect(page.getByRole("button", { name: "Refresh scores" })).toBeEnabled(); };
     const identity = () => page.locator("main[data-app-commit]");
-    const detect = async () => { const before = healthCount; await page.clock.fastForward(3100); await expect.poll(() => healthCount).toBeGreaterThan(before); await expect(page.getByText("An app update is being verified.", { exact: true })).toBeAttached(); await page.clock.fastForward(10100); await expect(page.getByRole("button", { name: "Refresh app", exact: true })).toBeVisible(); };
+    // Wait for the full response before advancing the confirmation clock. Quiet
+    // background checks deliberately do not expose pending/current UI statuses.
+    const tickHealth = async milliseconds => {
+      const received = page.waitForResponse(response => new URL(response.url()).pathname === "/api/health");
+      await page.clock.fastForward(milliseconds); await (await received).finished();
+      await page.waitForTimeout(50); // Let JSON consumption and React publication finish.
+    };
+    const detect = async () => { await tickHealth(3100); await tickHealth(10100); await expect(page.getByRole("button", { name: "Refresh app", exact: true })).toBeVisible(); };
+
     documentBackend = healthBackend = 0; failHealth = false;
     await page.goto(origin); await expect(identity()).toHaveAttribute("data-app-commit", A); await expect(page.getByRole("button", { name: "Refresh scores" })).toBeEnabled();
     documentBackend = healthBackend = 1; await detect();
     await refreshPage(); await expect(identity()).toHaveAttribute("data-app-commit", B);
-    await page.clock.fastForward(14000); await expect(page.getByText("The app is up to date.", { exact: true })).toBeAttached(); await expect(page.getByRole("button", { name: "Refresh app", exact: true })).toHaveCount(0);
+    await tickHealth(14000); await expect(page.getByRole("button", { name: "Refresh app", exact: true })).toHaveCount(0);
     evidence.scenarios.push(`${name}: A page detects B and loads hydrated B, marker arrival is inert`);
     // Roll back the whole origin to A while B remains open.
-    documentBackend = healthBackend = 0; await page.clock.fastForward(300000); await expect(page.getByText("An app update is being verified.", { exact: true })).toBeAttached(); await page.clock.fastForward(10100); await expect(page.getByRole("button", { name: "Refresh app", exact: true })).toBeVisible();
+    documentBackend = healthBackend = 0; await tickHealth(300000); await tickHealth(10100); await expect(page.getByRole("button", { name: "Refresh app", exact: true })).toBeVisible();
     failHealth = true; const before = documents;
     await page.getByRole("button", { name: "Refresh app", exact: true }).click(); await expect(page.locator(".app-update-status")).toContainText("Refresh could not be verified"); expect(documents).toBe(before);
     failHealth = false; await refreshPage(); await expect(identity()).toHaveAttribute("data-app-commit", A);

@@ -97,11 +97,11 @@ export const test = base.extend({
     expect(health).toEqual({ version: testInfo.config.metadata.appVersion, commit: testInfo.config.metadata.sourceCommit });
     await provide({
       state,
-      async open({ now = NOW, push = {}, path = "/" } = {}) {
+      async open({ now = NOW, push = {}, path = "/", waitForScores = true } = {}) {
         await page.clock.install({ time: new Date(now) });
         await installPushSimulation(page, push);
         await page.goto(path);
-        await expect(page.getByRole("button", { name: "Refresh scores" })).toBeEnabled();
+        if (waitForScores) await expect(page.getByRole("button", { name: "Refresh scores" })).toBeEnabled();
       },
     });
     await testInfo.attach("browser-evidence", { contentType: "application/json", body: JSON.stringify({

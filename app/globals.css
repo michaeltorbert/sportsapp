@@ -94,5 +94,5 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .app-update { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; padding: 1rem; margin: 1rem 0 .5rem; border: 1px solid var(--border); border-radius: .75rem; }
 .app-update-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
 .app-update button { min-height: 44px; padding: .4rem .75rem; border: 1px solid currentColor; border-radius: .4rem; }
-.app-update button:disabled { opacity: .5; }
+.app-update button[aria-disabled="true"] { opacity: .5; }
 .app-update-status { font-size: .875rem; margin: .5rem 0 1rem; }

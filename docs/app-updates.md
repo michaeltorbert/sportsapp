@@ -43,3 +43,11 @@ receipt or installed iPhone behavior. A manual installed-iPhone resume/update
 check remains separate. Two agreeing observations reduce rollout noise but do
 not prove global edge consistency; a stale document remains usable and can
 present another explicit retry without a reload loop.
+
+If the browser cancels an explicit replacement and leaves the working document
+open, its refresh controls recover after 15 seconds with a retry message. This
+recovery never navigates; the user must choose Refresh app again. Controls use
+aria-disabled during verification so keyboard focus stays in place on failure.
+Background checks remain quiet until an update is confirmed or a shown notice
+is cleared. Help reports the outcome of an explicit check, and a later failed
+background check clears any obsolete current-status claim.

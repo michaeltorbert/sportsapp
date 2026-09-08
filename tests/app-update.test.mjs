@@ -92,3 +92,48 @@ test("storage denial does not prevent dismissal, checking, or explicit navigatio
   t.mock.timers.tick(2000); await fresh.check(); assert.equal(states.at(-1).target, B);
   await fresh.refresh(); assert.deepEqual(navigations, [B]); fresh.dispose();
 });
+test("slow initial scores cannot erase a manual URL date", () => {
+  const view = { date: "", followToday: false, filter: "watch", hideFinals: false, focusedGame: "" };
+  assert.equal(new URL(refreshUrl("https://example.test/?date=2026-09-05", B, view)).searchParams.get("date"), "2026-09-05");
+  assert.equal(new URL(refreshUrl("https://example.test/?date=invalid", B, view)).searchParams.has("date"), false);
+  assert.equal(new URL(refreshUrl("https://example.test/?date=2026-09-05", B, { ...view, followToday: true })).searchParams.has("date"), false);
+});
+test("background outcomes stay quiet, dismissal stays quiet and failed checks clear stale current feedback", async t => {
+  const { updater, states, window } = environment(t);
+  t.mock.timers.tick(3000); await settle(); assert.equal(states.at(-1).status, "");
+  t.mock.timers.tick(10000); await settle(); assert.equal(states.at(-1).target, B);
+  updater.dismiss(); assert.equal(states.at(-1).status, "");
+  t.mock.timers.tick(300000); await settle(); assert.equal(states.at(-1).status, ""); assert.equal(states.at(-1).target, null);
+  fetch.mock.mockImplementation(async () => ({ ok: true, json: async () => ({ commit: A, version: "1" }) }));
+  t.mock.timers.tick(2000); await updater.check(); assert.equal(states.at(-1).status, "The app is up to date.");
+  fetch.mock.mockImplementation(async () => ({ ok: false }));
+  t.mock.timers.tick(2000); window.dispatchEvent(new Event("focus")); await settle(); assert.equal(states.at(-1).status, "");
+});
+test("manual verification feedback lasts through confirmation, and clearing a shown notice announces current", async t => {
+  const { updater, states, window } = environment(t);
+  await updater.check(); assert.equal(states.at(-1).status, "An app update is being verified.");
+  t.mock.timers.tick(10000); await settle(); assert.equal(states.at(-1).status, "An app update is available.");
+  fetch.mock.mockImplementation(async () => ({ ok: true, json: async () => ({ commit: A, version: "1" }) }));
+  t.mock.timers.tick(2000); window.dispatchEvent(new Event("focus")); await settle();
+  assert.equal(states.at(-1).target, null); assert.equal(states.at(-1).status, "The app is up to date.");
+});
+test("cancelled navigation recovers without navigating again and superseded manual intent stays cleared", async t => {
+  const { updater, states, navigations, window } = environment(t);
+  let release;
+  fetch.mock.mockImplementation(() => new Promise(resolve => { release = resolve; }));
+  const check = updater.check(), refresh = updater.refresh();
+  release({ ok: true, json: async () => ({ commit: B, version: "1" }) }); await settle();
+  release({ ok: true, json: async () => ({ commit: B, version: "1" }) }); await Promise.all([check, refresh]);
+  await updater.refresh(); assert.deepEqual(navigations, [B]);
+  t.mock.timers.tick(15000); await settle(); assert.equal(states.at(-1).refreshing, false); assert.match(states.at(-1).status, /did not finish/); assert.deepEqual(navigations, [B]);
+  fetch.mock.mockImplementation(async () => ({ ok: false }));
+  window.dispatchEvent(new Event("focus")); await settle(); assert.equal(states.at(-1).status, "");
+  await updater.refresh(); assert.match(states.at(-1).status, /could not be verified/);
+});
+test("one shared background/manual response preserves manual current feedback", async t => {
+  const { updater, states, window } = environment(t); let release;
+  fetch.mock.mockImplementation(() => new Promise(resolve => { release = resolve; }));
+  window.dispatchEvent(new Event("focus")); const manual = updater.check();
+  release({ ok: true, json: async () => ({ commit: A, version: "1" }) }); await manual; await settle();
+  assert.equal(fetch.mock.callCount(), 1); assert.equal(states.at(-1).status, "The app is up to date.");
+});

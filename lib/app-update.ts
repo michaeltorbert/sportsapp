@@ -31,8 +31,9 @@ export type UpdateView = { date: string; followToday: boolean; filter: Filter; h
 export function refreshUrl(href: string, commit: string, view: UpdateView): string {
   const url = new URL(href), identity = validCommit(commit);
   if (!identity) throw new Error("Invalid update identity");
-  if (view.followToday || !validDate(view.date)) url.searchParams.delete("date");
-  else url.searchParams.set("date", view.date);
+  if (view.followToday) url.searchParams.delete("date");
+  else if (validDate(view.date)) url.searchParams.set("date", view.date);
+  else if (!validDate(url.searchParams.get("date") || "")) url.searchParams.delete("date");
   url.searchParams.set("tab", initialTab(`?tab=${view.filter}`));
   url.searchParams.set("_ss_update", identity);
   url.searchParams.set("_ss_hide_finals", view.hideFinals ? "1" : "0");

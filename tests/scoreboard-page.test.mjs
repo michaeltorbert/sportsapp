@@ -12,11 +12,12 @@ const { retainFinalCategories } = await bundle("lib/football.ts");
 const output = await build({
   entryPoints: ["app/page.tsx"], bundle: true, platform: "node", format: "esm", jsx: "automatic", write: false,
   plugins: [{ name: "score-page-runtime", setup(build) {
-    build.onResolve({ filter: /^(next\/link|react(?:\/jsx-runtime)?|lucide-react|@\/components\/.*|@\/lib\/use-scoreboard)$/ }, args => ({ path: args.path, namespace: "page-test" }));
+    build.onResolve({ filter: /^(next\/link|react(?:\/jsx-runtime)?|lucide-react|@\/components\/.*|@\/lib\/(?:use-scoreboard|use-app-update))$/ }, args => ({ path: args.path, namespace: "page-test" }));
     build.onLoad({ filter: /.*/, namespace: "page-test" }, args => {
       if (args.path === "next/link") return { contents: "export default ({children,...props})=>globalThis.scorePageTest.element('a',props,children);" };
-      if (args.path === "react") return { contents: "export const useState=(...a)=>globalThis.scorePageTest.useState(...a),useRef=v=>({current:v}),useEffect=()=>{},useSyncExternalStore=()=>null;" };
+      if (args.path === "react") return { contents: "export const useState=(...a)=>globalThis.scorePageTest.useState(...a),useRef=v=>({current:v}),useEffect=fn=>globalThis.scorePageTest.effect(fn),useSyncExternalStore=()=>null;" };
       if (args.path === "react/jsx-runtime") return { contents: "export const jsx=(...a)=>globalThis.scorePageTest.jsx(...a),jsxs=(...a)=>globalThis.scorePageTest.jsxs(...a),Fragment=globalThis.scorePageTest.Fragment;" };
+      if (args.path === "@/lib/use-app-update") return { contents: "export const LOADED_COMMIT=undefined,useAppUpdate=()=>({target:null,status:'',refreshing:false,check(){},refresh(){},dismiss(){}});" };
       if (args.path === "@/lib/use-scoreboard") return { contents: "export const useScoreboard=scope=>globalThis.scorePageTest.scoreboard(scope);" };
       if (args.path === "lucide-react") return { contents: "export const ArrowUpRight=()=>null,CalendarDays=()=>null,ChevronLeft=()=>null,ChevronRight=()=>null,CircleHelp=()=>null,CloudOff=()=>null,Radio=()=>null,RefreshCw=()=>null,Signal=()=>null,TriangleAlert=()=>null,Tv=()=>null,Zap=()=>null;" };
       return { contents: `
@@ -52,11 +53,12 @@ function fixtures() {
   };
 }
 
-function render(filter, { hideFinals = false, focusedGame = "", showHelp = false, boards = fixtures() } = {}) {
+function render(filter, { hideFinals = false, focusedGame = "", showHelp = false, boards = fixtures(), effects = [], changes = [] } = {}) {
   let state = 0, selectedScope;
   globalThis.scorePageTest = {
     ...jsxRuntime, filter, showHelp, element: React.createElement,
-    useState(initial) { return [[filter, hideFinals, focusedGame][state++] ?? initial, () => {}]; },
+    effect(fn) { effects.push(fn); },
+    useState(initial) { const slot = state++; return [[filter, hideFinals, focusedGame][slot] ?? initial, value => changes.push({ slot, value })]; },
     scoreboard(scope) { selectedScope = scope; return { date: "2026-08-29", today: "2026-09-05", boards, data: boards[scope], error: "", refreshing: false, online: true, now: Date.now(), timezone: "EDT", refresh() {}, setDate() {}, followToday: true }; },
   };
   try { return { html: renderToStaticMarkup(React.createElement(Home)), scope: selectedScope }; }
@@ -182,4 +184,18 @@ test("a delayed close observation stays out of One score until its retained fina
   const html = render("close", { boards }).html;
   assert.deepEqual(cardIds(html), [live.id]);
   assert.match(html, /One-score watch/);
+});
+
+test("restoration effect replay uses its captured snapshot after transient URL cleanup", () => {
+  const effects = [], changes = [];
+  render("watch", { effects, changes });
+  const original = new Map(["location", "history", "localStorage"].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  const url = new URL(`https://example.test/?_ss_update=${"b".repeat(40)}&_ss_hide_finals=1&_ss_focus=focused`);
+  Object.defineProperty(globalThis, "location", { configurable: true, value: url });
+  Object.defineProperty(globalThis, "history", { configurable: true, value: { state: { retained: true }, replaceState(state, title, next) { assert.deepEqual(state, { retained: true }); url.href = String(next); } } });
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem() { throw Error("Restoration must not read stored preference"); } } });
+  try {
+    effects[0](); assert.equal(url.search, ""); effects[0]();
+    assert.deepEqual(changes, [{ slot: 1, value: true }, { slot: 2, value: "focused" }, { slot: 1, value: true }, { slot: 2, value: "focused" }]);
+  } finally { for (const [key, descriptor] of original) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; } }
 });

@@ -57,8 +57,10 @@ export default function Home() {
   const [hideFinals, setHideFinals] = useState(false);
   const [focusedGame, setFocusedGame] = useState("");
   const focusedOnce = useRef(false);
+  const initialRestore = useRef<ReturnType<typeof updateRestoration> | undefined>(undefined);
   useEffect(() => {
-    const restore = updateRestoration(location.search);
+    if (initialRestore.current === undefined) initialRestore.current = updateRestoration(location.search);
+    const restore = initialRestore.current;
     if (restore) {
       setHideFinals(restore.hideFinals); setFocusedGame(restore.focusedGame); focusedOnce.current = true;
     } else {
