@@ -32,7 +32,7 @@ This directory is an independent Worker, outside the Sites runtime. Use Cloudfla
 5. Confirm `/config` reports `ready: true` after the cron runs and obtains a valid ESPN scoreboard. Check a real iPhone Home Screen subscription and Android Chrome subscription. Test actual notification delivery before calling push active.
 6. The deployed origin is already configured in `public/alerts-config.json`. Preserve the readiness gate and publish any further changes under a new version.
 
-The API accepts the configured `SITE_ORIGIN`. Subscription endpoints are limited to Apple, Google FCM, and Mozilla push services, and redirects are rejected. Subscription keys are stored only in the alerts database. Public callers cannot list subscribers. A random device token, stored hashed server-side, is required to edit or disable that device’s subscription. HTTP 404/410 responses deactivate expired subscriptions.
+The API accepts the configured `SITE_ORIGIN`. Subscription endpoints are limited to Apple, Google FCM, and Mozilla push services. Push requests use Workers-compatible manual redirect handling: redirects are never followed and their 3xx status is recorded as a rejected attempt. Subscription keys are stored only in the alerts database. Public callers cannot list subscribers. A random device token, stored hashed server-side, is required to edit or disable that device’s subscription. HTTP 404/410 responses deactivate expired subscriptions.
 
 ## Trigger semantics
 
@@ -44,6 +44,7 @@ The API accepts the configured `SITE_ORIGIN`. Subscription endpoints are limited
 - Existing trigger IDs `one-score-fourth` and `ranked-trailing-fourth` intentionally cover both Q4 and overtime. Do not rename them or clear their history on upgrade.
 - A unique `(game_id, trigger)` ledger survives restarts, corrections, lead changes, and deployments. Each event/subscription pair is claimed atomically before delivery. Subscriptions created after an event are excluded.
 - Delivery is **at most one send attempt**, not guaranteed device delivery. Ambiguous failures and rejected sends are not retried, because a retry could violate “no repeats.” The database records accepted, rejected, and uncertain attempts. A failure after claiming but before sending can miss an alert. This is the intentional no-repeat tradeoff; distributed push cannot promise exactly-once user-visible delivery.
+- Sender exceptions remain `uncertain` in the existing ledger. Structured `push_send_failed` logs identify only the stage (`serialize`, `encrypt`, `vapid`, or `transport`), without exception details, endpoints, payloads, or keys. A transport-stage failure does not establish whether the provider received the request. If response-body cleanup fails after an HTTP response, `push_response_cleanup_failed` records only its status; the received status still determines the ledger result. None of these diagnostics authorizes another attempt or establishes visible phone delivery.
 - Keep event and delivery ledgers when redeploying. Do not erase history as part of updates. Replacing the D1 database would lose deduplication history.
 
 ## Score-feed coverage

@@ -62,7 +62,7 @@ function intercept(t, { events = [liveEvent()], send = () => new Response(null, 
     assert.equal(url.hostname, "fcm.googleapis.com", "Unexpected network destination must not escape interception");
     const headers = new Headers(init.headers);
     assert.equal(init.method, "POST");
-    assert.equal(init.redirect, "error");
+    assert.equal(init.redirect, "manual");
     assert.equal(headers.get("content-encoding"), "aes128gcm");
     assert.equal(headers.get("content-type"), "application/octet-stream");
     assert.equal(headers.get("ttl"), "300");
@@ -81,6 +81,8 @@ function intercept(t, { events = [liveEvent()], send = () => new Response(null, 
 
 for (const [outcome, status, active, send] of [
   ["HTTP 201", "accepted", 1, () => new Response(null, { status: 201 })],
+  ["HTTP redirect", "http-307", 1, () => new Response(null, { status: 307, headers: { Location: "https://other.test/" } })],
+  ["HTTP 201 with failed cleanup", "accepted", 1, () => ({ status: 201, body: { cancel() { throw new Error("Simulated cleanup failure"); } } })],
   ["HTTP 404", "http-404", 0, () => new Response(null, { status: 404 })],
   ["HTTP 410", "http-410", 0, () => new Response(null, { status: 410 })],
   ["HTTP 503", "http-503", 1, () => new Response(null, { status: 503 })],

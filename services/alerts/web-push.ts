@@ -44,9 +44,27 @@ export async function validSubscription(value: unknown): Promise<Subscription | 
   } catch { return null; }
 }
 export async function sendPush(subscription: Subscription, payload: unknown, config: { publicKey: string; privateKey: string; subject: string }, fetcher: typeof fetch = fetch) {
-  const body = await encrypt(subscription, JSON.stringify(payload));
-  const authorization = await vapid(subscription.endpoint, config.publicKey, config.privateKey, config.subject);
-  const response = await fetcher(subscription.endpoint, { method: "POST", redirect: "error", signal: AbortSignal.timeout(10000), headers: { Authorization: authorization, "Content-Encoding": "aes128gcm", "Content-Type": "application/octet-stream", TTL: "300", Urgency: "high" }, body });
-  await response.body?.cancel();
+  let stage: "serialize" | "encrypt" | "vapid" | "transport" = "serialize";
+  let response: Response;
+  try {
+    const serialized = JSON.stringify(payload);
+    stage = "encrypt";
+    const body = await encrypt(subscription, serialized);
+    stage = "vapid";
+    const authorization = await vapid(subscription.endpoint, config.publicKey, config.privateKey, config.subject);
+    stage = "transport";
+    // Workers supports manual/follow, but rejects redirect:error. Manual also
+    // prevents forwarding the subscription payload and authorization elsewhere.
+    response = await fetcher(subscription.endpoint, { method: "POST", redirect: "manual", signal: AbortSignal.timeout(10000), headers: { Authorization: authorization, "Content-Encoding": "aes128gcm", "Content-Type": "application/octet-stream", TTL: "300", Urgency: "high" }, body });
+  } catch {
+    // Never include exception text, endpoint, payload, or key material in logs.
+    console.error(JSON.stringify({ event: "push_send_failed", stage }));
+    throw new Error(`Push send failed during ${stage}`);
+  }
+  try { await response.body?.cancel(); }
+  catch {
+    // A received provider status remains authoritative if body cleanup fails.
+    console.error(JSON.stringify({ event: "push_response_cleanup_failed", status: response.status }));
+  }
   return response.status;
 }
