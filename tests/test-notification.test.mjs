@@ -26,6 +26,7 @@ async function fixture(t) {
     assert.equal(host, "web.push.apple.com", "Unexpected destination must not escape interception");
     calls.push({ url, init });
     if (response === "transport") throw new TypeError("Simulated connection loss");
+    if (response === "cleanup") return { status: 201, body: { cancel() { throw new Error("Simulated cleanup failure"); } } };
     return new Response(null, { status: response });
   };
   t.after(() => { globalThis.fetch = original; });
@@ -87,7 +88,7 @@ test("one labeled encrypted test reaches only its owner, preserves game history,
   assert.equal(f.sqlite.prepare("SELECT state_json FROM game_states").get().state_json, history);
 });
 
-for (const [code, expected, active] of [[404, "http-404", 0], [410, "http-410", 0], [503, "http-503", 1], ["transport", "uncertain", 1]]) {
+for (const [code, expected, active] of [[307, "http-307", 1], [404, "http-404", 0], [410, "http-410", 0], [503, "http-503", 1], ["transport", "uncertain", 1], ["cleanup", "accepted", 1]]) {
   test(`device test ${code} keeps an immutable attempt and does not retry`, async t => {
     const f = await fixture(t), testId = crypto.randomUUID(); f.respond(code);
     const result = await (await f.request(testId)).json();
