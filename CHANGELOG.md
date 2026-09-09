@@ -1,5 +1,13 @@
 # Saturday Signal releases
 
+## 1.5.0 · 2026-09-09
+
+- Add per-device close-game, upset-watch, final and ACC kickoff choices. Existing devices retain their selections; enrollment through the updated UI defaults to upset watch only, while legacy clients omitting the new fields retain legacy defaults. Turning alerts off preserves saved choices (#54).
+- Use selective late-game upset watches, fresh activation baselines and shared live-alert deduplication to avoid replaying conditions already underway or sending a second live alert for the same game. Preserve ownership checks, subscriptions, trigger IDs and delivery history (#54).
+- Add a guarded, paused cutover procedure with tested poll fencing and retained release-preflight evidence; prohibit preference-unaware alert rollbacks and require fresh-baseline acceptance before paired release (#54).
+- Improve updater test diagnostics and retained failure evidence without changing app update behavior.
+- Document the investigation finding that no reliable low-cost CDN freshness signal was available, so no speculative runtime freshness heuristic was added; existing coverage checks remain unchanged (#46).
+
 ## 1.4.4 · 2026-09-08
 
 - Serve the prebuilt homepage through static assets to avoid repeated Worker rendering on app opens (#38, #50).
