@@ -1,5 +1,6 @@
-export const VERSION = "1.4.4";
+export const VERSION = "1.5.0";
 export const releases = [
+  { version: "1.5.0", date: "September 9, 2026", changes: "Choose close-game, upset-watch, final and ACC kickoff alerts for each device. Existing devices keep their choices, and newly enabled alerts skip conditions already underway. Improved protection against duplicate live alerts." },
   { version: "1.4.4", date: "September 8, 2026", changes: "Load the homepage from a prebuilt page to avoid repeating server rendering whenever the app opens." },
   { version: "1.4.3", date: "September 8, 2026", changes: "Fixed a notification-sending error and reduced score-processing work." },
   { version: "1.4.2", date: "September 8, 2026", changes: "Restored complete score coverage across overnight football-week boundaries, helping scheduled alert checks recover when the primary score feed is unavailable." },
