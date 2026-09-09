@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bundle, cdnFeed, database, game } from "./helpers.mjs";
-const { default: worker, poll } = await bundle("services/alerts/worker.ts");
+const { default: worker, deliver } = await bundle("services/alerts/worker.ts");
 const { hash } = await bundle("services/alerts/web-push.ts");
 
 async function fixture(t) {
@@ -80,8 +80,8 @@ test("one labeled encrypted test reaches only its owner, preserves game history,
   assert.equal(f.sqlite.prepare("SELECT state_json FROM game_states").get().state_json, history);
   assert.equal(f.sqlite.prepare("SELECT count(*) n FROM alert_events").get().n, 1);
   assert.deepEqual({ ...f.sqlite.prepare("SELECT * FROM deliveries").get() }, { event_id: `test:${testId}`, subscription_id: f.id, status: "accepted", attempted_at: now });
-  await poll(f.env, now);
-  await poll(f.env, now + 60000);
+  await deliver(f.env, now, [game({ id: "existing-game" })]);
+  await deliver(f.env, now + 60000, [game({ id: "existing-game" })]);
   assert.deepEqual(await Promise.all(f.calls.map(async c => (await decodePayload(f, c.init.body)).eventId)), [`test:${testId}`, "existing-game:one-score-fourth", "existing-game:one-score-fourth"]);
   assert.equal(f.sqlite.prepare("SELECT count(*) n FROM deliveries").get().n, 3);
   assert.equal(f.sqlite.prepare("SELECT count(*) n FROM alert_events").get().n, 1);

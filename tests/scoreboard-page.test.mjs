@@ -147,7 +147,7 @@ test("Help discloses ranking-only alerts when the line-based list excludes a ran
   const { html } = render("watch", { boards, showHelp: true });
   assert.deepEqual(cardIds(html), ["ranked-underdog"]);
   assert.doesNotMatch(html, /class="badge upset-badge"|class="upset-reason"/);
-  assert.match(html, /Push alerts use rankings alone, so a ranked betting underdog can trigger an upset alert without an upset badge here/);
+  assert.match(html, /Phone alerts are separate from these display categories and cover every qualifying game, regardless of the selected tab/);
   assert.deepEqual(cardIds(render("upset", { boards }).html), []);
 });
 

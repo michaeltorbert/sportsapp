@@ -35,16 +35,17 @@ async function installPushSimulation(page, options) {
     const audit = { permissionRequests: 0, subscribes: 0, unsubscribes: 0 };
     const makeSubscription = endpoint => ({ endpoint,
       toJSON() { return { endpoint, keys: { p256dh: "simulated-public-key", auth: "simulated-auth" } }; },
-      async unsubscribe() { audit.unsubscribes++; current = null; return true; },
+      async unsubscribe() { audit.unsubscribes++; current = null; try { sessionStorage.removeItem("simulated-push-endpoint"); } catch {} return true; },
     });
-    let current = options.existing ? makeSubscription("https://push.example.test/existing") : null;
+    let persisted = null; try { persisted = sessionStorage.getItem("simulated-push-endpoint"); } catch {}
+    let current = persisted ? makeSubscription(persisted) : options.existing ? makeSubscription("https://push.example.test/existing") : null;
     const registration = { pushManager: {
       async getSubscription() { return current; },
-      async subscribe() { audit.subscribes++; current = makeSubscription(`https://push.example.test/new-${++sequence}`); return current; },
+      async subscribe() { audit.subscribes++; current = makeSubscription(`https://push.example.test/new-${++sequence}`); try { sessionStorage.setItem("simulated-push-endpoint", current.endpoint); } catch {} return current; },
     } };
     class SimulatedNotification {
-      static permission = options.permission || "default";
-      static async requestPermission() { audit.permissionRequests++; return options.permissionResult || "granted"; }
+      static permission = persisted ? "granted" : options.permission || "default";
+      static async requestPermission() { audit.permissionRequests++; this.permission = options.permissionResult || "granted"; return this.permission; }
     }
     Object.defineProperty(window, "Notification", { configurable: true, value: SimulatedNotification });
     Object.defineProperty(window, "PushManager", { configurable: true, value: class SimulatedPushManager {} });
@@ -62,17 +63,28 @@ export const test = base.extend({
   harness: async ({ page, browser, browserName, request }, provide, testInfo) => {
     const state = {
       events: standardEvents(), failScores: false, ready: true, failConfig: false,
-      active: true, kickoff: true, conflict: false, alertRequests: [], scoreRequests: [], cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], unexpectedExternal: [], errors: [],
+      active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 0, preferencesVersion: 1, failSave: false, conflict: false, alertRequests: [], scoreRequests: [], cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], unexpectedExternal: [], errors: [],
     };
     page.on("pageerror", error => state.errors.push(error.message));
     await page.route("**/*", async route => {
       const req = route.request(), url = new URL(req.url());
       const json = (body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
       if (url.origin === ALERT_ORIGIN) {
-        if (url.pathname === "/config") return json({ ready: state.ready, publicKey: "AA" }, state.failConfig ? 503 : 200);
+        if (url.pathname === "/config") return json({ ready: state.ready, publicKey: "AA", preferencesVersion: state.preferencesVersion }, state.failConfig ? 503 : 200);
         state.alertRequests.push({ method: req.method(), path: url.pathname, authorization: req.headers().authorization || null, body: req.postDataJSON() });
-        if (req.method() === "GET") return json({ active: state.active, kickoff: state.kickoff });
-        if (req.method() === "POST") return state.conflict ? json({ error: "simulated missing credentials" }, 409) : json(CREDENTIALS, 201);
+        const status = () => ({ active: state.active, kickoff: state.kickoff, closeGame: state.closeGame, upsetWatch: state.upsetWatch, upsetFinal: state.upsetFinal, revision: state.revision, preferencesVersion: state.preferencesVersion });
+        if (req.method() === "GET") return json(state.getStatus ? { error: "simulated settings read failure" } : status(), state.getStatus || 200);
+        if (state.failSave) return json({ error: "simulated failure" }, 503);
+        if (req.method() === "POST" && state.conflict) return json({ error: "simulated missing credentials", code: "ownership-conflict" }, 409);
+        if (req.method() === "POST" && req.postDataJSON().revision !== undefined && req.postDataJSON().revision !== state.revision) return json({ error: "simulated stale revision", code: "revision-conflict" }, 409);
+        if (req.method() === "PATCH" || req.method() === "POST") {
+          const body = req.postDataJSON();
+          for (const key of ["active", "kickoff", "closeGame", "upsetWatch", "upsetFinal"]) if (typeof body[key] === "boolean") state[key] = body[key];
+          if (req.method() === "POST") state.active = true;
+          state.revision++;
+          return json(req.method() === "POST" ? CREDENTIALS : status());
+        }
+        if (req.method() === "DELETE") { state.active = false; state.revision++; }
         return json({ ok: true });
       }
       if (url.hostname === "site.api.espn.com") {

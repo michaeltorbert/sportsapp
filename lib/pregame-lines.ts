@@ -34,6 +34,26 @@ export function parsePregameLine(raw: unknown, awayId: string, homeId: string): 
   return first.line;
 }
 
+export type PregameEvidence = { state: "absent" | "invalid" } | { state: "line" | "pickem"; line: PregameLine };
+/** Alert-only evidence status; keep the existing display parser's API/behavior. */
+export function classifyPregameEvidence(raw: unknown, awayId: string, homeId: string): PregameEvidence {
+  if (raw == null) return { state: "absent" };
+  if (!Array.isArray(raw)) return { state: "invalid" };
+  const supplied: unknown[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return { state: "invalid" };
+    if (!("spread" in item) || item.spread === undefined) {
+      if (!oddsSchema.partial().extend({ overUnder: spread }).safeParse(item).success) return { state: "invalid" };
+      continue; // A total-only market does not assert a point-spread favorite.
+    }
+    if (!parsePregameLine([item], awayId, homeId)) return { state: "invalid" };
+    supplied.push(item);
+  }
+  if (!supplied.length) return { state: "absent" };
+  const line = parsePregameLine(supplied, awayId, homeId);
+  return line ? { state: line.favoriteId === null ? "pickem" : "line", line } : { state: "invalid" };
+}
+
 const summarySchema = z.object({
   header: z.object({ id: z.string(), competitions: z.array(z.object({ competitors: z.array(z.object({ homeAway: z.string(), team: z.object({ id: z.string() }) })) })) }),
   pickcenter: z.unknown().optional(),

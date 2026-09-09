@@ -1,6 +1,6 @@
 import { build } from "esbuild";
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 export async function bundle(entry) {
   const output = await build({ entryPoints: [entry], absWorkingDir: fileURLToPath(new URL("..", import.meta.url)), bundle: true, platform: "node", format: "esm", write: false });
@@ -11,9 +11,13 @@ export function game(changes = {}) {
   return { id: "game1", date: "2026-09-06T02:30:00Z", timeValid: true, state: "live", status: "4th", period: 4, clock: 180, clockKnown: true, intermission: false, started: true, teams: [team("a"), team("b", { score: 21, rank: 20 })], broadcast: "ESPN", possession: null, downDistance: "", redZone: false, url: "https://www.espn.com/college-football/game/_/gameId/game1", ...changes };
 }
 export function scoreboard(games, date = "2026-09-05", extra = {}) { return { date, endDate: date, fetchedAt: "2026-09-06T04:01:00.000Z", games, ...extra }; }
-export function database() {
+export function database({ migrated = false } = {}) {
   const sqlite = new DatabaseSync(":memory:");
-  sqlite.exec(readFileSync(new URL("../services/alerts/migrations/0001_alerts.sql", import.meta.url), "utf8"));
+  const migrations = new URL("../services/alerts/migrations/", import.meta.url);
+  for (const file of readdirSync(migrations).filter(name => name.endsWith(".sql")).sort()) sqlite.exec(readFileSync(new URL(file, migrations), "utf8"));
+  // Existing transport fixtures represent an already-drained installation.
+  // Migration tests opt into the actual paused, pending-baseline initial state.
+  if (!migrated) sqlite.exec("UPDATE poll_state SET value=1 WHERE id IN ('preferences_epoch','preferences_delivery_enabled','preferences_cutover_complete')");
   const db = {
     prepare(sql) {
       let args = [];
