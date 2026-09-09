@@ -39,6 +39,8 @@ export function normalizeScoreboard(raw: unknown, date: string, fetchedAt = new 
     const intermission = /HALFTIME|END_PERIOD/.test(statusName);
     const started = (s.period || 0) > 0 || teams.some(t => (t.score || 0) > 0) || state === "final";
     games.set(e.id, { id: e.id, date: gameDate, timeValid: c.timeValid !== false, state, started, pregameLine: !started && (state === "upcoming" || state === "delayed") ? parsePregameLine(c.odds, teams[0].id, teams[1].id) : undefined, clockKnown, intermission, status: s.type.shortDetail || s.type.detail || s.type.description || "Status unavailable", period: s.period || 0, clock: s.clock || 0, teams, broadcast: [...new Set(c.broadcasts?.flatMap(b => b.names || []) || [])].join(" / ") || c.broadcast || "", possession: c.situation?.possession === undefined ? null : String(c.situation.possession), downDistance: c.situation?.downDistanceText || "", redZone: c.situation?.isRedZone === true, url: espnLink(e.links?.find(l => l.rel?.includes("summary"))?.href, `https://www.espn.com/college-football/game/_/gameId/${encodeURIComponent(e.id)}`) });
+    const normalized = games.get(e.id)!;
+    if (!started && (state === "upcoming" || state === "delayed") && c.odds != null && (!Array.isArray(c.odds) || c.odds.length > 0) && !normalized.pregameLine) normalized.pregameEvidenceInvalid = true;
   }
   if (envelope.events.length && unreadable === envelope.events.length) throw new Error("ESPN returned unreadable games");
   return { date, endDate, fetchedAt, games: [...games.values()], warnings: unreadable ? ["Some games could not be read from ESPN; the list may be incomplete."] : undefined };

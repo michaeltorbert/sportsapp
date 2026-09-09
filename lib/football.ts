@@ -4,7 +4,8 @@ import { gamePriority, teamRelevance } from "./watch-priority";
 export type Team = { id: string; name: string; abbreviation: string; logo: string | null; score: number | null; rank: number | null; rankKnown?: boolean; record: string; conferenceId: string | null; changed?: boolean };
 export type Categories = { acc: boolean; top25: boolean; close: boolean; upset: boolean };
 export type PregameLine = { favoriteId: string | null; spread: number; source: string };
-export type Game = { id: string; date: string; timeValid: boolean; state: "live" | "delayed" | "upcoming" | "final" | "other"; status: string; period: number; clock: number; clockKnown?: boolean; intermission?: boolean; pregameLine?: PregameLine; started: boolean; teams: [Team, Team]; broadcast: string; possession: string | null; downDistance: string; redZone: boolean; url: string; retainedCategories?: Categories; lastActiveClose?: boolean };
+export type AlertExpectation = { version: 1; gameId: string; teamIds: [string, string]; date: string; observedAt: number; state: "absent" | "line" | "pickem" | "invalid"; line?: PregameLine };
+export type Game = { id: string; date: string; timeValid: boolean; state: "live" | "delayed" | "upcoming" | "final" | "other"; status: string; period: number; clock: number; clockKnown?: boolean; intermission?: boolean; pregameLine?: PregameLine; pregameEvidenceInvalid?: boolean; alertExpectation?: AlertExpectation; started: boolean; teams: [Team, Team]; broadcast: string; possession: string | null; downDistance: string; redZone: boolean; url: string; retainedCategories?: Categories; lastActiveClose?: boolean };
 export type Scoreboard = { date: string; endDate?: string; fetchedAt: string; games: Game[]; stale?: boolean; warnings?: string[] };
 // Reuse one formatter. Workers charge CPU for Intl.DateTimeFormat construction,
 // and score normalization calls this once per event. Lazy so unused homepage

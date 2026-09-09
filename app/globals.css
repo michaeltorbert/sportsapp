@@ -96,3 +96,13 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .app-update button { min-height: 44px; padding: .4rem .75rem; border: 1px solid currentColor; border-radius: .4rem; }
 .app-update button[aria-disabled="true"] { opacity: .5; }
 .app-update-status { font-size: .875rem; margin: .5rem 0 1rem; }
+.alert-setting { display: flex; align-items: center; gap: 18px; min-height: 64px; padding: 14px 0; border-bottom: 1px solid #2b374b; cursor: pointer; }
+.alert-setting > span { flex: 1; min-width: 0; }
+.alert-setting strong { display: block; color: #edf4ff; font-size: 16px; }
+.alert-setting small { display: block; font-size: 13px; line-height: 1.5; color: #a1aec3; margin-top: 4px; }
+.alert-setting input { appearance: none; flex: 0 0 48px; width: 48px; height: 44px; border-radius: 24px; background: #39475b; border: 7px solid #121c2a; position: relative; cursor: pointer; }
+.alert-setting input::after { content: ""; display: block; width: 22px; height: 22px; border-radius: 50%; background: #d5dce6; margin: 4px 2px; }
+.alert-setting input:checked { background: #cefb70; }
+.alert-setting input:checked::after { background: #172308; transform: translateX(10px); }
+.alert-setting input:disabled { opacity: .45; cursor: default; }
+.alert-setting input:focus-visible { outline: 2px solid #cefb70; outline-offset: 2px; }

@@ -53,6 +53,8 @@ Use an existing authenticated Wrangler session or a securely supplied token. Nev
 
 ## Production
 
+Before the first release containing alert preferences, complete the separately authorized [paused migration and old-worker drain](alert-preferences-rollout.md). The release's read-only preflight blocks an unprepared service; it does not migrate or activate it.
+
 1. Merge the reviewed PR after its Tests check passes.
 2. Give every published change a new semantic version in `package.json`, `package-lock.json`, `lib/releases.ts`, and `CHANGELOG.md`. Do not reuse or move existing tags.
 3. Create the immutable version tag at the merged commit and publish its stable GitHub release using the Codex GitHub App. This triggers **Release to Cloudflare**. To redeploy an existing stable tag manually, dispatch the workflow on that tag as the workflow run ref (for example, through GitHub's workflow-dispatch API with `ref: v1.2.0`). Dispatching on main fails the production tag policy and release validation; there is no separate tag input.

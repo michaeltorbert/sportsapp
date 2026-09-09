@@ -74,6 +74,12 @@ test("config explains each readiness gate without exposing private configuration
     assert.equal(config.lastSuccessfulPollAt, new Date(now).toISOString());
     assert.equal(config.lastTickAt, new Date(now).toISOString());
     assert.ok(!JSON.stringify(config).includes("private-test"));
+    set("preferences_delivery_enabled", 0);
+    assert.equal((await read()).ready, false);
+    assert.equal((await read()).readinessReason, "preferences-rollout-paused");
+    set("preferences_delivery_enabled", 1); set("preferences_epoch", 0);
+    assert.equal((await read()).ready, false);
+    assert.equal((await read()).readinessReason, "awaiting-preferences-baseline");
   } finally { sqlite.close(); }
 });
 
@@ -117,7 +123,7 @@ test("overtime includes ties and upsets with accurate titles and stable dedupe I
   assert.ok(first.every(e => e.payload.title.endsWith("Overtime")));
   assert.deepEqual(rules.transitions({ game: { ...g, period: 4 }, observedAt: now - 60000 }, g, now), []);
   const tied = structuredClone(g); tied.period = 6; tied.teams[0].score = tied.teams[1].score;
-  assert.deepEqual(rules.transitions(null, tied, now).map(e => e.trigger), ["one-score-fourth"]);
+  assert.deepEqual(rules.transitions(null, tied, now).map(e => e.trigger), ["one-score-fourth", "ranked-trailing-fourth"]);
   assert.match(rules.transitions(null, tied, now)[0].payload.body, /Tied/);
   const wide = structuredClone(g); wide.teams[1].score = wide.teams[0].score + 9;
   assert.equal(rules.conditions(wide, now)["one-score-fourth"], false);
@@ -182,7 +188,7 @@ test("subscriptions validate push keys, require device ownership, and honor opt-
   const path = `/subscriptions/${credentials.id}`;
   assert.equal((await worker.fetch(request(path, "PATCH", { kickoff: true }, "wrong-token"), env)).status, 404);
   assert.equal((await worker.fetch(request(path, "PATCH", { kickoff: true }, credentials.token), env)).status, 200);
-  assert.deepEqual(await (await worker.fetch(request(path, "GET", null, credentials.token), env)).json(), { active: true, kickoff: true });
+  assert.deepEqual(await (await worker.fetch(request(path, "GET", null, credentials.token), env)).json(), { active: true, kickoff: true, closeGame: false, upsetWatch: true, upsetFinal: false, revision: 1, preferencesVersion: 1 });
   assert.equal((await worker.fetch(request(path, "DELETE", null, credentials.token), env)).status, 200);
   assert.equal((await (await worker.fetch(request(path, "GET", null, credentials.token), env)).json()).active, false);
   sqlite.close();

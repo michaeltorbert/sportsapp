@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { bundle, cdnFeed, database, game } from "./helpers.mjs";
 
-const { poll, saveGameStates } = await bundle("services/alerts/worker.ts");
+const { poll, saveGameStates, deliver } = await bundle("services/alerts/worker.ts");
 const { encode } = await bundle("services/alerts/web-push.ts");
 const now = Date.parse("2026-09-06T03:00:00Z");
 const origin = "https://app.test";
@@ -121,7 +121,8 @@ test("delivery filters inactive/new subscribers, stale events, and kickoff opt-o
   f.event("recent", { createdAt: recentAt });
   f.event("kickoff", { trigger: "acc-kickoff", createdAt: recentAt });
   const { attempts } = intercept(t, { events: [] });
-  await poll(f.env, now);
+  const kickoff = game({ id: "kickoff", state: "upcoming", started: false, period: 0, date: new Date(now + 300000).toISOString() }); kickoff.teams[0].conferenceId = "1";
+  await deliver(f.env, now, [game({ id: "stale" }), game({ id: "boundary" }), game({ id: "recent" }), kickoff]);
   assert.deepEqual(f.sqlite.prepare("SELECT event_id,subscription_id,status FROM deliveries ORDER BY event_id,subscription_id").all().map(row => ({ ...row })), [
     { event_id: "boundary:one-score-fourth", subscription_id: "no-kickoff", status: "accepted" },
     { event_id: "kickoff:acc-kickoff", subscription_id: "eligible", status: "accepted" },

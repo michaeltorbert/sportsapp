@@ -67,6 +67,15 @@ test("scoreboard parsing retains known clocks and only reads pre-kickoff line ev
   assert.equal(normalize(live).id, live.id, "invalid odds cannot discard an otherwise valid score");
 });
 
+test("alert normalization distinguishes absent odds from supplied invalid evidence without changing display lines", () => {
+  for (const [raw, invalid] of [[undefined, false], [[], false], [{ malformed: true }, true], [[odds({ spread: "bad" })], true], [[odds()], false]]) {
+    const e = event(); e.competitions[0].odds = raw;
+    const g = normalizeScoreboard({ events: [e] }, "2026-09-06").games[0];
+    assert.equal(g.pregameEvidenceInvalid === true, invalid);
+    if (invalid) assert.equal(g.pregameLine, undefined);
+  }
+});
+
 test("summary identity binds the line to the correct game and both competitors", () => {
   const g = game({ id: "summary-identity" });
   assert.equal(summaryPregameLine(summary(g), g).favoriteId, "b");

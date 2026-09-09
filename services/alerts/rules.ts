@@ -1,4 +1,5 @@
 import { rankedUpset } from "../../lib/upset";
+import { meaningfulUpset } from "./expectation";
 import { classify, easternDate, margin, type Game } from "../../lib/football";
 export type Trigger = "one-score-fourth" | "ranked-trailing-fourth" | "upset-final" | "acc-kickoff";
 export type Snapshot = { game: Game; observedAt: number };
@@ -6,11 +7,11 @@ export type AlertEvent = { id: string; gameId: string; gameDay: string; trigger:
 
 export function conditions(game: Game, now: number): Record<Trigger, boolean> {
   const tags = classify({ ...game, retainedCategories: undefined });
-  const lateGame = game.state === "live" && game.period >= 4;
+  const lateGame = game.state === "live" && Number.isInteger(game.period) && game.period >= 4;
   const untilKickoff = Date.parse(game.date) - now;
   return {
     "one-score-fourth": lateGame && tags.close,
-    "ranked-trailing-fourth": lateGame && rankedUpset(game),
+    "ranked-trailing-fourth": lateGame && meaningfulUpset(game),
     "upset-final": game.state === "final" && rankedUpset(game),
     "acc-kickoff": game.state === "upcoming" && game.timeValid && tags.acc && untilKickoff > 0 && untilKickoff <= 600000,
   };

@@ -48,6 +48,8 @@ jobs:
           npm run test:runtime
           npm run deploy:check
           npm run deploy:alerts -- --dry-run
+      - name: Require completed alert preference cutover
+        run: node scripts/check-alert-preferences-rollout.mjs
       - name: Deploy existing alert service, then website
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
