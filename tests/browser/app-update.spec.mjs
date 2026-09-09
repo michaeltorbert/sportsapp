@@ -126,18 +126,25 @@ test("updater preserves initial manual date before slow scores finish", async ({
 test("keyboard verification keeps focus, ignores repeated activation and recovers after failure", async ({ page, harness }) => {
   const state = await mockHealth(page); await harness.open(); await detect(page, state);
   let release;
-  await page.route("**/api/health", async route => { state.count++; await new Promise(resolve => { release = resolve; }); await route.fulfill({ status: 503, json: {} }); });
-  const button = page.getByRole("button", { name: "Refresh app", exact: true });
-  await button.focus(); const before = state.count;
-  await page.keyboard.press("Enter"); await expect(button).toHaveAttribute("aria-disabled", "true");
-  await expect(button).toBeFocused(); await page.keyboard.press("Enter"); expect(state.count).toBe(before + 1);
-  release(); await expect(button).toHaveAttribute("aria-disabled", "false"); await expect(button).toBeFocused();
-  await expect(page.locator(".app-update-status")).toContainText("Refresh could not be verified");
-  // WebKit follows the platform preference for tabbing to buttons. Exercise
-  // keyboard activation and focus retention independently of that preference.
-  await page.getByRole("button", { name: "Later", exact: true }).focus();
-  await page.keyboard.press("Enter"); await expect(page.locator(".app-update")).toHaveCount(0);
-  await expect(page.getByText("An app update is available.", { exact: true })).toHaveCount(0);
+  const held = new Promise(resolve => { release = resolve; });
+  const controlledRoute = async route => { state.count++; await held; await route.fulfill({ status: 503, json: {} }); };
+  await page.route("**/api/health", controlledRoute);
+  try {
+    const button = page.getByRole("button", { name: "Refresh app", exact: true });
+    await button.focus(); const before = state.count;
+    await page.keyboard.press("Enter"); await expect(button).toHaveAttribute("aria-disabled", "true");
+    await expect(button).toBeFocused(); await page.keyboard.press("Enter"); expect(state.count).toBe(before + 1);
+    release(); await expect(button).toHaveAttribute("aria-disabled", "false"); await expect(button).toBeFocused();
+    await expect(page.locator(".app-update-status")).toContainText("Refresh could not be verified");
+    // WebKit follows the platform preference for tabbing to buttons. Exercise
+    // keyboard activation and focus retention independently of that preference.
+    await page.getByRole("button", { name: "Later", exact: true }).focus();
+    await page.keyboard.press("Enter"); await expect(page.locator(".app-update")).toHaveCount(0);
+    await expect(page.getByText("An app update is available.", { exact: true })).toHaveCount(0);
+  } finally {
+    release();
+    await page.unroute("**/api/health", controlledRoute);
+  }
 });
 
 // These transitions simulate lifecycle signals, not OS suspension or a lost
@@ -196,44 +203,53 @@ for (const mode of ["hidden", "offline"]) {
           await route.fulfill({ status: outcome === "failure" ? 503 : 200, json: { version: "1", commit: outcome === "dismissed target" ? B : loaded } });
         };
         await page.route("**/api/health", controlledRoute);
-        await page.getByRole("button", { name: "How this scoreboard works" }).click();
-        const help = page.locator(".help-body"), check = page.getByRole("button", { name: "Check for app update", exact: true });
-        await check.click();
-        await expect(help).toContainText("Checking for an app update…");
-        if (timing === "in-flight") await expect.poll(() => controlledCalls).toBe(1);
-        else await expectStable(() => expect(controlledCalls).toBe(0));
-        await suspendUpdater(page, mode, true);
-        await expect(help).not.toContainText("Checking for an app update…");
-        if (timing === "queued") {
-          await page.clock.fastForward(2100);
-          await expectStable(() => expect(controlledCalls).toBe(0));
-          await suspendUpdater(page, mode, false);
-          await expect.poll(() => controlledCalls).toBe(1);
+        try {
+          await page.getByRole("button", { name: "How this scoreboard works" }).click();
+          const help = page.locator(".help-body"), check = page.getByRole("button", { name: "Check for app update", exact: true });
+          await check.click();
+          await expect(help).toContainText("Checking for an app update…");
+          if (timing === "in-flight") await expect.poll(() => controlledCalls).toBe(1);
+          else await expectStable(() => expect(controlledCalls).toBe(0));
+          await suspendUpdater(page, mode, true);
+          await expect(help).not.toContainText("Checking for an app update…");
+          if (timing === "queued") {
+            await page.clock.fastForward(2100);
+            await expectStable(() => expect(controlledCalls).toBe(0));
+            await suspendUpdater(page, mode, false);
+            await expect.poll(() => controlledCalls).toBe(1);
+          }
+          release();
+          const response = await controlledRequest.response();
+          expect(response, `Controlled health response missing (${mode}, ${timing}, ${outcome}); failure: ${JSON.stringify(controlledRequest.failure())}`).not.toBeNull();
+          await response.finished();
+          await expectStable(() => expect(controlledCalls).toBe(1));
+          // A new request is no longer held after this controlled response.
+          await page.unroute("**/api/health", controlledRoute);
+          state.commit = outcome === "dismissed target" ? B : loaded;
+          state.fail = outcome === "failure";
+          await expectStable(async () => {
+            expect(await help.getByRole("status").textContent()).toBe("");
+            expect(await page.locator(".app-update").count()).toBe(0);
+          });
+          if (timing === "in-flight") await suspendUpdater(page, mode, false);
+          if (outcome === "dismissed target") {
+            await page.clock.fastForward(10100);
+            await expect(help).toContainText("An app update is available.");
+            expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("ss:app-update-dismissed")))).not.toContain(B);
+          } else {
+            await check.click(); await page.clock.fastForward(2100);
+            await expect(help).toContainText(outcome === "failure" ? "Unable to check for an app update. Please try again." : "The app is up to date.");
+          }
+          expect(harness.state.alertRequests.filter(request => request.method !== "GET")).toEqual([]);
+        } finally {
+          // Release even after an assertion fails, and remove only our handler.
+          release();
+          await page.unroute("**/api/health", controlledRoute);
         }
-        release(); await (await controlledRequest.response()).finished();
-        await expectStable(() => expect(controlledCalls).toBe(1));
-        // A new request is no longer held after this controlled response.
-        await page.unroute("**/api/health");
-        state.commit = outcome === "dismissed target" ? B : loaded;
-        await page.route("**/api/health", route => { state.count++; return route.fulfill({ status: outcome === "failure" ? 503 : 200, json: { version: "1", commit: state.commit } }); });
-        await expectStable(async () => {
-          expect(await help.getByRole("status").textContent()).toBe("");
-          expect(await page.locator(".app-update").count()).toBe(0);
-        });
-        if (timing === "in-flight") await suspendUpdater(page, mode, false);
-        if (outcome === "dismissed target") {
-          await page.clock.fastForward(10100);
-          await expect(help).toContainText("An app update is available.");
-          expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("ss:app-update-dismissed")))).not.toContain(B);
-        } else {
-          await check.click(); await page.clock.fastForward(2100);
-          await expect(help).toContainText(outcome === "failure" ? "Unable to check for an app update. Please try again." : "The app is up to date.");
-        }
-        expect(harness.state.alertRequests.filter(request => request.method !== "GET")).toEqual([]);
       });
     }
   }
-  for (const outcome of ["loaded", "dismissed target"]) {
+  for (const outcome of ["loaded", "failure", "dismissed target"]) {
     test(`Help confirmation wait expires across ${mode}; ${outcome} resumes correctly`, async ({ page, harness }) => {
       const state = await mockHealth(page); await harness.open();
       const loaded = await page.locator("main").getAttribute("data-app-commit");
@@ -254,13 +270,19 @@ for (const mode of ["hidden", "offline"]) {
       await expectStable(() => expect(state.count).toBe(suspendedCount));
       await expect(page.locator(".app-update")).toHaveCount(0);
       state.commit = outcome === "loaded" ? loaded : B;
+      state.fail = outcome === "failure";
       await suspendUpdater(page, mode, false);
       await expect.poll(() => state.count).toBe(suspendedCount + 1);
-      if (outcome === "loaded") {
+      if (outcome !== "dismissed target") {
         await expectStable(async () => {
           expect(await help.getByRole("status").textContent()).toBe("");
           expect(await page.locator(".app-update").count()).toBe(0);
         });
+        if (outcome === "failure") {
+          await page.getByRole("button", { name: "Check for app update", exact: true }).click();
+          await page.clock.fastForward(2100);
+          await expect(help).toContainText("Unable to check for an app update. Please try again.");
+        }
       } else {
         // Immediate availability proves the ten-second candidate survived;
         // removing B from dismissal storage proves the explicit Later override.
@@ -271,3 +293,20 @@ for (const mode of ["hidden", "offline"]) {
     });
   }
 }
+
+test("persisted pageshow alone resumes updater checks (simulated lifecycle, not real BFCache)", async ({ page, harness }) => {
+  const state = await mockHealth(page); await harness.open();
+  await page.evaluate(() => Object.defineProperty(document, "hidden", { configurable: true, value: true }));
+  await page.clock.fastForward(310_000);
+  expect(state.count).toBe(0);
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, value: false });
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+  });
+  await expect.poll(() => state.count).toBe(1);
+  await expectStable(() => expect(state.count).toBe(1));
+  await expect(page.locator(".app-update")).toHaveCount(0);
+  await page.clock.fastForward(10100);
+  await expect(page.locator(".app-update")).toBeVisible();
+  expect(harness.state.alertRequests.filter(request => request.method !== "GET")).toEqual([]);
+});
