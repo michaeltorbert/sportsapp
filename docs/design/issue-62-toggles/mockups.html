@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saturday Signal · Issue 62 toggle explorations</title>
+<style>
+  :root {
+    --bg: #0a0e16;
+    --sheet: #121c2a;
+    --lime: #cefb70;
+    --lime-ink: #172308;
+    --text: #edf4ff;
+    --muted: #a1aec3;
+    --line: #2b374b;
+    --off: #3a475b;
+    --thumb: #ffffff;
+    --thumb-off: #d5dce6;
+    --focus: #cefb70;
+    --card: #1d2c42;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #05070c; color: var(--text); font-family: var(--font); }
+  .page { padding: 32px 24px 80px; max-width: 1320px; margin: 0 auto; }
+  .page h1 { font-size: 28px; letter-spacing: -.6px; margin: 0 0 8px; }
+  .lede { color: var(--muted); max-width: 720px; line-height: 1.5; margin: 0 0 28px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+  .shot {
+    width: 390px;
+    background:
+      radial-gradient(ellipse at 70% -120px, #1a2c49 0, transparent 420px),
+      var(--bg);
+    border: 1px solid #223044;
+    border-radius: 18px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 18px 40px #0007;
+  }
+  .shot[data-name] { /* screenshot target */ }
+  .status {
+    height: 54px; display: flex; justify-content: space-between; align-items: flex-end;
+    padding: 0 22px 10px; font-size: 15px; font-weight: 650; color: #f3f5fa;
+  }
+  .status .pips { display: flex; gap: 5px; align-items: center; font-size: 12px; color: #d7deea; }
+  .app-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 18px 16px; border-bottom: 1px solid #253044;
+  }
+  .logo {
+    width: 36px; height: 36px; border-radius: 9px; background: var(--lime); color: var(--lime-ink);
+    display: grid; place-items: center;
+  }
+  .logo svg { width: 20px; height: 20px; }
+  .wordmark { font-size: 22px; font-weight: 780; letter-spacing: -1px; line-height: 1; }
+  .wordmark em { font-style: normal; font-weight: 430; color: #d1dbea; }
+  .sport { display: block; color: #91a0b8; font-size: 10px; letter-spacing: 1.7px; font-weight: 600; margin-top: 6px; }
+  .board { padding: 18px 18px 8px; min-height: 88px; }
+  .tabs {
+    display: grid; grid-template-columns: 1.2fr .7fr .9fr 1fr .85fr; gap: 3px;
+    padding: 5px; border: 1px solid #293345; background: #111a28; border-radius: 14px;
+  }
+  .tab { min-height: 44px; border-radius: 9px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; font-weight: 650; color: #b8c4d7; }
+  .tab b { font-size: 12px; font-weight: 700; }
+  .tab.on { background: #d3fc81; color: #1b280a; }
+  .sheet {
+    background: var(--sheet);
+    border: 1px solid #344257;
+    border-radius: 24px 24px 0 0;
+    padding: 10px 0 22px;
+    margin-top: 10px;
+    min-height: 560px;
+  }
+  .handle { width: 36px; height: 4px; background: #465268; border-radius: 3px; margin: 4px auto 8px; }
+  .sheet-head { padding: 8px 54px 6px 20px; position: relative; }
+  .sheet-head h2 { margin: 0; font-size: 23px; font-weight: 720; letter-spacing: -.5px; }
+  .sheet-head p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+  .x {
+    position: absolute; right: 10px; top: 4px; width: 44px; height: 44px;
+    display: grid; place-items: center; color: #a1aec3; font-size: 24px;
+  }
+  .body { padding: 4px 20px 8px; }
+  .row {
+    display: flex; align-items: center; gap: 16px;
+    min-height: 64px; padding: 14px 0; border-bottom: 1px solid var(--line);
+  }
+  .row .copy { flex: 1; min-width: 0; }
+  .row strong { display: block; color: var(--text); font-size: 16px; font-weight: 650; }
+  .row small { display: block; margin-top: 4px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+  .eyebrow { font-size: 11px; letter-spacing: 1.7px; font-weight: 700; color: #95a5be; margin: 14px 0 2px; }
+  .master-card {
+    background: var(--card); border: 1px solid #344257; border-radius: 14px;
+    padding: 4px 14px; margin: 8px 0 6px;
+  }
+  .master-card .row { border: 0; }
+  .note { font-size: 12px; color: #8f9bb1; line-height: 1.6; margin: 14px 0 0; }
+  .status-line { font-size: 12px; color: var(--lime); margin: 10px 0 0; }
+  .busy { color: #d7e7b0; display: flex; gap: 8px; align-items: center; }
+  .spin {
+    width: 12px; height: 12px; border: 2px solid #8ea36a; border-top-color: var(--lime);
+    border-radius: 50%;
+  }
+  .icon-wrap {
+    width: 36px; height: 36px; border-radius: 10px; background: #1c2a20; color: var(--lime);
+    display: grid; place-items: center; flex: 0 0 36px;
+  }
+  .icon-wrap.off { background: #243044; color: #8ea0b8; }
+  .hit { position: relative; flex: 0 0 auto; min-width: 44px; min-height: 44px; display: grid; place-items: center; }
+
+  /* A. Classic iOS, white thumb */
+  .sw { width: 51px; height: 31px; position: relative; }
+  .sw i {
+    display: block; width: 51px; height: 31px; border-radius: 16px; background: var(--off);
+    box-shadow: inset 0 0 0 1px #0003;
+    position: relative;
+  }
+  .sw i::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%;
+    background: var(--thumb); box-shadow: 0 2px 4px #0005, 0 1px 1px #0003;
+  }
+  .sw.on i { background: var(--lime); }
+  .sw.on i::after { left: 22px; }
+  .sw.off i::after { background: var(--thumb-off); }
+  .sw.disabled { opacity: .45; }
+  .sw.focus i { outline: 2px solid var(--lime); outline-offset: 3px; }
+
+  /* B. ON/OFF in the track */
+  .sw-label i::before {
+    position: absolute; top: 0; height: 31px; line-height: 31px; font-size: 9px; font-weight: 800;
+    letter-spacing: .4px; pointer-events: none;
+  }
+  .sw-label.on i::before { content: "ON"; left: 8px; color: var(--lime-ink); }
+  .sw-label.off i::before { content: "OFF"; right: 7px; color: #c5d0e0; }
+
+  /* C. Check in thumb */
+  .sw-check.on i::after {
+    background:
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23172308' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12.5l4.2 4.2L19 7.5'/></svg>") center/14px no-repeat,
+      #fff;
+  }
+
+  /* D. Segmented */
+  .seg {
+    display: flex; width: 92px; height: 32px; padding: 2px; background: #1a2433; border-radius: 9px;
+    border: 1px solid #33435d;
+  }
+  .seg span {
+    flex: 1; display: grid; place-items: center; font-size: 11px; font-weight: 750; color: #93a3ba; border-radius: 7px;
+  }
+  .seg.on .yes, .seg.off .no { background: var(--lime); color: var(--lime-ink); }
+
+  /* E. Status word + switch */
+  .with-word { display: flex; align-items: center; gap: 8px; }
+  .word { font-size: 12px; font-weight: 750; min-width: 24px; text-align: right; }
+  .word.on { color: var(--lime); }
+  .word.off { color: #8b9bb2; }
+
+  /* F. Glow pill */
+  .sw-glow.on i { box-shadow: 0 0 16px #cefb7066, inset 0 0 0 1px #e7ffb0aa; }
+
+  /* G. Slim rail */
+  .sw-slim { width: 46px; height: 28px; }
+  .sw-slim i { width: 46px; height: 16px; border-radius: 99px; margin-top: 6px; }
+  .sw-slim i::after { top: -6px; width: 28px; height: 28px; left: 0; box-shadow: 0 2px 6px #0006; }
+  .sw-slim.on i::after { left: 18px; }
+
+  /* H. Square-ish material */
+  .sw-sq i { border-radius: 8px; }
+  .sw-sq i::after { border-radius: 6px; width: 23px; height: 23px; top: 4px; left: 4px; }
+  .sw-sq.on i::after { left: 24px; }
+
+  /* Current production crescent — copied from app/globals.css */
+  .crescent {
+    appearance: none; flex: 0 0 48px; width: 48px; height: 44px; border-radius: 24px;
+    background: #39475b; border: 7px solid #121c2a; position: relative;
+  }
+  .crescent::after {
+    content: ""; display: block; width: 22px; height: 22px; border-radius: 50%;
+    background: #d5dce6; margin: 4px 2px;
+  }
+  .crescent.on { background: #cefb70; }
+  .crescent.on::after { background: #172308; transform: translateX(10px); }
+  .compare { display: flex; gap: 28px; align-items: center; }
+  .compare figure { margin: 0; text-align: center; background: #121c2a; padding: 12px 16px 10px; border-radius: 12px; border: 1px solid #2b374b; }
+  .compare figcaption { font-size: 11px; color: var(--muted); margin-top: 8px; }
+
+  /* Cards */
+  .cards .row {
+    background: #162233; border: 1px solid #2b3b51; border-radius: 14px; padding: 14px 14px;
+    margin: 8px 0; border-bottom: 1px solid #2b3b51;
+  }
+  .hero {
+    display: flex; align-items: center; gap: 14px; background: #1c2a20; border: 1px solid #3c5330;
+    border-radius: 16px; padding: 16px; margin: 8px 0 12px;
+  }
+  .hero .sw { transform: scale(1.15); transform-origin: right center; }
+  .hero strong { font-size: 18px; }
+  .group {
+    background: #162233; border-radius: 14px; overflow: hidden; border: 1px solid #2b3b51; margin: 8px 0 0;
+  }
+  .group .row { padding: 14px 14px; margin: 0; }
+  .group .row:last-child { border-bottom: 0; }
+
+  .caption {
+    position: static;
+    display: block;
+    background: #0d1420;
+    color: #c5d3e6;
+    font-size: 10px;
+    letter-spacing: 1.1px;
+    font-weight: 750;
+    padding: 9px 16px 8px;
+    border-bottom: 1px solid #223044;
+    border-radius: 0;
+    left: auto; top: auto; z-index: auto;
+  }
+
+  /* Toggle board */
+  .board-shot { padding: 22px 20px 28px; }
+  .board-shot h2 { margin: 0 0 6px; font-size: 22px; }
+  .board-shot .intro { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+  .state {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 0; border-bottom: 1px solid var(--line);
+  }
+  .state b { font-size: 15px; }
+  .state span { color: var(--muted); font-size: 12px; display: block; margin-top: 3px; }
+  .how { color: #c7e49e; font-size: 14px; min-height: 44px; display: inline-flex; align-items: center; }
+  .caption-inline { font-size: 11px; color: #8ea0b8; letter-spacing: .6px; font-weight: 700; margin: 0 0 8px; }
+</style>
+
+<body>
+<div class="page">
+  <h1>Issue 62 · toggle explorations</h1>
+  <p class="lede">Pixel mockups in Saturday Signal chrome. Current production switches use a 7px sheet-colored border on a 48×44 control, which reads as a lime crescent around a dark thumb. These keep a real binary switch, 44×44 targets, and a non-color on/off cue.</p>
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+const types = [
+  { name: "Upset watch", short: "Ranked favorite threatened late in Q4 or OT.", long: "A meaningful threat to a ranked favorite in Q4 or overtime, including ties and an underdog within 8 points.", on: true },
+  { name: "Any close game", short: "Tied or within 8 points in Q4 or OT.", long: "Any game tied or within 8 points in Q4 or overtime.", on: true },
+  { name: "Upset final results", short: "A ranked team loses to a lower-ranked opponent.", long: "A ranked team loses to an unranked or lower-ranked opponent. A separate result alert.", on: true },
+  { name: "ACC kickoff reminders", short: "10 minutes before an ACC game.", long: "10 minutes before a game involving an ACC team.", on: false },
+];
+
+const icons = {
+  bell: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>`,
+  zap: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z"/></svg>`,
+  clock: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
+  flag: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>`,
+  whistle: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h8a4 4 0 1 1 0 8H8a4 4 0 0 1-4-4v-4z"/><path d="M12 12V8h6l2 4"/></svg>`,
+  bars: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>`,
+};
+
+function sw(cls, on, extra = "") {
+  const state = on ? "on" : "off";
+  return `<span class="hit" aria-hidden="true"><span class="sw ${cls} ${state} ${extra}"><i></i></span></span>`;
+}
+function seg(on) {
+  return `<span class="hit"><span class="seg ${on ? "on" : "off"}"><span class="no">Off</span><span class="yes">On</span></span></span>`;
+}
+function worded(cls, on) {
+  return `<span class="with-word">${sw(cls, on)}<span class="word ${on ? "on" : "off"}">${on ? "On" : "Off"}</span></span>`;
+}
+
+function chrome(inner, { title = "Alert settings", intro = "Choose alerts for this device.", caption = "", extraSheet = "" } = {}) {
+  return `
+    ${caption ? `<div class="caption">${caption}</div>` : ""}
+    <div class="status"><span>5:41</span><span class="pips">LTE &nbsp; 69</span></div>
+    <div class="app-head">
+      <div class="logo">${icons.bars}</div>
+      <div><div class="wordmark">saturday<em>signal</em></div><span class="sport">COLLEGE FOOTBALL</span></div>
+    </div>
+    <div class="board">
+      <div class="tabs">
+        <div class="tab on"><b>Watchlist</b> 0</div>
+        <div class="tab">ACC<br>14</div>
+        <div class="tab">Top 25<br>24</div>
+        <div class="tab">One score<br>0</div>
+        <div class="tab">Upsets<br>0</div>
+      </div>
+    </div>
+    <section class="sheet ${extraSheet}">
+      <div class="handle"></div>
+      <div class="sheet-head">
+        <div class="x">×</div>
+        <h2>${title}</h2>
+        <p>${intro}</p>
+      </div>
+      <div class="body">${inner}</div>
+    </section>`;
+}
+
+function row(t, control, copyKey = "short") {
+  return `<label class="row"><span class="copy"><strong>${t.name}</strong><small>${t[copyKey]}</small></span>${control}</label>`;
+}
+
+const shots = [];
+
+function add(name, title, html) {
+  shots.push({ name, title, html });
+}
+
+add("01-ios-classic", "A · Classic iOS, white thumb", chrome(`
+  <div class="master-card">${row({ name: "Notifications", short: "On for this device. Turning off keeps your choices." }, sw("", true))}</div>
+  <p class="eyebrow">GAME ALERTS</p>
+  ${types.map(t => row(t, sw("", t.on))).join("")}
+  <p class="note">Applies to every qualifying game. Tabs do not filter alerts.</p>
+  <p class="status-line">Saved for this device.</p>
+`, { intro: "Choose what’s worth an interruption.", caption: "A · CLASSIC iOS" }));
+
+add("02-ios-onoff", "B · Persistent ON / OFF in the track", chrome(`
+  <div class="master-card">${row({ name: "Notifications", short: "On for this device." }, sw("sw-label", true))}</div>
+  <p class="eyebrow">GAME ALERTS</p>
+  ${types.map(t => row(t, sw("sw-label", t.on))).join("")}
+  <p class="note">On/off is readable from position and the label, not color alone.</p>
+`, { caption: "B · LABELED TRACK" }));
+
+add("03-check-thumb", "C · Check in the thumb", chrome(`
+  <div class="master-card">${row({ name: "Notifications", short: "On for this device." }, sw("sw-check", true))}</div>
+  <p class="eyebrow">GAME ALERTS</p>
+  ${types.map(t => row(t, sw("sw-check", t.on))).join("")}
+  <p class="note">Check mark on, empty thumb off. Position still moves.</p>
+`, { caption: "C · CHECK THUMB" }));
+
+add("04-segmented", "D · Segmented On | Off", chrome(`
+  <div class="master-card">${row({ name: "Notifications", short: "On for this device." }, seg(true))}</div>
+  <p class="eyebrow">GAME ALERTS</p>
+  ${types.map(t => row(t, seg(t.on))).join("")}
+  <p class="note">Both states stay visible. Selected side is lime.</p>
+`, { caption: "D · SEGMENTED" }));
+
+add("05-status-word", "E · Status word beside the switch", chrome(`
+  <div class="master-card">${row({ name: "Notifications", short: "Off keeps your choices." }, worded("", true))}</div>
+  <p class="eyebrow">GAME ALERTS</p>
+  ${types.map(t => row(t, worded("", t.on))).join("")}
+  <p class="note">The word sits outside the control so saving never covers state.</p>
+`, { caption: "E · WORD + SWITCH" }));
+
+add("06-glow", "F · Soft lime glow, still iOS", chrome(`
+  <div class="master-card">${row({ name: "Notifications", short: "On for this device." }, sw("sw-glow", true))}</div>
+  <p class="eyebrow">GAME ALERTS</p>
+  ${types.map(t => row(t, sw("sw-glow", t.on))).join("")}
+  <p class="note">Glow is decoration only. Thumb position is the state.</p>
+`, { caption: "F · GLOW PILL", intro: "Closer to the reference you posted." }));
+
+add("07-icons", "G · Icon rail + iOS switch", chrome(`
+  <label class="row"><span class="icon-wrap">${icons.bell}</span><span class="copy"><strong>Notifications</strong><small>On for this device.</small></span>${sw("", true)}</label>
+  <p class="eyebrow">GAME ALERTS</p>
+  <label class="row"><span class="icon-wrap">${icons.zap}</span><span class="copy"><strong>Upset watch</strong><small>${types[0].short}</small></span>${sw("", true)}</label>
+  <label class="row"><span class="icon-wrap">${icons.clock}</span><span class="copy"><strong>Any close game</strong><small>${types[1].short}</small></span>${sw("", true)}</label>
+  <label class="row"><span class="icon-wrap">${icons.flag}</span><span class="copy"><strong>Upset final results</strong><small>${types[2].short}</small></span>${sw("", true)}</label>
+  <label class="row"><span class="icon-wrap off">${icons.whistle}</span><span class="copy"><strong>ACC kickoff reminders</strong><small>${types[3].short}</small></span>${sw("", false)}</label>
+  <p class="note">Icons scan faster; they do not replace the switch.</p>
+`, { caption: "G · ICONS" }));
+
+add("08-grouped", "H · iOS Settings grouped list", chrome(`
+  <p class="eyebrow">DEVICE</p>
+  <div class="group">${row({ name: "Notifications", short: "On · choices stay saved if you turn this off." }, sw("", true))}</div>
+  <p class="eyebrow">GAME ALERTS</p>
+  <div class="group">${types.map(t => row(t, sw("", t.on))).join("")}</div>
+  <p class="note">One short line each. Details live in How alerts work.</p>
+  <a class="how">How alerts work</a>
+`, { caption: "H · GROUPED INSET", extraSheet: "" }));
+
+add("09-hero", "I · Hero master switch", chrome(`
+  <div class="hero">
+    <span class="icon-wrap">${icons.bell}</span>
+    <span class="copy"><strong>Notifications on</strong><small>Alerts reach this phone when the app is closed.</small></span>
+    ${sw("sw-glow", true)}
+  </div>
+  <p class="eyebrow">WHAT TO HEAR</p>
+  ${types.map(t => row(t, sw("", t.on))).join("")}
+  <p class="status-line">Saved for this device.</p>
+`, { title: "Alerts", intro: "Pick the interruptions worth a buzz.", caption: "I · HERO MASTER" }));
+
+add("10-cards", "J · Each type as a card", chrome(`
+  <div class="master-card">${row({ name: "Notifications", short: "On for this device." }, sw("", true))}</div>
+  <div class="cards">${types.map(t => row(t, sw("", t.on))).join("")}</div>
+  <p class="note">Cards separate the types without extra copy.</p>
+`, { caption: "J · CARDS" }));
+
+add("11-quiet", "K · Quiet sheet, short copy", chrome(`
+  <div class="master-card">${row({ name: "Notifications", short: "Turning off stops future alerts; your choices stay saved." }, sw("", true))}</div>
+  <p class="eyebrow">GAME ALERTS</p>
+  ${types.map(t => row(t, sw("", t.on))).join("")}
+  <p class="note">Alerts cover every qualifying game.</p>
+  <a class="how">How alerts work</a>
+`, { title: "Alert settings", intro: "Choose what’s worth an interruption.", caption: "K · QUIET / SHORT COPY" }));
+
+add("12-current-copy-fixed-switch", "L · Keep today’s copy, fix only the switch", chrome(`
+  <label class="row"><span class="copy"><strong>Notifications</strong><small>Off keeps your choices. A notification already sent cannot be recalled.</small></span>${sw("", true)}</label>
+  ${types.map(t => row(t, sw("", t.on), "long")).join("")}
+  <p class="note">Alerts are on for this device, including when the app is closed.</p>
+  <p class="note">Alerts cover all qualifying games. Scoreboard tabs do not filter notifications.</p>
+`, { title: "Catch the game-changing moments.", intro: "Choose alerts for this device.", caption: "L · SAME COPY, FIXED SWITCH" }));
+
+add("13-states", "M · Required states", `
+  <div class="board-shot">
+    <p class="caption-inline">M · REQUIRED STATES</p>
+    <h2>Switch states</h2>
+    <p class="intro">Classic iOS treatment. On and off stay distinct by thumb position plus a non-color cue. Saving never covers the control.</p>
+    <div class="state"><div><b>On</b><span>Thumb right, lime track, white knob.</span></div>${sw("", true)}</div>
+    <div class="state"><div><b>Off</b><span>Thumb left, gray track.</span></div>${sw("", false)}</div>
+    <div class="state"><div><b>On, labeled</b><span>ON text remains in the track.</span></div>${sw("sw-label", true)}</div>
+    <div class="state"><div><b>Off, labeled</b><span>OFF text remains in the track.</span></div>${sw("sw-label", false)}</div>
+    <div class="state"><div><b>Disabled on</b><span>State preserved, 45% opacity, not operable.</span></div>${sw("", true, "disabled")}</div>
+    <div class="state"><div><b>Focus-visible</b><span>2px lime ring, 3px offset. Keyboard only.</span></div>${sw("", true, "focus")}</div>
+    <div class="state"><div><b>Busy / saving</b><span>Position kept. Spinner lives outside the switch.</span></div><span class="with-word">${sw("", true)}<span class="busy"><i class="spin"></i></span></span></div>
+    <p class="note">Hit target is 44×44 around a 51×31 track. Reduced-motion would skip the thumb slide.</p>
+  </div>
+`);
+
+add("14-slim-rail", "N · Slim rail, large thumb", chrome(`
+  <div class="master-card">${row({ name: "Notifications", short: "On for this device." }, sw("sw-slim", true))}</div>
+  <p class="eyebrow">GAME ALERTS</p>
+  ${types.map(t => row(t, sw("sw-slim", t.on))).join("")}
+  <p class="note">Track is a thin rail; the thumb carries the state.</p>
+`, { caption: "N · SLIM RAIL" }));
+
+add("15-square", "O · Squared material switch", chrome(`
+  <div class="master-card">${row({ name: "Notifications", short: "On for this device." }, sw("sw-sq sw-label", true))}</div>
+  <p class="eyebrow">GAME ALERTS</p>
+  ${types.map(t => row(t, sw("sw-sq sw-label", t.on))).join("")}
+  <p class="note">Less iOS-native, still a binary switch with ON/OFF.</p>
+`, { caption: "O · SQUARED" }));
+
+add("16-vs-current", "P · Current crescent vs classic iOS", `
+  <div class="board-shot">
+    <p class="caption-inline">P · WHY THE CURRENT SWITCH LOOKS OFF</p>
+    <h2>Current vs proposed</h2>
+    <p class="intro">Production uses a 48×44 control with a 7px sheet-colored border. The visible track collapses into a lime crescent around a dark thumb. Classic iOS keeps a full lime pill and a white knob.</p>
+    <div class="state"><div><b>On</b><span>Same row, two treatments.</span></div>
+      <div class="compare">
+        <figure><span class="crescent on"></span><figcaption>Current</figcaption></figure>
+        <figure>${sw("", true)}<figcaption>Proposed</figcaption></figure>
+      </div>
+    </div>
+    <div class="state"><div><b>Off</b><span>Gray track, thumb on the left.</span></div>
+      <div class="compare">
+        <figure><span class="crescent"></span><figcaption>Current</figcaption></figure>
+        <figure>${sw("", false)}<figcaption>Proposed</figcaption></figure>
+      </div>
+    </div>
+    <div class="state"><div><b>On, labeled</b><span>If we need a non-color cue in the control itself.</span></div>
+      <div class="compare">
+        <figure><span class="crescent on"></span><figcaption>Current</figcaption></figure>
+        <figure>${sw("sw-label", true)}<figcaption>Labeled</figcaption></figure>
+      </div>
+    </div>
+    <p class="note">Recommendation: A (classic iOS) or B (labeled track) in the quiet sheet (K). White thumb on a full lime pill. Saving stays outside the switch.</p>
+  </div>
+`);
+
+const grid = document.getElementById("grid");
+for (const s of shots) {
+  const el = document.createElement("article");
+  el.className = "shot";
+  el.dataset.name = s.name;
+  el.setAttribute("aria-label", s.title);
+  el.innerHTML = s.html;
+  grid.appendChild(el);
+}
+</script>
+</body>
+</html>
