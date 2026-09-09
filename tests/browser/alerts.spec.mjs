@@ -1,4 +1,20 @@
-import { test, expect, CREDENTIALS } from "./fixtures.mjs";
+import { test, expect, CREDENTIALS, ALERT_ORIGIN } from "./fixtures.mjs";
+
+test("SIMULATED preferences: focused switch remains focused while a save is pending", async ({ page, harness }) => {
+  await harness.open({ push: { permission: "granted", existing: true, credentials: true } });
+  await page.getByRole("button", { name: "Alerts on", exact: true }).tap();
+  let release; const held = new Promise(resolve => { release = resolve; }); let writes = 0;
+  const handler = async route => { if (route.request().method() === "PATCH") { writes++; await held; } await route.fallback(); };
+  await page.route(`${ALERT_ORIGIN}/subscriptions/*`, handler);
+  try {
+    const control = page.getByRole("switch", { name: "Any close game", exact: true });
+    await control.focus(); await control.press("Space");
+    await expect(control).toHaveAttribute("aria-busy", "true"); await expect(control).toBeFocused();
+    expect(await control.evaluate(el => el.disabled)).toBe(false);
+    await expect.poll(() => writes).toBe(1); await page.keyboard.press("Space"); expect(writes).toBe(1);
+    release(); await expect(control).toHaveAttribute("aria-busy", "false"); await expect(control).toBeFocused();
+  } finally { release(); await page.unroute(`${ALERT_ORIGIN}/subscriptions/*`, handler); }
+});
 
 for (const width of [320, 390]) test(`SIMULATED preferences: ${width}px large-text layout and keyboard switches`, async ({ page, harness }, testInfo) => {
   await page.setViewportSize({ width, height: 844 });

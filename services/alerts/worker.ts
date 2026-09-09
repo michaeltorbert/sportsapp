@@ -261,7 +261,8 @@ async function api(request: Request, env: Env): Promise<Response> {
       : state.last_tick <= now - 180000 ? "stale-poll-tick"
       : !state.last_good_score ? "awaiting-first-successful-poll"
       : state.last_good_score <= now - 20 * 60000 ? "stale-score-feed" : "ready";
-    return json({ ready: readinessReason === "ready", readinessReason, lastTickAt: state.last_tick ? new Date(state.last_tick).toISOString() : null, lastSuccessfulPollAt: state.last_good_score ? new Date(state.last_good_score).toISOString() : null, publicKey: env.VAPID_PUBLIC_KEY || "", version: VERSION, preferencesVersion: 1 });
+    const preferencesReady = !!env.VAPID_PUBLIC_KEY && !!env.VAPID_PRIVATE_KEY && state.preferences_delivery_enabled === 1 && state.preferences_epoch > 0;
+    return json({ ready: readinessReason === "ready", readinessReason, preferencesReady, lastTickAt: state.last_tick ? new Date(state.last_tick).toISOString() : null, lastSuccessfulPollAt: state.last_good_score ? new Date(state.last_good_score).toISOString() : null, publicKey: env.VAPID_PUBLIC_KEY || "", version: VERSION, preferencesVersion: 1 });
   }
   const token = request.headers.get("Authorization")?.replace(/^Bearer /, "") || "";
   if (request.method === "POST" && url.pathname === "/subscriptions") {

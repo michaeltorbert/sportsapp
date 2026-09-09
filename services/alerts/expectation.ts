@@ -16,6 +16,9 @@ export function retainExpectation(game: Game, previous: Game | undefined, now: n
     else if (line) evidence = { version: 1, gameId: game.id, teamIds: game.teams.map(t => t.id) as [string, string], date: game.date, observedAt: now, state: line.favoriteId === null ? "pickem" : "line", line };
   }
   if (!evidence) evidence = { version: 1, gameId: game.id, teamIds: game.teams.map(t => t.id) as [string, string], date: game.date, observedAt: now, state: "absent" };
+  // observedAt records changed evidence, not a successful fetch. Identical odds
+  // must not turn an otherwise unchanged board into recurring snapshot writes.
+  if (saved && saved.state === evidence.state && saved.line?.favoriteId === evidence.line?.favoriteId && saved.line?.spread === evidence.line?.spread && saved.line?.source === evidence.line?.source) evidence = saved;
   return { ...game, alertExpectation: evidence };
 }
 export function meaningfulUpset(game: Game) {

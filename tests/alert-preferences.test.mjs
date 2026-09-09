@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bundle, database, game } from "./helpers.mjs";
-const { meaningfulUpset, retainExpectation } = await bundle("services/alerts/expectation.ts");
-const { conditions } = await bundle("services/alerts/rules.ts");
+import { readFileSync } from "node:fs";
+import { bundle, database, game, cdnFeed } from "./helpers.mjs";
+const { meaningfulUpset, retainExpectation, MIN_UPSET_SPREAD, MIN_UPSET_RANK_GAP } = await bundle("services/alerts/expectation.ts");
+const { conditions, transitions } = await bundle("services/alerts/rules.ts");
 const { activationBaselines } = await bundle("services/alerts/preferences.ts");
-const { default: worker, claimDelivery, saveGameStates, deliver } = await bundle("services/alerts/worker.ts");
+const { default: worker, claimDelivery, saveGameStates, deliver, poll } = await bundle("services/alerts/worker.ts");
 const { hash } = await bundle("services/alerts/web-push.ts");
 const now = Date.parse("2026-09-06T03:00Z");
 const ranked = () => { const g = game(); g.teams[0].rank = 5; g.teams[1].rank = 20; return g; };
@@ -41,7 +42,64 @@ test("delivery gates all 16 selections, stale conditions, sibling attempts and r
 test("release rollout preflight fails closed for old or paused services", async () => {
   const { checkRollout } = await import("../scripts/check-alert-preferences-rollout.mjs");
   for (const config of [null, {}, { ready: true }, { preferencesVersion: 1, ready: false }]) assert.throws(() => checkRollout(config));
-  assert.doesNotThrow(() => checkRollout({ preferencesVersion: 1, ready: true }));
+  for (const readinessReason of ["missing-vapid-config", "preferences-rollout-paused", "awaiting-preferences-baseline", "unknown"]) assert.throws(() => checkRollout({ preferencesVersion: 1, preferencesReady: false, ready: true, readinessReason }));
+  for (const readinessReason of ["ready", "stale-poll-tick", "stale-score-feed", "future-unrelated-reason"]) {
+    assert.doesNotThrow(() => checkRollout({ preferencesVersion: 1, preferencesReady: true, ready: readinessReason === "ready", readinessReason }));
+    assert.throws(() => checkRollout({ preferencesVersion: 0, preferencesReady: true, readinessReason }));
+  }
+});
+
+test("identical pregame evidence keeps its observation time and causes no snapshot writes", async () => {
+  const { db, sqlite } = database();
+  try {
+    for (const extra of [{ pregameLine: { favoriteId: "a", spread: 7, source: "fixture" } }, { pregameLine: { favoriteId: null, spread: 0, source: "fixture" } }, { pregameEvidenceInvalid: true }]) {
+      const pre = { ...ranked(), id: JSON.stringify(extra), state: "upcoming", started: false, period: 0, ...extra };
+      await saveGameStates(db, [pre], now);
+      const before = sqlite.prepare("SELECT total_changes() n").get().n;
+      await saveGameStates(db, [structuredClone(pre)], now + 60000);
+      assert.equal(sqlite.prepare("SELECT total_changes() n").get().n, before);
+      const stored = JSON.parse(sqlite.prepare("SELECT state_json FROM game_states WHERE game_id=?").get(pre.id).state_json);
+      assert.equal(stored.alertExpectation.observedAt, now);
+    }
+  } finally { sqlite.close(); }
+});
+
+test("upset payloads name the watch and actual score for tied, behind and far-ahead underdogs", () => {
+  for (const score of [14, 7, 42]) {
+    const g = ranked(); g.teams[0].score = 14; g.teams[1].score = score;
+    const event = transitions(null, g, now).find(e => e.trigger === "ranked-trailing-fourth");
+    assert.equal(event.payload.title, "Upset watch · 4th quarter");
+    assert.equal(event.payload.body, `a 14, b ${score}`);
+    assert.doesNotMatch(event.payload.body, /close|finish/i);
+  }
+});
+
+test("alert panel policy copy stays synchronized with exported selectivity constants", () => {
+  const source = readFileSync(new URL("../components/alerts.tsx", import.meta.url), "utf8");
+  assert.ok(source.includes(`favorite of ${MIN_UPSET_SPREAD}+ points`));
+  assert.ok(source.includes(`rank gap of ${MIN_UPSET_RANK_GAP}+`));
+});
+
+test("poll persists a pregame line through Q4 and claims the selected upset delivery once", async () => {
+  const { db, sqlite } = database(); const originalFetch = globalThis.fetch; let calls = 0, live = false;
+  try {
+    sqlite.prepare("INSERT INTO subscriptions VALUES(?,?,?,?,?,?,?,?,?)").run("device", "invalid-fixture-endpoint", "invalid", "invalid", "owner", 0, 1, 1, 1);
+    sqlite.exec("UPDATE subscription_settings SET close_game=0,upset_final=0");
+    globalThis.fetch = async input => {
+      assert.equal(new URL(input).hostname, "cdn.espn.com", "No transport can escape interception"); calls++;
+      const competition = { competitors: ["a", "b"].map((id, i) => ({ id, homeAway: i ? "home" : "away", score: live ? "14" : "0", curatedRank: { current: 5 + i }, team: { id } })) };
+      if (!live) competition.odds = [{ spread: 7, provider: { name: "fixture" }, awayTeamOdds: { favorite: true, team: { id: "a" } }, homeTeamOdds: { favorite: false, team: { id: "b" } } }];
+      return Response.json(cdnFeed([{ id: "line-game", date: new Date(now + 60000).toISOString(), status: { period: live ? 4 : 0, type: { state: live ? "in" : "pre", name: live ? "STATUS_IN_PROGRESS" : "STATUS_SCHEDULED" } }, competitions: [competition] }]));
+    };
+    const env = { DB: db, SITE_ORIGIN: "https://app.test", VAPID_PUBLIC_KEY: "invalid", VAPID_PRIVATE_KEY: "invalid" };
+    await poll(env, now); live = true;
+    sqlite.exec("UPDATE poll_state SET value=0 WHERE id='next_poll'");
+    await poll(env, now + 120000); await poll(env, now + 180000);
+    assert.equal(calls, 3);
+    const snapshot = JSON.parse(sqlite.prepare("SELECT state_json FROM game_states").get().state_json);
+    assert.equal(snapshot.alertExpectation.line.spread, 7); assert.equal(snapshot.alertExpectation.observedAt, now);
+    assert.deepEqual(sqlite.prepare("SELECT event_id FROM deliveries").all().map(r => r.event_id), ["line-game:ranked-trailing-fourth"]);
+  } finally { globalThis.fetch = originalFetch; sqlite.close(); }
 });
 
 test("losing a settings revision cannot partially mutate active or kickoff", async () => {
