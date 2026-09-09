@@ -31,7 +31,7 @@ Enabling a type or reactivating the master creates a pending baseline. The first
 node -e 'console.log("cutover-" + require("node:crypto").randomUUID())'
 ```
 
-Substitute that exact identifier for `cutover-UUID` below. Generate and review each action's SQL, then execute it through the established interface and retain all returned rows:
+Substitute that exact identifier for `cutover-UUID` below. Generate and review each action's SQL, then execute the **entire generated block in one complete submission** to the established D1 query interface and retain all returned rows. Never split `SELECT changes()` into a later request: its result belongs to the mutation on the same database connection. A missing or mismatched change count fails closed; apparently correct state rows alone must never override that failure:
 
 ```sh
 node scripts/alert-preferences-fence.mjs acquire cutover-UUID
@@ -53,7 +53,7 @@ Emergency pause SQL is generated separately and only sets the existing gate row 
 node scripts/alert-preferences-fence.mjs pause cutover-UUID
 ```
 
-Require one changed row and read back gate zero; absence requires investigation, never an insert. Pause does not need fence ownership, because it only disables delivery. It does not clear the durable cutover marker. Keep the fence until a successful owned release or diagnose lost ownership; never delete a different owner's row.
+Require one matched row and read back gate zero; absence requires investigation, never an insert. `changed_rows` reports matched rows, not proof that the value transitioned: pausing an already-zero gate still matches one row. Pause does not need fence ownership, because it only disables delivery; if there is no active attempt, generate any fresh well-formed `cutover-UUID` for this pause command. It does not clear the durable cutover marker. Keep any existing owned fence until a successful owned release or diagnose lost ownership; never delete a different owner's row.
 
 While paused, the first accepted poll can already create baseline rows. Those rows intentionally persist: a condition seen during the pause must not become a replay when delivery resumes. The fenced epoch reset and baseline add suppression for conditions that appeared later in the pause without deleting earlier suppression history.
 

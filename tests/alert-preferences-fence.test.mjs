@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { database } from "./helpers.mjs";
+import { database, bundle, cdnFeed } from "./helpers.mjs";
 import { fenceSql, stateIds } from "../scripts/alert-preferences-fence.mjs";
 
 const owner = "cutover-11111111-1111-4111-8111-111111111111";
 const other = "cutover-22222222-2222-4222-8222-222222222222";
 function fixture(t) {
-  const { sqlite } = database({ migrated: true });
+  const { db, sqlite } = database({ migrated: true });
   t.after(() => sqlite.close());
   sqlite.exec("INSERT INTO poll_state VALUES('next_poll',123),('last_good_score',456)");
   const run = (action, who = owner) => {
@@ -20,7 +20,7 @@ function fixture(t) {
   };
   const states = () => sqlite.prepare("SELECT * FROM poll_state ORDER BY id").all();
   const drain = () => sqlite.exec("UPDATE poll_lock SET expires_at=expires_at-17*60000");
-  return { sqlite, run, states, drain };
+  return { db, sqlite, run, states, drain };
 }
 
 test("operator acquisition never steals a live or expired row; release is owner-specific", t => {
@@ -92,4 +92,42 @@ test("activation, pause and owner release preserve retained histories and durabl
 test("SQL generator rejects unsafe owners and unknown actions", () => {
   assert.throws(() => fenceSql("acquire", "'; DELETE FROM subscriptions;--"));
   assert.throws(() => fenceSql("renew", owner));
+});
+
+test("generated activation and release let the real poll establish a fresh no-replay baseline", async t => {
+  const { poll } = await bundle("services/alerts/worker.ts");
+  const { db, sqlite, run, drain } = fixture(t);
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const now = Date.now();
+  sqlite.prepare("INSERT INTO subscriptions VALUES(?,?,?,?,?,?,?,?,?)").run("enabled-device", "https://push.example.invalid/intercepted", "invalid", "invalid", "owner", 0, 1, 1, 1);
+  sqlite.prepare("INSERT INTO alert_events VALUES(?,?,?,?,?,?)").run("cutover-game:one-score-fourth", "cutover-game", "one-score-fourth", "retained-day", now - 60000, "{}");
+  const eventsBefore = sqlite.prepare("SELECT * FROM alert_events").all();
+  assert.equal(run("acquire"), 1);
+  drain(); // Simulate elapsed time locally; production never alters the lease.
+  const drainCompleted = now - 1000;
+  assert.equal(run("activate"), 4);
+  assert.equal(run("release"), 1);
+  let scoreRequests = 0;
+  globalThis.fetch = async input => {
+    assert.equal(new URL(input).hostname, "cdn.espn.com", "All network is mocked; push transport must never be attempted");
+    scoreRequests++;
+    const feed = cdnFeed([{ id: "cutover-game", date: new Date(now - 60000).toISOString(),
+      status: { period: 4, type: { state: "in", name: "STATUS_IN_PROGRESS" } },
+      competitions: [{ competitors: ["a", "b"].map((id, i) => ({ id, homeAway: i ? "home" : "away", score: i ? "21" : "14", team: { id } })) }] }]);
+    const entry = feed.content.sbData.leagues[0].calendar[0].entries[0];
+    entry.startDate = new Date(now - 7 * 86400000).toISOString();
+    entry.endDate = new Date(now + 7 * 86400000).toISOString();
+    return Response.json(feed);
+  };
+  await poll({ DB: db, SITE_ORIGIN: "https://app.test", VAPID_PUBLIC_KEY: "invalid", VAPID_PRIVATE_KEY: "invalid" }, now);
+  assert.equal(scoreRequests, 1);
+  const epoch = sqlite.prepare("SELECT value FROM poll_state WHERE id='preferences_epoch'").get().value;
+  assert.equal(epoch, now);
+  assert.ok(epoch > drainCompleted);
+  assert.equal(sqlite.prepare("SELECT value FROM poll_state WHERE id='last_good_score'").get().value, epoch);
+  assert.equal(sqlite.prepare("SELECT count(*) AS n FROM deliveries").get().n, 0, "Existing event receives no delivery claim");
+  assert.deepEqual(sqlite.prepare("SELECT * FROM alert_events").all(), eventsBefore);
+  assert.equal(sqlite.prepare("SELECT count(*) AS n FROM rule_baselines WHERE game_id='cutover-game' AND trigger='one-score-fourth'").get().n, 1);
+  assert.equal(sqlite.prepare("SELECT count(*) AS n FROM subscriptions WHERE active=1").get().n, 1);
 });
