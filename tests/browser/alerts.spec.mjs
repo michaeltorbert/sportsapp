@@ -25,7 +25,8 @@ for (const width of [320, 390]) test(`SIMULATED preferences: ${width}px large-te
   await expect(dialog).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   for (const control of await dialog.getByRole("switch").all()) {
-    const box = await control.boundingBox(); expect(box.width).toBeGreaterThanOrEqual(44); expect(box.height).toBeGreaterThanOrEqual(44);
+    // WebKit's transformed sheet can report 43.99994 for a 44 CSS-pixel target.
+    const box = await control.boundingBox(); expect(Math.round(box.width * 100) / 100).toBeGreaterThanOrEqual(44); expect(Math.round(box.height * 100) / 100).toBeGreaterThanOrEqual(44);
     await control.focus(); await expect(control).toBeFocused();
   }
   const master = page.getByRole("switch", { name: "Notifications", exact: true });
