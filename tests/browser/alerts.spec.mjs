@@ -1,5 +1,20 @@
 import { test, expect, CREDENTIALS, ALERT_ORIGIN } from "./fixtures.mjs";
 
+test("SIMULATED preferences: stale re-enable reloads choices without reset or unsubscribe", async ({ page, harness }) => {
+  harness.state.active = false;
+  await harness.open({ push: { permission: "granted", existing: true, credentials: true } });
+  await page.getByRole("button", { name: "Alerts", exact: true }).tap();
+  await expect(page.getByRole("switch", { name: "Any close game", exact: true })).toBeChecked();
+  harness.state.revision++; harness.state.closeGame = false;
+  await page.getByRole("button", { name: "Enable alerts", exact: true }).tap();
+  await expect(page.getByRole("status").filter({ hasText: "Review the reloaded choices" })).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Any close game", exact: true })).not.toBeChecked();
+  await expect(page.getByRole("button", { name: "Reset alerts", exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("ss:push")))).toEqual(CREDENTIALS);
+  expect(await page.evaluate(() => window.__pushSimulation.unsubscribes)).toBe(0);
+  expect(harness.state.alertRequests.some(r => r.method === "DELETE")).toBe(false);
+});
+
 test("SIMULATED preferences: focused switch remains focused while a save is pending", async ({ page, harness }) => {
   await harness.open({ push: { permission: "granted", existing: true, credentials: true } });
   await page.getByRole("button", { name: "Alerts on", exact: true }).tap();

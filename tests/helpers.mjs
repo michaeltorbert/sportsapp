@@ -17,7 +17,7 @@ export function database({ migrated = false } = {}) {
   for (const file of readdirSync(migrations).filter(name => name.endsWith(".sql")).sort()) sqlite.exec(readFileSync(new URL(file, migrations), "utf8"));
   // Existing transport fixtures represent an already-drained installation.
   // Migration tests opt into the actual paused, pending-baseline initial state.
-  if (!migrated) sqlite.exec("UPDATE poll_state SET value=1 WHERE id IN ('preferences_epoch','preferences_delivery_enabled')");
+  if (!migrated) sqlite.exec("UPDATE poll_state SET value=1 WHERE id IN ('preferences_epoch','preferences_delivery_enabled','preferences_cutover_complete')");
   const db = {
     prepare(sql) {
       let args = [];

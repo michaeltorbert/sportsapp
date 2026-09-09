@@ -72,6 +72,7 @@ test("config explains each readiness gate without exposing private configuration
     const config = await read();
     assert.equal(config.ready, true); assert.equal(config.readinessReason, "ready");
     assert.equal(config.preferencesReady, true);
+    assert.equal(config.preferencesCutoverComplete, true);
     assert.equal(config.version, packageVersion);
     assert.equal(config.lastSuccessfulPollAt, new Date(now).toISOString());
     assert.equal(config.lastTickAt, new Date(now).toISOString());
@@ -79,6 +80,10 @@ test("config explains each readiness gate without exposing private configuration
     set("preferences_delivery_enabled", 0);
     assert.equal((await read()).ready, false);
     assert.equal((await read()).readinessReason, "preferences-rollout-paused");
+    assert.equal((await read()).preferencesCutoverComplete, true);
+    set("preferences_cutover_complete", 0);
+    assert.equal((await read()).preferencesCutoverComplete, false);
+    set("preferences_cutover_complete", 1);
     assert.equal((await read()).preferencesReady, false);
     set("preferences_delivery_enabled", 1); set("preferences_epoch", 0);
     assert.equal((await read()).ready, false);

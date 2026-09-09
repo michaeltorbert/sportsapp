@@ -89,7 +89,17 @@ export function Alerts() {
       const sub = existing || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(config.publicKey) });
       const credentials = saved();
       const r = await fetch(`${service}/subscriptions`, { method: "POST", credentials: "omit", headers: { "Content-Type": "application/json", ...(credentials ? { Authorization: `Bearer ${credentials.token}` } : {}) }, body: JSON.stringify({ subscription: sub.toJSON(), ...Object.fromEntries(types.map(t => [t.key, choices[t.key]])), ...(record ? { revision: record.revision } : {}) }), signal: AbortSignal.timeout(10000) });
-      if (!r.ok) throw Error(r.status === 409 ? "This device’s saved alert access is missing. Reset alerts below, then enable again." : "Could not save alerts. Please try again.");
+      if (!r.ok) {
+        const failure = await r.json().catch(() => ({}));
+        const code = failure && typeof failure === "object" && "code" in failure ? failure.code : undefined;
+        if (r.status === 409 && code === "revision-conflict") {
+          setResetNeeded(false);
+          try { if (credentials) setRecord(await read(service, credentials)); setMessage("Settings changed on the service. Review the reloaded choices, then try again."); }
+          catch { setMessage("Settings changed on the service. Could not reload them; reconnect and review before trying again."); }
+          return;
+        }
+        throw Error(r.status === 409 && code === "ownership-conflict" ? "This device’s saved alert access is missing. Reset alerts below, then enable again." : "Could not save alerts. Please try again.");
+      }
       const stored: Credentials = await r.json();
       try { localStorage.setItem("ss:push", JSON.stringify(stored)); } catch { await sub.unsubscribe(); throw Error("This browser cannot save alert settings. Allow website storage and try again."); }
       setRecord(await read(service, stored)); setLocalReady(true); setResetNeeded(false); setMessage("Alerts are on for this device, including when the app is closed.");

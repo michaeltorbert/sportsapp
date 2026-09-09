@@ -31,3 +31,5 @@ INSERT OR IGNORE INTO poll_state(id,value) VALUES('preferences_epoch',0);
 -- Delivery remains paused until the documented compatible-worker drain. Never
 -- infer safe cutover from schema migration or a poll lock lease alone.
 INSERT OR IGNORE INTO poll_state(id,value) VALUES('preferences_delivery_enabled',0);
+-- Durable operator attestation; later operational pauses must not clear it.
+INSERT OR IGNORE INTO poll_state(id,value) VALUES('preferences_cutover_complete',0);

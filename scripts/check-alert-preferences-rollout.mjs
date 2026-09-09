@@ -2,7 +2,7 @@
 // explicitly authorized operator procedure, never automatic release side effects.
 import { readFile } from "node:fs/promises";
 export function checkRollout(config) {
-  if (config?.preferencesVersion !== 1 || config?.preferencesReady !== true) throw new Error("Complete docs/alert-preferences-rollout.md before deploying this paired release.");
+  if (config?.preferencesVersion !== 1 || config?.preferencesCutoverComplete !== true) throw new Error("Complete docs/alert-preferences-rollout.md before deploying this paired release.");
 }
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
   const settings = JSON.parse(await readFile(new URL("../public/alerts-config.json", import.meta.url), "utf8"));

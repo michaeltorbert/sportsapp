@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bundle, game, scoreboard } from "./helpers.mjs";
-const { parsePregameLine, summaryPregameLine, enrichPregameLines } = await bundle("lib/pregame-lines.ts");
+const { parsePregameLine, classifyPregameEvidence, summaryPregameLine, enrichPregameLines } = await bundle("lib/pregame-lines.ts");
 const { normalizeScoreboard } = await bundle("lib/espn-data.ts");
 const { loadScores } = await bundle("lib/score-client.ts");
 const { gamePriority } = await bundle("lib/watch-priority.ts");
+const { retainExpectation, meaningfulUpset } = await bundle("services/alerts/expectation.ts");
 
 function odds(changes = {}) {
   return { spread: -7, provider: { id: "100", name: "ESPN sample", priority: 1 },
@@ -19,6 +20,21 @@ function event(changes = {}) {
 function summary(g, lines = [odds()]) {
   return { header: { id: g.id, competitions: [{ competitors: g.teams.map((t, i) => ({ homeAway: i ? "home" : "away", team: { id: t.id } })) }] }, pickcenter: lines };
 }
+
+test("alert evidence separates total-only absence from invalid supplied expectations", () => {
+  assert.equal(classifyPregameEvidence([{ malformed: true }], "a", "b").state, "invalid");
+  const total = event(); total.competitions[0].odds = [{ overUnder: 45.5 }]; total.competitions[0].competitors[0].curatedRank.current = 5;
+  const pre = retainExpectation(normalizeScoreboard({ events: [total] }, "2026-09-06").games[0], undefined, 1);
+  assert.equal(pre.alertExpectation.state, "absent");
+  assert.equal(meaningfulUpset(retainExpectation({ ...pre, state: "live", started: true, period: 4 }, pre, 2)), true);
+  const contrary = odds({ spread: 7, homeTeamOdds: { favorite: false, team: { id: "b" } }, awayTeamOdds: { favorite: true, team: { id: "a" } } });
+  for (const [raw, state] of [[undefined, "absent"], [[], "absent"], [[{ overUnder: 45.5, provider: { name: "totals" } }], "absent"], [[odds({ spread: "bad" })], "invalid"], [[odds({ isLive: true })], "invalid"], [[odds(), contrary], "invalid"], [[odds()], "line"], [[odds({ spread: 0, homeTeamOdds: { favorite: false, team: { id: "b" } } })], "pickem"]]) {
+    assert.equal(classifyPregameEvidence(raw, "a", "b").state, state);
+    const e = event(); e.competitions[0].odds = raw;
+    const normalized = normalizeScoreboard({ events: [e] }, "2026-09-06").games[0];
+    assert.equal(normalized.pregameEvidenceInvalid === true, state === "invalid");
+  }
+});
 
 test("parse explicit pregame favorites, away spreads, pick'em and summary teamId references", () => {
   assert.deepEqual(parsePregameLine([odds()], "a", "b"), { favoriteId: "b", spread: 7, source: "ESPN sample" });

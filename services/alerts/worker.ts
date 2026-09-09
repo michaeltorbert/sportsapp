@@ -251,7 +251,7 @@ async function api(request: Request, env: Env): Promise<Response> {
   if (origin && !allowedOrigin(origin, env)) return json({ error: "Origin not allowed" }, 403);
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
   if (url.pathname === "/config" && request.method === "GET") {
-    const ticks = await env.DB.prepare("SELECT id,value FROM poll_state WHERE id IN ('last_tick','last_good_score','preferences_delivery_enabled','preferences_epoch')").all<{ id: string; value: number }>();
+    const ticks = await env.DB.prepare("SELECT id,value FROM poll_state WHERE id IN ('last_tick','last_good_score','preferences_delivery_enabled','preferences_epoch','preferences_cutover_complete')").all<{ id: string; value: number }>();
     const state = Object.fromEntries(ticks.results.map(row => [row.id, row.value]));
     const now = Date.now();
     const readinessReason = !env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY ? "missing-vapid-config"
@@ -262,7 +262,7 @@ async function api(request: Request, env: Env): Promise<Response> {
       : !state.last_good_score ? "awaiting-first-successful-poll"
       : state.last_good_score <= now - 20 * 60000 ? "stale-score-feed" : "ready";
     const preferencesReady = !!env.VAPID_PUBLIC_KEY && !!env.VAPID_PRIVATE_KEY && state.preferences_delivery_enabled === 1 && state.preferences_epoch > 0;
-    return json({ ready: readinessReason === "ready", readinessReason, preferencesReady, lastTickAt: state.last_tick ? new Date(state.last_tick).toISOString() : null, lastSuccessfulPollAt: state.last_good_score ? new Date(state.last_good_score).toISOString() : null, publicKey: env.VAPID_PUBLIC_KEY || "", version: VERSION, preferencesVersion: 1 });
+    return json({ ready: readinessReason === "ready", readinessReason, preferencesReady, preferencesCutoverComplete: state.preferences_cutover_complete === 1, lastTickAt: state.last_tick ? new Date(state.last_tick).toISOString() : null, lastSuccessfulPollAt: state.last_good_score ? new Date(state.last_good_score).toISOString() : null, publicKey: env.VAPID_PUBLIC_KEY || "", version: VERSION, preferencesVersion: 1 });
   }
   const token = request.headers.get("Authorization")?.replace(/^Bearer /, "") || "";
   if (request.method === "POST" && url.pathname === "/subscriptions") {
@@ -272,11 +272,11 @@ async function api(request: Request, env: Env): Promise<Response> {
     const selected = Object.fromEntries(Object.entries(body).filter(([key]) => key !== "subscription"));
     if (!validPatch(selected)) return json({ error: "Invalid preferences" }, 400);
     const id = await hash(sub.endpoint), existing = await env.DB.prepare("SELECT * FROM subscriptions WHERE id=?").bind(id).first<StoredSubscription>();
-    if (existing && (!token || await hash(token) !== existing.token_hash)) return json({ error: "Subscription already registered" }, 409);
+    if (existing && (!token || await hash(token) !== existing.token_hash)) return json({ error: "Subscription already registered", code: "ownership-conflict" }, 409);
     const secret = existing ? token : encode(crypto.getRandomValues(new Uint8Array(32)));
     const now = Date.now();
     if (existing) {
-      if (!await changeSettings(env.DB, existing, { ...selected, active: true }, now)) return json({ error: "Settings changed. Reload and try again." }, 409);
+      if (!await changeSettings(env.DB, existing, { ...selected, active: true }, now)) return json({ error: "Settings changed. Reload and try again.", code: "revision-conflict" }, 409);
       await env.DB.prepare("UPDATE subscriptions SET p256dh=?,auth=? WHERE id=? AND token_hash=?").bind(sub.keys.p256dh, sub.keys.auth, id, await hash(secret)).run();
     } else {
       await env.DB.batch([
@@ -287,7 +287,7 @@ async function api(request: Request, env: Env): Promise<Response> {
     }
     // A simultaneous registration may have won the unique key after our read.
     const actual = await env.DB.prepare("SELECT token_hash FROM subscriptions WHERE id=?").bind(id).first<{ token_hash: string }>();
-    if (actual?.token_hash !== await hash(secret)) return json({ error: "Subscription already registered" }, 409);
+    if (actual?.token_hash !== await hash(secret)) return json({ error: "Subscription already registered", code: "ownership-conflict" }, 409);
     return json({ id, token: secret });
   }
   const match = /^\/subscriptions\/([A-Za-z0-9_-]{43})(\/test)?$/.exec(url.pathname);
@@ -306,7 +306,7 @@ async function api(request: Request, env: Env): Promise<Response> {
     if (request.method === "PATCH") {
       const body = await readBody(request);
       if (!validPatch(body)) return json({ error: "Invalid preference" }, 400);
-      if (!await changeSettings(env.DB, sub, body, Date.now())) return json({ error: "Settings changed. Reload and try again." }, 409);
+      if (!await changeSettings(env.DB, sub, body, Date.now())) return json({ error: "Settings changed. Reload and try again.", code: "revision-conflict" }, 409);
       return json(await readStatus(env.DB, sub.id));
     }
   }

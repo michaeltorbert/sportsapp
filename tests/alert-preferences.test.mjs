@@ -39,13 +39,13 @@ test("delivery gates all 16 selections, stale conditions, sibling attempts and r
   } finally { globalThis.fetch = originalFetch; sqlite.close(); }
 });
 
-test("release rollout preflight fails closed for old or paused services", async () => {
+test("release rollout preflight requires durable cutover but permits later corrective pauses", async () => {
   const { checkRollout } = await import("../scripts/check-alert-preferences-rollout.mjs");
   for (const config of [null, {}, { ready: true }, { preferencesVersion: 1, ready: false }]) assert.throws(() => checkRollout(config));
-  for (const readinessReason of ["missing-vapid-config", "preferences-rollout-paused", "awaiting-preferences-baseline", "unknown"]) assert.throws(() => checkRollout({ preferencesVersion: 1, preferencesReady: false, ready: true, readinessReason }));
-  for (const readinessReason of ["ready", "stale-poll-tick", "stale-score-feed", "future-unrelated-reason"]) {
-    assert.doesNotThrow(() => checkRollout({ preferencesVersion: 1, preferencesReady: true, ready: readinessReason === "ready", readinessReason }));
-    assert.throws(() => checkRollout({ preferencesVersion: 0, preferencesReady: true, readinessReason }));
+  for (const readinessReason of ["missing-vapid-config", "preferences-rollout-paused", "awaiting-preferences-baseline", "unknown"]) assert.throws(() => checkRollout({ preferencesVersion: 1, preferencesCutoverComplete: false, ready: true, readinessReason }));
+  for (const readinessReason of ["ready", "preferences-rollout-paused", "missing-vapid-config", "awaiting-preferences-baseline", "stale-poll-tick", "stale-score-feed", "future-unrelated-reason"]) {
+    assert.doesNotThrow(() => checkRollout({ preferencesVersion: 1, preferencesCutoverComplete: true, ready: readinessReason === "ready", readinessReason }));
+    assert.throws(() => checkRollout({ preferencesVersion: 0, preferencesCutoverComplete: true, readinessReason }));
   }
 });
 
@@ -257,6 +257,7 @@ test("all preference combinations, authorization, revisions, grandfathering and 
     const off = await (await request("GET")).json(); assert.equal(off.active, false); assert.equal(off.upsetWatch, true);
     assert.equal((await request("PATCH", { kickoff: false })).status, 200); // Old client.
     assert.equal((await request("PATCH", { active: true, revision: 0 })).status, 409);
+    assert.equal((await (await request("PATCH", { active: true, revision: 0 })).json()).code, "revision-conflict");
     for (const bad of [{}, { closeGame: 1 }, { unknown: true }, { revision: 2 }]) assert.equal((await request("PATCH", bad)).status, 400);
     assert.equal((await request("PATCH", { active: true }, "wrong")).status, 404);
     assert.equal((await request("PATCH", { active: true }, token, "https://evil.test")).status, 403);
