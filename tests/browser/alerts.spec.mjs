@@ -1,5 +1,22 @@
 import { test, expect, CREDENTIALS, ALERT_ORIGIN } from "./fixtures.mjs";
 
+for (const code of [404, 503]) test(`SIMULATED preferences: settings GET ${code} preserves config and blocks unconfirmed writes`, async ({ page, harness }) => {
+  harness.state.getStatus = code;
+  await harness.open({ push: { permission: "granted", existing: true, credentials: true } });
+  await page.getByRole("button", { name: "Alerts", exact: true }).tap();
+  await expect(page.getByRole("status").filter({ hasText: code === 404 ? "Reset alerts" : "next check will retry" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Alerts are being set up" })).toHaveCount(0);
+  await expect(page.getByRole("switch", { name: "Notifications", exact: true })).toBeDisabled();
+  if (code === 404) await expect(page.getByRole("button", { name: "Reset alerts", exact: true })).toBeVisible();
+  else await expect(page.getByRole("button", { name: "Reset alerts", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Enable alerts", exact: true })).toHaveCount(0);
+  expect(harness.state.alertRequests.every(r => r.method === "GET")).toBe(true);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("ss:push")))).toEqual(CREDENTIALS);
+  harness.state.getStatus = 0; await page.clock.fastForward(31000);
+  await expect(page.getByRole("switch", { name: "Notifications", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Reset alerts", exact: true })).toHaveCount(0);
+});
+
 test("SIMULATED preferences: stale re-enable reloads choices without reset or unsubscribe", async ({ page, harness }) => {
   harness.state.active = false;
   await harness.open({ push: { permission: "granted", existing: true, credentials: true } });

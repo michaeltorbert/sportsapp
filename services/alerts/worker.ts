@@ -279,10 +279,12 @@ async function api(request: Request, env: Env): Promise<Response> {
       if (!await changeSettings(env.DB, existing, { ...selected, active: true }, now)) return json({ error: "Settings changed. Reload and try again.", code: "revision-conflict" }, 409);
       await env.DB.prepare("UPDATE subscriptions SET p256dh=?,auth=? WHERE id=? AND token_hash=?").bind(sub.keys.p256dh, sub.keys.auth, id, await hash(secret)).run();
     } else {
+      const legacy = !["closeGame", "upsetWatch", "upsetFinal"].some(key => key in body);
+      const close = legacy || body.closeGame === true, upset = legacy || body.upsetWatch !== false, final = legacy || body.upsetFinal === true;
       await env.DB.batch([
         env.DB.prepare("INSERT OR IGNORE INTO subscriptions(id,endpoint,p256dh,auth,token_hash,kickoff,active,created_at,updated_at) VALUES(?,?,?,?,?,?,1,?,?)").bind(id, sub.endpoint, sub.keys.p256dh, sub.keys.auth, await hash(secret), body.kickoff ? 1 : 0, now, now),
         env.DB.prepare("UPDATE subscription_settings SET close_game=?,upset_watch=?,upset_final=?,close_since=?,upset_since=?,final_since=?,kickoff_since=?,pending=? WHERE subscription_id=? AND EXISTS(SELECT 1 FROM subscriptions WHERE id=? AND token_hash=?)")
-          .bind(Number(body.closeGame === true), Number(body.upsetWatch !== false), Number(body.upsetFinal === true), now, now, now, now, Number(body.closeGame === true) + 2 * Number(body.upsetWatch !== false) + 4 * Number(body.upsetFinal === true) + 8 * Number(body.kickoff === true), id, id, await hash(secret)),
+          .bind(Number(close), Number(upset), Number(final), now, now, now, now, Number(close) + 2 * Number(upset) + 4 * Number(final) + 8 * Number(body.kickoff === true), id, id, await hash(secret)),
       ]);
     }
     // A simultaneous registration may have won the unique key after our read.

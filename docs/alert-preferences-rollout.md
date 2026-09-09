@@ -4,7 +4,7 @@ This change is local and undeployed. A normal paired release must wait until the
 
 ## Policy and compatibility
 
-New devices select upset watch only; existing devices retain close-game, upset-watch and final alerts plus their existing ACC reminder and active state. All choices are per subscription, independent of scoreboard tabs. Turning the master off preserves the subscription and choices. The API retains ownership authentication and old kickoff-only PATCH support; new clients send revisions to reject stale edits. All four choices may be off while the master remains on.
+New devices enrolled through the updated UI select upset watch only; existing devices retain close-game, upset-watch and final alerts plus their existing ACC reminder and active state. A new-record POST from an old client that omits all three new fields retains legacy close/upset/final defaults, protecting enrollment between Worker activation and the paired website release. All choices are per subscription, independent of scoreboard tabs. Turning the master off preserves the subscription and choices. The API retains ownership authentication and old kickoff-only PATCH support; new clients send revisions to reject stale edits. All four choices may be off while the master remains on.
 
 Live upset watch includes Q4/intermissions and overtime, with the underdog ahead, tied, or at most eight points behind. A ranked favorite must have a persisted pregame spread of at least seven points; absent a line, confirmed unranked opposition or a rank gap of at least ten qualifies. Pick'em, malformed/conflicting supplied odds, missing rank knowledge, and an unranked favorite do not qualify. Final upset results keep the previous rank-only semantics. Display badges are unchanged.
 

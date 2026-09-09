@@ -30,6 +30,7 @@ export function Alerts() {
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
   const [resetNeeded, setResetNeeded] = useState(false), [online, setOnline] = useState(true);
   const [localReady, setLocalReady] = useState(false);
+  const [accessConfirmed, setAccessConfirmed] = useState(false);
   const writing = useRef(false), sequence = useRef(0);
   const enabled = !!record?.active && localReady, choices = record || defaults;
   useEffect(() => {
@@ -50,16 +51,26 @@ export function Alerts() {
         setMessage(previous => previous === "The alert service is unavailable. Try again later." ? "" : previous);
         const credentials = saved();
         if (credentials) {
+          try {
           const details = await read(url.origin, credentials);
           const local = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration("/") : undefined;
           const subscription = await local?.pushManager.getSubscription();
           if (alive && !writing.current && generation === sequence.current) {
             setLocalReady("Notification" in window && Notification.permission === "granted" && !!subscription);
             setRecord(previous => previous && previous.revision > details.revision ? previous : details);
+            setAccessConfirmed(true); setResetNeeded(false);
+            setMessage(previous => previous.includes("Could not read alert settings") || previous.includes("Reset alerts") ? "" : previous);
+          }
+          } catch (e) {
+            if (alive && !writing.current && generation === sequence.current) {
+              const text = e instanceof Error ? e.message : "Could not read alert settings.";
+              setAccessConfirmed(false); setResetNeeded(text.includes("Reset alerts"));
+              setMessage(text.includes("Reset alerts") ? text : "Could not read alert settings. Your saved access is unchanged; the next check will retry. No changes can be saved yet.");
+            }
           }
         }
-      } catch (e) {
-        if (alive && !writing.current && generation === sequence.current) { const text = e instanceof Error && e.message.includes("Reset alerts") ? e.message : "The alert service is unavailable. Try again later."; setMessage(text); setResetNeeded(text.includes("Reset alerts")); setConfig(null); }
+      } catch {
+        if (alive && !writing.current && generation === sequence.current) { setMessage("The alert service is unavailable. Try again later."); setConfig(null); }
       } finally { checking = false; if (alive) setLoading(false); }
     };
     void check(); const timer = window.setInterval(check, 30000);
@@ -69,7 +80,7 @@ export function Alerts() {
   function start() { if (writing.current) return false; writing.current = true; sequence.current++; setBusy(true); setMessage("Saving…"); return true; }
   function finish() { writing.current = false; setBusy(false); }
   async function update(patch: Partial<Choices> & { active?: boolean }) {
-    const credentials = saved(); if (!credentials || !record || !start()) return;
+    const credentials = saved(); if (!credentials || !record || !accessConfirmed || !start()) return;
     try {
       const r = await fetch(`${service}/subscriptions/${credentials.id}`, { method: "PATCH", credentials: "omit", headers: { "Content-Type": "application/json", Authorization: `Bearer ${credentials.token}` }, body: JSON.stringify({ ...patch, revision: record.revision }), signal: AbortSignal.timeout(10000) });
       if (!r.ok) throw Error(); const v: Status = await r.json(); if (!valid(v)) throw Error();
@@ -80,7 +91,7 @@ export function Alerts() {
     } finally { finish(); }
   }
   async function enable() {
-    if (!registration || !config?.ready || config.preferencesVersion !== 1 || !online || (ios && !standalone) || !start()) return;
+    if (!registration || !config?.ready || config.preferencesVersion !== 1 || !online || (saved() && !accessConfirmed) || (ios && !standalone) || !start()) return;
     try {
       // Keep the permission request directly in the user gesture before any network await.
       const permission = await Notification.requestPermission();
@@ -102,7 +113,7 @@ export function Alerts() {
       }
       const stored: Credentials = await r.json();
       try { localStorage.setItem("ss:push", JSON.stringify(stored)); } catch { await sub.unsubscribe(); throw Error("This browser cannot save alert settings. Allow website storage and try again."); }
-      setRecord(await read(service, stored)); setLocalReady(true); setResetNeeded(false); setMessage("Alerts are on for this device, including when the app is closed.");
+      setRecord(await read(service, stored)); setAccessConfirmed(true); setLocalReady(true); setResetNeeded(false); setMessage("Alerts are on for this device, including when the app is closed.");
     } catch (e) {
       const text = e instanceof Error ? e.message : "Could not enable alerts."; const credentials = saved();
       if (credentials) { try { setRecord(await read(service, credentials)); } catch { /* Last confirmed state remains visible. */ } }
@@ -117,12 +128,12 @@ export function Alerts() {
       await (await registration?.pushManager.getSubscription())?.unsubscribe(); localStorage.removeItem("ss:push"); setRecord(null); setResetNeeded(false); setMessage("Alerts are off for this device.");
     } catch { setMessage("Could not reset alerts. Reconnect and try again."); } finally { finish(); }
   }
-  const canEnable = supported && (!ios || standalone) && !!registration && config?.ready && config.preferencesVersion === 1 && online;
+  const canEnable = supported && (!ios || standalone) && !!registration && config?.ready && config.preferencesVersion === 1 && online && (!saved() || accessConfirmed);
   return <Sheet><SheetTrigger asChild><button className="alerts-button">{enabled ? <BellRing size={16} /> : <Bell size={16} />}<span>{enabled ? "Alerts on" : "Alerts"}</span></button></SheetTrigger><SheetContent side="bottom" className="help-sheet"><SheetHeader><SheetTitle>Catch the game-changing moments.</SheetTitle><SheetDescription>Choose alerts for this device.</SheetDescription></SheetHeader><div className="help-body">
-<label className="alert-setting"><span><strong>Notifications</strong><small>Off keeps your choices. A notification already sent cannot be recalled.</small></span><input role="switch" aria-label="Notifications" type="checkbox" checked={enabled} aria-disabled={busy} aria-busy={busy} disabled={!online || (enabled ? !service : !canEnable)} onChange={e => { if (writing.current) return; if (e.target.checked) void enable(); else void update({ active: false }); }} /></label>
-    {types.map(t => <label key={t.key} className="alert-setting"><span><strong>{t.name}</strong><small id={`alert-${t.key}`}>{t.description}</small></span><input role="switch" aria-label={t.name} aria-describedby={`alert-${t.key}`} type="checkbox" checked={choices[t.key]} aria-disabled={busy} aria-busy={busy} disabled={!enabled || !online} onChange={e => { if (!writing.current) void update({ [t.key]: e.target.checked }); }} /></label>)}
-    {enabled && types.every(t => !choices[t.key]) && <p>No alert types are selected. You will not receive game alerts.</p>}
-    {ios && !standalone ? <div className="install-tip"><h3>Add to Home Screen for alerts</h3><p>In Safari, tap Share → Add to Home Screen. Keep Open as Web App enabled if offered. Open the new icon, return to Alerts, and tap Enable alerts.</p></div> : !supported ? <p>This browser does not support push alerts. Try Safari on your iPhone’s Home Screen or Chrome on Android.</p> : loading ? <p>Checking alert availability…</p> : !online ? <p>You are offline. Reconnect to save or check alert settings.</p> : !config?.ready ? <div className="install-tip"><h3>Alerts are being set up</h3><p>Live scores are available now. Background alerts will become available when setup is complete.</p></div> : config.preferencesVersion !== 1 ? <p>Alert settings need a newer service version. Try again later.</p> : !enabled && <button className="solid-button alert-enable" onClick={enable} disabled={busy || !registration}>Enable alerts</button>}
+<label className="alert-setting"><span><strong>Notifications</strong><small>Off keeps your choices. A notification already sent cannot be recalled.</small></span><input role="switch" aria-label="Notifications" type="checkbox" checked={enabled} aria-disabled={busy} aria-busy={busy} disabled={!online || (!!saved() && !accessConfirmed) || (enabled ? !service : !canEnable)} onChange={e => { if (writing.current) return; if (e.target.checked) void enable(); else void update({ active: false }); }} /></label>
+    {types.map(t => <label key={t.key} className="alert-setting"><span><strong>{t.name}</strong><small id={`alert-${t.key}`}>{t.description}</small></span><input role="switch" aria-label={t.name} aria-describedby={`alert-${t.key}`} type="checkbox" checked={choices[t.key]} aria-disabled={busy} aria-busy={busy} disabled={!enabled || !online || !accessConfirmed} onChange={e => { if (!writing.current) void update({ [t.key]: e.target.checked }); }} /></label>)}
+    {enabled && types.every(t => !choices[t.key]) && <p role="status">No alert types are selected. You will not receive game alerts.</p>}
+    {ios && !standalone ? <div className="install-tip"><h3>Add to Home Screen for alerts</h3><p>In Safari, tap Share → Add to Home Screen. Keep Open as Web App enabled if offered. Open the new icon, return to Alerts, and tap Enable alerts.</p></div> : !supported ? <p>This browser does not support push alerts. Try Safari on your iPhone’s Home Screen or Chrome on Android.</p> : loading ? <p>Checking alert availability…</p> : !online ? <p>You are offline. Reconnect to save or check alert settings.</p> : !config?.ready ? <div className="install-tip"><h3>Alerts are being set up</h3><p>Live scores are available now. Background alerts will become available when setup is complete.</p></div> : config.preferencesVersion !== 1 ? <p>Alert settings need a newer service version. Try again later.</p> : !enabled && (!saved() || accessConfirmed) && !resetNeeded && <button className="solid-button alert-enable" onClick={enable} disabled={busy || !registration || !canEnable}>Enable alerts</button>}
     {message && <p role="status">{message}</p>}{resetNeeded && <button className="text-link" onClick={reset} disabled={busy}>Reset alerts</button>}
     <p className="alert-footnote">Alerts cover all qualifying games. Scoreboard tabs do not filter notifications. Close games and upset watch share at most one live notification attempt per game; optional finals are separate. New selections start from the next successful score check and do not replay current or past conditions.</p>
     <p className="alert-footnote">Upset watch requires a ranked pregame favorite of 7+ points. Without a line, it uses a ranked team against a confirmed unranked opponent, or a rank gap of 10+. Pick’em and conflicting expectations do not qualify. Alerts depend on ESPN’s feed and your device’s settings.</p>

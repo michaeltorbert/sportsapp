@@ -73,7 +73,7 @@ export const test = base.extend({
         if (url.pathname === "/config") return json({ ready: state.ready, publicKey: "AA", preferencesVersion: state.preferencesVersion }, state.failConfig ? 503 : 200);
         state.alertRequests.push({ method: req.method(), path: url.pathname, authorization: req.headers().authorization || null, body: req.postDataJSON() });
         const status = () => ({ active: state.active, kickoff: state.kickoff, closeGame: state.closeGame, upsetWatch: state.upsetWatch, upsetFinal: state.upsetFinal, revision: state.revision, preferencesVersion: state.preferencesVersion });
-        if (req.method() === "GET") return json(status());
+        if (req.method() === "GET") return json(state.getStatus ? { error: "simulated settings read failure" } : status(), state.getStatus || 200);
         if (state.failSave) return json({ error: "simulated failure" }, 503);
         if (req.method() === "POST" && state.conflict) return json({ error: "simulated missing credentials", code: "ownership-conflict" }, 409);
         if (req.method() === "POST" && req.postDataJSON().revision !== undefined && req.postDataJSON().revision !== state.revision) return json({ error: "simulated stale revision", code: "revision-conflict" }, 409);

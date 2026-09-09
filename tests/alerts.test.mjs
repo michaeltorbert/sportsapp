@@ -200,7 +200,7 @@ test("subscriptions validate push keys, require device ownership, and honor opt-
   const path = `/subscriptions/${credentials.id}`;
   assert.equal((await worker.fetch(request(path, "PATCH", { kickoff: true }, "wrong-token"), env)).status, 404);
   assert.equal((await worker.fetch(request(path, "PATCH", { kickoff: true }, credentials.token), env)).status, 200);
-  assert.deepEqual(await (await worker.fetch(request(path, "GET", null, credentials.token), env)).json(), { active: true, kickoff: true, closeGame: false, upsetWatch: true, upsetFinal: false, revision: 1, preferencesVersion: 1 });
+  assert.deepEqual(await (await worker.fetch(request(path, "GET", null, credentials.token), env)).json(), { active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 1, preferencesVersion: 1 });
   assert.equal((await worker.fetch(request(path, "DELETE", null, credentials.token), env)).status, 200);
   assert.equal((await (await worker.fetch(request(path, "GET", null, credentials.token), env)).json()).active, false);
   sqlite.close();

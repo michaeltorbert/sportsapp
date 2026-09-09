@@ -49,6 +49,24 @@ test("release rollout preflight requires durable cutover but permits later corre
   }
 });
 
+test("equal activation timestamps cannot deliver and Q4 suppression survives exit and overtime", async () => {
+  const { db, sqlite } = database();
+  try {
+    sqlite.prepare("INSERT INTO subscriptions VALUES(?,?,?,?,?,?,?,?,?)").run("device", "invalid", "invalid", "invalid", "owner", 0, 1, 1, 1);
+    sqlite.exec(`UPDATE subscription_settings SET close_game=0,upset_final=0,upset_since=${now}`);
+    sqlite.prepare("INSERT INTO alert_events VALUES(?,?,?,?,?,?)").run("game1:ranked-trailing-fourth", "game1", "ranked-trailing-fourth", "2026-09-05", now, "{}");
+    await deliver({ DB: db }, now + 1, [ranked()]);
+    assert.equal(sqlite.prepare("SELECT count(*) n FROM deliveries").get().n, 0);
+    sqlite.exec(`UPDATE subscription_settings SET pending=2,upset_since=${now - 1}`);
+    await activationBaselines(db, [ranked()], now);
+    const exited = ranked(); exited.teams[0].score = 40; exited.teams[1].score = 0;
+    await activationBaselines(db, [exited], now + 1);
+    await deliver({ DB: db }, now + 2, [{ ...ranked(), period: 5 }]);
+    assert.equal(sqlite.prepare("SELECT count(*) n FROM deliveries").get().n, 0);
+    assert.equal(sqlite.prepare("SELECT count(*) n FROM alert_suppressions WHERE trigger='ranked-trailing-fourth'").get().n, 1);
+  } finally { sqlite.close(); }
+});
+
 test("identical pregame evidence keeps its observation time and causes no snapshot writes", async () => {
   const { db, sqlite } = database();
   try {
@@ -143,7 +161,7 @@ test("disabled at enrollment does not consume a condition before later enable", 
   try {
     const pair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
     const subscription = { endpoint: "https://fcm.googleapis.com/fcm/send/enrollment", keys: { p256dh: Buffer.from(await crypto.subtle.exportKey("raw", pair.publicKey)).toString("base64url"), auth: Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString("base64url") } };
-    const registration = await worker.fetch(new Request("https://alerts.test/subscriptions", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ subscription, kickoff: false }) }), env);
+    const registration = await worker.fetch(new Request("https://alerts.test/subscriptions", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ subscription, kickoff: false, closeGame: false, upsetWatch: true, upsetFinal: false }) }), env);
     assert.equal(registration.status, 200); const credentials = await registration.json();
     assert.equal(sqlite.prepare("SELECT pending FROM subscription_settings").get().pending, 2);
     await activationBaselines(db, [ranked()], ++time);
