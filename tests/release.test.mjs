@@ -1,11 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, copyFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { checkRelease } from "../scripts/check-release.mjs";
 import { readAlertConfig, verifyDeployment } from "../scripts/verify-deployment.mjs";
+
+test("rollout preflight executes and records success under a path containing # and %", t => {
+  const cwd = realpathSync(mkdtempSync(join(tmpdir(), "rollout-#%-")));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  mkdirSync(join(cwd, "scripts"));
+  mkdirSync(join(cwd, "public"));
+  const script = join(cwd, "scripts", "check-alert-preferences-rollout.mjs");
+  copyFileSync(new URL("../scripts/check-alert-preferences-rollout.mjs", import.meta.url), script);
+  writeFileSync(join(cwd, "public", "alerts-config.json"), JSON.stringify({ serviceUrl: "https://example.invalid" }));
+  const mock = "globalThis.fetch=async()=>Response.json({preferencesVersion:1,preferencesCutoverComplete:true})";
+  const result = execFileSync(process.execPath, ["--import", `data:text/javascript,${encodeURIComponent(mock)}`, script], { encoding: "utf8" });
+  assert.match(result, /Alert preference cutover is complete/);
+});
 
 test("release configuration accepts JSONC comments and trailing commas but rejects malformed origins", () => {
   const source = '{ // Allowed by Wrangler\n "vars": { "SITE_ORIGIN": "https://old.test", }, }';
