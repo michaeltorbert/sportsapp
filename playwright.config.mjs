@@ -13,7 +13,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  workers: 2,
+  // Hosted runners share one local workerd server with the browser engines.
+  // Serialize CI to reduce resource contention; keep local parallelism.
+  workers: process.env.CI ? 1 : 2,
   timeout: 30_000,
   expect: { timeout: 8_000 },
   outputDir: "output/playwright/results",
