@@ -18,7 +18,7 @@ try {
   await writeFile(path.join(temporary, "wrangler.json"), JSON.stringify(config));
   // A root request reaching the Worker must fail. A successful root response
   // therefore proves asset-first routing, rather than merely fast SSR.
-  await writeFile(path.join(temporary, "guard.mjs"), `import worker from ${JSON.stringify(path.join(root, "dist/server/index.js"))}; export default { fetch(request, env, ctx) { if (new URL(request.url).pathname === "/") return new Response("ROOT_REACHED_WORKER", { status: 599 }); return worker.fetch(request, env, ctx); } };`);
+  await writeFile(path.join(temporary, "guard.mjs"), `import worker from ${JSON.stringify(path.join(root, "dist/server/index.js"))}; export default { fetch(request, env, ctx) { if (new URL(request.url).pathname === "/" || new URL(request.url).pathname === "/guide") return new Response("ROOT_REACHED_WORKER", { status: 599 }); return worker.fetch(request, env, ctx); } };`);
   const socket = createServer();
   socket.listen(0, "127.0.0.1");
   await once(socket, "listening");
@@ -39,20 +39,24 @@ try {
   }
   assert.ok(health?.ok, output);
   const { version, commit } = await health.json();
-  for (const suffix of ["/", "/?tab=acc&date=2026-09-07&_ss_update=1", "/?game=401858212#game-401858212"]) {
+  for (const suffix of ["/guide", "/guide?date=2026-09-12&view=watch", "/", "/?tab=acc&date=2026-09-07&_ss_update=1", "/?game=401858212#game-401858212"]) {
     const response = await fetch(origin + suffix);
     assert.equal(response.status, 200, suffix);
     assert.equal(response.headers.get("cache-control"), "public, max-age=0, must-revalidate", suffix);
     assert.ok((await response.text()).includes(`<!-- saturday-signal-static ${version} ${commit} -->`), suffix);
   }
   assert.equal((await fetch(origin + "/", { method: "HEAD" })).status, 200);
+  assert.equal((await fetch(origin + "/guide", { method: "HEAD" })).status, 200);
+  const guideRsc = await fetch(origin + "/guide.rsc", { headers: { RSC: "1", Accept: "text/x-component" } });
+  assert.equal(guideRsc.status, 200);
+  assert.match(guideRsc.headers.get("content-type") ?? "", /text\/x-component/);
   assert.equal((await fetch(origin + "/api/scores?date=invalid")).status, 400);
   assert.equal((await fetch(origin + "/not-a-route")).status, 404);
   const rsc = await fetch(origin + "/.rsc", { headers: { RSC: "1", Accept: "text/x-component" } });
   assert.equal(rsc.status, 200);
   assert.match(rsc.headers.get("content-type") ?? "", /text\/x-component/);
   assert.ok(!(await rsc.text()).includes("saturday-signal-static"));
-  console.log(JSON.stringify({ version, commit, runtime: "workerd", rootBypassesWorker: true, checks: ["root", "query", "HEAD", "dynamic-api", "404", "rsc"], externalRequests: 0 }));
+  console.log(JSON.stringify({ version, commit, runtime: "workerd", rootBypassesWorker: true, guideBypassesWorker: true, checks: ["root", "query", "HEAD", "dynamic-api", "404", "rsc"], externalRequests: 0 }));
 } finally {
   if (child?.pid && child.exitCode === null) {
     const exited = once(child, "exit");

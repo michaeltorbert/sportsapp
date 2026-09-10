@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 
 export async function packageStaticHome(root, expectedCommit) {
 await rm(new URL("dist/client/index.html", root), { force: true });
+await rm(new URL("dist/client/guide.html", root), { force: true });
 assert.match(expectedCommit, /^[a-f0-9]{40}$/, "Static homepage requires an exact source commit");
 const version = JSON.parse(await readFile(new URL("package.json", root), "utf8")).version;
 const index = JSON.parse(await readFile(new URL("dist/server/vinext-prerender.json", root), "utf8"));
@@ -30,6 +31,13 @@ const scripts = [...html.matchAll(/(?:src|href)="(\/assets\/[^"?#]+)[^"]*"/g)].m
 assert.ok(scripts.length > 0, "Prerendered homepage must reference built assets");
 for (const asset of new Set(scripts)) assert.ok((await stat(new URL(`dist/client${asset}`, root))).isFile(), asset);
 const marker = `<!-- saturday-signal-static ${version} ${expectedCommit} -->`;
+assert.ok(index.routes.some(route => route.route === "/guide" && route.status === "rendered" && route.revalidate === false), "Guide must be completely prerendered");
+const guide = await readFile(new URL("dist/server/prerendered-routes/guide.html", root), "utf8");
+for (const pattern of [/<html[\s>]/i, /<\/html>/i, /__VINEXT_RSC_DONE__/, /__VINEXT_RSC_CHUNKS__/, /All games/, /All times Eastern/, /Connecting to ESPN/]) assert.match(guide, pattern);
+const guideAssets = [...guide.matchAll(/(?:src|href)="(\/assets\/[^"?#]+)[^"]*"/g)].map(match => match[1]);
+assert.ok(guideAssets.length > 0, "Guide must reference built assets");
+for (const asset of new Set(guideAssets)) assert.ok((await stat(new URL(`dist/client${asset}`, root))).isFile(), asset);
+await writeFile(new URL("dist/client/guide.html", root), `${marker}\n${guide}`);
 await writeFile(new URL("dist/client/index.html", root), `${marker}\n${html}`);
 console.log(JSON.stringify({ staticHomepage: fileURLToPath(new URL("dist/client/index.html", root)), version, commit: expectedCommit, assets: new Set(scripts).size }));
 }

@@ -27,17 +27,25 @@ export function updateRestoration(search: string) {
   if (!validCommit(p.get("_ss_update")) || (hide !== "0" && hide !== "1") || (focus !== null && !gameId(focus))) return null;
   return { hideFinals: hide === "1", focusedGame: gameId(focus) };
 }
-export type UpdateView = { date: string; followToday: boolean; filter: Filter; hideFinals: boolean; focusedGame: string };
+export type ScoresUpdateView = { date: string; followToday: boolean; filter: Filter; hideFinals: boolean; focusedGame: string };
+export type UpdateView = ScoresUpdateView | { page: "guide"; date: string; followToday: boolean; view: "all" | "watch" };
 export function refreshUrl(href: string, commit: string, view: UpdateView): string {
   const url = new URL(href), identity = validCommit(commit);
   if (!identity) throw new Error("Invalid update identity");
   if (view.followToday) url.searchParams.delete("date");
   else if (validDate(view.date)) url.searchParams.set("date", view.date);
   else if (!validDate(url.searchParams.get("date") || "")) url.searchParams.delete("date");
-  url.searchParams.set("tab", initialTab(`?tab=${view.filter}`));
+  if ("page" in view && view.page === "guide") {
+    if (view.view === "watch") url.searchParams.set("view", "watch"); else url.searchParams.delete("view");
+    for (const key of ["tab", "_ss_hide_finals", "_ss_focus"]) url.searchParams.delete(key);
+    url.searchParams.set("_ss_update", identity);
+    return url.href;
+  }
+  const scores = view as ScoresUpdateView;
+  url.searchParams.set("tab", initialTab(`?tab=${scores.filter}`));
   url.searchParams.set("_ss_update", identity);
-  url.searchParams.set("_ss_hide_finals", view.hideFinals ? "1" : "0");
-  const focus = gameId(view.focusedGame);
+  url.searchParams.set("_ss_hide_finals", scores.hideFinals ? "1" : "0");
+  const focus = gameId(scores.focusedGame);
   if (focus) url.searchParams.set("_ss_focus", focus); else url.searchParams.delete("_ss_focus");
   if (/^#game-[A-Za-z0-9_-]+$/.test(url.hash)) url.hash = "";
   return url.href;

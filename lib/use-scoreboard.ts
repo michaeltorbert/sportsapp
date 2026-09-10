@@ -12,11 +12,11 @@ function readBoard(key: string): Scoreboard | null {
     return board && validDate(board.date) && Number.isFinite(Date.parse(board.fetchedAt)) && Array.isArray(board.games) && board.games.every((g: { teams?: unknown[] }) => Array.isArray(g.teams) && g.teams.length === 2) ? board : null;
   } catch { return null; }
 }
-export function useScoreboard(scope: BoardScope) {
+export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDate?: string | null) {
   const search = useInitialSearch();
   const query = new URLSearchParams(search || "").get("date");
   const [chosenDate, setSelection] = useState<string | null | undefined>(undefined);
-  const selection = chosenDate === undefined ? (query && validDate(query) ? query : null) : chosenDate;
+  const selection = dailyOnly ? (controlledDate ?? null) : chosenDate === undefined ? (query && validDate(query) ? query : null) : chosenDate;
   const [today, setToday] = useState(""), [date, setDate] = useState("");
   const [boards, setBoards] = useState<Record<BoardScope, Scoreboard | null>>({ daily: null, acc: null, top25: null });
   const [errors, setErrors] = useState<Record<BoardScope, string>>({ daily: "", acc: "", top25: "" });
@@ -43,7 +43,8 @@ export function useScoreboard(scope: BoardScope) {
     try {
       const clock = new Date(), calendar = easternDate(clock), yesterday = shiftDate(calendar, -1);
       let prior: Scoreboard | null = null, overnightWarning = "";
-      try { prior = await loadScores(yesterday, c.signal); }
+      const manualGuide = dailyOnly && selection !== null;
+      try { if (!manualGuide) prior = await loadScores(yesterday, c.signal); }
       catch (e) {
         if (c.signal.aborted) throw e;
         overnightWarning = "Could not verify overnight games. Checking again shortly.";
@@ -76,17 +77,34 @@ export function useScoreboard(scope: BoardScope) {
         }
       };
       const week = accWeek(effective);
-      await Promise.all([update({ start: activeDate, end: activeDate }, "daily"), update(week, "acc"), update(week, "top25")]);
+      const checkOvernight = async () => {
+        try {
+          const overnight = await loadScores(yesterday, c.signal);
+          if (controller.current !== c) return;
+          const effective = gameDay(clock, overnight, held.current);
+          held.current = effective; setToday(effective); setOvernightError("");
+          try { localStorage.setItem("ss:game-day", effective); } catch { /* Optional. */ }
+        } catch {
+          if (controller.current === c) setOvernightError("Could not verify overnight games. Checking again shortly.");
+        }
+      };
+      // A manual Guide date can load even when yesterday is slow or unavailable.
+      await Promise.all([update({ start: activeDate, end: activeDate }, "daily"), ...(dailyOnly ? [] : [update(week, "acc"), update(week, "top25")]), ...(manualGuide ? [checkOvernight()] : [])]);
     } catch {
-      if (controller.current === c) setOvernightError(navigator.onLine ? "Could not refresh scores. Retrying automatically." : "You're offline. Reconnect to refresh scores.");
+      if (controller.current === c) {
+        const message = navigator.onLine ? "Could not refresh scores. Retrying automatically." : "You're offline. Reconnect to refresh scores.";
+        setOvernightError(message);
+        if (dailyOnly) { setDate(selection || held.current || easternDate()); setErrors(previous => ({ ...previous, daily: message })); }
+      }
     } finally {
       window.clearTimeout(timeout);
       if (controller.current === c) { controller.current = null; setRefreshing(false); }
     }
-  }, [selection]);
+  }, [selection, dailyOnly]);
 
+  const queryReady = search !== null;
   useEffect(() => {
-    if (search === null) return;
+    if (!queryReady) return;
     // Schedule the initial poll alongside the interval, with matching cleanup.
     // Hydration must resolve the initial query before any scores are requested.
     const initial = window.setTimeout(refresh, 0);
@@ -95,16 +113,17 @@ export function useScoreboard(scope: BoardScope) {
     const offline = () => { setOvernightError("You're offline. Reconnect to refresh scores."); };
     document.addEventListener("visibilitychange", resume); window.addEventListener("online", resume); window.addEventListener("offline", offline);
     return () => { window.clearTimeout(initial); window.clearInterval(interval); controller.current?.abort(); controller.current = null; document.removeEventListener("visibilitychange", resume); window.removeEventListener("online", resume); window.removeEventListener("offline", offline); };
-  }, [refresh, search]);
+  }, [refresh, queryReady]);
   const chooseDate = (value: string | null) => { setErrors({ daily: "", acc: "", top25: "" }); setOvernightError(""); setSelection(value); setDate(value || held.current || easternDate()); };
   // Weekly views follow the current football week; manual dates apply to daily tabs.
   const range = today ? accWeek(today) : null;
+  const displayDate = dailyOnly && selection ? selection : date;
   const matching = {
-    daily: matchingBoard(boards.daily, date),
+    daily: matchingBoard(boards.daily, displayDate),
     acc: range ? matchingBoard(boards.acc, range.start, range.end) : null,
     top25: range ? matchingBoard(boards.top25, range.start, range.end) : null,
   };
   const data = matching[scope];
   const error = errors[scope] || overnightError;
-  return { date, today, data, boards: matching, error, refreshing, online, now, timezone, refresh, setDate: chooseDate, followToday: selection === null };
+  return { date: displayDate, today, data, boards: matching, error, dailyError: errors.daily, overnightError, refreshing, online, now, timezone, refresh, setDate: chooseDate, followToday: selection === null };
 }
