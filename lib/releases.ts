@@ -1,5 +1,6 @@
-export const VERSION = "1.5.0";
+export const VERSION = "1.6.0";
 export const releases = [
+  { version: "1.6.0", date: "September 10, 2026", changes: "Browse the day's football games by network and Eastern kickoff time in the new TV Guide. Filter to your watchlist, open game details, or use the accessible text schedule. Estimated game windows and unknown kickoff times are clearly labeled." },
   { version: "1.5.0", date: "September 9, 2026", changes: "Choose close-game, upset-watch, final and ACC kickoff alerts for each device. Existing devices keep their choices, and newly enabled alerts skip conditions already underway. Improved protection against duplicate live alerts." },
   { version: "1.4.4", date: "September 8, 2026", changes: "Load the homepage from a prebuilt page to avoid repeating server rendering whenever the app opens." },
   { version: "1.4.3", date: "September 8, 2026", changes: "Fixed a notification-sending error and reduced score-processing work." },

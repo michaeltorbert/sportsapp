@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.6.0 · 2026-09-10
+
+- Add a responsive TV Guide with network rows, Eastern kickoff times, watchlist filtering, game details and an accessible text schedule (#60).
+- Show estimated game windows, overlapping broadcasts and unknown kickoff times honestly; preserve selected dates, browser navigation and retained schedules during refresh failures.
+- Add static Guide delivery and regression coverage for mobile layouts, keyboard navigation and accessible game labels. Preserve alert preferences, subscriptions, trigger IDs and delivery history.
+
 ## 1.5.0 · 2026-09-09
 
 - Add per-device close-game, upset-watch, final and ACC kickoff choices. Existing devices retain their selections; enrollment through the updated UI defaults to upset watch only, while legacy clients omitting the new fields retain legacy defaults. Turning alerts off preserves saved choices (#54).

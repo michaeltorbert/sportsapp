@@ -16,6 +16,7 @@ import { scoreboardScope, viewGames, type Filter } from "@/lib/scoreboard-views"
 import { initialTab, updateRestoration, gameId } from "@/lib/app-update";
 import { useInitialSearch } from "@/lib/browser-state";
 import { useAppUpdate, LOADED_COMMIT, type AppUpdate } from "@/lib/use-app-update";
+import { AppNavigation } from "@/components/app-navigation";
 import { AppUpdateNotice } from "@/components/app-update";
 
 const filters: { id: Filter; label: string }[] = [{ id: "watch", label: "Watchlist" }, { id: "acc", label: "ACC" }, { id: "top25", label: "Top 25" }, { id: "close", label: "One score" }, { id: "upset", label: "Upsets" }];
@@ -92,6 +93,7 @@ export default function Home() {
   };
   return <main className="app-shell" data-app-commit={LOADED_COMMIT}>
     <header className="app-header"><Link className="wordmark" href="/" onClick={() => { setDate(null); setFilter("watch"); setFocusedGame(""); }} aria-label="Saturday Signal home"><span className="brand-icon"><Signal size={22} strokeWidth={3} /></span><span>saturday<span className="brand-light">signal</span><span className="sport-label">COLLEGE FOOTBALL</span></span></Link><div className="header-actions"><button className={`icon-button ${refreshing ? "refreshing" : ""}`} aria-label="Refresh scores" onClick={refresh} disabled={refreshing || !date}><RefreshCw size={20} /></button><Help update={update} /></div></header>
+    <AppNavigation active="scores" date={date} followToday={followToday} />
     <div className="date-bar">{weekly ? <div className="week-label"><CalendarDays size={16} /><span>{week ? `${shortDate(week.start)} – ${shortDate(week.end)}` : "This football week"}</span><span className="week-note">THU–MON · ET</span></div> : <><div className="date-navigation"><button className="icon-button" aria-label="Previous day" disabled={!date} onClick={() => setDate(shiftDate(date, -1))}><ChevronLeft size={19} /></button><label className="date-picker"><CalendarDays size={15} /><span>{dateText}</span><input type="date" value={date} onChange={e => { if (e.target.value) setDate(e.target.value); }} aria-label="Scoreboard date, Eastern time" /></label><button className="icon-button" aria-label="Next day" disabled={!date} onClick={() => setDate(shiftDate(date, 1))}><ChevronRight size={19} /></button></div><button className={`today-button ${followToday ? "is-today" : ""}`} onClick={() => { setDate(null); if (followToday) refresh(); }} disabled={!today}>Today</button></>}</div>
     {overnight && !weekly && <p className="overnight-note">Late games are still on. Today is staying on {shortDate(today)}.</p>}
     <Tabs value={filter} onValueChange={v => setFilter(v as Filter)} className="score-tabs">

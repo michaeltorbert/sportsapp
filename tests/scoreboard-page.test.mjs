@@ -25,7 +25,7 @@ const output = await build({
         export const Tabs=wrapper,TabsList=wrapper,Empty=wrapper,EmptyHeader=wrapper,EmptyMedia=wrapper,EmptyTitle=wrapper,EmptyDescription=wrapper,Sheet=wrapper,SheetTrigger=wrapper,SheetHeader=wrapper,SheetTitle=wrapper,SheetDescription=wrapper;
         export const TabsContent=({value,children})=>value===globalThis.scorePageTest.filter?wrapper({children}):null;
         export const TabsTrigger=({value,children})=>globalThis.scorePageTest.element('button',{'data-tab':value},children);
-        export const SheetContent=({children})=>globalThis.scorePageTest.showHelp?wrapper({children}):null,Skeleton=()=>null,Alerts=()=>null,AppUpdateNotice=()=>null;
+        export const SheetContent=({children})=>globalThis.scorePageTest.showHelp?wrapper({children}):null,Skeleton=()=>null,Alerts=()=>null,AppUpdateNotice=()=>null,AppNavigation=()=>null;
       ` };
     });
   } }],
