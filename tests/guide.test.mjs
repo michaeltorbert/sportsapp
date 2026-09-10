@@ -120,3 +120,13 @@ test("Time TBD uses network, team names and ID ordering in both its section and 
   assert.deepEqual(model.tbd.map(g => g.id), ["98", "99", "02", "01"]);
   assert.deepEqual(model.games.map(g => g.id), ["timed", "98", "99", "02", "01"]);
 });
+
+
+test("compact kickoff labels exclude meridiem formatting, and malformed labels remain unavailable", () => {
+  assert.equal(g.compactGuideTime(Date.parse("2026-09-12T12:45:00-04:00")), "12:45");
+  assert.equal(g.compactGuideTime(Date.parse("2026-09-12T16:15:00-04:00")), "4:15");
+  assert.equal(g.compactGuideTime(Date.parse("2026-09-12T00:00:00-04:00")), "12:00");
+  const malformed = game({ date: "unparseable", timeValid: true });
+  assert.match(g.fullGameLabel(malformed), /Date unavailable, Time TBD/);
+  assert.equal(g.kickoff(malformed), null);
+});

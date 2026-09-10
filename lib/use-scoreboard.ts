@@ -25,7 +25,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
   const [boards, setBoards] = useState<Record<BoardScope, Scoreboard | null>>({ daily: null, acc: null, top25: null });
   const [errors, setErrors] = useState<Record<BoardScope, string>>({ daily: "", acc: "", top25: "" });
   const [overnightError, setOvernightError] = useState("");
-  const [dailyErrorDate, setDailyErrorDate] = useState("");
+  const [guideDailyErrors, setGuideDailyErrors] = useState<Record<string, string>>({});
   const [refreshing, setRefreshing] = useState(false);
   const online = useOnline(), timezone = useTimezone();
   const [now, setNow] = useState(0);
@@ -77,9 +77,12 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
           try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* Optional. */ }
           setBoards(previous => ({ ...previous, [boardScope]: next }));
           setErrors(previous => ({ ...previous, [boardScope]: "" })); setNow(Date.now());
+          if (dailyOnly && boardScope === "daily") setGuideDailyErrors(previous => {
+            const next = { ...previous }; delete next[activeDate]; return next;
+          });
         } catch {
           if (controller.current === c) {
-            if (boardScope === "daily") setDailyErrorDate(activeDate);
+            if (dailyOnly && boardScope === "daily") setGuideDailyErrors(previous => ({ ...previous, [activeDate]: refreshError(navigator.onLine, true) }));
             setErrors(previous => ({ ...previous, [boardScope]: refreshError(navigator.onLine, dailyOnly) }));
           }
         }
@@ -102,7 +105,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
       if (controller.current === c) {
         const message = refreshError(navigator.onLine, dailyOnly);
         setOvernightError(message);
-        if (dailyOnly) { const failedDate = selection || gameDay(new Date(), null, held.current); setDate(failedDate); if (selection === null) setToday(failedDate); setDailyErrorDate(failedDate); setErrors(previous => ({ ...previous, daily: message })); }
+        if (dailyOnly) { const failedDate = selection || gameDay(new Date(), null, held.current); setDate(failedDate); if (selection === null) setToday(failedDate); setGuideDailyErrors(previous => ({ ...previous, [failedDate]: message })); setErrors(previous => ({ ...previous, daily: message })); }
       }
     } finally {
       window.clearTimeout(timeout);
@@ -134,5 +137,5 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
   };
   const data = matching[scope];
   const error = errors[scope] || overnightError;
-  return { date: displayDate, today, data, boards: matching, error, dailyError: !dailyOnly || dailyErrorDate === displayDate ? errors.daily : "", overnightError, refreshing, online, now, timezone, refresh, setDate: chooseDate, followToday: selection === null };
+  return { date: displayDate, today, data, boards: matching, error, dailyError: dailyOnly ? guideDailyErrors[displayDate] || "" : errors.daily, overnightError, refreshing, online, now, timezone, refresh, setDate: chooseDate, followToday: selection === null };
 }

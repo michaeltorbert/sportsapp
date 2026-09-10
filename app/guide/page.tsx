@@ -17,7 +17,8 @@ export default function Guide() {
   const stale = !!data && (!!dailyError || !!data.stale || age > 90 || !online);
   const feedState = !online ? "Offline" : data ? stale ? "Schedule may be out of date." : "Schedule updated." : dailyError ? "Schedule unavailable" : "Connecting to ESPN…";
   const ageLabel = age < 15 ? "just now" : age < 60 ? `${age}s ago` : `${Math.floor(age / 60)}m ago`;
-  const warnings = [...new Set([dailyError, ...(data?.warnings || []), data?.stale ? "ESPN is unavailable. Showing the last successful schedule." : "", data && age > 90 ? "Waiting for a fresh schedule update." : "", !online ? "You're offline. Reconnect to refresh the schedule." : ""].filter(Boolean))];
+  const connectionWarnings = !online ? ["You're offline. Reconnect to refresh schedule."] : [dailyError, data?.stale ? "ESPN is unavailable. Showing the last successful schedule." : "", data && age > 90 ? "Waiting for a fresh schedule update." : ""];
+  const warnings = [...new Set([...connectionWarnings, ...(data?.warnings || [])].filter(Boolean))];
   const dateLabel = date ? new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)) : "Today";
   const chooseDate = (value: string | null) => selection.choose({ date: value, view: selection.view });
   return <main className="app-shell guide-shell" data-app-commit={LOADED_COMMIT}>
@@ -27,7 +28,7 @@ export default function Guide() {
     <div className="guide-heading"><h1>Guide</h1><div className="guide-modes" role="group" aria-label="Guide games"><button aria-pressed={selection.view === "all"} onClick={() => selection.choose({ date: selection.date, view: "all" })}>All games</button><button aria-pressed={selection.view === "watch"} onClick={() => selection.choose({ date: selection.date, view: "watch" })}>Watchlist only</button></div></div>
     <div className="guide-feed"><span aria-hidden="true" className={`feed-dot ${stale || !online ? "feed-warning" : !data ? "feed-loading" : ""}`} /><span role="status" className="sr-only">{feedState}</span><span>{!online ? "Offline" : data ? `${stale ? "Last update" : "Updated"} ${ageLabel}` : dailyError ? "Schedule unavailable" : "Connecting to ESPN…"}</span><span>All times Eastern</span></div>
     {followToday && today && today !== easternDate() && <p className="overnight-note">Late games are still on. Today is staying on {dateLabel}.</p>}
-    {followToday && overnightError && <p className="guide-overnight" role="status">{overnightError}</p>}
+    {followToday && online && overnightError && !warnings.includes(overnightError) && <p className="guide-overnight" role="status">{overnightError}</p>}
     {warnings.length > 0 && <div className="feed-banner" role="alert"><div>{warnings.map(w => <p key={w}>{w}</p>)}</div><button onClick={refresh} disabled={refreshing}>Retry</button></div>}
     <AppUpdateNotice update={update} />
     {!data && !dailyError && online && <div className="guide-loading" role="status" aria-label="Loading guide"><div /><div /><div /><div /></div>}

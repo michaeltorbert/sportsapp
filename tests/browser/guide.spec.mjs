@@ -10,8 +10,15 @@ async function openGuide(page, harness, options = {}) {
   await expect(page.getByTestId("guide-count")).toContainText("games listed");
 }
 
-test("Guide URL owner preserves date/mode across reload, Back/Forward and app navigation without mode refetch", async ({ page, harness }) => {
+test("Guide URL owner preserves date/mode across reload, Back/Forward and app navigation without mode refetch", async ({ page, harness, baseURL }, testInfo) => {
+  const guideRequests = [];
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.origin === new URL(baseURL).origin && ["/guide", "/guide/", "/guide.rsc"].includes(url.pathname)) guideRequests.push(request.url());
+  });
   await openGuide(page, harness);
+  await page.waitForLoadState("networkidle");
+  const initialGuideRequests = [...guideRequests];
   const initial = await page.getByTestId("guide-count").innerText();
   const requests = harness.state.scoreRequests.length;
   const mounts = await page.evaluate(() => { window.__guideOriginal = document.querySelector(".guide-shell"); return !!window.__guideOriginal; });
@@ -21,12 +28,16 @@ test("Guide URL owner preserves date/mode across reload, Back/Forward and app na
   await expect(page.getByTestId("guide-count")).not.toHaveText(initial);
   expect(harness.state.scoreRequests.length).toBe(requests);
   expect(await page.evaluate(() => window.__guideOriginal === document.querySelector(".guide-shell"))).toBe(true);
+  await page.waitForLoadState("networkidle");
+  expect(guideRequests).toEqual(initialGuideRequests);
   await page.goBack(); await expect(page.getByRole("button", { name: "All games", exact: true })).toHaveAttribute("aria-pressed", "true");
   expect(harness.state.scoreRequests.length).toBe(requests);
   expect(await page.evaluate(() => window.__guideOriginal === document.querySelector(".guide-shell"))).toBe(true);
   await page.goForward(); await expect(page.getByRole("button", { name: "Watchlist only", exact: true })).toHaveAttribute("aria-pressed", "true");
   expect(harness.state.scoreRequests.length).toBe(requests);
   expect(await page.evaluate(() => window.__guideOriginal === document.querySelector(".guide-shell"))).toBe(true);
+  await page.waitForLoadState("networkidle");
+  await testInfo.attach("guide-history-route-requests", { body: JSON.stringify({ initial: initialGuideRequests, afterNativeTraversal: guideRequests }), contentType: "application/json" });
   await page.reload(); await expect(dateInput(page)).toHaveValue("2026-09-12");
   await expect(page.getByRole("button", { name: "Watchlist only", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("link", { name: "Scores", exact: true }).click();
@@ -41,6 +52,11 @@ test("full archive geometry, scrolling, accessible details and responsive screen
   const bars = page.locator(".guide-game");
   expect(await bars.count()).toBeGreaterThan(25);
   await expect(bars.first()).toHaveAttribute("aria-label", /2026-09-12/);
+  for (const label of await page.locator(".guide-game-text b").allTextContents()) expect(label).toMatch(/^\d{1,2}:\d{2}$/);
+  await region(page).evaluate(el => { el.scrollLeft = el.scrollWidth; });
+  const finalTick = await page.locator(".guide-hours > span").last().boundingBox(), edge = await region(page).boundingBox();
+  expect(finalTick.x + finalTick.width).toBeLessThanOrEqual(edge.x + edge.width);
+  await region(page).evaluate(el => { el.scrollLeft = 0; });
   const measurements = await bars.evaluateAll(elements => elements.slice(0, 20).map(el => ({ width: el.getBoundingClientRect().width, height: el.getBoundingClientRect().height, start: Number(el.dataset.start), x: el.parentElement.getBoundingClientRect().left - el.parentElement.parentElement.getBoundingClientRect().left })));
   for (const m of measurements) { expect(m.width).toBeCloseTo(315, 0); expect(m.height).toBeGreaterThanOrEqual(44); }
   for (const a of measurements) for (const b of measurements) expect(a.x - b.x).toBeCloseTo((a.start - b.start) / 3_600_000 * 90, 0);
@@ -366,7 +382,104 @@ test("Back from Scores restores Guide date and pushed mode", async ({ page, harn
   await expect(dateInput(page)).toHaveValue("2026-09-12");
   await expect(page.getByRole("button", { name: "Watchlist only", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("guide-count")).toContainText("on this day");
+  await page.waitForLoadState("networkidle");
+  const scoreRequests = harness.state.scoreRequests.length;
   await page.goBack();
   await expect(page.getByRole("button", { name: "All games", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("guide-count")).toContainText("80 games listed");
+  await page.goForward();
+  await expect(page.getByRole("button", { name: "Watchlist only", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.waitForLoadState("networkidle");
+  expect(harness.state.scoreRequests.length).toBe(scoreRequests);
+  await page.goForward();
+  await expect(page.getByLabel("Scoreboard date, Eastern time")).toHaveValue("2026-09-12");
+  await expect(page.locator(".guide-shell")).toHaveCount(0);
+});
+
+
+test("Jump is absent for Watchlist with only TBD games or no matching games", async ({ page, harness }) => {
+  const timed = event("timed-plain", { date: "2026-09-12T20:00:00Z", state: "upcoming" });
+  const tbd = event("tbd-watch", { date: "2026-09-12T20:00:00Z", state: "upcoming", acc: true });
+  tbd.competitions[0].timeValid = false;
+  harness.state.events = [timed, tbd];
+  await harness.open({ path: "/guide?date=2026-09-12&view=watch", now: "2026-09-12T15:00:00Z", waitForScores: false });
+  await expect(page.getByRole("heading", { name: "Time TBD", exact: true })).toBeVisible();
+  await expect(region(page)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Jump to/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "All games", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Jump to schedule start", exact: true })).toBeVisible();
+  harness.state.events = [timed];
+  await page.getByRole("button", { name: "Refresh guide", exact: true }).click();
+  await expect(page.getByTestId("guide-count")).toContainText("1 game listed");
+  await page.getByRole("button", { name: "Watchlist only", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "No Watchlist games on this day" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Jump to/ })).toHaveCount(0);
+});
+
+test("offline Today reports one connection warning after both fetch scopes fail", async ({ page, harness }) => {
+  await openGuide(page, harness, { path: "/guide" });
+  harness.state.failScores = true;
+  await page.evaluate(() => { Object.defineProperty(navigator, "onLine", { configurable: true, value: false }); window.dispatchEvent(new Event("offline")); });
+  await page.getByRole("button", { name: "Refresh guide", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Refresh guide", exact: true })).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveCount(1);
+  await expect(page.getByRole("alert").locator("p")).toHaveText(["You're offline. Reconnect to refresh schedule."]);
+  await expect(page.locator(".guide-overnight")).toHaveCount(0);
+  await expect(page.getByTestId("guide-count")).toContainText("80 games listed");
+});
+
+
+test("Guide date Back and Forward load the selected feed", async ({ page, harness }) => {
+  await openGuide(page, harness);
+  await page.getByRole("button", { name: "Next day", exact: true }).click();
+  await expect(dateInput(page)).toHaveValue("2026-09-13");
+  await expect(page.getByRole("heading", { name: "No games listed for this day" })).toBeVisible();
+  const requests = harness.state.scoreRequests.length;
+  await page.goBack();
+  await expect(dateInput(page)).toHaveValue("2026-09-12");
+  await expect(page.getByTestId("guide-count")).toContainText("80 games listed");
+  expect(harness.state.scoreRequests.length).toBeGreaterThan(requests);
+  await page.goForward();
+  await expect(dateInput(page)).toHaveValue("2026-09-13");
+  await expect(page.getByRole("heading", { name: "No games listed for this day" })).toBeVisible();
+});
+
+
+test("a failed retained day keeps its warning after another date also fails", async ({ page, harness }) => {
+  await openGuide(page, harness);
+  harness.state.failScores = true;
+  await page.getByRole("button", { name: "Refresh guide", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Could not refresh schedule");
+  await page.getByRole("button", { name: "Next day", exact: true }).click();
+  await expect(dateInput(page)).toHaveValue("2026-09-13");
+  await expect(page.getByRole("heading", { name: "Schedule temporarily unavailable" })).toBeVisible();
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route("https://site.api.espn.com/**/scoreboard?*", async route => {
+    if (new URL(route.request().url()).searchParams.get("dates") === "20260912") await gate;
+    await route.fallback();
+  });
+  harness.state.failScores = false;
+  try {
+    await page.goBack();
+    await expect(dateInput(page)).toHaveValue("2026-09-12");
+    await expect(page.getByTestId("guide-count")).toContainText("80 games listed");
+    await expect(page.getByRole("alert")).toContainText("Could not refresh schedule");
+    await expect(page.locator(".guide-feed")).toContainText("Last update");
+  } finally { release(); }
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.locator(".guide-feed")).toContainText("Updated just now");
+});
+
+test("TBD listings visibly distinguish live, final, postponed and canceled games", async ({ page, harness }) => {
+  harness.state.events = ["live", "final", "postponed", "canceled", "scheduled"].map(state => {
+    const game = event(`tbd-${state}`, { date: "2026-09-12T20:00:00Z", state: state === "final" ? "final" : state === "live" ? "live" : "upcoming" });
+    game.competitions[0].timeValid = false;
+    if (["postponed", "canceled"].includes(state)) game.status.type = { name: `STATUS_${state.toUpperCase()}`, state: "pre", completed: false, shortDetail: state[0].toUpperCase() + state.slice(1) };
+    return game;
+  });
+  await harness.open({ path: "/guide?date=2026-09-12", now: "2026-09-12T15:00:00Z", waitForScores: false });
+  await expect(page.getByTestId("guide-count")).toContainText("5 games listed");
+  for (const status of ["Live", "Final", "Postponed", "Canceled"]) await expect(page.locator(".guide-tbd").getByRole("button", { name: new RegExp(`tbd-${status.toLowerCase()}`) })).toContainText(`${status} · Listed on`);
+  await expect(page.locator(".guide-tbd").getByRole("button", { name: /tbd-scheduled/ })).not.toContainText("Scheduled");
 });

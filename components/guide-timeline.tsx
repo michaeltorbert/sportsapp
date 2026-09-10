@@ -2,7 +2,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./ui/sheet";
 import { classify, easternDate, type Scoreboard } from "@/lib/football";
-import { coordinate, fullGameLabel, gameColor, guideBoard, guideTime, HOUR, kickoff, LANE_HEIGHT, matchup, networks, tickLabel, watched, type GuideMode } from "@/lib/guide";
+import { compactGuideTime, coordinate, fullGameLabel, gameColor, guideBoard, guideTime, HOUR, kickoff, LANE_HEIGHT, matchup, networks, tickLabel, watched, type GuideMode } from "@/lib/guide";
 
 const SCALE = 90, LABEL_WIDTH = 80, AXIS_HEIGHT = 40;
 type Anchor = { date: string; time: number; network: string; offset: number; order: string[] };
@@ -48,18 +48,18 @@ export function GuideTimeline({ board, mode, now, followToday }: { board: Scoreb
     saveAnchor();
   };
   const ticks: number[] = [];
-  if (model.start !== null && model.end !== null) for (let t = model.start; t <= model.end; t += HOUR) ticks.push(t);
+  if (model.start !== null && model.end !== null) for (let t = model.start; t < model.end; t += HOUR) ticks.push(t);
   return <>
-    <div className="guide-canvas-toolbar"><span ref={focusFallback} className="guide-count" tabIndex={-1} data-testid="guide-count">{model.games.length} {model.games.length === 1 ? "game" : "games"} listed{mode === "watch" ? ` · ${model.allCount} on this day` : ""}</span>{model.start !== null && <button className="guide-jump" aria-label={now >= model.start! && now <= model.end! ? "Jump to current time" : "Jump to schedule start"} onClick={() => { const el = scroller.current; if (el) { el.scrollLeft = now >= model.start! && now <= model.end! ? Math.max(0, coordinate(now, model.start!, SCALE) - 50) : 0; saveAnchor(); } }}>{now >= model.start && now <= model.end! ? "Now" : "Start"}</button>}</div>
+    <div className="guide-canvas-toolbar"><span ref={focusFallback} className="guide-count" tabIndex={-1} data-testid="guide-count">{model.games.length} {model.games.length === 1 ? "game" : "games"} listed{mode === "watch" ? ` · ${model.allCount} on this day` : ""}</span>{rows.length > 0 && model.start !== null && <button className="guide-jump" aria-label={now >= model.start! && now <= model.end! ? "Jump to current time" : "Jump to schedule start"} onClick={() => { const el = scroller.current; if (el) { el.scrollLeft = now >= model.start! && now <= model.end! ? Math.max(0, coordinate(now, model.start!, SCALE) - 50) : 0; saveAnchor(); } }}>{now >= model.start && now <= model.end! ? "Now" : "Start"}</button>}</div>
     {model.games.length === 0 ? <div className="guide-empty"><h2>{mode === "watch" && model.allCount ? "No Watchlist games on this day" : "No games listed for this day"}</h2><p>{mode === "watch" && model.allCount ? "Choose All games to see the full schedule." : "Choose another date or check ESPN for schedule updates."}</p></div> : <>
       {rows.length > 0 && <><p id="guide-pan-help" className="guide-pan-help">Swipe to explore · Tab to games, arrow keys to scroll</p><div ref={scroller} className="guide-viewport" role="region" aria-label="Network and time schedule" aria-describedby="guide-pan-help guide-estimates" tabIndex={0} onScroll={saveAnchor}>
-        <div className="guide-canvas" style={{ width: width + LABEL_WIDTH }}>
+        <div className="guide-canvas" style={{ width: width + LABEL_WIDTH, "--guide-hour-width": `${SCALE}px` } as React.CSSProperties}>
           <div className="guide-axis"><span className="guide-corner">ET</span><div className="guide-hours" style={{ width }}>{ticks.map(t => <span key={t} style={{ left: coordinate(t, model.start!, SCALE) }}><span>{tickLabel(t)}</span>{easternDate(new Date(t)) !== board.date && <small>{easternDate(new Date(t)).slice(5)}</small>}</span>)}</div></div>
           {rows.map(lane => <section key={lane.key} className="guide-network" data-network={lane.key} style={{ height: lane.tracks * LANE_HEIGHT }} aria-label={lane.name}>
             <h2 className="guide-network-name"><span>{lane.name}</span></h2><div className="guide-track" style={{ width }}>
               <ul aria-label={`${lane.name} games`}>{lane.games.map(p => <li key={p.game.id} style={{ left: coordinate(p.start, model.start!, SCALE), top: p.track * LANE_HEIGHT, width: coordinate(p.end, p.start, SCALE) }}>
                 <button className="guide-game" data-game={p.game.id} data-start={p.start} data-end={p.end} style={{ "--game-color": gameColor(p.game.id) } as React.CSSProperties} aria-label={`${fullGameLabel(p.game)}. Estimated 3½-hour window; actual end unknown.`} onFocus={event => { if (!restoringFocus.current && event.currentTarget.matches(":focus-visible")) reveal(event.currentTarget); }} onClick={event => openGame(p.game.id, event.currentTarget)}>
-                  <span className="guide-game-bar"><span className="guide-game-text"><b>{guideTime(p.start).replace(/ (AM|PM)$/, "")}</b> {watched(p.game) && <span className="guide-watch-star" aria-hidden="true">★</span>} {matchup(p.game)}{p.game.state !== "upcoming" && <em> · {p.game.state === "live" ? "Live" : p.game.state === "final" ? "Final" : p.game.status}</em>}</span></span>
+                  <span className="guide-game-bar"><span className="guide-game-text"><b>{compactGuideTime(p.start)}</b> {watched(p.game) && <span className="guide-watch-star" aria-hidden="true">★</span>} {matchup(p.game)}{p.game.state !== "upcoming" && <em> · {p.game.state === "live" ? "Live" : p.game.state === "final" ? "Final" : p.game.status}</em>}</span></span>
                 </button>
               </li>)}</ul>
             </div>
@@ -67,7 +67,7 @@ export function GuideTimeline({ board, mode, now, followToday }: { board: Scoreb
           {model.start !== null && model.end !== null && now >= model.start && now <= model.end && <div className="guide-now" aria-hidden="true" style={{ left: LABEL_WIDTH + coordinate(now, model.start, SCALE), top: AXIS_HEIGHT }}><span>Now</span></div>}
         </div>
       </div></>}
-      {model.tbd.length > 0 && <section className="guide-tbd"><h2>Time TBD</h2><ul>{model.tbd.map(g => <li key={g.id}><button onClick={event => openGame(g.id, event.currentTarget)} aria-label={fullGameLabel(g)}><strong>{matchup(g)}</strong><span>Listed on {networks(g).join(" / ")}{watched(g) ? " · Watchlist" : ""}</span></button></li>)}</ul></section>}
+      {model.tbd.length > 0 && <section className="guide-tbd"><h2>Time TBD</h2><ul>{model.tbd.map(g => <li key={g.id}><button onClick={event => openGame(g.id, event.currentTarget)} aria-label={fullGameLabel(g)}><strong>{matchup(g)}</strong><span>{g.state !== "upcoming" && `${g.state === "live" ? "Live" : g.state === "final" ? "Final" : g.status} · `}Listed on {networks(g).join(" / ")}{watched(g) ? " · Watchlist" : ""}</span></button></li>)}</ul></section>}
       <details className="guide-text-schedule"><summary>Text schedule</summary><ol>{model.games.map(g => <li key={g.id}><a href={g.url} target="_blank" rel="noopener noreferrer">{fullGameLabel(g)} · Gamecast ↗</a></li>)}</ol></details>
     </>}
     <p id="guide-estimates" className="guide-estimates">Bars show estimated 3½-hour windows; actual end times vary.</p>

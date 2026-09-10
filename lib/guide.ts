@@ -58,9 +58,12 @@ export function guideBoard(board: Scoreboard | null, mode: GuideMode) {
 let timeFormatter: Intl.DateTimeFormat | undefined;
 let accessibleTimeFormatter: Intl.DateTimeFormat | undefined;
 let tickFormatter: Intl.DateTimeFormat | undefined;
-export function guideTime(time: number) {
-  timeFormatter ??= new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
-  return timeFormatter.format(time);
+function clockFormatter() {
+  return timeFormatter ??= new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
+}
+export function guideTime(time: number) { return clockFormatter().format(time); }
+export function compactGuideTime(time: number) {
+  return clockFormatter().formatToParts(time).filter(part => part.type === "hour" || part.type === "minute").map(part => part.value).join(":");
 }
 export function tickLabel(time: number) {
   tickFormatter ??= new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", timeZoneName: "short" });
@@ -71,4 +74,4 @@ function accessibleTime(time: number) {
   return accessibleTimeFormatter.format(time);
 }
 export function matchup(game: Game) { return game.teams.map(team => team.abbreviation || team.name).join(" @ "); }
-export function fullGameLabel(game: Game) { const time = kickoff(game); return `${game.teams.map(t => t.name).join(" at ")}, ${easternDate(new Date(game.date))}, ${time === null ? "Time TBD" : accessibleTime(time) + " (Eastern)"}, ${game.state === "upcoming" ? "Scheduled" : game.status}, listed on ${networks(game).join(" / ")}${watched(game) ? ", Watchlist" : ""}`; }
+export function fullGameLabel(game: Game) { const time = kickoff(game), date = Date.parse(game.date); return `${game.teams.map(t => t.name).join(" at ")}, ${Number.isFinite(date) ? easternDate(new Date(date)) : "Date unavailable"}, ${time === null ? "Time TBD" : accessibleTime(time) + " (Eastern)"}, ${game.state === "upcoming" ? "Scheduled" : game.status}, listed on ${networks(game).join(" / ")}${watched(game) ? ", Watchlist" : ""}`; }
