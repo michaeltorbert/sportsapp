@@ -12,6 +12,10 @@ function readBoard(key: string): Scoreboard | null {
     return board && validDate(board.date) && Number.isFinite(Date.parse(board.fetchedAt)) && Array.isArray(board.games) && board.games.every((g: { teams?: unknown[] }) => Array.isArray(g.teams) && g.teams.length === 2) ? board : null;
   } catch { return null; }
 }
+function refreshError(online: boolean, guide: boolean) {
+  const subject = guide ? "schedule" : "scores";
+  return online ? `Could not refresh ${subject}. Retrying automatically.` : `You're offline. Reconnect to refresh ${subject}.`;
+}
 export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDate?: string | null) {
   const search = useInitialSearch();
   const query = new URLSearchParams(search || "").get("date");
@@ -76,7 +80,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
         } catch {
           if (controller.current === c) {
             if (boardScope === "daily") setDailyErrorDate(activeDate);
-            setErrors(previous => ({ ...previous, [boardScope]: navigator.onLine ? "Could not refresh scores. Retrying automatically." : "You're offline. Reconnect to refresh scores." }));
+            setErrors(previous => ({ ...previous, [boardScope]: refreshError(navigator.onLine, dailyOnly) }));
           }
         }
       };
@@ -96,9 +100,9 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
       await Promise.all([update({ start: activeDate, end: activeDate }, "daily"), ...(dailyOnly ? [] : [update(week, "acc"), update(week, "top25")]), ...(manualGuide ? [checkOvernight()] : [])]);
     } catch {
       if (controller.current === c) {
-        const message = navigator.onLine ? "Could not refresh scores. Retrying automatically." : "You're offline. Reconnect to refresh scores.";
+        const message = refreshError(navigator.onLine, dailyOnly);
         setOvernightError(message);
-        if (dailyOnly) { const failedDate = selection || held.current || easternDate(); setDate(failedDate); setDailyErrorDate(failedDate); setErrors(previous => ({ ...previous, daily: message })); }
+        if (dailyOnly) { const failedDate = selection || gameDay(new Date(), null, held.current); setDate(failedDate); if (selection === null) setToday(failedDate); setDailyErrorDate(failedDate); setErrors(previous => ({ ...previous, daily: message })); }
       }
     } finally {
       window.clearTimeout(timeout);
@@ -114,14 +118,15 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
     const initial = window.setTimeout(refresh, 0);
     const interval = window.setInterval(refresh, 30000);
     const resume = () => { if (!document.hidden && navigator.onLine) refresh(); };
-    const offline = () => { setOvernightError("You're offline. Reconnect to refresh scores."); };
+    const offline = () => { setOvernightError(refreshError(false, dailyOnly)); };
     document.addEventListener("visibilitychange", resume); window.addEventListener("online", resume); window.addEventListener("offline", offline);
     return () => { window.clearTimeout(initial); window.clearInterval(interval); controller.current?.abort(); controller.current = null; document.removeEventListener("visibilitychange", resume); window.removeEventListener("online", resume); window.removeEventListener("offline", offline); };
-  }, [refresh, queryReady]);
+  }, [refresh, queryReady, dailyOnly]);
   const chooseDate = (value: string | null) => { setErrors({ daily: "", acc: "", top25: "" }); setOvernightError(""); setSelection(value); setDate(value || held.current || easternDate()); };
   // Weekly views follow the current football week; manual dates apply to daily tabs.
   const range = today ? accWeek(today) : null;
-  const displayDate = dailyOnly && selection ? selection : date;
+  // Guide URL ownership includes null: Today must never fall back to a manual date.
+  const displayDate = dailyOnly ? (selection ?? today) : date;
   const matching = {
     daily: matchingBoard(boards.daily, displayDate),
     acc: range ? matchingBoard(boards.acc, range.start, range.end) : null,

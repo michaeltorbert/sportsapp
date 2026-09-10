@@ -19,6 +19,13 @@ test("archived full slate conserves unique selected-day games, including non-Wat
   assert.equal(all.start, watch.start); assert.equal(all.end, watch.end);
   for (const game of all.games) assert.equal(all.lanes.flatMap(l => l.games).filter(p => p.game.id === game.id).length, g.kickoff(game) === null ? 0 : g.networks(game).length);
   assert.ok(all.lanes.some(l => l.name === "ESPN+"));
+  // The provider spells out these labels; keep them distinct from SECN/ACCN.
+  for (const name of ["SEC Network", "ACC Network", "BTN"]) {
+    assert.ok(all.lanes.some(l => l.name === name));
+    assert.ok(g.networkOrder(name, "ESPN+") < 0);
+  }
+  const labels = g.guideBoard(scoreboard([game({ broadcasts: ["SECN", "SEC Network", "ACCN", "ACC Network"] })]), "all").lanes.map(l => l.name);
+  assert.equal(labels.length, 4);
 });
 
 test("quarter-hour kickoffs and 210-minute windows use exact coordinates; collisions never hide entries", () => {
@@ -100,4 +107,16 @@ test("fixed palette has at least eight swatches, white-text contrast, and stable
     assert.ok(1.05 / (luminance + .05) >= 4.5, color);
   }
   assert.equal(g.gameColor("example"), g.gameColor("example"));
+});
+
+
+test("Time TBD uses network, team names and ID ordering in both its section and text-schedule tail", () => {
+  const make = (id, name, network) => {
+    const result = game({ id, timeValid: false, broadcasts: [network] });
+    result.teams[0].name = name; result.teams[1].name = "Common"; return result;
+  };
+  const games = [make("01", "Alpha", "FOX"), make("02", "Zed", "ABC"), make("99", "Aaa", "ABC"), make("98", "Aaa", "ABC"), game({ id: "timed" })];
+  const model = g.guideBoard(scoreboard(games), "all");
+  assert.deepEqual(model.tbd.map(g => g.id), ["98", "99", "02", "01"]);
+  assert.deepEqual(model.games.map(g => g.id), ["timed", "98", "99", "02", "01"]);
 });

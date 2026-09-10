@@ -22,7 +22,11 @@ test("Guide URL owner preserves date/mode across reload, Back/Forward and app na
   expect(harness.state.scoreRequests.length).toBe(requests);
   expect(await page.evaluate(() => window.__guideOriginal === document.querySelector(".guide-shell"))).toBe(true);
   await page.goBack(); await expect(page.getByRole("button", { name: "All games", exact: true })).toHaveAttribute("aria-pressed", "true");
+  expect(harness.state.scoreRequests.length).toBe(requests);
+  expect(await page.evaluate(() => window.__guideOriginal === document.querySelector(".guide-shell"))).toBe(true);
   await page.goForward(); await expect(page.getByRole("button", { name: "Watchlist only", exact: true })).toHaveAttribute("aria-pressed", "true");
+  expect(harness.state.scoreRequests.length).toBe(requests);
+  expect(await page.evaluate(() => window.__guideOriginal === document.querySelector(".guide-shell"))).toBe(true);
   await page.reload(); await expect(dateInput(page)).toHaveValue("2026-09-12");
   await expect(page.getByRole("button", { name: "Watchlist only", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("link", { name: "Scores", exact: true }).click();
@@ -90,7 +94,7 @@ test("manual-day freshness ignores failed overnight probe; stale refresh retains
   const count = await page.getByTestId("guide-count").innerText();
   harness.state.failScores = true;
   await page.getByRole("button", { name: "Refresh guide", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("Could not refresh");
+  await expect(page.getByRole("alert")).toContainText("Could not refresh schedule");
   await expect(page.getByTestId("guide-count")).toHaveText(count);
   harness.state.failScores = false;
   await page.getByRole("button", { name: "Retry", exact: true }).click();
@@ -221,4 +225,148 @@ test("removed game details close and do not reopen if a later poll restores the 
   await page.clock.fastForward(31_000);
   await expect(page.locator(`.guide-game[data-game="${id}"]`).first()).toBeAttached();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+
+for (const action of ["Today", "Back"]) test(`manual date to ${action} immediately leaves the manual board while overnight is pending`, async ({ page, harness }) => {
+  harness.state.events = [event("manual-future", { date: "2026-09-19T20:00:00Z", state: "upcoming" }), event("effective-today", { date: "2026-09-12T20:00:00Z", state: "upcoming" })];
+  await harness.open({ path: "/guide", now: "2026-09-12T15:00:00Z", waitForScores: false });
+  await expect(dateInput(page)).toHaveValue("2026-09-12");
+  await expect(page.getByRole("button", { name: "Refresh guide", exact: true })).toBeEnabled();
+  await dateInput(page).fill("2026-09-19");
+  await expect(page.locator('.guide-game[data-game="manual-future"]')).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh guide", exact: true })).toBeEnabled();
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route("https://site.api.espn.com/**/scoreboard?*", async route => {
+    if (new URL(route.request().url()).searchParams.get("dates") === "20260911") await gate;
+    await route.fallback().catch(() => {});
+  });
+  try {
+    if (action === "Today") await page.getByRole("button", { name: "Today", exact: true }).click();
+    else await page.goBack();
+    await expect(page).toHaveURL(/\/guide$/);
+    await expect(dateInput(page)).toHaveValue("2026-09-12");
+    await expect(page.locator('.guide-game[data-game="manual-future"]')).toHaveCount(0);
+    await expect(page.getByRole("status", { name: "Loading guide" })).toBeVisible();
+    await page.getByRole("button", { name: "Next day", exact: true }).click();
+    await expect(dateInput(page)).toHaveValue("2026-09-13");
+    await expect(page.getByRole("heading", { name: "No games listed for this day" })).toBeVisible();
+  } finally { release(); }
+});
+
+for (const remaining of ["empty", "tbd-only", "tbd-opener"]) test(`removed details retain connected keyboard focus with ${remaining} results`, async ({ page, harness }) => {
+  const initial = event("removed-focus", { date: "2026-09-12T20:00:00Z", state: "upcoming" });
+  if (remaining === "tbd-opener") initial.competitions[0].timeValid = false;
+  harness.state.events = [initial];
+  await harness.open({ path: "/guide?date=2026-09-12", now: "2026-09-12T15:00:00Z", waitForScores: false });
+  const opener = page.getByRole("button", { name: /removed-focus away at removed-focus home/ });
+  await opener.focus(); await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  const tbd = event("remaining-tbd", { date: "2026-09-12T20:00:00Z", state: "upcoming" });
+  tbd.competitions[0].timeValid = false;
+  harness.state.events = remaining === "tbd-only" ? [tbd] : [];
+  await page.clock.fastForward(31_000);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(region(page)).toHaveCount(0);
+  await expect(page.getByTestId("guide-count")).toBeFocused();
+  expect(await page.evaluate(() => document.activeElement.isConnected && document.activeElement !== document.body)).toBe(true);
+});
+
+
+test("unresolved initial Today timeout exposes a valid unavailable date instead of indefinite loading", async ({ page, harness }) => {
+  await page.addInitScript(() => localStorage.setItem("ss:game-day", "invalid-saved-date"));
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route("https://site.api.espn.com/**/scoreboard?*", async route => {
+    await gate; await route.fallback().catch(() => {});
+  });
+  try {
+    await harness.open({ path: "/guide", now: "2026-09-12T15:00:00Z", waitForScores: false });
+    await expect(page.getByRole("status", { name: "Loading guide" })).toBeVisible();
+    await page.clock.fastForward(41_000);
+    await expect(dateInput(page)).toHaveValue("2026-09-12");
+    await expect(page.getByRole("heading", { name: "Schedule temporarily unavailable" })).toBeVisible();
+    await expect(page.getByRole("status", { name: "Loading guide" })).toHaveCount(0);
+  } finally { release(); }
+});
+
+test("tall streaming lane keeps its network label visible at top middle and bottom", async ({ page, harness }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await openGuide(page, harness);
+  const lane = page.locator('[data-network="espn+"]');
+  const label = lane.locator(".guide-network-name > span");
+  const sizes = await lane.evaluate(el => ({ top: el.offsetTop, height: el.offsetHeight }));
+  expect(sizes.height).toBeGreaterThan(400);
+  for (const portion of [0, .5, 1]) {
+    await region(page).evaluate((el, { sizes, portion }) => { el.scrollTop = sizes.top - 40 + portion * (sizes.height - el.clientHeight + 40); }, { sizes, portion });
+    const view = await region(page).boundingBox(), bounds = await label.boundingBox();
+    expect(bounds.y).toBeGreaterThanOrEqual(view.y + 39);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(view.y + view.height + 1);
+    await expect(label).toHaveText("ESPN+");
+  }
+});
+
+test("pointer tap and details return preserve horizontal pan while keyboard navigation reveals starts", async ({ page, harness }) => {
+  await openGuide(page, harness);
+  const first = page.locator(".guide-game").first();
+  for (const closeWith of ["pointer", "Escape"]) {
+    await region(page).evaluate(el => { el.scrollLeft = 180; el.scrollTop = 0; });
+    const view = await region(page).boundingBox(), bar = await first.boundingBox();
+    expect(bar.x).toBeLessThan(view.x + 80);
+    await page.mouse.click(view.x + 105, bar.y + bar.height / 2);
+    await expect(page.getByRole("dialog")).toBeVisible();
+    expect(await page.locator(".guide-viewport").evaluate(el => el.scrollLeft)).toBe(180);
+    if (closeWith === "Escape") await page.keyboard.press("Escape");
+    else await page.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect.poll(() => region(page).evaluate(el => el.scrollLeft)).toBe(180);
+  }
+  await region(page).focus(); await page.keyboard.press("ArrowRight");
+  // Establish keyboard modality; mobile Safari may skip buttons with its default Tab preference.
+  await first.focus(); await expect(first).toBeFocused();
+  const bounds = await first.boundingBox(), view = await region(page).boundingBox();
+  expect(bounds.x).toBeGreaterThanOrEqual(view.x + 79);
+});
+
+test("timeline allows vertical chaining to the text schedule while containing horizontal overscroll", async ({ page, harness, browserName }) => {
+  await openGuide(page, harness);
+  const styles = await region(page).evaluate(el => ({ x: getComputedStyle(el).overscrollBehaviorX, y: getComputedStyle(el).overscrollBehaviorY }));
+  expect(styles).toEqual({ x: "contain", y: "auto" });
+  await region(page).evaluate(el => { el.scrollTop = el.scrollHeight; });
+  const bounds = await region(page).boundingBox();
+  await page.mouse.move(bounds.x + bounds.width / 2, Math.min(bounds.y + bounds.height / 2, 700));
+  const start = await page.evaluate(() => scrollY);
+  // Mobile WebKit has no mouse-wheel automation; its computed policy is checked above.
+  if (browserName === "webkit") return;
+  await page.mouse.wheel(0, 600);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(start);
+});
+
+test("feed age uses seconds outside the stable status announcement", async ({ page, harness }) => {
+  await openGuide(page, harness);
+  const status = page.locator('.guide-feed [role="status"]');
+  await expect(status).toHaveText("Schedule updated.");
+  await page.clock.fastForward(16_000);
+  await expect(page.locator(".guide-feed")).toContainText(/1[56]s ago/);
+  await expect(page.locator(".guide-feed")).not.toContainText("0m ago");
+  await expect(status).toHaveText("Schedule updated.");
+  await expect(page.getByRole("button", { name: "Jump to schedule start", exact: true })).toBeVisible();
+});
+
+
+test("Back from Scores restores Guide date and pushed mode", async ({ page, harness }) => {
+  await openGuide(page, harness);
+  await page.getByRole("button", { name: "Watchlist only", exact: true }).click();
+  await expect(page).toHaveURL(/date=2026-09-12&view=watch/);
+  await page.getByRole("link", { name: "Scores", exact: true }).click();
+  await expect(page.getByLabel("Scoreboard date, Eastern time")).toHaveValue("2026-09-12");
+  await page.goBack();
+  await expect(page).toHaveURL(/\/guide\?date=2026-09-12&view=watch$/);
+  await expect(dateInput(page)).toHaveValue("2026-09-12");
+  await expect(page.getByRole("button", { name: "Watchlist only", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("guide-count")).toContainText("on this day");
+  await page.goBack();
+  await expect(page.getByRole("button", { name: "All games", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("guide-count")).toContainText("80 games listed");
 });

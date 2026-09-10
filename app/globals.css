@@ -126,27 +126,29 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .guide-shell .feed-banner { margin: 6px 0; padding: 8px 12px; font-size: 12px; }.guide-shell .feed-banner p { margin: 2px 0; }.guide-shell .feed-banner button { margin-left: auto; }
 .guide-overnight { font-size: 12px; color: #efc690; margin: 4px 0; }
 .guide-canvas-toolbar { display: flex; align-items: center; justify-content: space-between; min-height: 44px; font-size: 12px; color: #b2c2d8; }
+.guide-count:focus-visible { outline: 2px solid #cefb70; outline-offset: 3px; border-radius: 2px; }
 .guide-jump { min-height: 44px; padding: 0 14px; color: #d3fc81; border-radius: 8px; }
-.guide-pan-help { font-size: 10px; color: #9eafc7; margin: 0 0 5px; }
-.guide-viewport { position: relative; overflow: auto; overscroll-behavior: contain; height: clamp(176px, calc(100dvh - 305px), 700px); border: 1px solid #2a3c54; border-radius: 8px; background: #0a1527; scroll-padding: 40px 0 0 80px; }
+.guide-pan-help { font-size: 11px; color: #9eafc7; margin: 0 0 5px; }
+.guide-viewport { position: relative; overflow: auto; overscroll-behavior-x: contain; overscroll-behavior-y: auto; height: clamp(176px, calc(100dvh - 305px), 700px); border: 1px solid #2a3c54; border-radius: 8px; background: #0a1527; scroll-padding: 40px 0 0 80px; }
 .guide-viewport:focus-visible { outline: 2px solid #cefb70; outline-offset: 2px; }
 .guide-canvas { position: relative; min-height: 100%; }
 .guide-axis { position: sticky; top: 0; height: 40px; z-index: 4; display: flex; background: #101e32; border-bottom: 1px solid #31445e; }
 .guide-corner { position: sticky; left: 0; z-index: 5; flex: 0 0 80px; display: flex; align-items: center; padding-left: 12px; background: #101e32; color: #a7bad4; font-size: 11px; }
 .guide-hours { position: relative; height: 40px; overflow: hidden; }
-.guide-hours > span { position: absolute; top: 7px; padding-left: 5px; white-space: nowrap; font-size: 10px; color: #c6d4e7; }
-.guide-hours small { display: block; font-size: 9px; color: #a5b6ce; }
+.guide-hours > span { position: absolute; top: 4px; padding-left: 5px; white-space: nowrap; font-size: 11px; color: #c6d4e7; }
+.guide-hours small { display: block; font-size: 11px; color: #a5b6ce; }
 .guide-network { display: flex; position: relative; border-bottom: 1px solid #293b52; }
-.guide-network-name { position: sticky; left: 0; z-index: 2; background: #0e1c30; width: 80px; flex: 0 0 80px; margin: 0; padding: 0 8px; display: flex; align-items: center; font-size: 12px; line-height: 1.15; font-weight: 750; overflow-wrap: anywhere; color: #c6d5e9; border-right: 1px solid #31445e; }
+.guide-network-name { position: sticky; left: 0; z-index: 2; background: #0e1c30; width: 80px; flex: 0 0 80px; margin: 0; padding: 0 8px; display: block; font-size: 12px; line-height: 1.15; font-weight: 750; overflow-wrap: anywhere; color: #c6d5e9; border-right: 1px solid #31445e; }
+.guide-network-name > span { position: sticky; top: 40px; display: flex; align-items: center; height: 44px; }
 .guide-track { position: relative; height: 100%; background: repeating-linear-gradient(to right, #2b3e574d 0 1px, transparent 1px 90px); }
 .guide-track ul { list-style: none; padding: 0; margin: 0; }
 .guide-track li { position: absolute; height: 44px; }
 .guide-game { display: block; width: 100%; height: 44px; text-align: left; border: 0; padding: 6px 2px; background: transparent; color: #fff; border-radius: 5px; }
 .guide-game-bar { display: block; height: 32px; line-height: 32px; background: var(--game-color); border-radius: 4px; box-shadow: inset -5px 0 0 #ffffff18; border-right: 1px dashed #ffffffa0; }
 .guide-game-text { position: sticky; left: 88px; display: block; width: max-content; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 7px; font-size: 12px; font-weight: 600; }
-.guide-game-text b { margin-right: 6px; font-variant-numeric: tabular-nums; font-weight: 800; }.guide-game-text em { font-style: normal; font-size: 10px; }.guide-watch-star { color: #ffe483; font-size: 11px; }
+.guide-game-text b { margin-right: 6px; font-variant-numeric: tabular-nums; font-weight: 800; }.guide-game-text em { font-style: normal; font-size: 11px; }.guide-watch-star { color: #ffe483; font-size: 11px; }
 .guide-game:hover .guide-game-bar { filter: brightness(1.12); }.guide-game:focus-visible { outline-offset: -3px; outline: 2px solid #fff; background: #ffffff22; }
-.guide-now { position: absolute; bottom: 0; width: 2px; background: #cefb70; z-index: 1; pointer-events: none; }.guide-now > span { color: #152209; font-size: 9px; background: #cefb70; padding: 2px; position: absolute; top: 0; }
+.guide-now { position: absolute; bottom: 0; width: 2px; background: #cefb70; z-index: 1; pointer-events: none; }.guide-now > span { color: #152209; font-size: 11px; background: #cefb70; padding: 2px; position: absolute; top: 0; }
 .guide-estimates { color: #aebed2; font-size: 11px; margin: 10px 0; }
 .guide-tbd h2 { font-size: 15px; margin: 16px 0 8px; }.guide-tbd ul, .guide-text-schedule ol { margin: 0; padding: 0; list-style: none; }
 .guide-tbd button { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; width: 100%; text-align: left; border-bottom: 1px solid #2c3b52; font-size: 13px; }.guide-tbd span { color: #aebed2; font-size: 12px; }
