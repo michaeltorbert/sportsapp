@@ -51,7 +51,7 @@ test("full archive geometry, scrolling, accessible details and responsive screen
   await openGuide(page, harness);
   const bars = page.locator(".guide-game");
   expect(await bars.count()).toBeGreaterThan(25);
-  await expect(bars.first()).toHaveAttribute("aria-label", /2026-09-12/);
+  await expect(bars.first()).toHaveAccessibleName(/2026-09-12/);
   for (const label of await page.locator(".guide-game-text b").allTextContents()) expect(label).toMatch(/^\d{1,2}:\d{2}$/);
   await region(page).evaluate(el => { el.scrollLeft = el.scrollWidth; });
   const finalTick = await page.locator(".guide-hours > span").last().boundingBox(), edge = await region(page).boundingBox();
@@ -323,7 +323,7 @@ test("tall streaming lane keeps its network label visible at top middle and bott
   }
 });
 
-test("pointer tap and details return preserve horizontal pan while keyboard navigation reveals starts", async ({ page, harness }) => {
+test("pointer tap and details return preserve horizontal pan while keyboard navigation reveals starts", async ({ page, harness, browserName }) => {
   await openGuide(page, harness);
   const first = page.locator(".guide-game").first();
   for (const closeWith of ["pointer", "Escape"]) {
@@ -339,8 +339,17 @@ test("pointer tap and details return preserve horizontal pan while keyboard navi
     await expect.poll(() => region(page).evaluate(el => el.scrollLeft)).toBe(180);
   }
   await region(page).focus(); await page.keyboard.press("ArrowRight");
+  // Chromium animates this key scroll; mobile WebKit does not move the viewport.
+  // Let any native motion settle before testing a separate focus reveal.
+  if (browserName === "chromium") await expect.poll(() => region(page).evaluate(el => el.scrollLeft)).toBeGreaterThan(180);
+  await expect.poll(() => region(page).evaluate(async el => {
+    const left = el.scrollLeft;
+    for (let frame = 0; frame < 3; frame++) await new Promise(requestAnimationFrame);
+    return el.scrollLeft === left;
+  })).toBe(true);
   // Establish keyboard modality; mobile Safari may skip buttons with its default Tab preference.
   await first.focus(); await expect(first).toBeFocused();
+  await expect.poll(() => first.evaluate(el => el.matches(":focus-visible"))).toBe(true);
   const bounds = await first.boundingBox(), view = await region(page).boundingBox();
   expect(bounds.x).toBeGreaterThanOrEqual(view.x + 79);
 });
@@ -367,7 +376,7 @@ test("feed age uses seconds outside the stable status announcement", async ({ pa
   await expect(page.locator(".guide-feed")).toContainText(/1[56]s ago/);
   await expect(page.locator(".guide-feed")).not.toContainText("0m ago");
   await expect(status).toHaveText("Schedule updated.");
-  await expect(page.getByRole("button", { name: "Jump to schedule start", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start — jump to schedule start", exact: true })).toBeVisible();
 });
 
 
@@ -405,15 +414,15 @@ test("Jump is absent for Watchlist with only TBD games or no matching games", as
   await harness.open({ path: "/guide?date=2026-09-12&view=watch", now: "2026-09-12T15:00:00Z", waitForScores: false });
   await expect(page.getByRole("heading", { name: "Time TBD", exact: true })).toBeVisible();
   await expect(region(page)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Jump to/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(Now|Start) — jump to/ })).toHaveCount(0);
   await page.getByRole("button", { name: "All games", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Jump to schedule start", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start — jump to schedule start", exact: true })).toBeVisible();
   harness.state.events = [timed];
   await page.getByRole("button", { name: "Refresh guide", exact: true }).click();
   await expect(page.getByTestId("guide-count")).toContainText("1 game listed");
   await page.getByRole("button", { name: "Watchlist only", exact: true }).click();
   await expect(page.getByRole("heading", { name: "No Watchlist games on this day" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Jump to/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(Now|Start) — jump to/ })).toHaveCount(0);
 });
 
 test("offline Today reports one connection warning after both fetch scopes fail", async ({ page, harness }) => {
@@ -481,5 +490,33 @@ test("TBD listings visibly distinguish live, final, postponed and canceled games
   await harness.open({ path: "/guide?date=2026-09-12", now: "2026-09-12T15:00:00Z", waitForScores: false });
   await expect(page.getByTestId("guide-count")).toContainText("5 games listed");
   for (const status of ["Live", "Final", "Postponed", "Canceled"]) await expect(page.locator(".guide-tbd").getByRole("button", { name: new RegExp(`tbd-${status.toLowerCase()}`) })).toContainText(`${status} · Listed on`);
-  await expect(page.locator(".guide-tbd").getByRole("button", { name: /tbd-scheduled/ })).not.toContainText("Scheduled");
+  await expect(page.locator(".guide-tbd").getByRole("button", { name: /tbd-scheduled/ }).locator("span:not(.sr-only)")).not.toContainText("Scheduled");
+});
+
+
+test("Guide controls include their visible label in the accessible name", async ({ page, harness }) => {
+  const timed = event("label-timed", { date: "2026-09-12T16:00:00Z", state: "live", rank: 5 });
+  const tbd = event("label-tbd", { date: "2026-09-12T20:00:00Z", state: "final", acc: true });
+  tbd.competitions[0].timeValid = false;
+  harness.state.events = [timed, tbd];
+  await harness.open({ path: "/guide?date=2026-09-12", now: "2026-09-12T17:00:00Z", waitForScores: false });
+  await expect(page.getByTestId("guide-count")).toContainText("2 games listed");
+  for (const control of await page.locator(".guide-game, .guide-tbd button, .guide-jump").all()) {
+    const visible = await control.evaluate(element => {
+      const copy = element.cloneNode(true);
+      copy.querySelectorAll('[aria-hidden="true"], .sr-only').forEach(node => node.remove());
+      return Array.from(copy.childNodes).map(node => node.textContent).join(" ").replace(/\s+/g, " ").trim();
+    });
+    expect(visible).not.toBe("");
+    const escaped = visible.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    await expect(control).toHaveAccessibleName(new RegExp(`^${escaped}`));
+    await expect(control).not.toHaveAccessibleName(/★/);
+  }
+  const timedButton = page.locator(".guide-game");
+  await expect(timedButton).toHaveAccessibleName(/label-timed away at label-timed home, 2026-09-12, 12:00 PM EDT/);
+  await expect(timedButton).toHaveAccessibleName(/Watchlist.*Estimated 3½-hour window; actual end unknown/);
+  await expect(page.locator(".guide-tbd button")).toHaveAccessibleName(/label-tbd away at label-tbd home, 2026-09-12, Time TBD/);
+  await expect(page.getByRole("button", { name: "Now — jump to current time", exact: true })).toBeVisible();
+  await page.clock.fastForward(4 * 60 * 60 * 1000);
+  await expect(page.getByRole("button", { name: "Start — jump to schedule start", exact: true })).toBeVisible();
 });
