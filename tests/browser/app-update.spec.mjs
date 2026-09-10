@@ -176,6 +176,10 @@ for (const mode of ["hidden", "offline"]) {
   for (const timing of ["queued", "in-flight"]) {
     for (const outcome of ["loaded", "failure", "dismissed target"]) {
       test(`Help ${timing} ${outcome} response expires across ${mode} suspension`, async ({ page, harness }) => {
+        // These cases test updater timing, not the Help sheet's entrance motion.
+        // Honor the app's reduced-motion CSS so clicking the animated sheet does
+        // not race WebKit compositing while the test clock advances independently.
+        await page.emulateMedia({ reducedMotion: "reduce" });
         const state = await mockHealth(page);
         await harness.open();
         const loaded = await page.locator("main").getAttribute("data-app-commit");
