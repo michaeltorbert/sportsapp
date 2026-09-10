@@ -21,6 +21,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
   const [boards, setBoards] = useState<Record<BoardScope, Scoreboard | null>>({ daily: null, acc: null, top25: null });
   const [errors, setErrors] = useState<Record<BoardScope, string>>({ daily: "", acc: "", top25: "" });
   const [overnightError, setOvernightError] = useState("");
+  const [dailyErrorDate, setDailyErrorDate] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const online = useOnline(), timezone = useTimezone();
   const [now, setNow] = useState(0);
@@ -73,7 +74,10 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
           setBoards(previous => ({ ...previous, [boardScope]: next }));
           setErrors(previous => ({ ...previous, [boardScope]: "" })); setNow(Date.now());
         } catch {
-          if (controller.current === c) setErrors(previous => ({ ...previous, [boardScope]: navigator.onLine ? "Could not refresh scores. Retrying automatically." : "You're offline. Reconnect to refresh scores." }));
+          if (controller.current === c) {
+            if (boardScope === "daily") setDailyErrorDate(activeDate);
+            setErrors(previous => ({ ...previous, [boardScope]: navigator.onLine ? "Could not refresh scores. Retrying automatically." : "You're offline. Reconnect to refresh scores." }));
+          }
         }
       };
       const week = accWeek(effective);
@@ -94,7 +98,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
       if (controller.current === c) {
         const message = navigator.onLine ? "Could not refresh scores. Retrying automatically." : "You're offline. Reconnect to refresh scores.";
         setOvernightError(message);
-        if (dailyOnly) { setDate(selection || held.current || easternDate()); setErrors(previous => ({ ...previous, daily: message })); }
+        if (dailyOnly) { const failedDate = selection || held.current || easternDate(); setDate(failedDate); setDailyErrorDate(failedDate); setErrors(previous => ({ ...previous, daily: message })); }
       }
     } finally {
       window.clearTimeout(timeout);
@@ -125,5 +129,5 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
   };
   const data = matching[scope];
   const error = errors[scope] || overnightError;
-  return { date: displayDate, today, data, boards: matching, error, dailyError: errors.daily, overnightError, refreshing, online, now, timezone, refresh, setDate: chooseDate, followToday: selection === null };
+  return { date: displayDate, today, data, boards: matching, error, dailyError: !dailyOnly || dailyErrorDate === displayDate ? errors.daily : "", overnightError, refreshing, online, now, timezone, refresh, setDate: chooseDate, followToday: selection === null };
 }

@@ -13,6 +13,8 @@ export function GuideTimeline({ board, mode, now, followToday }: { board: Scoreb
   const opener = useRef<HTMLElement | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const game = model.games.find(g => g.id === selected);
+  // A removed listing closes its details permanently, even if a later poll restores it.
+  if (selected !== null && !game) setSelected(null);
   const width = model.start !== null && model.end !== null ? coordinate(model.end, model.start, SCALE) : 0;
   const rows = model.lanes.map((lane, i, list) => ({ ...lane, top: list.slice(0, i).reduce((n, l) => n + l.tracks * LANE_HEIGHT, 0) }));
   const saveAnchor = () => {

@@ -143,7 +143,9 @@ test("verified app refresh preserves Guide route, explicit date and mode without
   await page.clock.fastForward(3100); await expect.poll(() => calls).toBeGreaterThan(0);
   await page.clock.fastForward(10100);
   await expect(page.getByRole("button", { name: "Refresh app", exact: true })).toBeVisible();
+  const reloaded = page.waitForEvent("domcontentloaded");
   await page.getByRole("button", { name: "Refresh app", exact: true }).click();
+  await reloaded;
   await expect(page).toHaveURL(/\/guide\?date=2026-09-12&view=watch$/);
   await expect(dateInput(page)).toHaveValue("2026-09-12");
   await expect(page.getByRole("button", { name: "Watchlist only", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -180,4 +182,43 @@ test("reduced motion and doubled desktop scale retain reachable controls and tex
   await expect(listing).toContainText("2026-09-12");
   await listing.focus(); await expect(listing).toBeFocused();
   await expect(listing).toHaveAttribute("href", /^https:\/\/www\.espn\.com\//);
+});
+
+
+test("a previous day's failure does not label a newly selected pending day unavailable", async ({ page, harness }) => {
+  harness.state.failScores = true;
+  await harness.open({ path: "/guide?date=2026-09-12", now: "2026-09-12T15:00:00Z", waitForScores: false });
+  await expect(page.getByRole("heading", { name: "Schedule temporarily unavailable" })).toBeVisible();
+  harness.state.failScores = false;
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route("https://site.api.espn.com/**/scoreboard?*", async route => {
+    if (new URL(route.request().url()).searchParams.get("dates") === "20260913") await gate;
+    await route.fallback();
+  });
+  try {
+    await page.getByRole("button", { name: "Next day", exact: true }).click();
+    await expect(dateInput(page)).toHaveValue("2026-09-13");
+    await expect(page.getByRole("status", { name: "Loading guide" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Schedule temporarily unavailable" })).toHaveCount(0);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  } finally { release(); }
+  await expect(page.getByRole("heading", { name: "No games listed for this day" })).toBeVisible();
+});
+
+
+test("removed game details close and do not reopen if a later poll restores the listing", async ({ page, harness }) => {
+  await openGuide(page, harness);
+  const first = page.locator(".guide-game").first();
+  const id = await first.getAttribute("data-game");
+  await first.click(); await expect(page.getByRole("dialog")).toBeVisible();
+  const removed = harness.state.events.find(e => e.id === id);
+  harness.state.events = harness.state.events.filter(e => e.id !== id);
+  await page.clock.fastForward(31_000);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(region(page)).toBeFocused();
+  harness.state.events.push(removed);
+  await page.clock.fastForward(31_000);
+  await expect(page.locator(`.guide-game[data-game="${id}"]`).first()).toBeAttached();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
