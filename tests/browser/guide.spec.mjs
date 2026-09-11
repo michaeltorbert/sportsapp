@@ -32,11 +32,14 @@ test("Guide fits ranked school names to visible space and explains Watchlist sta
   await page.evaluate(() => { document.body.style.zoom = "2"; });
   await region(page).evaluate(el => { el.scrollLeft = 180; });
   await expect(label).toHaveAttribute("data-abbreviated", "true");
-  const zoomed = await label.evaluate(el => ({
-    labelRight: el.getBoundingClientRect().right,
-    barRight: el.parentElement.getBoundingClientRect().right,
-    viewRight: el.closest(".guide-viewport").getBoundingClientRect().right,
-  }));
+  const zoomed = await label.evaluate(el => {
+    const viewport = el.closest(".guide-viewport"), view = viewport.getBoundingClientRect();
+    return {
+      labelRight: el.getBoundingClientRect().right,
+      barRight: el.parentElement.getBoundingClientRect().right,
+      viewRight: view.left + (viewport.clientLeft + viewport.clientWidth) * view.width / viewport.offsetWidth,
+    };
+  });
   expect(zoomed.labelRight).toBeLessThanOrEqual(Math.min(zoomed.barRight, zoomed.viewRight));
   await page.evaluate(() => { document.body.style.zoom = "1"; });
   await region(page).evaluate(el => { el.scrollLeft = 0; });
@@ -46,6 +49,28 @@ test("Guide fits ranked school names to visible space and explains Watchlist sta
   await button.click();
   await expect(page.getByRole("dialog")).toContainText("No. 8 Oklahoma");
   await expect(page.getByRole("link", { name: "Find on YouTube TV" })).toHaveAttribute("href", "https://tv.youtube.com/search/Oklahoma%20Michigan");
+});
+
+test("Guide labels stay inside the scrollable client area with reserved right space", async ({ page, harness }) => {
+  const listing = event("gutter", { date: "2026-09-12T16:00:00Z", state: "upcoming", rank: 8 });
+  const teams = listing.competitions[0].competitors;
+  teams[0].team.shortDisplayName = "Northwestern State"; teams[0].team.abbreviation = "NORTHWESTERN";
+  teams[1].team.shortDisplayName = "Southeastern Louisiana"; teams[1].team.abbreviation = "SOUTHEASTERN";
+  harness.state.events = [listing];
+  await page.setViewportSize({ width: 320, height: 640 });
+  await harness.open({ path: "/guide?date=2026-09-12", now: "2026-09-12T15:00:00Z", waitForScores: false });
+  await region(page).evaluate(el => {
+    el.style.overflowY = "scroll";
+    el.style.scrollbarGutter = "stable";
+    // A substantial right border also exercises the client-edge distinction on
+    // platforms whose scrollbars overlay content rather than reserving a gutter.
+    el.style.borderRightWidth = "24px";
+  });
+  await expect.poll(() => page.locator(".guide-game-text").evaluate(el => {
+    const viewport = el.closest(".guide-viewport"), view = viewport.getBoundingClientRect();
+    const clientRight = view.left + (viewport.clientLeft + viewport.clientWidth) * view.width / viewport.offsetWidth;
+    return el.getBoundingClientRect().right <= clientRight;
+  })).toBe(true);
 });
 
 test("YouTube TV search safely encodes school names and retains ESPN", async ({ page, harness }) => {
