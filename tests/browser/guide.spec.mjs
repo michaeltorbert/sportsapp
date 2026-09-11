@@ -7,20 +7,20 @@ const dateInput = page => page.getByLabel("Guide date, Eastern time");
 test("Guide fits ranked school names to visible space and explains Watchlist stars", async ({ page, harness }) => {
   const listing = event("readable", { date: "2026-09-12T16:00:00Z", state: "upcoming", rank: 8 });
   const teams = listing.competitions[0].competitors;
-  teams[0].team.shortDisplayName = "Oklahoma"; teams[0].team.abbreviation = "OU";
-  teams[1].team.shortDisplayName = "Michigan"; teams[1].team.abbreviation = "MICH";
+  teams[0].team.shortDisplayName = "Oklahoma State"; teams[0].team.abbreviation = "OKST";
+  teams[1].team.shortDisplayName = "Michigan State"; teams[1].team.abbreviation = "MSU";
   const later = structuredClone(listing); later.id = "later"; later.date = "2026-09-12T23:00:00Z";
   harness.state.events = [listing, later];
   await page.setViewportSize({ width: 1280, height: 850 });
   await harness.open({ path: "/guide?date=2026-09-12", now: "2026-09-12T15:00:00Z", waitForScores: false });
   const button = page.locator('.guide-game[data-game="readable"]'), label = button.locator(".guide-game-text");
   await expect(label).toHaveAttribute("data-abbreviated", "false");
-  await expect(label.locator(".guide-label-full")).toContainText("#8 Oklahoma @ Michigan");
-  await expect(button).toHaveAccessibleName(/#8 Oklahoma @ Michigan.*No. 8 Oklahoma at Michigan/);
+  await expect(label.locator(".guide-label-full")).toContainText("#8 Oklahoma State @ Michigan State");
+  await expect(button).toHaveAccessibleName(/#8 Oklahoma State @ Michigan State.*No. 8 Oklahoma State at Michigan State/);
   await expect(page.locator(".guide-watch-legend")).toContainText("Watchlist");
   await page.setViewportSize({ width: 320, height: 640 });
   await expect(label).toHaveAttribute("data-abbreviated", "true");
-  await expect(label.locator(".guide-label-short")).toContainText("#8 OU @ MICH");
+  await expect(label.locator(".guide-label-short")).toContainText("#8 OKST @ MSU");
   await page.setViewportSize({ width: 1280, height: 850 });
   await expect(label).toHaveAttribute("data-abbreviated", "false");
   await page.setViewportSize({ width: 640, height: 850 });
@@ -47,8 +47,8 @@ test("Guide fits ranked school names to visible space and explains Watchlist sta
   await page.getByRole("button", { name: "Watchlist only", exact: true }).click();
   await expect(page.locator(".guide-watch-legend, .guide-watch-star")).toHaveCount(0);
   await button.click();
-  await expect(page.getByRole("dialog")).toContainText("No. 8 Oklahoma");
-  await expect(page.getByRole("link", { name: "Find on YouTube TV" })).toHaveAttribute("href", "https://tv.youtube.com/search/Oklahoma%20Michigan");
+  await expect(page.getByRole("dialog")).toContainText("No. 8 Oklahoma State");
+  await expect(page.getByRole("link", { name: "Find on YouTube TV" })).toHaveAttribute("href", "https://tv.youtube.com/search/Oklahoma%20State%20Michigan%20State");
 });
 
 test("Guide labels stay inside the scrollable client area with reserved right space", async ({ page, harness }) => {
