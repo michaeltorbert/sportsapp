@@ -28,6 +28,19 @@ test("Guide fits ranked school names to visible space and explains Watchlist sta
   await expect(label).toHaveAttribute("data-abbreviated", "true");
   await region(page).evaluate(el => { el.scrollLeft = 0; });
   await expect(label).toHaveAttribute("data-abbreviated", "false");
+  await page.setViewportSize({ width: 1280, height: 850 });
+  await page.evaluate(() => { document.body.style.zoom = "2"; });
+  await region(page).evaluate(el => { el.scrollLeft = 180; });
+  await expect(label).toHaveAttribute("data-abbreviated", "true");
+  const zoomed = await label.evaluate(el => ({
+    labelRight: el.getBoundingClientRect().right,
+    barRight: el.parentElement.getBoundingClientRect().right,
+    viewRight: el.closest(".guide-viewport").getBoundingClientRect().right,
+  }));
+  expect(zoomed.labelRight).toBeLessThanOrEqual(Math.min(zoomed.barRight, zoomed.viewRight));
+  await page.evaluate(() => { document.body.style.zoom = "1"; });
+  await region(page).evaluate(el => { el.scrollLeft = 0; });
+  await expect(label).toHaveAttribute("data-abbreviated", "false");
   await page.getByRole("button", { name: "Watchlist only", exact: true }).click();
   await expect(page.locator(".guide-watch-legend, .guide-watch-star")).toHaveCount(0);
   await button.click();

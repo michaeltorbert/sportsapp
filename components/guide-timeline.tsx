@@ -43,10 +43,12 @@ export function GuideTimeline({ board, mode, now, followToday }: { board: Scoreb
     let frame = 0, cancelled = false;
     const fitLabels = () => {
       const view = viewport.getBoundingClientRect();
+      // Rectangles include ancestor zoom; measured text and CSS widths do not.
+      const zoom = viewport.offsetWidth ? view.width / viewport.offsetWidth : 1;
       const measurements = Array.from(viewport.querySelectorAll<HTMLElement>(".guide-game-text"), label => {
         const bar = label.parentElement!.getBoundingClientRect();
         // Keep the label inside the portion of its estimated window currently visible.
-        const available = Math.max(0, Math.min(bar.right - 5, view.right - 2) - Math.max(bar.left, view.left + 88));
+        const available = Math.max(0, Math.min((bar.right - view.left) / zoom - 5, view.width / zoom - 2) - Math.max((bar.left - view.left) / zoom, 88));
         const full = label.querySelector<HTMLElement>(".guide-label-measure")!;
         return { label, available, abbreviated: String(full.offsetWidth + 7 > available) };
       });
