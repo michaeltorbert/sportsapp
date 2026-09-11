@@ -10,6 +10,15 @@ const { parseGuide, guideUrl } = await bundle("lib/guide-state.ts");
 const { refreshUrl } = await bundle("lib/app-update.ts");
 const fixture = JSON.parse(readFileSync(new URL("fixtures/guide-2026-09-12.json", import.meta.url)));
 
+test("Guide names prefer schools and retain ranks in short and accessible labels", () => {
+  const listing = game();
+  listing.teams[0] = { ...listing.teams[0], name: "Oklahoma", abbreviation: "OU", rank: 8 };
+  listing.teams[1] = { ...listing.teams[1], name: "Michigan", abbreviation: "MICH", rank: null };
+  assert.equal(g.matchup(listing), "#8 Oklahoma @ Michigan");
+  assert.equal(g.matchup(listing, true), "#8 OU @ MICH");
+  assert.match(g.fullGameLabel(listing), /^No. 8 Oklahoma at Michigan,/);
+});
+
 test("archived full slate conserves unique selected-day games, including non-Watchlist and multi-network listings", () => {
   const board = normalizeScoreboard(fixture, "2026-09-12");
   const all = g.guideBoard(board, "all"), watch = g.guideBoard(board, "watch");

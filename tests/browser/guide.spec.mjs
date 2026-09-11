@@ -3,6 +3,93 @@ import { test, expect, event } from "./fixtures.mjs";
 const archive = JSON.parse(readFileSync(new URL("../fixtures/guide-2026-09-12.json", import.meta.url)));
 const region = page => page.getByRole("region", { name: "Network and time schedule" });
 const dateInput = page => page.getByLabel("Guide date, Eastern time");
+
+test("Guide fits ranked school names to visible space and explains Watchlist stars", async ({ page, harness }) => {
+  const listing = event("readable", { date: "2026-09-12T16:00:00Z", state: "upcoming", rank: 8 });
+  const teams = listing.competitions[0].competitors;
+  teams[0].team.shortDisplayName = "Oklahoma"; teams[0].team.abbreviation = "OU";
+  teams[1].team.shortDisplayName = "Michigan"; teams[1].team.abbreviation = "MICH";
+  const later = structuredClone(listing); later.id = "later"; later.date = "2026-09-12T23:00:00Z";
+  harness.state.events = [listing, later];
+  await page.setViewportSize({ width: 1280, height: 850 });
+  await harness.open({ path: "/guide?date=2026-09-12", now: "2026-09-12T15:00:00Z", waitForScores: false });
+  const button = page.locator('.guide-game[data-game="readable"]'), label = button.locator(".guide-game-text");
+  await expect(label).toHaveAttribute("data-abbreviated", "false");
+  await expect(label.locator(".guide-label-full")).toContainText("#8 Oklahoma @ Michigan");
+  await expect(button).toHaveAccessibleName(/#8 Oklahoma @ Michigan.*No. 8 Oklahoma at Michigan/);
+  await expect(page.locator(".guide-watch-legend")).toContainText("Watchlist");
+  await page.setViewportSize({ width: 320, height: 640 });
+  // The full names can fit at 320px with some system fonts; constrain the
+  // visible game window to force the fallback without assuming font metrics.
+  await region(page).evaluate(el => { el.scrollLeft = 180; });
+  await expect(label).toHaveAttribute("data-abbreviated", "true");
+  await expect(label.locator(".guide-label-short")).toContainText("#8 OU @ MICH");
+  await page.setViewportSize({ width: 1280, height: 850 });
+  await expect(label).toHaveAttribute("data-abbreviated", "false");
+  await page.setViewportSize({ width: 640, height: 850 });
+  await region(page).evaluate(el => { el.scrollLeft = 180; });
+  await expect(label).toHaveAttribute("data-abbreviated", "true");
+  await region(page).evaluate(el => { el.scrollLeft = 0; });
+  await expect(label).toHaveAttribute("data-abbreviated", "false");
+  await page.setViewportSize({ width: 1280, height: 850 });
+  await page.evaluate(() => { document.body.style.zoom = "2"; });
+  await region(page).evaluate(el => { el.scrollLeft = 180; });
+  await expect(label).toHaveAttribute("data-abbreviated", "true");
+  const zoomed = await label.evaluate(el => {
+    const viewport = el.closest(".guide-viewport"), view = viewport.getBoundingClientRect();
+    return {
+      labelRight: el.getBoundingClientRect().right,
+      barRight: el.parentElement.getBoundingClientRect().right,
+      viewRight: view.left + (viewport.clientLeft + viewport.clientWidth) * view.width / viewport.offsetWidth,
+    };
+  });
+  expect(zoomed.labelRight).toBeLessThanOrEqual(Math.min(zoomed.barRight, zoomed.viewRight));
+  await page.evaluate(() => { document.body.style.zoom = "1"; });
+  await region(page).evaluate(el => { el.scrollLeft = 0; });
+  await expect(label).toHaveAttribute("data-abbreviated", "false");
+  await page.getByRole("button", { name: "Watchlist only", exact: true }).click();
+  await expect(page.locator(".guide-watch-legend, .guide-watch-star")).toHaveCount(0);
+  await button.click();
+  await expect(page.getByRole("dialog")).toContainText("No. 8 Oklahoma");
+  await expect(page.getByRole("link", { name: "Find on YouTube TV" })).toHaveAttribute("href", "https://tv.youtube.com/search/Oklahoma%20Michigan");
+});
+
+test("Guide labels stay inside the scrollable client area with reserved right space", async ({ page, harness }) => {
+  const listing = event("gutter", { date: "2026-09-12T16:00:00Z", state: "upcoming", rank: 8 });
+  const teams = listing.competitions[0].competitors;
+  teams[0].team.shortDisplayName = "Northwestern State"; teams[0].team.abbreviation = "NORTHWESTERN";
+  teams[1].team.shortDisplayName = "Southeastern Louisiana"; teams[1].team.abbreviation = "SOUTHEASTERN";
+  harness.state.events = [listing];
+  await page.setViewportSize({ width: 320, height: 640 });
+  await harness.open({ path: "/guide?date=2026-09-12", now: "2026-09-12T15:00:00Z", waitForScores: false });
+  await region(page).evaluate(el => {
+    el.style.overflowY = "scroll";
+    el.style.scrollbarGutter = "stable";
+    // A substantial right border also exercises the client-edge distinction on
+    // platforms whose scrollbars overlay content rather than reserving a gutter.
+    el.style.borderRightWidth = "24px";
+  });
+  await expect.poll(() => page.locator(".guide-game-text").evaluate(el => {
+    const viewport = el.closest(".guide-viewport"), view = viewport.getBoundingClientRect();
+    const clientRight = view.left + (viewport.clientLeft + viewport.clientWidth) * view.width / viewport.offsetWidth;
+    return el.getBoundingClientRect().right <= clientRight;
+  })).toBe(true);
+});
+
+test("YouTube TV search safely encodes school names and retains ESPN", async ({ page, harness }) => {
+  const listing = event("encoded", { date: "2026-09-12T16:00:00Z", state: "upcoming" });
+  listing.competitions[0].competitors[0].team.shortDisplayName = "Texas A&M";
+  listing.competitions[0].competitors[1].team.shortDisplayName = "Miami (OH)";
+  harness.state.events = [listing];
+  await harness.open({ path: "/guide?date=2026-09-12", now: "2026-09-12T15:00:00Z", waitForScores: false });
+  await page.locator(".guide-game").click();
+  const link = page.getByRole("link", { name: "Find on YouTube TV" });
+  await expect(link).toHaveAttribute("href", "https://tv.youtube.com/search/Texas%20A%26M%20Miami%20(OH)");
+  await expect(link).toHaveAttribute("target", "_blank");
+  await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  await expect(page.getByRole("dialog")).toContainText("Search results may include replays.");
+  await expect(page.getByRole("link", { name: "Open Gamecast" })).toBeVisible();
+});
 async function openGuide(page, harness, options = {}) {
   harness.state.events = structuredClone(archive.events);
   await harness.open({ path: "/guide?date=2026-09-12", now: "2026-09-12T15:00:00Z", waitForScores: false, ...options });
@@ -503,9 +590,18 @@ test("Guide controls include their visible label in the accessible name", async 
   await expect(page.getByTestId("guide-count")).toContainText("2 games listed");
   for (const control of await page.locator(".guide-game, .guide-tbd button, .guide-jump").all()) {
     const visible = await control.evaluate(element => {
-      const copy = element.cloneNode(true);
-      copy.querySelectorAll('[aria-hidden="true"], .sr-only').forEach(node => node.remove());
-      return Array.from(copy.childNodes).map(node => node.textContent).join(" ").replace(/\s+/g, " ").trim();
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      const text = [];
+      while (walker.nextNode()) {
+        let parent = walker.currentNode.parentElement, hidden = false;
+        while (parent && parent !== element) {
+          const style = getComputedStyle(parent);
+          if (parent.matches('[aria-hidden="true"], .sr-only') || style.display === "none" || style.visibility === "hidden") hidden = true;
+          parent = parent.parentElement;
+        }
+        if (!hidden) text.push(walker.currentNode.textContent);
+      }
+      return text.join(" ").replace(/\s+/g, " ").trim();
     });
     expect(visible).not.toBe("");
     const escaped = visible.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
