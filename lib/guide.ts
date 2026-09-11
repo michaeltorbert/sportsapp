@@ -73,5 +73,5 @@ function accessibleTime(time: number) {
   accessibleTimeFormatter ??= new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
   return accessibleTimeFormatter.format(time);
 }
-export function matchup(game: Game) { return game.teams.map(team => team.abbreviation || team.name).join(" @ "); }
-export function fullGameLabel(game: Game) { const time = kickoff(game), date = Date.parse(game.date); return `${game.teams.map(t => t.name).join(" at ")}, ${Number.isFinite(date) ? easternDate(new Date(date)) : "Date unavailable"}, ${time === null ? "Time TBD" : accessibleTime(time) + " (Eastern)"}, ${game.state === "upcoming" ? "Scheduled" : game.status}, listed on ${networks(game).join(" / ")}${watched(game) ? ", Watchlist" : ""}`; }
+export function matchup(game: Game, abbreviated = false) { return game.teams.map(team => `${team.rank !== null ? `#${team.rank} ` : ""}${abbreviated ? team.abbreviation || team.name : team.name}`).join(" @ "); }
+export function fullGameLabel(game: Game) { const time = kickoff(game), date = Date.parse(game.date); return `${game.teams.map(t => `${t.rank !== null ? `No. ${t.rank} ` : ""}${t.name}`).join(" at ")}, ${Number.isFinite(date) ? easternDate(new Date(date)) : "Date unavailable"}, ${time === null ? "Time TBD" : accessibleTime(time) + " (Eastern)"}, ${game.state === "upcoming" ? "Scheduled" : game.status}, listed on ${networks(game).join(" / ")}${watched(game) ? ", Watchlist" : ""}`; }

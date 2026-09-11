@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.6.1 · 2026-09-10
+
+- Prefer full school names in the Guide, measure available space before falling back to abbreviations, include rankings and make kickoff times less prominent.
+- Explain stars with an explicit Watchlist legend in All games; hide the legend and redundant stars in Watchlist mode.
+- Add a Find on YouTube TV matchup-search link in game details while preserving Gamecast. The link opens search, not direct playback or confirmed viewing access.
+
 ## 1.6.0 · 2026-09-10
 
 - Add a responsive TV Guide with network rows, Eastern kickoff times, watchlist filtering, game details and an accessible text schedule (#60).

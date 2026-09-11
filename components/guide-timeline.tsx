@@ -38,6 +38,30 @@ export function GuideTimeline({ board, mode, now, followToday }: { board: Scoreb
     // Restore the semantic anchor when data/filter layout changes, never on clock ticks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, board.date]);
+  useLayoutEffect(() => {
+    const viewport = scroller.current; if (!viewport) return;
+    let frame = 0, cancelled = false;
+    const fitLabels = () => {
+      const view = viewport.getBoundingClientRect();
+      const measurements = Array.from(viewport.querySelectorAll<HTMLElement>(".guide-game-text"), label => {
+        const bar = label.parentElement!.getBoundingClientRect();
+        // Keep the label inside the portion of its estimated window currently visible.
+        const available = Math.max(0, Math.min(bar.right - 5, view.right - 2) - Math.max(bar.left, view.left + 88));
+        const full = label.querySelector<HTMLElement>(".guide-label-measure")!;
+        return { label, available, abbreviated: String(full.offsetWidth + 7 > available) };
+      });
+      for (const { label, available, abbreviated } of measurements) {
+        label.style.maxWidth = `${available}px`;
+        label.dataset.abbreviated = abbreviated;
+      }
+    };
+    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(fitLabels); };
+    const observer = new ResizeObserver(schedule); observer.observe(viewport);
+    viewport.addEventListener("scroll", schedule, { passive: true });
+    void document.fonts.ready.then(() => { if (!cancelled) schedule(); });
+    fitLabels();
+    return () => { cancelled = true; cancelAnimationFrame(frame); observer.disconnect(); viewport.removeEventListener("scroll", schedule); };
+  }, [model, mode]);
   const openGame = (id: string, target: HTMLElement) => { opener.current = target; setSelected(id); };
   const reveal = (target: HTMLElement) => {
     const el = scroller.current; if (!el) return;
@@ -50,7 +74,9 @@ export function GuideTimeline({ board, mode, now, followToday }: { board: Scoreb
   const ticks: number[] = [];
   if (model.start !== null && model.end !== null) for (let t = model.start; t < model.end; t += HOUR) ticks.push(t);
   return <>
-    <div className="guide-canvas-toolbar"><span ref={focusFallback} className="guide-count" tabIndex={-1} data-testid="guide-count">{model.games.length} {model.games.length === 1 ? "game" : "games"} listed{mode === "watch" ? ` · ${model.allCount} on this day` : ""}</span>{rows.length > 0 && model.start !== null && <button className="guide-jump" aria-label={now >= model.start! && now <= model.end! ? "Now — jump to current time" : "Start — jump to schedule start"} onClick={() => { const el = scroller.current; if (el) { el.scrollLeft = now >= model.start! && now <= model.end! ? Math.max(0, coordinate(now, model.start!, SCALE) - 50) : 0; saveAnchor(); } }}>{now >= model.start && now <= model.end! ? "Now" : "Start"}</button>}</div>
+    <div className="guide-canvas-toolbar"><span ref={focusFallback} className="guide-count" tabIndex={-1} data-testid="guide-count">{model.games.length} {model.games.length === 1 ? "game" : "games"} listed{mode === "watch" ? ` · ${model.allCount} on this day` : ""}</span>
+      {mode === "all" && model.games.some(watched) && <span className="guide-watch-legend" title="ACC, Top 25, close games or upset watch"><span aria-hidden="true">★</span> Watchlist</span>}
+      {rows.length > 0 && model.start !== null && <button className="guide-jump" aria-label={now >= model.start! && now <= model.end! ? "Now — jump to current time" : "Start — jump to schedule start"} onClick={() => { const el = scroller.current; if (el) { el.scrollLeft = now >= model.start! && now <= model.end! ? Math.max(0, coordinate(now, model.start!, SCALE) - 50) : 0; saveAnchor(); } }}>{now >= model.start && now <= model.end! ? "Now" : "Start"}</button>}</div>
     {model.games.length === 0 ? <div className="guide-empty"><h2>{mode === "watch" && model.allCount ? "No Watchlist games on this day" : "No games listed for this day"}</h2><p>{mode === "watch" && model.allCount ? "Choose All games to see the full schedule." : "Choose another date or check ESPN for schedule updates."}</p></div> : <>
       {rows.length > 0 && <><p id="guide-pan-help" className="guide-pan-help">Swipe to explore · Tab to games, arrow keys to scroll</p><div ref={scroller} className="guide-viewport" role="region" aria-label="Network and time schedule" aria-describedby="guide-pan-help guide-estimates" tabIndex={0} onScroll={saveAnchor}>
         <div className="guide-canvas" style={{ width: width + LABEL_WIDTH, "--guide-hour-width": `${SCALE}px` } as React.CSSProperties}>
@@ -59,7 +85,7 @@ export function GuideTimeline({ board, mode, now, followToday }: { board: Scoreb
             <h2 className="guide-network-name"><span>{lane.name}</span></h2><div className="guide-track" style={{ width }}>
               <ul aria-label={`${lane.name} games`}>{lane.games.map(p => <li key={p.game.id} style={{ left: coordinate(p.start, model.start!, SCALE), top: p.track * LANE_HEIGHT, width: coordinate(p.end, p.start, SCALE) }}>
                 <button className="guide-game" data-game={p.game.id} data-start={p.start} data-end={p.end} style={{ "--game-color": gameColor(p.game.id) } as React.CSSProperties} onFocus={event => { if (!restoringFocus.current && event.currentTarget.matches(":focus-visible")) reveal(event.currentTarget); }} onClick={event => openGame(p.game.id, event.currentTarget)}>
-                  <span className="guide-game-bar"><span className="guide-game-text"><b>{compactGuideTime(p.start)}</b> {watched(p.game) && <span className="guide-watch-star" aria-hidden="true">★</span>} {matchup(p.game)}{p.game.state !== "upcoming" && <em> · {p.game.state === "live" ? "Live" : p.game.state === "final" ? "Final" : p.game.status}</em>}</span></span>
+                  <span className="guide-game-bar"><span className="guide-game-text">{["full", "short", "measure"].map(variant => <span key={variant} className={`guide-label-${variant}`} aria-hidden={variant === "measure" ? true : undefined}><b>{compactGuideTime(p.start)}</b> {mode === "all" && watched(p.game) && <span className="guide-watch-star" aria-hidden="true">★</span>} {matchup(p.game, variant === "short")}{p.game.state !== "upcoming" && <em> · {p.game.state === "live" ? "Live" : p.game.state === "final" ? "Final" : p.game.status}</em>}</span>)}</span></span>
                   {" "}<span className="sr-only">{fullGameLabel(p.game)}. Estimated 3½-hour window; actual end unknown.</span>
                 </button>
               </li>)}</ul>
@@ -72,6 +98,10 @@ export function GuideTimeline({ board, mode, now, followToday }: { board: Scoreb
       <details className="guide-text-schedule"><summary>Text schedule</summary><ol>{model.games.map(g => <li key={g.id}><a href={g.url} target="_blank" rel="noopener noreferrer">{fullGameLabel(g)} · Gamecast ↗</a></li>)}</ol></details>
     </>}
     <p id="guide-estimates" className="guide-estimates">Bars show estimated 3½-hour windows; actual end times vary.</p>
-    <Sheet open={!!game} onOpenChange={open => { if (!open) setSelected(null); }}><SheetContent side="bottom" className="guide-details" onCloseAutoFocus={event => { event.preventDefault(); const target = opener.current?.isConnected ? opener.current : scroller.current?.isConnected ? scroller.current : focusFallback.current; restoringFocus.current = true; target?.focus({ preventScroll: true }); restoringFocus.current = false; }}><SheetHeader><SheetTitle>{game ? game.teams.map(t => t.name).join(" at ") : "Game details"}</SheetTitle><SheetDescription>{game ? `${kickoff(game) === null ? "Time TBD" : guideTime(kickoff(game)!) + " Eastern"} · ${board.date} · ${game.status}` : ""}</SheetDescription></SheetHeader>{game && <div className="guide-details-body"><p>Listed on {networks(game).join(" / ")}</p>{game.teams.map(t => <p key={t.id}><strong>{t.rank !== null ? `No. ${t.rank} ` : ""}{t.name}</strong>{t.record ? ` · ${t.record}` : ""}{game.started && t.score !== null ? ` · ${t.score} points` : ""}</p>)}{watched(game) && <p>★ Watchlist · {Object.entries(classify(game)).filter(([, value]) => value).map(([key]) => ({ acc: "ACC", top25: "Top 25", close: "One-score watch", upset: "Upset watch" }[key])).join(" · ")}</p>}<p className="guide-estimates">Estimated window only. Actual end time and viewing access are not confirmed.</p><a className="solid-button" href={game.url} target="_blank" rel="noopener noreferrer">Open Gamecast ↗</a></div>}</SheetContent></Sheet>
+    <Sheet open={!!game} onOpenChange={open => { if (!open) setSelected(null); }}><SheetContent side="bottom" className="guide-details" onCloseAutoFocus={event => { event.preventDefault(); const target = opener.current?.isConnected ? opener.current : scroller.current?.isConnected ? scroller.current : focusFallback.current; restoringFocus.current = true; target?.focus({ preventScroll: true }); restoringFocus.current = false; }}><SheetHeader><SheetTitle>{game ? game.teams.map(t => t.name).join(" at ") : "Game details"}</SheetTitle><SheetDescription>{game ? `${kickoff(game) === null ? "Time TBD" : guideTime(kickoff(game)!) + " Eastern"} · ${board.date} · ${game.status}` : ""}</SheetDescription></SheetHeader>{game && <div className="guide-details-body"><p>Listed on {networks(game).join(" / ")}</p>{game.teams.map(t => <p key={t.id}><strong>{t.rank !== null ? `No. ${t.rank} ` : ""}{t.name}</strong>{t.record ? ` · ${t.record}` : ""}{game.started && t.score !== null ? ` · ${t.score} points` : ""}</p>)}{watched(game) && <p>★ Watchlist · {Object.entries(classify(game)).filter(([, value]) => value).map(([key]) => ({ acc: "ACC", top25: "Top 25", close: "One-score watch", upset: "Upset watch" }[key])).join(" · ")}</p>}<p className="guide-estimates">Estimated window only. Actual end time and viewing access are not confirmed.</p>
+      <a className="solid-button" href={`https://tv.youtube.com/search/${encodeURIComponent(game.teams.map(t => t.name).join(" "))}`} target="_blank" rel="noopener noreferrer">Find on YouTube TV ↗</a>
+      <p className="guide-estimates">Search results may include replays. Availability depends on your plan and location.</p>
+      <a className="solid-button" href={game.url} target="_blank" rel="noopener noreferrer">Open Gamecast ↗</a>
+    </div>}</SheetContent></Sheet>
   </>;
 }
