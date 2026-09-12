@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.6.2 · 2026-09-11
+
+- Gradually reduce Watchlist priority for comfortable leads, including in the first half, while retaining ACC interest, ranking relevance and meaningful upset significance (#66).
+- Smooth score-margin and halftime transitions, reduce multi-score drama as regulation time runs out, and give close fourth-quarter games more priority relative to comfortable leads.
+- Guard priority calculations against malformed saved scores; preserve shared tab ordering, stable tiebreakers and notification behavior.
+
 ## 1.6.1 · 2026-09-10
 
 - Prefer full school names in the Guide, measure available space before falling back to abbreviations, include rankings and make kickoff times less prominent.
