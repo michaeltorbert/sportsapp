@@ -12,11 +12,12 @@ const { retainFinalCategories } = await bundle("lib/football.ts");
 const output = await build({
   entryPoints: ["app/page.tsx"], bundle: true, platform: "node", format: "esm", jsx: "automatic", write: false,
   plugins: [{ name: "score-page-runtime", setup(build) {
-    build.onResolve({ filter: /^(next\/link|react(?:\/jsx-runtime)?|lucide-react|@\/components\/.*|@\/lib\/(?:use-scoreboard|use-app-update))$/ }, args => ({ path: args.path, namespace: "page-test" }));
+    build.onResolve({ filter: /^(next\/link|react(?:\/jsx-runtime)?|lucide-react|@\/components\/.*|@\/lib\/(?:use-scoreboard|use-app-update|use-duke-visibility))$/ }, args => ({ path: args.path, namespace: "page-test" }));
     build.onLoad({ filter: /.*/, namespace: "page-test" }, args => {
       if (args.path === "next/link") return { contents: "export default ({children,...props})=>globalThis.scorePageTest.element('a',props,children);" };
-      if (args.path === "react") return { contents: "export const useState=(...a)=>globalThis.scorePageTest.useState(...a),useRef=v=>({current:v}),useEffect=fn=>globalThis.scorePageTest.effect(fn),useSyncExternalStore=()=>null;" };
+      if (args.path === "react") return { contents: "export const useMemo=fn=>fn(),useState=(...a)=>globalThis.scorePageTest.useState(...a),useRef=v=>({current:v}),useEffect=fn=>globalThis.scorePageTest.effect(fn),useSyncExternalStore=()=>null;" };
       if (args.path === "react/jsx-runtime") return { contents: "export const jsx=(...a)=>globalThis.scorePageTest.jsx(...a),jsxs=(...a)=>globalThis.scorePageTest.jsxs(...a),Fragment=globalThis.scorePageTest.Fragment;" };
+      if (args.path === "@/lib/use-duke-visibility") return { contents: "export const useDukeVisibility=()=>({prefs:null,storageWarning:'',setHidden(){},setMode(){}});" };
       if (args.path === "@/lib/use-app-update") return { contents: "export const LOADED_COMMIT=undefined,useAppUpdate=()=>({target:null,status:'',refreshing:false,check(){},refresh(){},dismiss(){}});" };
       if (args.path === "@/lib/use-scoreboard") return { contents: "export const useScoreboard=scope=>globalThis.scorePageTest.scoreboard(scope);" };
       if (args.path === "lucide-react") return { contents: "export const ArrowUpRight=()=>null,CalendarDays=()=>null,ChevronLeft=()=>null,ChevronRight=()=>null,CircleHelp=()=>null,CloudOff=()=>null,Radio=()=>null,RefreshCw=()=>null,Signal=()=>null,TriangleAlert=()=>null,Tv=()=>null,Zap=()=>null;" };
@@ -25,7 +26,7 @@ const output = await build({
         export const Tabs=wrapper,TabsList=wrapper,Empty=wrapper,EmptyHeader=wrapper,EmptyMedia=wrapper,EmptyTitle=wrapper,EmptyDescription=wrapper,Sheet=wrapper,SheetTrigger=wrapper,SheetHeader=wrapper,SheetTitle=wrapper,SheetDescription=wrapper;
         export const TabsContent=({value,children})=>value===globalThis.scorePageTest.filter?wrapper({children}):null;
         export const TabsTrigger=({value,children})=>globalThis.scorePageTest.element('button',{'data-tab':value},children);
-        export const SheetContent=({children})=>globalThis.scorePageTest.showHelp?wrapper({children}):null,Skeleton=()=>null,Alerts=()=>null,AppUpdateNotice=()=>null,AppNavigation=()=>null;
+        export const SheetContent=({children})=>globalThis.scorePageTest.showHelp?wrapper({children}):null,Skeleton=()=>null,Alerts=()=>null,AppUpdateNotice=()=>null,AppNavigation=()=>null,DukeSettings=()=>null,DukeGameControls=()=>null;
       ` };
     });
   } }],
@@ -147,7 +148,7 @@ test("Help discloses ranking-only alerts when the line-based list excludes a ran
   const { html } = render("watch", { boards, showHelp: true });
   assert.deepEqual(cardIds(html), ["ranked-underdog"]);
   assert.doesNotMatch(html, /class="badge upset-badge"|class="upset-reason"/);
-  assert.match(html, /Phone alerts are separate from these display categories and cover every qualifying game, regardless of the selected tab/);
+  assert.match(html, /Phone alerts are separate from these display categories and cover every qualifying game except Duke, regardless of the selected tab/);
   assert.deepEqual(cardIds(render("upset", { boards }).html), []);
 });
 

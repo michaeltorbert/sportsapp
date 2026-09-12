@@ -163,3 +163,35 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .guide-details { max-width: 640px; margin: auto; padding-bottom: max(24px, env(safe-area-inset-bottom)); border-radius: 18px 18px 0 0; max-height: 90dvh; overflow-y: auto; }.guide-details > button { min-width: 44px; min-height: 44px; top: 5px; right: 5px; display: grid; place-items: center; }.guide-details [data-slot="sheet-header"] { padding-right: 54px; }.guide-details-body { padding: 0 18px 16px; font-size: 14px; }.guide-details-body p { margin: 0 0 14px; }.guide-details-body .solid-button { display: inline-flex; align-items: center; }
 @media (max-height: 450px) and (min-width: 600px) { .guide-shell { display: grid; grid-template-columns: 1fr 1fr; padding-top: max(env(safe-area-inset-top), 4px); }.guide-shell > * { grid-column: 1 / -1; }.guide-shell .app-header { grid-column: 1; border: 0; }.guide-shell .destination-nav { grid-column: 2; justify-content: flex-end; border: 0; padding: 0; }.guide-controls { grid-column: 1; }.guide-heading { grid-column: 2; min-height: 48px; padding-left: 12px; }.guide-heading h1 { font-size: 18px; }.guide-canvas-toolbar { min-height: 44px; }.guide-viewport { height: max(150px, calc(100dvh - 196px)); } }
 @media (max-width: 350px) { .guide-shell .wordmark { font-size: 20px; }.guide-modes button { padding: 0 8px; }.guide-heading h1 { font-size: 20px; }.guide-controls .date-picker { font-size: 12px; }.guide-controls .date-navigation { margin-left: -8px; }.guide-controls .today-button { padding: 0 9px; } }
+
+/* Dates identify protected events without revealing opponents or game status. */
+.duke-controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
+.duke-game-control { display: flex; flex-direction: column; gap: 4px; }
+.duke-game-control small { font-size: 11px; color: #a1aec3; padding-left: 12px; }
+.duke-toggle { display: inline-flex; gap: 8px; align-items: center; min-height: 44px; padding: 8px 13px; border: 1px solid #34435a; border-radius: 24px; background: #182131; color: #c7d3e5; font-size: 13px; }
+.duke-toggle.is-hidden { background: #1c281d; color: #d6eca9; border-color: #445338; }
+.duke-toggle span { font-size: 11px; opacity: .8; }
+.settings-sheet { width: 430px; max-width: 100%; overflow-y: auto; padding: 24px; }
+.settings-body h3 { font-size: 16px; font-weight: 650; margin: 22px 0 12px; }
+.settings-body p { color: #a1aec3; font-size: 13px; line-height: 1.6; margin: 12px 0; }
+.settings-body legend { font-size: 15px; font-weight: 650; padding: 14px 0 5px; }
+.duke-mode { display: flex; gap: 12px; align-items: center; min-height: 55px; border-bottom: 1px solid #293345; font-size: 14px; cursor: pointer; }
+.duke-mode input { width: 18px; height: 18px; accent-color: #cefb70; }
+.duke-storage-warning { font-size: 13px; color: #ffce98; }
+.duke-reveal button { min-height: 44px; }
+@media (max-width: 600px) { .settings-sheet { width: 100%; max-width: 100%; } .app-header .wordmark { font-size: 22px; } }
+
+/* Keep the per-game control in the existing heading row on short screens. */
+.guide-heading { flex-wrap: wrap; }
+.guide-heading > .duke-controls { flex-basis: 100%; }
+@media (max-height: 450px) and (min-width: 600px) {
+  .guide-shell { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .guide-heading { flex-wrap: wrap; gap: 6px; padding-left: 6px; }
+  .guide-heading:has(.duke-controls) h1 { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .guide-heading > .duke-controls { flex-basis: auto; flex-wrap: wrap; margin: 0; }
+  .guide-heading .duke-toggle { padding: 6px 8px; gap: 5px; white-space: nowrap; }
+  .guide-heading .duke-toggle span, .guide-heading .duke-game-control small { display: none; }
+  .guide-heading .guide-modes button { padding: 0 7px; font-size: 11px; white-space: nowrap; }
+  .guide-shell .brand-icon { display: none; }
+  .guide-shell .wordmark { font-size: 20px; }
+}

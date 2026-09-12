@@ -1,3 +1,4 @@
+import { isDuke } from "../../lib/duke-visibility";
 import { rankedUpset } from "../../lib/upset";
 import { meaningfulUpset } from "./expectation";
 import { classify, easternDate, margin, type Game } from "../../lib/football";
@@ -6,6 +7,7 @@ export type Snapshot = { game: Game; observedAt: number };
 export type AlertEvent = { id: string; gameId: string; gameDay: string; trigger: Trigger; createdAt: number; payload: { title: string; body: string; eventId: string; url: string } };
 
 export function conditions(game: Game, now: number): Record<Trigger, boolean> {
+  if (isDuke(game)) return { "one-score-fourth": false, "ranked-trailing-fourth": false, "upset-final": false, "acc-kickoff": false };
   const tags = classify({ ...game, retainedCategories: undefined });
   const lateGame = game.state === "live" && Number.isInteger(game.period) && game.period >= 4;
   const untilKickoff = Date.parse(game.date) - now;

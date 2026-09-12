@@ -1,5 +1,6 @@
-export const VERSION = "1.6.3";
+export const VERSION = "1.7.0";
 export const releases = [
+  { version: "1.7.0", date: "September 12, 2026", changes: "Add Settings and Duke spoiler protection. Away and neutral-site games are hidden by default, with a saved hide or show choice for each game. Duke notifications stay off. Team records are omitted to avoid revealing hidden results." },
   { version: "1.6.3", date: "September 12, 2026", changes: "Keep Duke and Virginia Tech first within live, upcoming and finished games. Give ranked upset watches more priority and retain interest when a ranked game becomes tied. Preserve earlier ordering decisions with a cumulative rule log and regression tests." },
   { version: "1.6.2", date: "September 11, 2026", changes: "Comfortable leads gradually move down the Watchlist, including in the first half, while close finishes and meaningful upsets retain priority. Rankings and ACC interest still matter, with smoother score and halftime transitions." },
   { version: "1.6.1", date: "September 10, 2026", changes: "Read school names and rankings more easily in the Guide, with abbreviations when space is tight and less prominent kickoff times. A Watchlist legend explains the stars in All games. Game details now offer a YouTube TV matchup search alongside Gamecast." },
