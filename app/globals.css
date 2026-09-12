@@ -180,3 +180,17 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .duke-storage-warning { font-size: 13px; color: #ffce98; }
 .duke-reveal button { min-height: 44px; }
 @media (max-width: 600px) { .settings-sheet { width: 100%; max-width: 100%; } .app-header .wordmark { font-size: 22px; } }
+
+/* Keep the per-game control in the existing heading row on short screens. */
+.guide-heading { flex-wrap: wrap; }
+.guide-heading > .duke-controls { order: 3; flex-basis: 100%; }
+@media (max-height: 450px) and (min-width: 600px) {
+  .guide-heading { flex-wrap: nowrap; gap: 6px; padding-left: 6px; }
+  .guide-heading h1 { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .guide-heading > .duke-controls { order: 0; flex-basis: auto; flex-wrap: nowrap; margin: 0; }
+  .guide-heading .duke-toggle { padding: 6px 8px; gap: 5px; white-space: nowrap; }
+  .guide-heading .duke-toggle span, .guide-heading .duke-game-control small { display: none; }
+  .guide-heading .guide-modes button { padding: 0 7px; font-size: 11px; white-space: nowrap; }
+  .guide-shell .brand-icon { display: none; }
+  .guide-shell .wordmark { font-size: 20px; }
+}
