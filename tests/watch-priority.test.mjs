@@ -278,3 +278,105 @@ test("malformed saved scores cannot produce a nonfinite priority", () => {
     assert.equal(priority.upset, 0);
   }
 });
+
+
+test("ranked upset watch precedes Texas A&M winning in the reported third-quarter state", () => {
+  // Scores, ranks and clocks come from the screenshot. Spread magnitude is unknown;
+  // exercise rank fallback and several explicit line assumptions independently.
+  for (const spread of [null, 3, 7, 14]) {
+    const upset = match("oklahoma-michigan", { sec: true, rank: 11, period: 3, clock: 892,
+      score: 0, otherScore: 10 });
+    const winning = match("tamu-asu", { sec: true, rank: 10, period: 3, clock: 614,
+      score: 17, otherScore: 13 });
+    if (spread !== null) upset.pregameLine = { favoriteId: "a", spread, source: "fixture assumption" };
+    for (const input of [[winning, upset], [upset, winning]]) {
+      for (const filter of ["watch", "top25"])
+        assert.deepEqual(viewGames(scoreboard(input), filter).map(g => g.id), [upset.id, winning.id]);
+    }
+    const recovered = structuredClone(upset);
+    recovered.teams[0].score = 14;
+    assert.equal(gamePriority(recovered).upset, 0, "the trailing bonus disappears after a recovery");
+    upset.pregameLine = { favoriteId: "b", spread: 3, source: "contrary fixture assumption" };
+    assert.equal(gamePriority(upset).upset, 0, "a ranked betting underdog does not gain upset priority");
+  }
+});
+
+
+test("Oregon upset ranks near the top of the seven screenshot games", () => {
+  // Visible ranks, scores and clocks only; no betting lines inferred from images.
+  const rows = [
+    ["wake-purdue", { acc: true, score: 23, otherScore: 20, period: 4, clock: 120 }],
+    ["vt-odu", { acc: true, score: 37, otherScore: 13, period: 4, clock: 672 }],
+    ["oklahoma-michigan", { sec: true, rank: 11, score: 10, otherScore: 10, period: 4, clock: 709 }],
+    ["penn-state-temple", { rank: 16, score: 27, otherScore: 9, period: 4, clock: 112 }],
+    ["tamu-asu", { sec: true, rank: 10, score: 38, otherScore: 20, period: 4, clock: 518 }],
+    ["georgia-wku", { sec: true, rank: 2, score: 56, otherScore: 6, period: 3, clock: 674 }],
+    ["oregon-osu", { rank: 6, score: 14, otherScore: 24, period: 2, clock: 116 }],
+  ];
+  const games = rows.map(([id, values]) => {
+    const g = match(id, values);
+    // Unknown is safer than inventing the generic fixture's conference-watch evidence.
+    g.teams[1].conferenceId = null;
+    if (id === "vt-odu") g.teams[0].id = "259";
+    return g;
+  });
+  for (const input of [games, [...games].reverse()]) {
+    const ordered = viewGames(scoreboard(input), "watch").map(g => g.id);
+    assert.ok(ordered.indexOf("oregon-osu") <= 3, "ORD-005: upset stays above ordinary comfortable wins; exact position is not a user rule");
+    assert.ok(ordered.indexOf("oregon-osu") < ordered.indexOf("tamu-asu"));
+    assert.ok(ordered.indexOf("oregon-osu") < ordered.indexOf("georgia-wku"));
+    assert.equal(ordered[0], "vt-odu", "ORD-007 supersedes the old Oregon-over-VT inference");
+    assert.ok(ordered.indexOf("oregon-osu") < ordered.indexOf("penn-state-temple"));
+    assert.ok(viewGames(scoreboard(input), "top25").findIndex(g => g.id === "oregon-osu") <= 1);
+  }
+});
+
+
+test("ORD-007 Duke and Virginia Tech lead each state group without crossing groups", () => {
+  const states = ["live", "delayed", "upcoming", "other", "final"];
+  const games = states.flatMap((state, index) => {
+    const ordinary = match(`${state}-ordinary`, { state, rank: 1, period: 5,
+      score: 24, otherScore: 27, date: "2026-09-12T12:00:00Z" });
+    return [ordinary, ...["150", "259"].map((teamId, side) => {
+      const pinned = match(`${state}-${teamId}`, { state, acc: true, score: 56, otherScore: 0,
+        period: 1, date: `2026-09-${13 + index}T12:00:00Z` });
+      pinned.teams[side].id = teamId;
+      return pinned;
+    })];
+  });
+  for (const input of [games, [...games].reverse()]) {
+    const sorted = sortGames(input);
+    assert.deepEqual(sorted.map(g => g.state), states.flatMap(state => [state, state, state]));
+    for (const state of states) {
+      const group = sorted.filter(g => g.state === state);
+      assert.deepEqual(new Set(group.slice(0, 2).map(g => g.id)), new Set([`${state}-150`, `${state}-259`]));
+      assert.equal(group[2].id, `${state}-ordinary`);
+    }
+    assert.equal(viewGames(scoreboard(input), "watch", true).some(g => g.state === "final"), false);
+    assert.equal(viewGames(scoreboard(input), "upset").some(g => g.teams.some(t => ["150", "259"].includes(t.id))), false,
+      "pinning does not turn a comfortable favorite win into an upset");
+  }
+  const earlier = match("earlier", { state: "upcoming", date: "2026-09-12T12:00:00Z" });
+  const later = match("later", { state: "upcoming", date: "2026-09-12T20:00:00Z" });
+  earlier.teams[0].id = "259"; later.teams[0].id = "150";
+  assert.deepEqual(sortGames([later, earlier]).map(g => g.id), ["earlier", "later"],
+    "both favorites share a tier; chronology breaks their upcoming tie");
+});
+
+test("ORD-006 ranked ties retain interest below comparable ranked upsets", () => {
+  for (const period of [1, 2, 3, 4, 5]) {
+    const losing = match("losing", { sec: true, rank: 11, period, clock: 120, score: 21, otherScore: 24 });
+    const tied = match("tied", { sec: true, rank: 11, period, clock: 120, score: 24, otherScore: 24 });
+    assert.ok(gamePriority(tied).upset > 0);
+    assert.equal(gamePriority(tied).upset, gamePriority(losing).upset * 0.75);
+    for (const pair of [[tied, losing], [losing, tied]]) assert.equal(sortGames(pair)[0].id, "losing");
+    assert.equal(classify(tied).upset, false, "interest does not label a tie as an actual upset");
+    const recovered = match("recovered", { sec: true, rank: 11, period, clock: 120, score: 25, otherScore: 24 });
+    assert.ok(gamePriority(recovered).upset < gamePriority(tied).upset);
+    if (period < 4) assert.equal(gamePriority(recovered).upset, 0);
+  }
+  const lowRanked = match("low-ranked", { rank: 25, period: 3, score: 21, otherScore: 24 });
+  const marqueeTie = match("marquee-tie", { rank: 1, otherRank: 2, period: 3, score: 24, otherScore: 24 });
+  assert.equal(sortGames([lowRanked, marqueeTie])[0].id, "marquee-tie",
+    "retained tie interest avoids making every minor upset beat a top-two tie");
+});
