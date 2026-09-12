@@ -16,9 +16,26 @@ The score is an internal ordering weight, not a probability or a percentage.
 
 The urgency stage is 1–3 for the first three quarters, 4 for the fourth quarter, 5 for the final five minutes of regulation, and 6 for overtime. A missing or invalid clock or an intermission never supplies a final-minute bonus. A game with a missing period gets no urgency credit.
 
-A margin of eight points or fewer earns six times the urgency stage; nine through sixteen earns four times the stage. A margin of three or fewer gets four additional points in the final five minutes or overtime. An early 0–0 game therefore receives six drama points, compared with 34 for a tie in the final five minutes. Team relevance still matters independently.
+A margin of eight points or fewer earns six times the urgency stage. In the first half, that drama weight decreases linearly to zero between eight and twenty points (three times the stage at fourteen points). After halftime the zero-drama margin shrinks smoothly from twenty to sixteen points by regulation’s end; at Q4 kickoff it is eighteen. One-score games retain their full drama weight. A margin of three or fewer gets four additional points in the final five minutes or overtime. An early 0–0 game therefore receives six drama points, compared with 34 for a tie in the final five minutes. Team relevance still matters independently.
 
-Margins of 25 or more reduce relevance to 35% in every quarter; from the third quarter onward, that reduction starts at 17 points. These games receive no close-game drama. This keeps a major ranked loss visible while letting a close fourth-quarter game rise above it, even when the blowout is still in the first half. Final-minute tiebreak bands are five minutes, two minutes, and one minute; the clock does not reorder otherwise equal games every second.
+Issue #66 replaces the abrupt 25-point / second-half 17-point reduction with a continuous taper. Relevance stays at full weight through an eight-point margin. Beyond eight, subtract 65% times `min(1, (margin - 8) / (22 - 2 * elapsedQuarters))` from its multiplier. Elapsed regulation quarters run from zero at kickoff to four at regulation's end, using the reported quarter and a valid known clock; overtime stays at four. A missing or invalid clock uses the start of the reported quarter. An explicit end-of-quarter intermission uses that quarter's end, including halftime, so halftime and Q3 kickoff have identical relevance. Missing scores or a nonfinite margin from malformed saved scores receive no margin reduction or close-game drama.
+
+The relevance floor remains 35%, reached at a 30-point margin at kickoff, 26 at halftime, and 22 at regulation's end. These are product weights, not estimates of comeback probability. Increasing a favorite's lead cannot raise its priority. Smoothing drama across the margin range also removes the old 16/17-point drama cliff. Quarter urgency can still lift competitive games as play advances; it cannot create the old halftime relevance collapse. Rankings and ACC interest still distinguish equally competitive games, and an early ordinary tie does not automatically beat a relevant two-score game.
+
+The taper applies to either leader, while the separate supported upset bonus preserves additional interest when the expected winner trails. Significant upsets thus remain above otherwise identical comfortable favorite wins, without making every large upset deficit outrank a close late game. Final-minute tiebreak bands remain five minutes, two minutes, and one minute. Close one-score games retain those time bands; wider margins can gradually change relative priority as reported clocks advance. Kickoff and event ID still break otherwise equal scores.
+
+Historical screenshot comparison (explicit ordinary favorite assumptions; the screenshots do not establish betting lines):
+
+| State | Previous priority | New priority |
+| --- | ---: | ---: |
+| No. 24 Louisville 31–10 Villanova, Q2 1:53 | 34 | 18.26 |
+| No. 23 Missouri 0–0 Kansas, Q1 7:21 | 24 | 24 |
+| Boston College 14–0 Rutgers, end Q1 | 24 | 19.10 |
+| No. 25 Virginia 28–3 Norfolk State, end Q2 | 11.90 | 13.13 |
+
+Both Missouri–Kansas and Rutgers–BC now precede both larger leads. Virginia's weight rises slightly because a 25-point first-half margin no longer triggers an abrupt floor; its relative position below the two alternatives remains correct. No prior pairwise preference fixture was removed or reversed.
+
+Late-game tradeoff: at Q4 kickoff, a No. 24 ACC favorite leading by seventeen scores 23.97 (21.57 relevance plus 2.40 drama), below an ordinary one-score game at 24. This holds for leads from seventeen through twenty-four and throughout Q4. The old threshold assigned 11.90; the smooth rule keeps some relevance without lifting this comfortable win above a competitive alternative. A Top 5 ACC favorite with the same seventeen-point lead still scores 34.12 at Q4 kickoff because its relevance is stronger, but falls to 29.30 with one minute remaining, below the ordinary one-score game at 30.
 
 Upset significance uses the largest supported signal rather than adding overlapping signals:
 

@@ -23,12 +23,31 @@ export function urgencyStage(game: Game) {
   return game.period >= 1 && game.period <= 3 ? game.period : 0;
 }
 
+// Quarter-end intermissions and the following kickoff share the same elapsed time.
+// Without a trustworthy clock, use the start of the reported quarter.
+function elapsedQuarters(game: Game, stage: number) {
+  if (!stage) return 0;
+  if (game.period > 4) return 4;
+  const elapsed = game.intermission ? 1
+    : game.clockKnown === true && Number.isFinite(game.clock) && game.clock >= 0 && game.clock <= 900
+      ? 1 - game.clock / 900 : 0;
+  return game.period - 1 + elapsed;
+}
+
 /** Product weights calibrated by the pairwise scenarios in watch-priority.test.mjs. */
 export function gamePriority(game: Game) {
   const stage = urgencyStage(game), margin = gameMargin(game);
-  const lopsided = Number.isFinite(margin) && (margin >= 25 || (stage >= 3 && margin >= 17));
-  const relevance = teamRelevance(game) * (lopsided ? 0.35 : 1);
-  const drama = stage * (margin <= 8 ? 6 : margin <= 16 ? 4 : 0) + (stage >= 5 && margin <= 3 ? 4 : 0);
+  // Beyond one score, taper relevance toward 35% over 22 points at kickoff,
+  // narrowing to 14 points at regulation's end. Missing scores are not blowouts.
+  const elapsed = elapsedQuarters(game, stage);
+  const taperWidth = 22 - 2 * elapsed;
+  const comfort = Number.isFinite(margin) ? Math.min(1, Math.max(0, margin - 8) / taperWidth) : 0;
+  const relevance = teamRelevance(game) * (1 - 0.65 * comfort);
+  // A multi-score lead offers less drama as comeback time runs out.
+  const dramaCutoff = 20 - 2 * Math.max(0, elapsed - 2);
+  const drama = Number.isFinite(margin)
+    ? stage * 6 * Math.min(1, Math.max(0, (dramaCutoff - margin) / (dramaCutoff - 8))) + (stage >= 5 && margin <= 3 ? 4 : 0)
+    : 0;
   let upset = 0;
   const expected = gameExpectation(game);
   if (stage && expected && expected.team.score !== null && expected.opponent.score !== null) {
