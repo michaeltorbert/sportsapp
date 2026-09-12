@@ -156,7 +156,7 @@ test("full archive geometry, scrolling, accessible details and responsive screen
   await region(page).evaluate(el => { el.scrollLeft = 260; el.scrollTop = 90; });
   await page.getByRole("button", { name: "Refresh guide", exact: true }).click();
   await expect.poll(() => region(page).evaluate(el => el.scrollLeft)).toBe(260);
-  for (const [name, width, height] of [["portrait", 390, 844], ["landscape", 844, 390], ["short-landscape", 844, 330], ["desktop", 1280, 850], ["narrow", 320, 640]]) {
+  for (const [name, width, height] of [["portrait", 390, 844], ["landscape", 844, 390], ["short-landscape", 844, 330], ["small-landscape", 667, 375], ["desktop", 1280, 850], ["narrow", 320, 640]]) {
     await page.setViewportSize({ width, height });
     await region(page).evaluate(el => { el.scrollLeft = 0; el.scrollTop = 0; });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
