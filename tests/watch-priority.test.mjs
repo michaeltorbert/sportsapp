@@ -246,3 +246,35 @@ test("relevance, late urgency and significant upsets survive comfortable-lead tu
   assert.ok(gamePriority(losing).upset > 0);
   assert.equal(sortGames([winning, losing])[0].id, losing.id);
 });
+
+
+test("ordinary one-score fourth quarters beat comfortable lower-ranked ACC wins", () => {
+  for (const clock of [900, 600, 301, 300, 120, 0]) {
+    const close = match("ordinary-close", { period: 4, clock, score: 14, otherScore: 21 });
+    for (let lead = 17; lead <= 24; lead++) {
+      const favorite = match("ranked-acc-leading", { acc: true, rank: 24, period: 4, clock,
+        score: 7 + lead, otherScore: 7, pregameLine: { favoriteId: "a", spread: 14, source: "fixture" } });
+      for (const pair of [[close, favorite], [favorite, close]]) assert.equal(sortGames(pair)[0].id, close.id);
+    }
+  }
+  const close = match("ordinary-close", { period: 4, clock: 900, score: 14, otherScore: 21 });
+  const major = match("major-ranked", { acc: true, rank: 3, period: 4, clock: 900, score: 24, otherScore: 7 });
+  assert.ok(gamePriority(major).total > gamePriority(close).total,
+    "a Top 5 ACC matchup retains enough relevance to lead at Q4 start");
+  assert.ok(gamePriority({ ...major, clock: 60 }).total < gamePriority({ ...close, clock: 60 }).total,
+    "the ordinary one-score finish overtakes even the Top 5 comfortable win");
+});
+
+
+test("malformed saved scores cannot produce a nonfinite priority", () => {
+  for (const score of [null, NaN, undefined, "not a score"]) {
+    const saved = match("saved", { acc: true, rank: 24, score, otherScore: 7 });
+    // Assign after match as undefined otherwise selects its valid default score.
+    saved.teams[0].score = score;
+    const priority = gamePriority(saved);
+    assert.equal(priority.drama, 0);
+    assert.equal(priority.relevance, 34);
+    assert.ok(Number.isFinite(priority.total));
+    assert.equal(priority.upset, 0);
+  }
+});

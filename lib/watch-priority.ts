@@ -39,10 +39,15 @@ export function gamePriority(game: Game) {
   const stage = urgencyStage(game), margin = gameMargin(game);
   // Beyond one score, taper relevance toward 35% over 22 points at kickoff,
   // narrowing to 14 points at regulation's end. Missing scores are not blowouts.
-  const taperWidth = 22 - 2 * elapsedQuarters(game, stage);
+  const elapsed = elapsedQuarters(game, stage);
+  const taperWidth = 22 - 2 * elapsed;
   const comfort = Number.isFinite(margin) ? Math.min(1, Math.max(0, margin - 8) / taperWidth) : 0;
   const relevance = teamRelevance(game) * (1 - 0.65 * comfort);
-  const drama = stage * 6 * Math.min(1, Math.max(0, (20 - margin) / 12)) + (stage >= 5 && margin <= 3 ? 4 : 0);
+  // A multi-score lead offers less drama as comeback time runs out.
+  const dramaCutoff = 20 - 2 * Math.max(0, elapsed - 2);
+  const drama = Number.isFinite(margin)
+    ? stage * 6 * Math.min(1, Math.max(0, (dramaCutoff - margin) / (dramaCutoff - 8))) + (stage >= 5 && margin <= 3 ? 4 : 0)
+    : 0;
   let upset = 0;
   const expected = gameExpectation(game);
   if (stage && expected && expected.team.score !== null && expected.opponent.score !== null) {
