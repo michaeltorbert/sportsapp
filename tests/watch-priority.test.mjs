@@ -153,3 +153,96 @@ test("unranked SEC upset watches remain visible during a delay after kickoff", (
   paused.teams[0].rank = 5;
   assert.equal(conditions(paused, Date.now())["ranked-trailing-fourth"], false);
 });
+
+// Historical screenshot states; lines below are explicit test assumptions, not recovered odds.
+function screenshotGames() {
+  const rows = [
+    ["louisville-villanova", "Louisville", "Villanova", "1", "20", 24, 31, 10, 2, 113, false, 21],
+    ["missouri-kansas", "Missouri", "Kansas", "8", "4", 23, 0, 0, 1, 441, false, 7],
+    ["bc-rutgers", "Boston College", "Rutgers", "1", "5", null, 14, 0, 1, 0, true, 3],
+    ["virginia-norfolk", "Virginia", "Norfolk State", "1", "24", 25, 28, 3, 2, 0, true, 21],
+  ];
+  return rows.map(([id, name, opponent, conference, otherConference, rank, score, otherScore, period, clock, intermission, spread]) => {
+    const g = match(id, { rank, score, otherScore, period, clock, clockKnown: true, intermission,
+      pregameLine: { favoriteId: "a", spread, source: "fixture assumption" } });
+    Object.assign(g.teams[0], { name, conferenceId: conference, rankKnown: true });
+    Object.assign(g.teams[1], { name: opponent, conferenceId: otherConference, rank: null, rankKnown: true });
+    if (id === "bc-rutgers") Object.assign(g, { possession: "a", downDistance: "2nd & 10 at RUTG 27" });
+    return g;
+  });
+}
+
+test("issue 66 screenshot alternatives precede both comfortable ranked ACC leads", () => {
+  const games = screenshotGames();
+  for (const input of [games, [...games].reverse(), [games[2], games[0], games[3], games[1]]]) {
+    const ordered = viewGames(scoreboard(input), "watch").map(g => g.id);
+    for (const higher of ["missouri-kansas", "bc-rutgers"])
+      for (const lower of ["louisville-villanova", "virginia-norfolk"])
+        assert.ok(ordered.indexOf(higher) < ordered.indexOf(lower), `${higher} above ${lower}`);
+    for (const filter of ["acc", "top25", "close", "upset"]) {
+      const subset = viewGames(scoreboard(input), filter).map(g => g.id);
+      assert.deepEqual(subset, ordered.filter(id => subset.includes(id)));
+    }
+  }
+});
+
+test("favorite leads taper monotonically without the old single-point cliffs", () => {
+  for (const period of [1, 2, 3, 4, 5]) {
+    for (const clock of [900, 450, 0]) {
+      let previous;
+      for (let lead = 4; lead <= 42; lead++) {
+        const g = match("favorite", { acc: true, rank: 3, period, clock, score: 7 + lead, otherScore: 7,
+          pregameLine: { favoriteId: "a", spread: 14, source: "fixture" } });
+        const priority = gamePriority(g);
+        if (previous) {
+          assert.ok(priority.total <= previous.total, `lead ${lead}, period ${period}, clock ${clock}`);
+          assert.ok(previous.relevance - priority.relevance <= 2.4, "one point never removes 65% relevance");
+          if ([17, 21, 25].includes(lead)) assert.ok(previous.total - priority.total <= 5.4, "old boundary has no scoring cliff");
+        }
+        previous = priority;
+      }
+    }
+  }
+});
+
+test("comfortable leads remain continuous through halftime and Q3 and fade with elapsed time", () => {
+  for (const lead of [16, 17, 20, 21, 24, 25]) {
+    const base = match("favorite", { acc: true, rank: 24, period: 2, clock: 0, score: lead, otherScore: 0 });
+    const halftime = gamePriority({ ...base, intermission: true });
+    const third = gamePriority({ ...base, period: 3, clock: 900, intermission: false });
+    assert.equal(third.relevance, halftime.relevance);
+    assert.ok(Math.abs(third.total - halftime.total) <= 2, "only close-game urgency grows at Q3");
+    const before = gamePriority({ ...base, clock: 1 });
+    const after = gamePriority({ ...base, period: 3, clock: 899 });
+    assert.ok(before.relevance >= halftime.relevance && halftime.relevance >= after.relevance);
+    assert.ok(before.relevance - after.relevance < 0.01);
+  }
+});
+
+test("missing clocks use quarter start, and a known intermission supplies only elapsed-quarter context", () => {
+  const base = match("favorite", { acc: true, rank: 24, period: 2, clock: 900, score: 21, otherScore: 0 });
+  const start = gamePriority(base).relevance;
+  for (const extra of [{ clockKnown: false, clock: 0 }, { clockKnown: undefined, clock: 0 },
+    { clock: -1 }, { clock: 901 }, { clock: NaN }, { clock: Infinity }])
+    assert.equal(gamePriority({ ...base, ...extra }).relevance, start);
+  assert.equal(gamePriority({ ...base, intermission: true, clockKnown: false }).relevance,
+    gamePriority({ ...base, clock: 0 }).relevance);
+  for (const period of [0, NaN, 2.5]) assert.ok(Number.isFinite(gamePriority({ ...base, period }).total));
+  const missing = structuredClone(base); missing.teams[0].score = null;
+  assert.equal(gamePriority(missing).relevance, 34);
+  assert.equal(gamePriority(missing).drama, 0);
+});
+
+test("relevance, late urgency and significant upsets survive comfortable-lead tuning", () => {
+  const earlyTie = match("ordinary-tie", { period: 1, score: 0, otherScore: 0 });
+  const relevant = match("ranked-acc", { acc: true, rank: 5, period: 1, score: 14, otherScore: 0 });
+  assert.ok(gamePriority(relevant).total > gamePriority(earlyTie).total);
+  assert.ok(gamePriority({ ...earlyTie, period: 4 }).total > gamePriority(earlyTie).total);
+  const winning = match("favorite-winning", { acc: true, rank: 3, period: 2, score: 28, otherScore: 7,
+    pregameLine: { favoriteId: "a", spread: 14, source: "fixture" } });
+  const losing = structuredClone(winning); losing.id = "major-upset";
+  losing.teams[0].score = 7; losing.teams[1].score = 28;
+  assert.equal(gamePriority(winning).upset, 0);
+  assert.ok(gamePriority(losing).upset > 0);
+  assert.equal(sortGames([winning, losing])[0].id, losing.id);
+});
