@@ -40,3 +40,10 @@ This is the cumulative product contract and conflict log. The numeric implementa
 - ORD-008 remains pending. No change to the 16/17-point margin step is included in this revision.
 - All old ordering scenarios remain present except the explicitly superseded assistant-derived comparisons listed above. New tests cover both pinned teams in either participant position, every state group, input-order reversal, future chronology within the pinned tier, filter eligibility/hidden finals, and ties/recoveries across all quarters and overtime.
 - Validation: Codex ran the complete build and test suite: 255 passed, zero failures/skips. A separate read-only Codex reviewer found no actionable issues in this revision. This is not a renewed Claude/Fable verdict.
+
+### 2026-09-12 — ORD-010 Duke spoiler protection
+
+- Source: explicit user request, active. Hide Duke away and neutral-site matchups by default. Per-event hide/reveal overrides are independent of future defaults, persist past final, and apply before category counts, focus links, pinning, and Guide layout. Unknown home/neutral metadata stays hidden until explicitly revealed.
+- ORD-010 supersedes ORD-007 only for hidden Duke games; revealed Duke and all Virginia Tech games retain the existing ordering. ORD-001 through ORD-006 and ORD-008 remain unchanged. ORD-009 has a new explicit Duke-only notification exclusion; other alert rules and IDs remain unchanged.
+- Duke notifications are always off, irrespective of visibility. Default changes apply by kickoff time, preserving unseen historical games. Existing started games are remembered by event ID. Team records are suppressed while protection could apply, preventing indirect result disclosure across selected dates.
+- Regression: `tests/duke-visibility.test.mjs` (including ORD-010 focus/category/Guide/input-order scenario), `tests/browser/duke-visibility.spec.mjs`; complete ordering and full suites required before handoff.

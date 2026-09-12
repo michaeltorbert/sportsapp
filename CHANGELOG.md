@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.7.0 · 2026-09-12
+
+- Add Settings to Scores and Guide, with Duke away and neutral-site games hidden by default.
+- Save per-game hide/show choices on each device, including through refreshes and final results; changing the future default preserves prior games.
+- Exclude hidden Duke matchups before filters, counts and Guide layout, omit team records that could reveal results, and always suppress Duke notifications.
+
 ## 1.6.3 · 2026-09-12
 
 - Pin Duke and Virginia Tech within each game-state section, preserving filters and hidden finals.

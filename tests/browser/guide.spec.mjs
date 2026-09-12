@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { test, expect, event } from "./fixtures.mjs";
+// ORD-010: the 80-event archive contains one hidden Duke away game; visible counts are 79.
 const archive = JSON.parse(readFileSync(new URL("../fixtures/guide-2026-09-12.json", import.meta.url)));
 const region = page => page.getByRole("region", { name: "Network and time schedule" });
 const dateInput = page => page.getByLabel("Guide date, Eastern time");
@@ -482,7 +483,7 @@ test("Back from Scores restores Guide date and pushed mode", async ({ page, harn
   const scoreRequests = harness.state.scoreRequests.length;
   await page.goBack();
   await expect(page.getByRole("button", { name: "All games", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByTestId("guide-count")).toContainText("80 games listed");
+  await expect(page.getByTestId("guide-count")).toContainText("79 games listed");
   await page.goForward();
   await expect(page.getByRole("button", { name: "Watchlist only", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.waitForLoadState("networkidle");
@@ -521,7 +522,7 @@ test("offline Today reports one connection warning after both fetch scopes fail"
   await expect(page.getByRole("alert")).toHaveCount(1);
   await expect(page.getByRole("alert").locator("p")).toHaveText(["You're offline. Reconnect to refresh schedule."]);
   await expect(page.locator(".guide-overnight")).toHaveCount(0);
-  await expect(page.getByTestId("guide-count")).toContainText("80 games listed");
+  await expect(page.getByTestId("guide-count")).toContainText("79 games listed");
 });
 
 
@@ -533,7 +534,7 @@ test("Guide date Back and Forward load the selected feed", async ({ page, harnes
   const requests = harness.state.scoreRequests.length;
   await page.goBack();
   await expect(dateInput(page)).toHaveValue("2026-09-12");
-  await expect(page.getByTestId("guide-count")).toContainText("80 games listed");
+  await expect(page.getByTestId("guide-count")).toContainText("79 games listed");
   expect(harness.state.scoreRequests.length).toBeGreaterThan(requests);
   await page.goForward();
   await expect(dateInput(page)).toHaveValue("2026-09-13");
@@ -559,7 +560,7 @@ test("a failed retained day keeps its warning after another date also fails", as
   try {
     await page.goBack();
     await expect(dateInput(page)).toHaveValue("2026-09-12");
-    await expect(page.getByTestId("guide-count")).toContainText("80 games listed");
+    await expect(page.getByTestId("guide-count")).toContainText("79 games listed");
     await expect(page.getByRole("alert")).toContainText("Could not refresh schedule");
     await expect(page.locator(".guide-feed")).toContainText("Last update");
   } finally { release(); }
