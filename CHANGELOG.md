@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.6.3 · 2026-09-12
+
+- Pin Duke and Virginia Tech within each game-state section, preserving filters and hidden finals.
+- Raise ranked upset watches above ordinary comfortable wins and retain most interest when a ranked favorite ties, with comparable active upsets remaining higher.
+- Record cumulative ordering decisions, explicit exceptions and regression coverage so later requests preserve earlier preferences. The ambiguous 16–17-point-margin request remains pending; its existing behavior is unchanged.
+
 ## 1.6.2 · 2026-09-11
 
 - Gradually reduce Watchlist priority for comfortable leads, including in the first half, while retaining ACC interest, ranking relevance and meaningful upset significance (#66).
