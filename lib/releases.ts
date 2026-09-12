@@ -1,5 +1,6 @@
-export const VERSION = "1.6.1";
+export const VERSION = "1.6.2";
 export const releases = [
+  { version: "1.6.2", date: "September 11, 2026", changes: "Comfortable leads gradually move down the Watchlist, including in the first half, while close finishes and meaningful upsets retain priority. Rankings and ACC interest still matter, with smoother score and halftime transitions." },
   { version: "1.6.1", date: "September 10, 2026", changes: "Read school names and rankings more easily in the Guide, with abbreviations when space is tight and less prominent kickoff times. A Watchlist legend explains the stars in All games. Game details now offer a YouTube TV matchup search alongside Gamecast." },
   { version: "1.6.0", date: "September 10, 2026", changes: "Browse the day's football games by network and Eastern kickoff time in the new TV Guide. Filter to your watchlist, open game details, or use the accessible text schedule. Estimated game windows and unknown kickoff times are clearly labeled." },
   { version: "1.5.0", date: "September 9, 2026", changes: "Choose close-game, upset-watch, final and ACC kickoff alerts for each device. Existing devices keep their choices, and newly enabled alerts skip conditions already underway. Improved protection against duplicate live alerts." },
