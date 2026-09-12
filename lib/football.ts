@@ -1,5 +1,5 @@
 import { upsetWatch } from "./upset";
-import { gamePriority, teamRelevance } from "./watch-priority";
+import { gamePriority, isPinnedGame, teamRelevance } from "./watch-priority";
 
 export type Team = { id: string; name: string; abbreviation: string; logo: string | null; score: number | null; rank: number | null; rankKnown?: boolean; record: string; conferenceId: string | null; changed?: boolean };
 export type Categories = { acc: boolean; top25: boolean; close: boolean; upset: boolean };
@@ -36,6 +36,8 @@ export function sortGames(games: Game[]) {
   return [...games].sort((a, b) => {
     const byState = state[a.state] - state[b.state];
     if (byState) return byState;
+    const byPin = Number(isPinnedGame(b)) - Number(isPinnedGame(a));
+    if (byPin) return byPin;
     if (a.state === "live") {
       const ap = gamePriority(a), bp = gamePriority(b);
       const priority = bp.total - ap.total || bp.drama - ap.drama || bp.finishBand - ap.finishBand;

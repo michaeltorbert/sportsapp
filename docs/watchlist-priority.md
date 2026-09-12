@@ -1,6 +1,8 @@
 # Watchlist ordering
 
-Issue #10 combines team relevance, live drama, and upset significance. Every tab uses the same comparator for the games it includes. Live games come first, then delayed games, upcoming games, schedule updates, and finals. Upcoming games remain chronological. Equal live priorities use drama, a final-minute clock band, kickoff, and event ID as stable tiebreakers.
+The durable rule and conflict history is in [ordering-decisions.md](ordering-decisions.md). Read it before changing this implementation.
+
+Issue #10 combines team relevance, live drama, and upset significance. Every tab uses the same comparator for the games it includes. Live games come first, then delayed games, upcoming games, schedule updates, and finals. Within each state section, Duke and Virginia Tech come first. Both share one pinned tier; the existing priority/chronological tiebreakers order games within that tier and within the ordinary tier. Upcoming games remain chronological within each tier. Pinning does not change filter eligibility or the Hide finals setting. Equal live priorities use drama, a final-minute clock band, kickoff, and event ID as stable tiebreakers.
 
 ## Live priority
 
@@ -43,7 +45,12 @@ Upset significance uses the largest supported signal rather than adding overlapp
 - Pregame spread: 16 for at least 14 points, 12 for at least 7, or 8 for a smaller nonzero spread.
 - Conference watch: 8.
 
-Significance is capped at 20 and scaled by game stage and margin. A trailing expected winner receives full state credit; a tie or a lead of up to three points receives half credit only in the final five minutes or overtime. Those narrow leads and ties affect ordering without being labeled as a trailing upset. Large late deficits receive only one-quarter upset credit.
+Significance is capped at 20. A ranked expected winner receives an additional `24 * (1 - comfort)` interest weight. Multiply both significance and additional interest by the score-state factor: 1 when trailing, 0.75 when a ranked expected winner is tied, 0.5 for a lead of up to three in the final five minutes or overtime, otherwise zero. Unranked ties retain the previous half-credit rule only in the final five minutes or overtime. The whole result also uses the existing stage and margin factors. These are implementation calibrations, not literal user-requested numbers.
+
+This preserves most upset interest when a ranked favorite ties, while keeping a comparable ranked favorite trailing an unranked opponent higher. Ties and narrow leads affect ordering without receiving an upset label. A ranked betting underdog still receives no favorite-based bonus for trailing. The additional interest reaches zero at the same large-margin threshold as the relevance floor. The existing 16/17-point upset-margin step remains pending clarification under ORD-008; it is not silently smoothed.
+
+No. 11 Oklahoma trailing Michigan 0–10 at Q3 14:52 precedes No. 10 Texas A&M leading Arizona State 17–13 at Q3 10:14. Earlier claims that all extra interest disappears on a tie were superseded by ORD-006.
+
 
 ## Favorite evidence and labels
 
@@ -68,3 +75,6 @@ Failed or timed-out summary attempts rotate behind events not yet attempted, so 
 ## Verification
 
 `npm test` builds the app and runs the suite. Pairwise fixtures cover the approved comparisons, including Top 10 vs. unranked above a comparable unranked ACC tie; No. 3 vs. unranked above No. 24 vs. No. 25; ranked ACC upset above a comparable unranked ACC game; and close fourth-quarter games above a ranked team losing by 30. Other tests cover line provenance, absent data, cancellation, cache identity, retained finals, shared tab ordering, rendered explanations, and unchanged push IDs.
+
+
+The second screenshot regression covers No. 6 Oregon trailing Oklahoma State 14–24 at Q2 1:56. It remains ahead of ordinary comfortable wins by Penn State, Texas A&M and Georgia. Virginia Tech's 24-point lead is now pinned ahead of Oregon under ORD-007. Oregon's original exact second position was an assistant interpretation, not a user requirement; retained tie interest can now put the fourth-quarter Oklahoma tie ahead of the second-quarter Oregon deficit. The fixtures leave unverified opponent conferences explicitly unknown instead of inventing conference-watch evidence. They do not claim recovered betting lines or establish the phone's loaded application version.

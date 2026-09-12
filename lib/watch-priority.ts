@@ -6,6 +6,11 @@ function gameMargin(game: Game) {
   return a.score === null || b.score === null ? Infinity : Math.abs(a.score - b.score);
 }
 
+// Verified ESPN college-football team IDs; display-name changes must not unpin them.
+export function isPinnedGame(game: Game) {
+  return game.teams.some(team => team.id === "150" || team.id === "259");
+}
+
 export function teamRelevance(game: Game) {
   const acc = game.teams.filter(t => t.conferenceId === ACC).length;
   const ranks = game.teams.map(teamRank).filter((r): r is number => r !== null);
@@ -52,15 +57,21 @@ export function gamePriority(game: Game) {
   const expected = gameExpectation(game);
   if (stage && expected && expected.team.score !== null && expected.opponent.score !== null) {
     const difference = expected.team.score - expected.opponent.score;
-    const stateWeight = difference < 0 ? 1 : difference <= 3 && stage >= 5 ? 0.5 : 0;
     const rank = teamRank(expected.team), otherRank = teamRank(expected.opponent);
+    // A ranked favorite tying remains compelling, below a comparable active upset.
+    const stateWeight = difference < 0 ? 1 : difference === 0 && rank !== null ? 0.75
+      : difference <= 3 && stage >= 5 ? 0.5 : 0;
     const rankSignificance = rank === null ? 0 : (rank <= 5 ? 12 : rank <= 10 ? 9 : 6)
       + (otherRank === null && expected.opponent.rankKnown === true ? 8 : otherRank !== null && otherRank - rank >= 10 ? 4 : 0);
     const lineSignificance = expected.spread === null ? 0 : expected.spread >= 14 ? 16 : expected.spread >= 7 ? 12 : 8;
     const significance = Math.min(20, Math.max(rankSignificance, lineSignificance, expected.basis === "conference" ? 8 : 0));
     const stageWeight = stage === 1 ? 0.25 : stage === 2 ? 0.5 : stage === 3 ? 0.75 : 1;
     const marginWeight = margin <= 8 ? 1 : margin <= 16 ? 0.75 : stage >= 3 ? 0.25 : 0.5;
-    upset = significance * stateWeight * stageWeight * marginWeight;
+    // Rank-based interest follows the state weight: full when trailing, most
+    // retained on a tie, and half for a narrow lead only during a late finish.
+    // Stage and margin scaling still limit early deficits and blowouts.
+    const rankedInterest = rank !== null ? 24 * (1 - comfort) : 0;
+    upset = (significance + rankedInterest) * stateWeight * stageWeight * marginWeight;
   }
   const finishBand = stage === 5 ? game.clock <= 60 ? 3 : game.clock <= 120 ? 2 : 1 : 0;
   return { total: relevance + drama + upset, relevance, drama, upset, stage, finishBand };

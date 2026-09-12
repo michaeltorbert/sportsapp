@@ -9,3 +9,11 @@
 - Preserve the existing alerts Worker, D1 database, cron, VAPID secrets, trigger IDs, subscriptions, and delivery ledger. No reset or key rotation during a hosting migration.
 - Allow only explicitly configured alert origins. Preserve the old Sites origin until the transition is verified. Do not authorize wildcard preview origins.
 - Never claim phone notification delivery from unit tests or `/config` readiness alone. Deployment verification must report exact app version and commit; a failed workflow is not a successful release.
+
+## Cumulative Watchlist ordering policy
+
+- Before any change to ordering, priority weights, favorite pinning or relevant filters, read `docs/ordering-decisions.md`, `docs/watchlist-priority.md`, and `tests/watch-priority.test.mjs`. Treat accepted rules as cumulative requirements, not just the most recent screenshot.
+- Record each new request with a stable ORD identifier, source/date, status, plain-language rule, exceptions, and regression-test reference. Distinguish explicit user instructions from imported historical behavior, assistant interpretation, and pending clarification. Never claim imported behavior was directly requested without evidence.
+- Check the new request against every active rule. If it conflicts, preserve both entries and record the disposition. An explicit newer user instruction can supersede an older rule or assistant inference; say which one and why. If the priority is ambiguous, ask before replacing the old requirement. Do not delete or weaken a regression merely to make a new weighting pass.
+- Add or update representative pairwise/scenario tests, checking input-order independence and affected state groups. Run the complete ordering suite and full `npm test` before handoff. Report affected ORD IDs, explicit supersessions, checks and remaining questions. Record numeric calibration separately from product intent.
+- Keep the decision log and its hard enforcement here versioned with the implementation. Preserve historical/superseded entries. Git history supplies exact change diffs; the decision log supplies the reasons. Update the log even when no algorithm change is needed because an existing rule already handles the new case.
