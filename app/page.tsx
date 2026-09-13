@@ -44,8 +44,9 @@ function GameCard({ game, showDate = false, expanded, onExpanded }: { game: Game
     <details open={expanded} onToggle={event => { if (event.currentTarget.open !== expanded) onExpanded(event.currentTarget.open); }}>
       <summary className="game-summary">
         <span className="sr-only">Game details: </span>
-        <span className="teams"><TeamRow team={away} opponent={home} game={game} /><TeamRow team={home} opponent={away} game={game} /></span>
+        <span className="game-overview"><span className="teams"><TeamRow team={away} opponent={home} game={game} /><TeamRow team={home} opponent={away} game={game} /></span>
         <span className="game-meta">{showDate && <span className="game-day-label">{new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" }).format(new Date(game.date))}</span>}<span className={`game-status status-${game.state}`}>{game.state === "live" && <span className="live-dot" />}{game.state === "delayed" && <TriangleAlert size={14} />}{game.state === "upcoming" && game.timeValid ? localTime(game.date) : game.status}</span><span className="broadcast">{game.broadcast && <><Tv size={13} /><span>{game.broadcast}</span></>}</span>{tags.upset && <span className="compact-upset">{upsetLabel}</span>}{game.state === "live" && game.redZone && <span className="compact-red-zone">RED ZONE</span>}</span>
+        </span>
         <ChevronRight className="details-chevron" size={14} aria-hidden="true" />
       </summary>
       <div className="game-details">

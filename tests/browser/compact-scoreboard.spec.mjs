@@ -76,21 +76,21 @@ test('focused links disclose only visible games and opening bell does not enable
   await expect(page.getByRole('button', { name: 'Alerts off', exact: true })).toBeFocused();
 });
 
-test('long names and broadcasts wrap with 200 percent text at 320px', async ({ page, harness }, info) => {
+for (const width of [320, 375, 390, 430, 700]) test(`long names and broadcasts wrap with 200 percent text at ${width}px`, async ({ page, harness }, info) => {
   const game = event('long', { rank: 12, scores: [100, 107] });
   game.competitions[0].competitors[0].team.shortDisplayName = 'Northern Appalachian State Mountaineers';
   game.competitions[0].competitors[1].team.shortDisplayName = 'Coastal Carolina Chanticleers';
   game.competitions[0].broadcasts[0].names = ['ESPN College Football Alternate Network'];
   harness.state.events = [game];
-  await page.setViewportSize({ width: 320, height: 844 });
+  await page.setViewportSize({ width, height: 844 });
   await harness.open();
   const initial = await page.locator('.team-name').first().evaluate(el => parseFloat(getComputedStyle(el).fontSize));
   await page.addStyleTag({ content: 'html { font-size: 200%; }' });
   expect(await page.locator('.team-name').first().evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBe(initial * 2);
   await geometry(page);
-  for (const el of await page.locator('.team-name, .score, .broadcast, .game-meta').all()) expect(await el.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  for (const el of await page.locator('.team-name, .score, .broadcast, .game-meta').all()) expect(await el.evaluate(node => node.clientWidth > 0 && node.scrollWidth <= node.clientWidth + 1)).toBe(true);
   await expect(page.locator('.team-name').first()).toContainText('Northern Appalachian State Mountaineers');
-  await page.screenshot({ path: info.outputPath('compact-320-large-text.png'), fullPage: true, animations: 'disabled' });
+  await page.screenshot({ path: info.outputPath(`compact-${width}-large-text.png`), fullPage: true, animations: 'disabled' });
 });
 
 test.describe('device time distinct from Eastern date', () => {
