@@ -3,7 +3,7 @@ import { test, expect, CREDENTIALS, ALERT_ORIGIN } from "./fixtures.mjs";
 for (const code of [404, 503]) test(`SIMULATED preferences: settings GET ${code} preserves config and blocks unconfirmed writes`, async ({ page, harness }) => {
   harness.state.getStatus = code;
   await harness.open({ push: { permission: "granted", existing: true, credentials: true } });
-  await page.getByRole("button", { name: "Alerts", exact: true }).tap();
+  await page.getByRole("button", { name: "Alerts off", exact: true }).tap();
   await expect(page.getByRole("status").filter({ hasText: code === 404 ? "Reset alerts" : "next check will retry" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Alerts are being set up" })).toHaveCount(0);
   await expect(page.getByRole("switch", { name: "Notifications", exact: true })).toBeDisabled();
@@ -20,7 +20,7 @@ for (const code of [404, 503]) test(`SIMULATED preferences: settings GET ${code}
 test("SIMULATED preferences: stale re-enable reloads choices without reset or unsubscribe", async ({ page, harness }) => {
   harness.state.active = false;
   await harness.open({ push: { permission: "granted", existing: true, credentials: true } });
-  await page.getByRole("button", { name: "Alerts", exact: true }).tap();
+  await page.getByRole("button", { name: "Alerts off", exact: true }).tap();
   await expect(page.getByRole("switch", { name: "Any close game", exact: true })).toBeChecked();
   harness.state.revision++; harness.state.closeGame = false;
   await page.getByRole("button", { name: "Enable alerts", exact: true }).tap();
@@ -71,7 +71,7 @@ for (const width of [320, 390]) test(`SIMULATED preferences: ${width}px large-te
 
 test("SIMULATED preferences: selective defaults, saved switches, master retention and failed save", async ({ page, harness }) => {
   await harness.open();
-  await page.getByRole("button", { name: "Alerts", exact: true }).tap();
+  await page.getByRole("button", { name: "Alerts off", exact: true }).tap();
   const upset = page.getByRole("switch", { name: "Upset watch", exact: true });
   const close = page.getByRole("switch", { name: "Any close game", exact: true });
   const master = page.getByRole("switch", { name: "Notifications", exact: true });
@@ -96,7 +96,7 @@ test("SIMULATED preferences: selective defaults, saved switches, master retentio
 
 test("SIMULATED preferences: server activity alone cannot claim this browser is subscribed", async ({ page, harness }) => {
   await harness.open({ push: { permission: "granted", existing: false, credentials: true } });
-  await page.getByRole("button", { name: "Alerts", exact: true }).tap();
+  await page.getByRole("button", { name: "Alerts off", exact: true }).tap();
   await expect(page.getByRole("switch", { name: "Notifications", exact: true })).not.toBeChecked();
   await expect(page.getByRole("button", { name: "Enable alerts" })).toBeEnabled();
 });
@@ -104,7 +104,7 @@ test("SIMULATED preferences: server activity alone cannot claim this browser is 
 test("SIMULATED alerts: readiness updates automatically before enable becomes available", async ({ page, harness }) => {
   harness.state.ready = false;
   await harness.open();
-  await page.getByRole("button", { name: "Alerts", exact: true }).tap();
+  await page.getByRole("button", { name: "Alerts off", exact: true }).tap();
   await expect(page.getByRole("heading", { name: "Alerts are being set up" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Enable alerts" })).toHaveCount(0);
   harness.state.ready = true;
@@ -116,7 +116,7 @@ test("SIMULATED alerts: readiness updates automatically before enable becomes av
 test("SIMULATED alerts: unavailable config is reported and recovers on a later check", async ({ page, harness }) => {
   harness.state.failConfig = true;
   await harness.open();
-  await page.getByRole("button", { name: "Alerts", exact: true }).tap();
+  await page.getByRole("button", { name: "Alerts off", exact: true }).tap();
   await expect(page.getByRole("status").filter({ hasText: "The alert service is unavailable" })).toBeVisible();
   harness.state.failConfig = false;
   await page.clock.fastForward(31_000);
@@ -126,7 +126,7 @@ test("SIMULATED alerts: unavailable config is reported and recovers on a later c
 
 test("SIMULATED alerts: denied permission does not register a subscription", async ({ page, harness }) => {
   await harness.open({ push: { permission: "denied", permissionResult: "denied" } });
-  await page.getByRole("button", { name: "Alerts", exact: true }).tap();
+  await page.getByRole("button", { name: "Alerts off", exact: true }).tap();
   await page.getByRole("button", { name: "Enable alerts" }).tap();
   await expect(page.getByText("Alerts are blocked. You can allow them in your device’s notification settings.")).toBeVisible();
   expect(await page.evaluate(() => window.__pushSimulation)).toEqual({ permissionRequests: 1, subscribes: 0, unsubscribes: 0 });
@@ -150,7 +150,7 @@ test("SIMULATED alerts: an existing active subscription is recognized without re
 test("SIMULATED alerts: lost credentials require reset before a new subscription is saved", async ({ page, harness }) => {
   harness.state.conflict = true;
   await harness.open({ push: { permission: "granted", existing: true } });
-  await page.getByRole("button", { name: "Alerts", exact: true }).tap();
+  await page.getByRole("button", { name: "Alerts off", exact: true }).tap();
   await page.getByRole("button", { name: "Enable alerts" }).tap();
   await expect(page.getByText("This device’s saved alert access is missing. Reset alerts below, then enable again.")).toBeVisible();
   expect(harness.state.alertRequests).toHaveLength(1);
@@ -171,7 +171,7 @@ test("SIMULATED alerts: lost credentials require reset before a new subscription
 
 test("SIMULATED iPhone browser mode explains installation before allowing alerts", async ({ page, harness }) => {
   await harness.open({ push: { standalone: false } });
-  await page.getByRole("button", { name: "Alerts", exact: true }).tap();
+  await page.getByRole("button", { name: "Alerts off", exact: true }).tap();
   await expect(page.getByRole("heading", { name: "Add to Home Screen for alerts" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Enable alerts" })).toHaveCount(0);
   expect(harness.state.alertRequests).toEqual([]);

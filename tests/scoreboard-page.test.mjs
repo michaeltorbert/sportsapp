@@ -72,7 +72,7 @@ function badge(html, filter) { return Number(new RegExp(`data-tab="${filter}"[^>
 test("Top 25 renders its weekly sections, future non-ACC and ACC games, dates, and matching count", () => {
   const { html, scope } = render("top25");
   assert.equal(scope, "top25");
-  assert.match(html, /Top 25 this week/); assert.match(html, /THU–MON · ET/);
+  assert.match(html, /Top 25 this week/); assert.match(html, /THU–MON/);
   assert.doesNotMatch(html, /Scoreboard date, Eastern time|overnight-note/);
   const sections = [...html.matchAll(/<section class="score-section">(.*?)<\/section>/g)].map(match => match[1]);
   assert.equal(sections.length, 5);

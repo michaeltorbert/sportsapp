@@ -195,3 +195,77 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
   .guide-shell .brand-icon { display: none; }
   .guide-shell .wordmark { font-size: 20px; }
 }
+
+/* Scores-only compact listings. Shared Guide geometry remains unchanged. */
+.compact-scoreboard { padding-top: max(env(safe-area-inset-top), 10px); }
+.compact-scoreboard .app-header { padding: 0 0 4px; gap: 4px; }
+.compact-scoreboard .wordmark { font-size: 1.05rem; gap: 6px; letter-spacing: -.045em; min-width: 0; }
+.compact-scoreboard .brand-icon { width: 26px; height: 28px; flex-shrink: 0; border-radius: 6px; }
+.compact-scoreboard .brand-icon svg { width: 18px; }
+.compact-scoreboard .sport-label { font-size: .5rem; letter-spacing: .1em; margin-top: 5px; }
+.compact-scoreboard .header-actions { flex-shrink: 0; }
+.compact-scoreboard .alerts-trigger { color: #d6e7b8; }
+.compact-scoreboard .destination-nav { padding: 3px 0; }
+.compact-scoreboard .destination-nav a { font-size: .875rem; }
+.compact-scoreboard .date-bar { min-height: 48px; padding: 2px 0 0; gap: 4px; }
+.compact-scoreboard .date-picker, .compact-scoreboard .today-button { font-size: .875rem; }
+.compact-scoreboard .date-navigation { min-width: 0; }
+.compact-scoreboard .date-picker { min-width: 0; }
+.compact-scoreboard .today-button { padding: 0 12px; }
+.compact-scoreboard .week-label { font-size: .875rem; }
+.compact-scoreboard .week-note { font-size: .625rem; }
+.compact-scoreboard .timezone-cue { color: #98a9c0; font-size: .6875rem; margin: 0 0 8px; overflow-wrap: anywhere; }
+.compact-scoreboard .filter-tabs { display: flex; flex-wrap: wrap; border-radius: 8px; padding: 3px; min-height: 50px; max-width: none; }
+.compact-scoreboard .filter-tab { flex: 1; font-size: .75rem; min-width: min(100%, 3.4rem); white-space: normal; overflow-wrap: anywhere; padding: 4px 2px; }
+.compact-scoreboard .tab-count { font-size: .6875rem; height: auto; min-width: 0; }
+.compact-scoreboard .watch-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 10px; padding: 2px 0; }
+.compact-scoreboard .feed-status { font-size: .75rem; }
+.compact-scoreboard .toggle-label { font-size: .75rem; gap: 6px; }
+.compact-scoreboard .section-label { margin-bottom: 3px; font-size: .6875rem; }
+.compact-scoreboard .section-label h2 { font-size: .75rem; }
+.compact-scoreboard .score-section { margin-bottom: 14px; }
+.compact-scoreboard .game-grid { gap: 0 16px; }
+.compact-scoreboard .game-card { border: 0; border-bottom: 1px solid #2d394b; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; }
+.compact-scoreboard .game-card:target { scroll-margin-top: 110px; }
+.compact-scoreboard .final-card { opacity: .8; }
+.compact-scoreboard .game-summary { display: grid; grid-template-columns: minmax(0, 1fr) 12px; align-items: center; gap: 8px; padding: 8px 0; min-height: 44px; cursor: pointer; list-style: none; }
+.compact-scoreboard .game-summary::-webkit-details-marker { display: none; }
+.compact-scoreboard .game-summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 3px; }
+.compact-scoreboard .game-overview { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.compact-scoreboard .teams { flex: 1 1 10rem; padding: 0; gap: 4px; min-width: 0; }
+.compact-scoreboard .team-row { min-height: 29px; padding: 0; gap: 6px; }
+.compact-scoreboard .team-logo { width: 22px; height: 24px; flex: 0 0 22px; border-radius: 4px; padding: 2px; }
+.compact-scoreboard .team-logo img { width: 20px; height: 20px; }
+.compact-scoreboard .team-logo span { font-size: .5rem; }
+.compact-scoreboard .team-identity { display: flex; gap: 3px; align-items: center; }
+.compact-scoreboard .team-name { min-width: 0; font-size: .875rem; letter-spacing: -.015em; gap: 4px; line-height: 1.25; }
+.compact-scoreboard .rank { font-size: .625rem; min-width: 0; flex-shrink: 0; }
+.compact-scoreboard .possession { font-size: .55rem; flex-shrink: 0; }
+.compact-scoreboard .score { font-size: 1.375rem; min-width: 2.1ch; letter-spacing: -.03em; flex-shrink: 0; }
+.compact-scoreboard .game-meta { flex: 0 1 6.4rem; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; padding-left: 9px; border-left: 1px solid #29364a; overflow-wrap: anywhere; }
+.compact-scoreboard .game-status { font-size: .6875rem; line-height: 1.3; gap: 4px; margin-left: 0; flex-wrap: wrap; }
+.compact-scoreboard .broadcast { font-size: .625rem; text-align: left; gap: 4px; min-width: 0; }
+.compact-scoreboard .broadcast > span { min-width: 0; overflow-wrap: anywhere; }
+.compact-scoreboard .game-day-label { font-size: .625rem; }
+.compact-scoreboard .compact-upset, .compact-scoreboard .compact-red-zone { font-size: .625rem; line-height: 1.2; color: #ffc086; }
+.compact-scoreboard .compact-red-zone { color: #ff9f89; font-weight: 700; }
+.compact-scoreboard .details-chevron { color: #91a3bd; width: 12px; }
+.compact-scoreboard details[open] > summary .details-chevron { transform: rotate(90deg); }
+.compact-scoreboard .game-details { padding: 4px 0 8px; }
+.compact-scoreboard .game-details .upset-reason, .compact-scoreboard .game-details .drive, .compact-scoreboard .game-details .delay-note { padding: 2px 0 8px; font-size: .75rem; }
+.compact-scoreboard .card-bottom { padding: 0; background: transparent; flex-wrap: wrap; }
+.compact-scoreboard .badge, .compact-scoreboard .gamecast { font-size: .75rem; white-space: normal; }
+.compact-scoreboard .loading-card { border: 0; border-bottom: 1px solid #2d394b; border-radius: 0; padding: 10px 0; background: transparent; }
+.compact-scoreboard .empty-card { padding: 22px 14px; }
+.compact-scoreboard .app-footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; padding-top: 8px; margin-top: 12px; font-size: .6875rem; }
+.compact-scoreboard .version-label { font-size: .6875rem; }
+@media (max-width: 370px) {
+  .compact-scoreboard .header-actions { flex-basis: 100%; justify-content: flex-end; }
+  .compact-scoreboard .game-summary { grid-template-columns: minmax(0, 1fr) 12px; }
+  .compact-scoreboard .game-meta { flex-basis: 100%; flex-direction: row; flex-wrap: wrap; gap: 5px 10px; border: 0; padding-left: 0; }
+
+}
+
+.compact-scoreboard .watch-header > .duke-controls { margin: 0; gap: 4px; }
+.compact-scoreboard .watch-header .duke-toggle { padding: 6px; gap: 4px; font-size: .75rem; border: 0; border-radius: 0; background: transparent; color: #bbc8d9; }
+.compact-scoreboard .watch-header .duke-game-control:only-child .duke-toggle > span { display: none; }
