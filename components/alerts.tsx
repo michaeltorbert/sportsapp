@@ -23,7 +23,7 @@ async function read(base: string, credentials: Credentials): Promise<Status> {
   if (!r.ok) throw Error(r.status === 404 ? "This device’s saved alert access is missing. Reset alerts below, then enable again." : "Could not read alert settings.");
   const v: Status = await r.json(); if (!valid(v)) throw Error("Alert settings need a newer service version. Try again later."); return v;
 }
-export function Alerts() {
+export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
   const { ios, standalone, supported } = usePushEnvironment();
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
   const [service, setService] = useState(""), [config, setConfig] = useState<Config | null>(null), [record, setRecord] = useState<Status | null>(null);
@@ -129,7 +129,7 @@ export function Alerts() {
     } catch { setMessage("Could not reset alerts. Reconnect and try again."); } finally { finish(); }
   }
   const canEnable = supported && (!ios || standalone) && !!registration && config?.ready && config.preferencesVersion === 1 && online && (!saved() || accessConfirmed);
-  return <Sheet><SheetTrigger asChild><button className="alerts-button">{enabled ? <BellRing size={16} /> : <Bell size={16} />}<span>{enabled ? "Alerts on" : "Alerts"}</span></button></SheetTrigger><SheetContent side="bottom" className="help-sheet"><SheetHeader><SheetTitle>Catch the game-changing moments.</SheetTitle><SheetDescription>Choose alerts for this device.</SheetDescription></SheetHeader><div className="help-body">
+  return <Sheet><SheetTrigger asChild><button className={iconOnly ? "icon-button alerts-trigger" : "alerts-button"} aria-label={iconOnly ? enabled ? "Alerts on" : "Alerts off" : undefined}>{enabled ? <BellRing size={16} /> : <Bell size={16} />}<span className={iconOnly ? "sr-only" : undefined}>{enabled ? "Alerts on" : "Alerts"}</span></button></SheetTrigger><SheetContent side="bottom" className="help-sheet"><SheetHeader><SheetTitle>Catch the game-changing moments.</SheetTitle><SheetDescription>Choose alerts for this device.</SheetDescription></SheetHeader><div className="help-body">
 <label className="alert-setting"><span><strong>Notifications</strong><small>Off keeps your choices. A notification already sent cannot be recalled.</small></span><input role="switch" aria-label="Notifications" type="checkbox" checked={enabled} aria-disabled={busy} aria-busy={busy} disabled={!online || (!!saved() && !accessConfirmed) || (enabled ? !service : !canEnable)} onChange={e => { if (writing.current) return; if (e.target.checked) void enable(); else void update({ active: false }); }} /></label>
     {types.map(t => <label key={t.key} className="alert-setting"><span><strong>{t.name}</strong><small id={`alert-${t.key}`}>{t.description}</small></span><input role="switch" aria-label={t.name} aria-describedby={`alert-${t.key}`} type="checkbox" checked={choices[t.key]} aria-disabled={busy} aria-busy={busy} disabled={!enabled || !online || !accessConfirmed} onChange={e => { if (!writing.current) void update({ [t.key]: e.target.checked }); }} /></label>)}
     {enabled && types.every(t => !choices[t.key]) && <p role="status">No alert types are selected. You will not receive game alerts.</p>}

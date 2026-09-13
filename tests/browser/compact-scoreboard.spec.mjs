@@ -1,0 +1,127 @@
+import { test, expect, event, cards } from './fixtures.mjs';
+
+const controls = ['Alerts off', 'Refresh scores', 'How this scoreboard works', 'Settings'];
+async function geometry(page) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const boxes = [];
+  for (const name of controls) {
+    const control = page.getByRole('button', { name, exact: true });
+    await expect(control).toBeVisible();
+    const box = await control.boundingBox();
+    expect(box.width, name).toBeGreaterThanOrEqual(44);
+    expect(box.height, name).toBeGreaterThanOrEqual(44);
+    boxes.push(box);
+  }
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+    const a = boxes[i], b = boxes[j];
+    expect(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y).toBe(true);
+  }
+}
+for (const width of [390, 320]) test(`compact default geometry at ${width}px`, async ({ page, harness }, info) => {
+  await page.setViewportSize({ width, height: 844 });
+  await harness.open();
+  await expect(cards(page)).toHaveCount(3);
+  await geometry(page);
+  const metrics = await cards(page).evaluateAll(elements => elements.map(el => ({ id: el.id, top: el.getBoundingClientRect().top, height: el.getBoundingClientRect().height })));
+  expect(metrics[0].top).toBeLessThan(width === 390 ? 350 : 400);
+  for (const row of metrics) expect(row.height).toBeLessThan(150);
+  await expect(page.getByText('Auto-refresh on', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.timezone-cue')).toHaveCount(1);
+  await info.attach('compact-geometry', { body: JSON.stringify({ width, metrics }), contentType: 'application/json' });
+  await page.screenshot({ path: info.outputPath(`compact-${width}.png`), fullPage: true, animations: 'disabled' });
+});
+
+test('details support keyboard and touch, preserve live-to-final context and never show records', async ({ page, harness }, info) => {
+  const game = event('context', { rank: 5 });
+  game.competitions[0].situation = { possession: 'context-away', isRedZone: true, downDistanceText: '3rd & 2 at HOME 12' };
+  for (const team of game.competitions[0].competitors) team.records = [{ summary: 'SECRET-RECORD' }];
+  harness.state.events = [game];
+  await harness.open({ path: '/?date=2026-09-05' });
+  const row = page.locator('#game-context'), details = row.locator('details'), summary = row.locator('summary');
+  await expect(details).not.toHaveAttribute('open');
+  await expect(summary).toContainText('Game details:');
+  await expect(summary.locator('a,button,input')).toHaveCount(0);
+  await expect(summary).toContainText('RED ZONE');
+  await expect(summary.getByLabel('Possession')).toBeVisible();
+  await summary.focus(); await summary.press('Enter');
+  await expect(details).toHaveAttribute('open', '');
+  await expect(row.getByRole('link', { name: /Open context away vs context home on ESPN/ })).toHaveAttribute('href', /espn.com/);
+  await expect(row.locator('.drive')).toContainText('3rd & 2');
+  await expect(row).not.toContainText('SECRET-RECORD');
+  await page.screenshot({ path: info.outputPath('compact-expanded.png'), fullPage: true, animations: 'disabled' });
+  harness.state.events = [event('context', { rank: 5, state: 'final', scores: [28, 21] })];
+  await page.clock.fastForward(31_000);
+  await expect(row.locator('.game-status')).toHaveText('Final');
+  await expect(details).toHaveAttribute('open', '');
+  await expect(summary).toContainText('Earlier upset watch');
+  await summary.tap(); await expect(details).not.toHaveAttribute('open');
+  await summary.press('Space'); await expect(details).toHaveAttribute('open', '');
+});
+
+test('focused links disclose only visible games and opening bell does not enable notifications', async ({ page, harness }) => {
+  await harness.open({ path: '/?date=2026-09-05#game-ranked-live' });
+  await expect(page.locator('#game-ranked-live details')).toHaveAttribute('open', '');
+  await page.locator('#game-ranked-live summary').tap();
+  await page.clock.fastForward(31_000);
+  await expect(page.locator('#game-ranked-live details')).not.toHaveAttribute('open');
+  await page.getByRole('button', { name: 'Alerts off', exact: true }).tap();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  expect(await page.evaluate(() => window.__pushSimulation)).toEqual({ permissionRequests: 0, subscribes: 0, unsubscribes: 0 });
+  expect(harness.state.alertRequests.filter(request => request.method !== 'GET')).toEqual([]);
+  await page.getByRole('button', { name: 'Close', exact: true }).tap();
+  await expect(page.getByRole('button', { name: 'Alerts off', exact: true })).toBeFocused();
+});
+
+test('long names and broadcasts wrap with 200 percent text at 320px', async ({ page, harness }, info) => {
+  const game = event('long', { rank: 12, scores: [100, 107] });
+  game.competitions[0].competitors[0].team.shortDisplayName = 'Northern Appalachian State Mountaineers';
+  game.competitions[0].competitors[1].team.shortDisplayName = 'Coastal Carolina Chanticleers';
+  game.competitions[0].broadcasts[0].names = ['ESPN College Football Alternate Network'];
+  harness.state.events = [game];
+  await page.setViewportSize({ width: 320, height: 844 });
+  await harness.open();
+  const initial = await page.locator('.team-name').first().evaluate(el => parseFloat(getComputedStyle(el).fontSize));
+  await page.addStyleTag({ content: 'html { font-size: 200%; }' });
+  expect(await page.locator('.team-name').first().evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBe(initial * 2);
+  await geometry(page);
+  for (const el of await page.locator('.team-name, .score, .broadcast, .game-meta').all()) expect(await el.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  await expect(page.locator('.team-name').first()).toContainText('Northern Appalachian State Mountaineers');
+  await page.screenshot({ path: info.outputPath('compact-320-large-text.png'), fullPage: true, animations: 'disabled' });
+});
+
+test.describe('device time distinct from Eastern date', () => {
+  test.use({ timezoneId: 'America/Los_Angeles' });
+  test('one honest cue in daily and weekly views', async ({ page, harness }) => {
+    await harness.open();
+    await expect(page.locator('.timezone-cue')).toHaveText('Dates ET · Kickoffs PDT');
+    await page.getByRole('tab', { name: /^ACC/ }).tap();
+    await expect(page.locator('.timezone-cue')).toHaveText('Dates ET · Kickoffs PDT');
+    await expect(page.locator('#game-sunday-acc .game-day-label')).toHaveText('Sun, Sep 6');
+    await expect(page.locator('#game-sunday-acc .game-status')).toHaveText('2:00 PM');
+  });
+});
+
+
+test('update restoration opens details while hidden Duke focus stays protected', async ({ page, harness }) => {
+  const duke = event('duke-hidden', { acc: true });
+  duke.competitions[0].competitors[0].team.id = '150';
+  duke.competitions[0].competitors[0].team.shortDisplayName = 'Duke';
+  harness.state.events.push(duke);
+  await harness.open({ path: '/?date=2026-09-05&_ss_update=' + 'a'.repeat(40) + '&_ss_hide_finals=0&_ss_focus=ranked-live' });
+  await expect(page.locator('#game-ranked-live details')).toHaveAttribute('open', '');
+  await page.goto('/?date=2026-09-05#game-duke-hidden');
+  await expect(page.getByRole('button', { name: 'Refresh scores' })).toBeEnabled();
+  await expect(page.locator('#game-duke-hidden')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Show Duke game on Sep 5', exact: true })).toBeVisible();
+});
+
+test('delayed state remains visible and full explanation is disclosed', async ({ page, harness }) => {
+  const delayed = event('paused', { rank: 5 });
+  delayed.status.type = { name: 'STATUS_DELAYED', state: 'in', completed: false, shortDetail: 'Delayed' };
+  harness.state.events = [delayed];
+  await harness.open();
+  const row = page.locator('#game-paused');
+  await expect(row.locator('.game-status')).toHaveText('Delayed');
+  await row.locator('summary').tap();
+  await expect(row.locator('.delay-note')).toHaveText('Play paused. Watching for an update.');
+});
