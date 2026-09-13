@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.7.1 · 2026-09-12
+
+- Replace spacious score cards with compact listings and expandable game details, retaining spoiler protection and focused-game behavior.
+- Simplify the header, group update status with Duke visibility and Hide finals, and remove redundant live-section labels.
+- Preserve readable team names and scores with larger text across phone and tablet widths.
+
 ## 1.7.0 · 2026-09-12
 
 - Add Settings to Scores and Guide, with Duke away and neutral-site games hidden by default.
