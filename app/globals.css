@@ -265,3 +265,7 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
   .compact-scoreboard .game-meta { flex-basis: 100%; flex-direction: row; flex-wrap: wrap; gap: 5px 10px; border: 0; padding-left: 0; }
 
 }
+
+.compact-scoreboard .watch-header > .duke-controls { margin: 0; gap: 4px; }
+.compact-scoreboard .watch-header .duke-toggle { padding: 6px; gap: 4px; font-size: .75rem; }
+.compact-scoreboard .watch-header .duke-toggle > span { display: none; }
