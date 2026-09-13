@@ -61,6 +61,10 @@ test('details support keyboard and touch, preserve live-to-final context and nev
 test('focused links disclose only visible games and opening bell does not enable notifications', async ({ page, harness }) => {
   await harness.open({ path: '/?date=2026-09-05#game-ranked-live' });
   await expect(page.locator('#game-ranked-live details')).toHaveAttribute('open', '');
+  const landing = await page.locator('#game-ranked-live summary').boundingBox();
+  const tabs = await page.locator('.filter-tabs').boundingBox();
+  expect(landing.y).toBeGreaterThanOrEqual(tabs.y + tabs.height);
+  expect(landing.y + landing.height).toBeLessThan(844);
   await page.locator('#game-ranked-live summary').tap();
   await page.clock.fastForward(31_000);
   await expect(page.locator('#game-ranked-live details')).not.toHaveAttribute('open');
@@ -124,4 +128,16 @@ test('delayed state remains visible and full explanation is disclosed', async ({
   await expect(row.locator('.game-status')).toHaveText('Delayed');
   await row.locator('summary').tap();
   await expect(row.locator('.delay-note')).toHaveText('Play paused. Watching for an update.');
+});
+
+
+test('score change feedback remains on summary scores and honors reduced motion', async ({ page, harness }) => {
+  await harness.open({ path: '/?date=2026-09-05' });
+  harness.state.events[0].competitions[0].competitors[0].score = '17';
+  await page.getByRole('button', { name: 'Refresh scores' }).tap();
+  const changed = page.locator('#game-ranked-live summary .score-changed').first();
+  await expect(changed).toHaveText('17');
+  expect(await changed.evaluate(el => getComputedStyle(el).animationName)).toBe('score-flash');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect(await changed.evaluate(el => getComputedStyle(el).animationName)).toBe('none');
 });
