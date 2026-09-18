@@ -14,6 +14,7 @@ const output = await build({
   plugins: [{ name: "score-page-runtime", setup(build) {
     build.onResolve({ filter: /^(next\/link|react(?:\/jsx-runtime)?|lucide-react|@\/components\/.*|@\/lib\/(?:use-scoreboard|use-app-update|use-duke-visibility))$/ }, args => ({ path: args.path, namespace: "page-test" }));
     build.onLoad({ filter: /.*/, namespace: "page-test" }, args => {
+      if (args.path === "@/components/halftime-status") return { contents: "export const HalftimeStatus=()=>\"Halftime\";" };
       if (args.path === "next/link") return { contents: "export default ({children,...props})=>globalThis.scorePageTest.element('a',props,children);" };
       if (args.path === "react") return { contents: "export const useMemo=fn=>fn(),useState=(...a)=>globalThis.scorePageTest.useState(...a),useRef=v=>({current:v}),useEffect=fn=>globalThis.scorePageTest.effect(fn),useSyncExternalStore=()=>null;" };
       if (args.path === "react/jsx-runtime") return { contents: "export const jsx=(...a)=>globalThis.scorePageTest.jsx(...a),jsxs=(...a)=>globalThis.scorePageTest.jsxs(...a),Fragment=globalThis.scorePageTest.Fragment;" };

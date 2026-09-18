@@ -1,0 +1,167 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { bundle, game, scoreboard } from "./helpers.mjs";
+const h = await bundle("lib/halftime.ts");
+const { enrichPregameLines } = await bundle("lib/pregame-lines.ts");
+const now = Date.parse("2026-09-06T04:01:00Z");
+function half(id = "half") { return game({ id, halftime: true, period: 2, clock: 0, status: "Halftime" }); }
+function summary(g, anchor = now - 425000) { return { header: { id: g.id, competitions: [{ competitors: g.teams.map((t, i) => ({ homeAway: i ? "home" : "away", team: { id: t.id } })), status: { period: 2, type: { name: "STATUS_HALFTIME", state: "in" } } }] }, drives: { current: { plays: [{ id: "end", type: { id: "2" }, period: { number: 2 }, clock: { displayValue: "0:00" }, wallclock: new Date(anchor).toISOString(), modified: new Date(now + 9999999).toISOString() }] } } }; }
+const parse = (raw, g, at = now) => h.parseHalftime(raw, g, at, h.nextHalftimeGeneration(), h.halftimeEpoch());
+function label(g, at = now, extras = {}) { return h.halftimeLabel(g, scoreboard([g], undefined, extras), false, at, true, true); }
+
+test("real retained container fixture supports Awaiting after 22m19s", () => {
+  const fixture = JSON.parse(readFileSync(new URL("./fixtures/halftime-401868008.json", import.meta.url)));
+  const competitors = fixture.summary.header.competitions[0].competitors;
+  const g = half("401868008"); g.date = fixture.date;
+  g.teams.forEach((t, i) => { t.id = competitors.find(c => c.homeAway === (i ? "home" : "away")).team.id; });
+  const at = Date.parse(fixture.provenance.capturedAt), observed = parse(fixture.summary, g, at);
+  assert.equal(observed.status, "halftime"); assert.ok(at - observed.anchor > 22 * 60000);
+  h.observeHalftime(g, observed);
+  assert.equal(h.halftimeLabel(g, { fetchedAt: new Date(at).toISOString() }, false, at, true, true), "Halftime · Awaiting 3rd quarter");
+});
+test("structured current/previous marker deduplication and exact copy", () => {
+  const g = half("parser"), raw = summary(g);
+  raw.drives.previous = [structuredClone(raw.drives.current)];
+  assert.equal(parse(raw, g).anchor, now - 425000);
+  h.observeHalftime(g, parse(raw, g)); assert.equal(label(g), "Halftime 12:55"); assert.equal(label(g, now + 1000), "Halftime 12:54");
+  raw.drives.previous[0].plays[0].wallclock = new Date(now - 426000).toISOString();
+  assert.equal(parse(raw, g).reason, "conflict");
+  raw.drives.previous[0].plays[0].id = "different"; assert.equal(parse(raw, g).reason, "conflict");
+});
+test("identity, malformed timing, Q1 and untimed Q2 never invent anchors", () => {
+  const g = half("invalid");
+  for (const change of [r => r.header.id = "wrong", r => r.header.competitions[0].competitors.reverse().forEach((c, i) => c.homeAway = i ? "home" : "away"), r => r.drives.current.plays[0].wallclock = "2026-09-06T03:53:55", r => r.drives.current.plays[0].wallclock = "invalidZ", r => r.drives.current.plays[0].wallclock = new Date(now + 1).toISOString(), r => r.drives.current.plays[0].wallclock = "2026-09-06T01:00:00Z"]) {
+    const raw = summary(g); change(raw); assert.equal(parse(raw, g).status, "invalid");
+  }
+  for (const change of [r => r.drives.current.plays[0].period.number = 1, r => r.drives.current.plays[0].type.id = "24", r => r.drives.current.plays[0].clock.displayValue = "0:01"]) {
+    const raw = summary(g); change(raw); assert.equal(parse(raw, g).anchor, undefined);
+  }
+  const resumed = summary(g); resumed.drives.previous = [{ plays: [{ period: { number: 3 } }] }]; assert.equal(parse(resumed, g).status, "resumed");
+});
+test("freshness gates apply each tick to both number and Awaiting; failures retain but do not renew", () => {
+  const g = half("fresh"), observation = parse(summary(g), g); h.observeHalftime(g, observation);
+  h.observeHalftime(g, parse({}, g, now + 80000));
+  assert.equal(label(g, now + 90000), "Halftime 11:25"); assert.equal(label(g, now + 90001), "Halftime");
+  h.observeHalftime(g, parse(summary(g), g, now + 90001));
+  assert.equal(label(g, now + 90001, { fetchedAt: new Date(now + 90001).toISOString() }), "Halftime 11:25");
+  for (const [error, online, visible] of [[true, true, true], [false, false, true], [false, true, false]]) assert.equal(h.halftimeLabel(g, scoreboard([g]), error, now, online, visible), "Halftime");
+  h.observeHalftime(g, parse(summary(g, now - 1200000), g)); // Changed anchor conflict.
+  assert.equal(label(g), "Halftime"); h.observeHalftime(g, parse(summary(g, now - 1200000), g));
+  assert.equal(label(g), "Halftime · Awaiting 3rd quarter"); assert.equal(label(g, now + 90001), "Halftime");
+});
+test("reverse completions, global resumption, visibility generation and identities fail closed", () => {
+  const g = half("race"), old = parse(summary(g), g), resumed = summary(g); resumed.header.competitions[0].status.period = 3;
+  h.observeHalftime(g, parse(resumed, g)); h.observeHalftime(g, old); assert.equal(label(g), "Halftime");
+  const current = half("epoch"); h.observeHalftime(current, parse(summary(current), current)); assert.equal(label(current), "Halftime 12:55");
+  h.invalidateHalftime(); assert.equal(label(current), "Halftime");
+  h.observeHalftime(current, parse(summary(current), current)); assert.equal(label(current), "Halftime 12:55");
+  assert.equal(label({ ...current, date: "2026-09-06T03:00:00Z" }), "Halftime");
+  assert.equal(label({ ...current, teams: [...current.teams].reverse() }), "Halftime");
+  const stripped = h.stripHalftimeTiming(scoreboard([{ ...current, halftimeAnchor: now, halftimeVerifiedAt: now }]));
+  assert.equal(stripped.games[0].halftimeAnchor, undefined); assert.equal(stripped.games[0].halftime, true);
+});
+test("slow device clock can recover once the fixed anchor is in its past", () => {
+  const g = half("skew"), raw = summary(g, now + 60000);
+  assert.equal(parse(raw, g).reason, "anchor-bounds"); assert.equal(parse(raw, g, now + 60001).status, "halftime");
+});
+test("registry bound removes obsolete evidence without trusting board timing", () => {
+  const first = half("bounded0");
+  for (let i = 0; i < 251; i++) { const g = half(`bounded${i}`); h.observeHalftime(g, parse(summary(g), g)); }
+  assert.equal(label(first), "Halftime");
+  assert.equal(label({ ...half("tampered"), halftimeAnchor: now - 425000, halftimeVerifiedAt: now }), "Halftime");
+});
+test("combined waves keep 4/12 per call, 12/36 normal and 8/24 manual Guide; rotate >12 games", async () => {
+  for (const scopes of [1, 2, 3]) {
+    const games = Array.from({ length: 30 }, (_, i) => half(`capacity-${scopes}-${i}`));
+    let starts = 0, active = 0, peak = 0;
+    const fetcher = async url => { starts++; peak = Math.max(peak, ++active); await new Promise(r => setTimeout(r, 2)); active--; return Response.json(summary(games.find(g => url.endsWith(g.id)))); };
+    await Promise.all(Array.from({ length: scopes }, () => enrichPregameLines(scoreboard(games), new AbortController().signal, fetcher)));
+    assert.equal(starts, scopes * 12); assert.ok(peak <= scopes * 4);
+  }
+  const games = Array.from({ length: 25 }, (_, i) => half(`rotate-${i}`)); games.forEach(g => g.pregameLine = { favoriteId: "a", spread: 1, source: "test" });
+  const seen = new Set(), fetcher = async url => { const g = games.find(g => url.endsWith(g.id)); seen.add(g.id); return Response.json(summary(g)); };
+  for (let i = 0; i < 3; i++) await enrichPregameLines(scoreboard(games), new AbortController().signal, fetcher);
+  assert.equal(seen.size, 25);
+});
+test("same-call duplicate needs coalesce and in-flight requests retain separate cancellation", async () => {
+  const g = half("coalesced"); let starts = 0;
+  const fetcher = async () => { starts++; return Response.json(summary(g)); };
+  await enrichPregameLines(scoreboard([g, g]), new AbortController().signal, fetcher); assert.equal(starts, 1);
+  const pending = [], separate = (_url, options) => new Promise(resolve => pending.push({ resolve, signal: options.signal }));
+  const controller = new AbortController();
+  const first = enrichPregameLines(scoreboard([g]), controller.signal, separate), second = enrichPregameLines(scoreboard([g]), new AbortController().signal, separate);
+  assert.equal(pending.length, 2); controller.abort(); assert.equal(pending[1].signal.aborted, false);
+  pending.forEach(p => p.resolve(Response.json(summary(g)))); await Promise.all([first, second]);
+});
+
+test("original odds completion parity under deterministic slow and failed responses", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now });
+  const baseline = await bundle("tests/baselines/pregame-lines-1.7.1.ts");
+  const games = Array.from({ length: 8 }, (_, i) => half(`baseline-${i}`));
+  const extra = Array.from({ length: 8 }, (_, i) => ({ ...half(`extra-${i}`), pregameLine: { favoriteId: "a", spread: 1, source: "test" } }));
+  async function run(enrich) {
+    const completion = [], start = Date.now();
+    const fetcher = async (url, options) => {
+      const id = new URL(url).searchParams.get("event"), g = [...games, ...extra].find(g => g.id === id);
+      const i = games.indexOf(g), delay = i === 0 ? 1400 : i === 1 ? 600 : 200;
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, delay);
+        options.signal.addEventListener("abort", () => { clearTimeout(timer); reject(new DOMException("Abort", "AbortError")); }, { once: true });
+      });
+      if (i === 1) throw new Error("simulated failure");
+      completion.push({ id, elapsed: Date.now() - start }); return Response.json(summary(g));
+    };
+    const pending = enrich(scoreboard([...games, ...extra]), new AbortController().signal, fetcher);
+    for (let elapsed = 0; elapsed < 1600; elapsed += 100) { t.mock.timers.tick(100); await new Promise(setImmediate); }
+    await pending; return completion.filter(r => r.id.startsWith("baseline-"));
+  }
+  assert.deepEqual(await run(enrichPregameLines), await run(baseline.enrichPregameLines));
+});
+
+test("completed reuse never restamps status; saturation permits expiry then recovers", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const m = await bundle("tests/halftime-integration-entry.ts"), g = half("integration");
+  g.pregameLine = { favoriteId: "a", spread: 1, source: "test" };
+  let fail = false, calls = 0;
+  const fetcher = async () => { calls++; if (fail) throw Error("offline"); return Response.json(summary(g)); };
+  const load = () => m.enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  const label = () => m.halftimeLabel(g, { fetchedAt: new Date(Date.now()).toISOString() }, false, Date.now(), true, true);
+  await load(); t.mock.timers.tick(29000); await load(); assert.equal(calls, 1);
+  fail = true; t.mock.timers.tick(61001); await load(); assert.equal(label(), "Halftime");
+  fail = false; await load(); assert.equal(label(), "Halftime 11:25");
+  m.invalidateHalftime(); assert.equal(label(), "Halftime"); await load(); assert.equal(calls, 4, "resume bypasses a pre-boundary completed result");
+  assert.equal(label(), "Halftime 11:25");
+});
+
+test("saturated odds allocation preserves coverage while halftime-only games recover on later polls", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const m = await bundle("tests/halftime-integration-entry.ts"), odds = Array.from({ length: 12 }, (_, i) => half(`mixed-odds-${i}`));
+  const timers = Array.from({ length: 13 }, (_, i) => ({ ...half(`mixed-timer-${i}`), pregameLine: { favoriteId: "a", spread: 1, source: "test" } }));
+  const games = [...odds, ...timers], fetcher = async url => Response.json(summary(games.find(g => url.endsWith(g.id))));
+  const available = [];
+  for (let poll = 0; poll < 3; poll++) {
+    await m.enrichPregameLines(scoreboard(games), new AbortController().signal, fetcher);
+    available.push(timers.filter(g => m.halftimeLabel(g, { fetchedAt: new Date(Date.now()).toISOString() }, false, Date.now(), true, true) !== "Halftime").length);
+    t.mock.timers.tick(30000);
+  }
+  assert.deepEqual(available, [0, 12, 13]);
+});
+
+test("eviction cannot re-admit an older response after global Q3 suppression", () => {
+  const g = half("evicted-q3"), pending = parse(summary(g), g);
+  const resumed = summary(g); resumed.header.competitions[0].status.period = 3;
+  h.observeHalftime(g, parse(resumed, g));
+  for (let i = 0; i < 251; i++) { const other = half(`evict-q3-${i}`); h.observeHalftime(other, parse(summary(other), other)); }
+  h.observeHalftime(g, pending); assert.equal(label(g), "Halftime");
+});
+test("summary kickoff identity rejects a rescheduled matchup", () => {
+  const g = half("date-identity"), raw = summary(g); raw.header.competitions[0].date = "2026-09-06T03:00:00Z";
+  assert.equal(parse(raw, g).reason, "date-identity");
+});
+
+test("same play ID with conflicting structured fields is rejected", () => {
+  const g = half("structured-conflict"), raw = summary(g);
+  raw.drives.previous = [structuredClone(raw.drives.current)]; raw.drives.previous[0].plays[0].clock.displayValue = "0:01";
+  assert.equal(parse(raw, g).reason, "conflict");
+});

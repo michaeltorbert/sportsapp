@@ -1,0 +1,169 @@
+{
+  "provenance": {
+    "source": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=401868008",
+    "capturedAt": "2026-09-13T01:32:17.381207+00:00",
+    "completeness": "EXCERPT: identity, status and Q2 End Period plays in original container paths; no synthetic values"
+  },
+  "date": "2026-09-12T23:30Z",
+  "summary": {
+    "header": {
+      "id": "401868008",
+      "competitions": [
+        {
+          "status": {
+            "displayClock": "0:00",
+            "period": 2,
+            "type": {
+              "id": "23",
+              "name": "STATUS_HALFTIME",
+              "state": "in",
+              "completed": false,
+              "description": "Halftime",
+              "detail": "Halftime",
+              "shortDetail": "Halftime",
+              "statusPrimary": "Halftime"
+            },
+            "displayPeriod": "2nd"
+          },
+          "competitors": [
+            {
+              "homeAway": "home",
+              "team": {
+                "id": "324"
+              }
+            },
+            {
+              "homeAway": "away",
+              "team": {
+                "id": "2230"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "drives": {
+      "previous": [
+        {
+          "plays": []
+        },
+        {
+          "plays": []
+        },
+        {
+          "plays": []
+        },
+        {
+          "plays": []
+        },
+        {
+          "plays": []
+        },
+        {
+          "plays": []
+        },
+        {
+          "plays": []
+        },
+        {
+          "plays": []
+        },
+        {
+          "plays": []
+        },
+        {
+          "plays": []
+        },
+        {
+          "plays": []
+        },
+        {
+          "plays": []
+        },
+        {
+          "plays": []
+        },
+        {
+          "plays": []
+        },
+        {
+          "plays": []
+        },
+        {
+          "plays": [
+            {
+              "id": "401868008408",
+              "sequenceNumber": "90",
+              "type": {
+                "id": "2",
+                "text": "End Period",
+                "abbreviation": "EP"
+              },
+              "text": "End of 2nd quarter.",
+              "awayScore": 7,
+              "homeScore": 28,
+              "period": {
+                "number": 2
+              },
+              "clock": {
+                "displayValue": "0:00"
+              },
+              "scoringPlay": false,
+              "priority": false,
+              "modified": "2026-09-13T01:31Z",
+              "wallclock": "2026-09-13T01:09:58Z",
+              "teamParticipants": [
+                {
+                  "team": {
+                    "$ref": "http://sports.core.api.espn.pvt/v2/sports/football/leagues/college-football/seasons/2026/teams/2230?lang=en&region=us"
+                  },
+                  "id": "2230",
+                  "order": 1,
+                  "type": "offense"
+                },
+                {
+                  "team": {
+                    "$ref": "http://sports.core.api.espn.pvt/v2/sports/football/leagues/college-football/seasons/2026/teams/324?lang=en&region=us"
+                  },
+                  "id": "324",
+                  "order": 2,
+                  "type": "defense"
+                }
+              ],
+              "isPenalty": false,
+              "statYardage": 0,
+              "start": {
+                "down": 1,
+                "distance": 10,
+                "yardLine": 75,
+                "yardsToEndzone": 75,
+                "team": {
+                  "id": "2230"
+                }
+              },
+              "end": {
+                "down": 2,
+                "distance": 10,
+                "yardLine": 72,
+                "yardsToEndzone": 72,
+                "downDistanceText": "2nd & 10 at FOR 28",
+                "shortDownDistanceText": "2nd & 10",
+                "possessionText": "FOR 28",
+                "team": {
+                  "id": "2230"
+                }
+              },
+              "isTurnover": false
+            }
+          ]
+        },
+        {
+          "plays": []
+        }
+      ],
+      "current": {
+        "plays": []
+      }
+    }
+  }
+}

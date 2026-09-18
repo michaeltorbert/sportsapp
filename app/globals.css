@@ -269,3 +269,5 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .compact-scoreboard .watch-header > .duke-controls { margin: 0; gap: 4px; }
 .compact-scoreboard .watch-header .duke-toggle { padding: 6px; gap: 4px; font-size: .75rem; border: 0; border-radius: 0; background: transparent; color: #bbc8d9; }
 .compact-scoreboard .watch-header .duke-game-control:only-child .duke-toggle > span { display: none; }
+
+.halftime-status { font-variant-numeric: tabular-nums; }

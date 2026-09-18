@@ -1,3 +1,4 @@
+import { stripHalftimeTiming, nextHalftimeGeneration, halftimeEpoch } from "./halftime";
 import { enrichPregameLines } from "./pregame-lines";
 import { normalizeScoreboard, scoreboardCdnUrl, scoreboardUrl } from "./espn-data";
 import { completeCdnRange } from "./espn-cdn";
@@ -54,6 +55,7 @@ async function readJson(url: string, parent: AbortSignal, fetcher: Fetcher): Pro
 }
 
 export async function loadScores(date: string, signal: AbortSignal, fetcher: Fetcher = fetch, endDate = date, accOnly = false): Promise<Scoreboard> {
+  const generation = nextHalftimeGeneration(), epoch = halftimeEpoch();
   let board: Scoreboard;
   try {
     // ESPN explicitly allows anonymous browser requests with Access-Control-Allow-Origin: *.
@@ -64,7 +66,7 @@ export async function loadScores(date: string, signal: AbortSignal, fetcher: Fet
     const data = await readJson(`/api/scores?date=${encodeURIComponent(date)}&end=${endDate}&acc=${accOnly ? "1" : "0"}`, signal, fetcher) as Scoreboard;
     if (!data || data.date !== date || (data.endDate || data.date) !== endDate || !Array.isArray(data.games) || !Number.isFinite(Date.parse(data.fetchedAt)))
       throw new Error("Invalid score response");
-    board = data;
+    board = stripHalftimeTiming(data);
   }
-  return enrichPregameLines(board, signal, fetcher);
+  return enrichPregameLines(board, signal, fetcher, generation, epoch);
 }
