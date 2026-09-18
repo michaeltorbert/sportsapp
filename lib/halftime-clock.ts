@@ -15,7 +15,7 @@ function tick() {
   }
   previousWall = wall; previousMonotonic = monotonic;
   // Monotonically changing snapshot also wakes leaves for same-millisecond evidence changes.
-  snapshot = { now: wall, online: navigator.onLine, visible: !document.hidden };
+  snapshot = listeners.size ? { now: wall, online: navigator.onLine, visible: !document.hidden } : serverSnapshot;
   for (const listener of listeners) listener();
 }
 function visibility() {
@@ -37,6 +37,7 @@ export function subscribeHalftimeClock(listener: () => void) {
   return () => {
     listeners.delete(listener);
     if (!listeners.size) {
+      snapshot = serverSnapshot;
       if (interval) clearInterval(interval); interval = undefined;
       unsubscribeEvidence?.(); unsubscribeEvidence = undefined;
       document.removeEventListener("visibilitychange", visibility, true);

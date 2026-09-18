@@ -12,7 +12,12 @@ function label(g, at = now, extras = {}) { return h.halftimeLabel(g, scoreboard(
 
 test("real retained container fixture supports Awaiting after 22m19s", () => {
   const fixture = JSON.parse(readFileSync(new URL("./fixtures/halftime-401868008.json", import.meta.url)));
-  const competitors = fixture.summary.header.competitions[0].competitors;
+  const competition = fixture.summary.header.competitions[0];
+  assert.equal(competition.date, "2026-09-12T23:30Z");
+  assert.equal(competition.date, fixture.scoreboard_event.date);
+  assert.equal(competition.date, fixture.scoreboard_event.competitions[0].date);
+  assert.equal(competition.date, fixture.date, "real supplied date activates the positive identity gate");
+  const competitors = competition.competitors;
   const g = half("401868008"); g.date = fixture.date;
   g.teams.forEach((t, i) => { t.id = competitors.find(c => c.homeAway === (i ? "home" : "away")).team.id; });
   const at = Date.parse(fixture.provenance.capturedAt), observed = parse(fixture.summary, g, at);
@@ -77,7 +82,9 @@ test("combined waves keep 4/12 per call, 12/36 normal and 8/24 manual Guide; rot
     let starts = 0, active = 0, peak = 0;
     const fetcher = async url => { starts++; peak = Math.max(peak, ++active); await new Promise(r => setTimeout(r, 2)); active--; return Response.json(summary(games.find(g => url.endsWith(g.id)))); };
     await Promise.all(Array.from({ length: scopes }, () => enrichPregameLines(scoreboard(games), new AbortController().signal, fetcher)));
-    assert.equal(starts, scopes * 12); assert.ok(peak <= scopes * 4);
+    assert.ok(starts <= scopes * 12, "completed cross-scope reuse may reduce starts");
+    if (scopes === 1) assert.equal(starts, 12, "single saturated call uses its twelve slots");
+    assert.ok(peak <= scopes * 4);
   }
   const games = Array.from({ length: 25 }, (_, i) => half(`rotate-${i}`)); games.forEach(g => g.pregameLine = { favoriteId: "a", spread: 1, source: "test" });
   const seen = new Set(), fetcher = async url => { const g = games.find(g => url.endsWith(g.id)); seen.add(g.id); return Response.json(summary(g)); };
@@ -201,4 +208,16 @@ test("CODEX-02 markerless status cannot rehabilitate disputed numeric or expired
     h.observeHalftime(g, parse(markerless, g)); assert.equal(label(g), "Halftime", reason);
     h.observeHalftime(g, parse(raw, g)); assert.equal(label(g), expected, "explicit consistent marker clears dispute");
   }
+});
+
+
+test("CL-2 conflicting fresh scope statuses hide conservatively and recover when feeds agree", t => {
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const g = half("scope-status-disagreement"), earlier = parse(summary(g), g);
+  const laterGeneration = h.nextHalftimeGeneration();
+  h.observeHalftimeBoard(scoreboard([{ ...g, halftime: false, status: "0:10 - 2nd", clock: 10 }]), laterGeneration);
+  h.observeHalftime(g, earlier);
+  assert.equal(label(g), "Halftime", "accept temporary loss rather than override newer non-halftime evidence");
+  h.observeHalftime(g, parse(summary(g), g));
+  assert.equal(label(g), "Halftime 12:55", "a later agreeing summary restores the estimate");
 });

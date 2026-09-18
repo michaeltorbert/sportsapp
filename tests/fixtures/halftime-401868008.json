@@ -2,7 +2,7 @@
   "provenance": {
     "source": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=401868008",
     "capturedAt": "2026-09-13T01:32:17.381207+00:00",
-    "completeness": "EXCERPT: identity, status and Q2 End Period plays in original container paths; no synthetic values"
+    "completeness": "EXCERPT: identity, original summary competition date, scoreboard event/competition dates, status and Q2 End Period plays in original container paths; no synthetic values"
   },
   "date": "2026-09-12T23:30Z",
   "summary": {
@@ -38,7 +38,8 @@
                 "id": "2230"
               }
             }
-          ]
+          ],
+          "date": "2026-09-12T23:30Z"
         }
       ]
     },
@@ -165,5 +166,13 @@
         "plays": []
       }
     }
+  },
+  "scoreboard_event": {
+    "date": "2026-09-12T23:30Z",
+    "competitions": [
+      {
+        "date": "2026-09-12T23:30Z"
+      }
+    ]
   }
 }
