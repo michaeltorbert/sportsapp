@@ -9,11 +9,15 @@ type Record = HalftimeObservation & { suppressed?: boolean; disputed?: boolean }
 const records = new Map<string, Record>();
 let sequence = 0, epoch = 0, discardedGeneration = 0;
 const listeners = new Set<() => void>();
+let notificationDepth = 0, notificationPending = false;
 export function nextHalftimeGeneration() { return ++sequence; }
 export function halftimeEpoch() { return epoch; }
 export function invalidateHalftime() { epoch++; emit(); }
 export function subscribeHalftime(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
-function emit() { for (const listener of listeners) listener(); }
+function emit() {
+  if (notificationDepth) { notificationPending = true; return; }
+  for (const listener of listeners) listener();
+}
 function object(value: unknown): { [key: string]: unknown } { return value && typeof value === "object" && !Array.isArray(value) ? value as { [key: string]: unknown } : {}; }
 function array(value: unknown): unknown[] { return Array.isArray(value) ? value : []; }
 function validAnchor(anchor: number, game: Game, now: number) { return Number.isFinite(anchor) && Number.isFinite(Date.parse(game.date)) && anchor >= Date.parse(game.date) && anchor <= now && now - anchor <= MAX_ANCHOR_AGE; }
@@ -84,8 +88,14 @@ export function observeHalftime(game: Game, observation: HalftimeObservation) {
 }
 export function observeHalftimeBoard(board: Scoreboard, generation: number) {
   if (board.stale || Date.now() - Date.parse(board.fetchedAt) > FRESH_MS) return;
-  for (const game of board.games) if (!game.halftime || game.state !== "live") {
-    observeHalftime(game, { status: game.period >= 3 || game.state === "final" ? "resumed" : "other", observedAt: Date.parse(board.fetchedAt), generation, epoch });
+  notificationDepth++;
+  try {
+    for (const game of board.games) if (!game.halftime || game.state !== "live") {
+      observeHalftime(game, { status: game.period >= 3 || game.state === "final" ? "resumed" : "other", observedAt: Date.parse(board.fetchedAt), generation, epoch });
+    }
+  } finally {
+    notificationDepth--;
+    if (!notificationDepth && notificationPending) { notificationPending = false; emit(); }
   }
 }
 export function halftimeLabel(game: Game, board: Pick<Scoreboard, "fetchedAt" | "stale">, scopeError: boolean, now: number, online: boolean, visible: boolean): string {

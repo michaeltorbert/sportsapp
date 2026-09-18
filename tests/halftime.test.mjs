@@ -221,3 +221,104 @@ test("CL-2 conflicting fresh scope statuses hide conservatively and recover when
   h.observeHalftime(g, parse(summary(g), g));
   assert.equal(label(g), "Halftime 12:55", "a later agreeing summary restores the estimate");
 });
+
+function lineSummary(g) {
+  return { ...summary(g), pickcenter: [{ spread: -7, provider: { name: "halftime-source" },
+    awayTeamOdds: { favorite: false, team: { id: "a" } }, homeTeamOdds: { favorite: true, team: { id: "b" } } }] };
+}
+const extraGame = id => ({ ...half(id), pregameLine: { favoriteId: "a", spread: 1, source: "board" } });
+
+test("CL-A1 extra claims coalesce overlapping scopes without sharing cancellation or promises", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const m = await bundle("tests/halftime-integration-entry.ts"), g = extraGame("claim-cancel"), pending = [];
+  const fetcher = (_url, options) => new Promise(resolve => pending.push({ resolve, signal: options.signal }));
+  const owner = new AbortController();
+  const first = m.enrichPregameLines(scoreboard([g]), owner.signal, fetcher);
+  const loser = new AbortController();
+  await m.enrichPregameLines(scoreboard([g]), loser.signal, fetcher);
+  assert.equal(pending.length, 1, "second scope completes without awaiting the owner");
+  loser.abort(); assert.equal(pending[0].signal.aborted, false, "loser cancellation is isolated");
+  owner.abort();
+  const next = m.enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  await new Promise(setImmediate);
+  assert.equal(pending.length, 2, "owner abort immediately frees claim even if its fetch is hanging");
+  pending[0].resolve(Response.json(lineSummary(g))); await first;
+  await m.enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  assert.equal(pending.length, 2, "old owner's finally cannot release the replacement owner's token");
+  pending[1].resolve(Response.json(lineSummary(g))); await next;
+  assert.equal(m.halftimeLabel(g, scoreboard([g]), false, now, true, true), "Halftime 12:55");
+});
+
+test("CL-A1 timeout releases claims and new epochs do not wait for old work", async t => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now });
+  const m = await bundle("tests/halftime-integration-entry.ts"), g = extraGame("claim-epoch"), pending = [];
+  const fetcher = (_url, options) => new Promise(resolve => pending.push({ resolve, signal: options.signal }));
+  const first = m.enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  await new Promise(setImmediate);
+  t.mock.timers.tick(1500);
+  assert.equal(pending[0].signal.aborted, true);
+  const second = m.enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  await new Promise(setImmediate);
+  assert.equal(pending.length, 2, "deadline frees claim without relying on fetch settlement");
+  m.invalidateHalftime();
+  const third = m.enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  await new Promise(setImmediate);
+  assert.equal(pending.length, 3, "new visibility epoch has an independent claim");
+  pending[1].resolve(Response.json(lineSummary(g))); await second;
+  assert.equal(m.halftimeLabel(g, scoreboard([g]), false, Date.now(), true, true), "Halftime", "old epoch cannot authorize new display");
+  pending[0].resolve(Response.json(lineSummary(g))); await first;
+  await m.enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  assert.equal(pending.length, 3, "old epoch completion cannot release current claim");
+  pending[2].resolve(Response.json(lineSummary(g))); await third;
+  assert.equal(m.halftimeLabel(g, scoreboard([g]), false, Date.now(), true, true), "Halftime 12:54");
+});
+
+test("CL-A2 preferred extra lines survive noneligible halftime cache pressure", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const m = await bundle("tests/halftime-integration-entry.ts"), preferred = extraGame("cache-preferred"), byId = new Map([[preferred.id, preferred]]);
+  const requests = [], fetcher = async url => { const id = new URL(url).searchParams.get("event"); requests.push(id); return Response.json(lineSummary(byId.get(id))); };
+  await m.enrichPregameLines(scoreboard([preferred]), new AbortController().signal, fetcher);
+  const unrelated = Array.from({ length: 251 }, (_, i) => {
+    const g = half(`cache-unranked-${i}`); g.teams.forEach(team => { team.rank = null; team.rankKnown = true; team.conferenceId = "151"; }); byId.set(g.id, g); return g;
+  });
+  for (let index = 0; index < unrelated.length; index += 12) {
+    const board = await m.enrichPregameLines(scoreboard(unrelated.slice(index, index + 12)), new AbortController().signal, fetcher);
+    assert.ok(board.games.every(g => !g.pregameLine), "unranked nonpreferred extras cannot attach odds lines");
+  }
+  t.mock.timers.tick(30001);
+  const missingLine = { ...preferred, halftime: false, period: 3 }; delete missingLine.pregameLine;
+  const refreshed = await m.enrichPregameLines(scoreboard([missingLine]), new AbortController().signal, fetcher);
+  assert.equal(refreshed.games[0].pregameLine.source, "halftime-source");
+  assert.equal(requests.filter(id => id === preferred.id).length, 1, "ineligible extras do not evict the preferred game's six-hour odds entry");
+});
+
+test("CL-A4 board sweeps emit once while preserving generation and sticky resumption", t => {
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const g = half("batch-resumption"); h.observeHalftime(g, parse(summary(g), g));
+  let notifications = 0; const stop = h.subscribeHalftime(() => notifications++);
+  const pending = parse(summary(half("batch-other")), half("batch-other"));
+  const games = [ ...Array.from({ length: 100 }, (_, i) => game({ id: `batch-${i}`, halftime: false, period: 2 })), { ...g, halftime: false, period: 3 }, { ...half("batch-other"), halftime: false } ];
+  h.observeHalftimeBoard(scoreboard(games), h.nextHalftimeGeneration());
+  assert.equal(notifications, 1); assert.equal(label(g), "Halftime");
+  h.observeHalftime(half("batch-other"), pending);
+  assert.equal(label(half("batch-other")), "Halftime", "batched records still fence older observations");
+  h.observeHalftime(g, parse(summary(g), g)); assert.equal(label(g), "Halftime", "resumption stays terminal");
+  h.observeHalftimeBoard(scoreboard(games), h.nextHalftimeGeneration()); assert.equal(notifications, 2, "even repeated finals are one notification per sweep");
+  stop();
+});
+
+test("CL-A2 eligibility changes promote completed line evidence without restamping expiry", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const m = await bundle("tests/halftime-integration-entry.ts"), g = half("eligibility-change");
+  g.teams.forEach(team => { team.rank = null; team.rankKnown = true; team.conferenceId = "151"; });
+  let requests = 0; const fetcher = async () => { requests++; return Response.json(lineSummary(g)); };
+  const initial = await m.enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  assert.equal(initial.games[0].pregameLine, undefined);
+  t.mock.timers.tick(29000);
+  const ranked = { ...g, halftime: false, teams: g.teams.map((team, i) => ({ ...team, rank: i === 0 ? 5 : null })) };
+  const second = await m.enrichPregameLines(scoreboard([ranked]), new AbortController().signal, fetcher);
+  assert.equal(second.games[0].pregameLine.source, "halftime-source"); assert.equal(requests, 1);
+  t.mock.timers.tick(6 * 3600000 - 29000 + 1);
+  await m.enrichPregameLines(scoreboard([ranked]), new AbortController().signal, fetcher);
+  assert.equal(requests, 2, "six-hour expiry anchors to original observation, not eligibility promotion");
+});

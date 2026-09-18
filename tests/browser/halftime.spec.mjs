@@ -27,10 +27,13 @@ test("320px before/after, exact countdown copy and isolated one-second ticking",
   expect(await page.evaluate(() => window.__outsideTickChanges)).toBe(0);
   await expect(page.locator(".halftime-status[aria-live]")).toHaveCount(0);
 });
-test("estimate expiry and later Q3 do not invent a game restart", async ({ page, harness }) => {
+test("estimate expiry and later Q3 do not invent a game restart", async ({ page, harness }, info) => {
+  await page.setViewportSize({ width: 320, height: 844 });
   const game = setup(harness.state, 1199000); await harness.open({ now });
   await expect(status(page)).toHaveText("Halftime 0:01");
   await page.clock.runFor(1000); await expect(status(page)).toHaveText("Halftime · Awaiting 3rd quarter");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath("halftime-awaiting-320.png"), fullPage: true });
   game.status = { period: 3, clock: 899, type: { name: "STATUS_IN_PROGRESS", state: "in", shortDetail: "14:59 - 3rd" } };
   await page.getByRole("button", { name: "Refresh scores", exact: true }).click();
   await expect(page.locator(".game-status:visible").first()).toHaveText("14:59 - 3rd");
