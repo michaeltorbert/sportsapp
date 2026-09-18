@@ -165,3 +165,40 @@ test("same play ID with conflicting structured fields is rejected", () => {
   raw.drives.previous = [structuredClone(raw.drives.current)]; raw.drives.previous[0].plays[0].clock.displayValue = "0:01";
   assert.equal(parse(raw, g).reason, "conflict");
 });
+
+test("CODEX-01 later observed Q3 dominates a newer-started halftime request", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const m = await bundle("tests/halftime-integration-entry.ts"), g = half("positive-resumption");
+  const pending = [], fetcher = () => new Promise(resolve => pending.push(resolve));
+  const first = m.enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  const second = m.enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  pending[1](Response.json(summary(g))); await second;
+  const display = () => m.halftimeLabel(g, scoreboard([g]), false, Date.now(), true, true);
+  assert.equal(display(), "Halftime 12:55");
+  t.mock.timers.tick(1); const resumed = summary(g); resumed.header.competitions[0].status.period = 3;
+  pending[0](Response.json(resumed)); await first;
+  assert.equal(display(), "Halftime", "existing halftime snapshot immediately sees positive Q3 evidence");
+
+  const other = half("positive-scoreboard"), generation = m.nextHalftimeGeneration();
+  m.observeHalftime(other, m.parseHalftime(summary(other), other, now, m.nextHalftimeGeneration(), m.halftimeEpoch()));
+  m.observeHalftimeBoard(scoreboard([{ ...other, halftime: false, period: 3 }]), generation);
+  assert.equal(m.halftimeLabel(other, scoreboard([other]), false, Date.now(), true, true), "Halftime");
+});
+
+test("CODEX-02 markerless status cannot rehabilitate disputed numeric or expired anchors", () => {
+  for (const elapsed of [425000, 1200000]) for (const reason of ["conflict", "malformed-marker", "anchor-bounds"]) {
+    const g = half(`disputed-${elapsed}-${reason}`), raw = summary(g, now - elapsed);
+    h.observeHalftime(g, parse(raw, g));
+    const expected = elapsed === 425000 ? "Halftime 12:55" : "Halftime · Awaiting 3rd quarter";
+    assert.equal(label(g), expected);
+    const bad = structuredClone(raw);
+    if (reason === "conflict") {
+      bad.drives.previous = [structuredClone(bad.drives.current)];
+      bad.drives.previous[0].plays[0].wallclock = new Date(now - elapsed - 1000).toISOString();
+    } else bad.drives.current.plays[0].wallclock = reason === "malformed-marker" ? "no timestamp" : new Date(now + 1000).toISOString();
+    assert.equal(parse(bad, g).reason, reason); h.observeHalftime(g, parse(bad, g)); assert.equal(label(g), "Halftime");
+    const markerless = structuredClone(raw); delete markerless.drives;
+    h.observeHalftime(g, parse(markerless, g)); assert.equal(label(g), "Halftime", reason);
+    h.observeHalftime(g, parse(raw, g)); assert.equal(label(g), expected, "explicit consistent marker clears dispute");
+  }
+});

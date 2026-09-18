@@ -5,7 +5,7 @@ const FRESH_MS = 90_000, MAX_ANCHOR_AGE = 60 * 60_000;
 export const halftimeKey = (game: Game) => JSON.stringify([game.id, game.date, ...game.teams.map(t => t.id)]);
 type Status = "halftime" | "resumed" | "other" | "invalid";
 export type HalftimeObservation = { status: Status; anchor?: number; reason?: string; observedAt: number; generation: number; epoch: number };
-type Record = HalftimeObservation & { suppressed?: boolean };
+type Record = HalftimeObservation & { suppressed?: boolean; disputed?: boolean };
 const records = new Map<string, Record>();
 let sequence = 0, epoch = 0, discardedGeneration = 0;
 const listeners = new Set<() => void>();
@@ -63,18 +63,24 @@ function save(key: string, value: Record) {
   emit();
 }
 export function observeHalftime(game: Game, observation: HalftimeObservation) {
-  if (observation.generation <= discardedGeneration) return;
   const key = halftimeKey(game), old = records.get(key);
+  // Request start order is not source observation order. Positive resumption is
+  // terminal for this event identity, even when an older-started request sees it.
+  if (observation.status === "resumed") {
+    save(key, { ...observation, generation: Math.max(sequence, observation.generation, discardedGeneration), suppressed: true });
+    return;
+  }
+  if (observation.generation <= discardedGeneration) return;
   if (old && (old.generation > observation.generation || old.suppressed)) return;
   if (observation.status === "invalid") {
-    if (observation.reason === "conflict" || observation.reason === "malformed-marker" || observation.reason === "anchor-bounds") save(key, { ...observation, anchor: old?.anchor });
+    if (observation.reason === "conflict" || observation.reason === "malformed-marker" || observation.reason === "anchor-bounds") save(key, { ...observation, anchor: old?.anchor, disputed: true });
     return;
   }
   if (observation.status === "halftime" && !game.halftime) return;
   if (observation.status === "halftime" && observation.anchor !== undefined && old?.status === "halftime" && old.anchor !== undefined && old.anchor !== observation.anchor) {
-    save(key, { ...observation, status: "invalid", reason: "conflict" }); return;
+    save(key, { ...observation, status: "invalid", reason: "conflict", disputed: true }); return;
   }
-  save(key, { ...observation, anchor: observation.anchor ?? old?.anchor, suppressed: observation.status === "resumed" });
+  save(key, { ...observation, anchor: observation.anchor ?? old?.anchor, disputed: !!old?.disputed && observation.anchor === undefined });
 }
 export function observeHalftimeBoard(board: Scoreboard, generation: number) {
   if (board.stale || Date.now() - Date.parse(board.fetchedAt) > FRESH_MS) return;
@@ -84,7 +90,7 @@ export function observeHalftimeBoard(board: Scoreboard, generation: number) {
 }
 export function halftimeLabel(game: Game, board: Pick<Scoreboard, "fetchedAt" | "stale">, scopeError: boolean, now: number, online: boolean, visible: boolean): string {
   const fallback = "Halftime", record = records.get(halftimeKey(game));
-  if (!online || !visible || scopeError || board.stale || !game.halftime || game.state !== "live" || !record || record.suppressed || record.status !== "halftime" || record.epoch !== epoch) return fallback;
+  if (!online || !visible || scopeError || board.stale || !game.halftime || game.state !== "live" || !record || record.suppressed || record.disputed || record.status !== "halftime" || record.epoch !== epoch) return fallback;
   const boardAge = now - Date.parse(board.fetchedAt), statusAge = now - record.observedAt;
   if (!Number.isFinite(now) || !Number.isFinite(boardAge) || boardAge < 0 || boardAge > FRESH_MS || statusAge < 0 || statusAge > FRESH_MS || record.anchor === undefined || !validAnchor(record.anchor, game, now)) return fallback;
   const remaining = Math.max(0, Math.ceil((record.anchor + HALFTIME_MS - now) / 1000));
