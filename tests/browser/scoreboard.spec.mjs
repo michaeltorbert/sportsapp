@@ -81,6 +81,21 @@ test("legacy tab links keep their period and explicit category links restore mul
   await expectPressed(page, ["Top 25"]); await expect(period(page, "Day")).toHaveAttribute("aria-pressed", "true");
 });
 
+test("keyboard toggling keeps focus on the pressed button and announces the shown count", async ({ page, harness }) => {
+  await harness.open();
+  const shown = page.locator(".score-content").getByRole("status");
+  await expect(shown).toHaveText("3 games shown.");
+  await category(page, "ACC").focus();
+  await page.keyboard.press("Space");
+  await expect(category(page, "ACC")).toBeFocused();
+  await expectPressed(page, ["ACC"]);
+  await expect(shown).toHaveText("1 game shown.");
+  await page.keyboard.press("Space");
+  await expect(category(page, "ACC")).toBeFocused();
+  await expectPressed(page, ["All"]);
+  await expect(shown).toHaveText("3 games shown.");
+});
+
 test("Hide finals persists after reload and updates every scope's count", async ({ page, harness }) => {
   await harness.open();
   await expect(page.locator("#game-acc-final")).toBeVisible();

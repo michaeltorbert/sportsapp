@@ -56,7 +56,9 @@ test("legacy tab links keep their daily or weekly meaning and invalid values fal
   assert.deepEqual(initialView(""), { selection: [], period: "day" });
   // Explicit parameters win over a stale tab, drop unknown tokens and duplicates, and never trust period values beyond day/week.
   assert.deepEqual(initialView("?tab=acc&cats=upset"), { selection: ["upset"], period: "day" });
-  assert.deepEqual(initialView("?tab=upset&period=week"), { selection: [], period: "week" });
+  assert.deepEqual(initialView("?tab=upset&period=week"), { selection: ["upset"], period: "week" });
+  assert.deepEqual(initialView("?tab=acc&period=day"), { selection: ["acc"], period: "day" });
+  assert.deepEqual(initialView("?tab=acc&period=bogus"), { selection: ["acc"], period: "day" });
   assert.deepEqual(initialView("?cats=upset,acc,upset,bogus,watch&period=week"), { selection: ["acc", "upset"], period: "week" });
   assert.deepEqual(initialView("?cats=&period=month"), { selection: [], period: "day" });
   assert.deepEqual(initialView("?cats=%3Cscript%3E&period=week"), { selection: [], period: "week" });

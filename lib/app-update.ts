@@ -16,13 +16,15 @@ export function observe(current: Candidate, loaded: string, commit: string, now:
   return { ...current, confirmed: current.confirmed || now - current.since >= 10_000 };
 }
 // Legacy single-tab links keep their meaning: ACC and Top 25 were weekly views,
-// the rest daily. Explicit `cats`/`period` parameters take precedence over `tab`.
+// the rest daily. An explicit `cats` replaces `tab`; an explicit `period` replaces
+// the period a legacy tab implies.
 export function initialView(search: string | null): ScoreboardView {
   const params = new URLSearchParams(search || ""), cats = params.get("cats"), period = params.get("period"), tab = params.get("tab");
-  if (cats !== null || period !== null) return { selection: normalizeSelection((cats || "").split(",")), period: period === "week" ? "week" : "day" };
-  if (tab === "acc" || tab === "top25") return { selection: [tab], period: "week" };
-  if (tab === "close" || tab === "upset") return { selection: [tab], period: "day" };
-  return { selection: [], period: "day" };
+  const legacy: ScoreboardView = tab === "acc" || tab === "top25" ? { selection: [tab], period: "week" } : tab === "close" || tab === "upset" ? { selection: [tab], period: "day" } : { selection: [], period: "day" };
+  return {
+    selection: cats === null ? legacy.selection : normalizeSelection(cats.split(",")),
+    period: period === null ? (cats === null ? legacy.period : "day") : period === "week" ? "week" : "day",
+  };
 }
 export function viewSearch(url: URL, view: ScoreboardView) {
   url.searchParams.delete("tab");

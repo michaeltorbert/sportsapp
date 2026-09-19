@@ -50,7 +50,7 @@ This is the cumulative product contract and conflict log. The numeric implementa
 - Counts: every count describes the displayed period under the current Hide finals and Duke visibility rules. All is the deduplicated union of the four categories plus the All-only focused-game exception; category toggles never inherit that exception. Unloaded counts remain unknown rather than zero.
 - Ordering: ORD-001 through ORD-010 are unchanged. Combined selections show each game once in the shared order, and matching several categories adds no priority (regression named above). Alert eligibility, trigger IDs and phone notifications are unaffected; the existing `expanded list eligibility does not redefine ranked push triggers or their dedupe IDs` guard remains.
 - Supersession: ORD-011 supersedes the imported single-tab behavior, including the baseline’s mixed daily/weekly counts across tabs. The `Watchlist` tab label becomes `All`; the All view keeps its “Your watchlist” heading. No earlier ordering comparison is weakened; string-filter regressions were translated to selections and extended with combined selections.
-- Validation: Claude ran `npm test` (297 passed, 0 failed), lint, typecheck and the complete Playwright suite on Chromium and WebKit mobile emulation (104 passed each). This is the implementer’s own run, not an independent review verdict.
+- Validation: Claude ran `npm test` (298 passed, 0 failed), lint, typecheck and the complete Playwright suite on Chromium and WebKit mobile emulation (104 passed each). This is the implementer’s own run, not an independent review verdict.
 
 ### 2026-09-12 — ORD-010 Duke spoiler protection
 
