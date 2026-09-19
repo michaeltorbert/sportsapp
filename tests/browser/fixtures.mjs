@@ -65,6 +65,14 @@ export const test = base.extend({
       events: standardEvents(), failScores: false, ready: true, failConfig: false,
       active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 0, preferencesVersion: 1, failSave: false, conflict: false, alertRequests: [], scoreRequests: [], cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], unexpectedExternal: [], errors: [],
     };
+    const lifecycle = [];
+    const recordLifecycle = event => lifecycle.push({ event, utc: new Date().toISOString(), url: page.url() });
+    const onCrash = () => recordLifecycle("crash");
+    const onClose = () => recordLifecycle("close");
+    const onDisconnect = () => recordLifecycle("disconnected");
+    page.on("crash", onCrash);
+    page.on("close", onClose);
+    browser.on("disconnected", onDisconnect);
     page.on("pageerror", error => state.errors.push(error.message));
     await page.route("**/*", async route => {
       const req = route.request(), url = new URL(req.url());
@@ -123,15 +131,28 @@ export const test = base.extend({
         if (waitForScores) await expect(page.getByRole("button", { name: "Refresh scores" })).toBeEnabled();
       },
     });
+    // The page may already have crashed. Preserve the original test failure and
+    // attach Node-side evidence even when evaluating navigator is impossible.
+    let userAgent = null, userAgentError = null;
+    try { userAgent = await page.evaluate(() => navigator.userAgent); }
+    catch (error) { userAgentError = error.message; }
+    page.off("crash", onCrash);
+    page.off("close", onClose);
+    browser.off("disconnected", onDisconnect);
     await testInfo.attach("browser-evidence", { contentType: "application/json", body: JSON.stringify({
       utc: new Date().toISOString(), ...testInfo.config.metadata, deployedLocalBuild: health,
       browser: browserName, engineVersion: browser.version(), viewport: page.viewportSize(),
-      userAgent: await page.evaluate(() => navigator.userAgent), hasTouch: testInfo.project.use.hasTouch,
+      userAgent, userAgentError, hasTouch: testInfo.project.use.hasTouch,
+      lifecycle, pageClosed: page.isClosed(), browserConnected: browser.isConnected(),
+      testErrors: testInfo.errors.map(error => ({ message: error.message, stack: error.stack })),
+      runtimeErrors: state.errors,
       simulated: ["ESPN responses", "alert-service responses", "notification permission", "PushManager", "service-worker registration", "installed standalone state"],
       alertRequests: state.alertRequests, scoreRequests: state.scoreRequests, cdnRequests: state.cdnRequests, hostedScoreRequests: state.hostedScoreRequests, unexpectedExternal: state.unexpectedExternal,
     }, null, 2) });
-    expect(state.unexpectedExternal, "No unmocked external request is permitted").toEqual([]);
-    expect(state.errors, "No browser runtime errors").toEqual([]);
+    expect.soft(lifecycle.filter(entry => entry.event === "crash"), "No browser page crashes").toEqual([]);
+    expect.soft(lifecycle.filter(entry => entry.event === "disconnected"), "Browser remains connected during the test").toEqual([]);
+    expect.soft(state.unexpectedExternal, "No unmocked external request is permitted").toEqual([]);
+    expect.soft(state.errors, "No browser runtime errors").toEqual([]);
   },
 });
 

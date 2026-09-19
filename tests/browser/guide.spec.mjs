@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { test, expect, event } from "./fixtures.mjs";
+import { observeHealthBodies, consumeHealthAfter } from "./health-sync.mjs";
 // ORD-010: the 80-event archive contains one hidden Duke away game; visible counts are 79.
 const archive = JSON.parse(readFileSync(new URL("../fixtures/guide-2026-09-12.json", import.meta.url)));
 const region = page => page.getByRole("region", { name: "Network and time schedule" });
@@ -245,10 +246,10 @@ test("manual Guide day loads and changes immediately while yesterday is pending"
 });
 
 test("verified app refresh preserves Guide route, explicit date and mode without Scores keys", async ({ page, harness }) => {
-  let calls = 0;
-  await page.route("**/api/health", route => { calls++; return route.fulfill({ json: { version: "next", commit: "b".repeat(40) } }); });
+  await observeHealthBodies(page);
+  await page.route("**/api/health", route => route.fulfill({ json: { version: "next", commit: "b".repeat(40) } }));
   await openGuide(page, harness, { path: "/guide?date=2026-09-12&view=watch&tab=acc" });
-  await page.clock.fastForward(3100); await expect.poll(() => calls).toBeGreaterThan(0);
+  await consumeHealthAfter(page, () => page.clock.fastForward(3100));
   await page.clock.fastForward(10100);
   await expect(page.getByRole("button", { name: "Refresh app", exact: true })).toBeVisible();
   const reloaded = page.waitForEvent("domcontentloaded");
@@ -382,12 +383,17 @@ test("unresolved initial Today timeout exposes a valid unavailable date instead 
   await page.addInitScript(() => localStorage.setItem("ss:game-day", "invalid-saved-date"));
   let release;
   const gate = new Promise(resolve => { release = resolve; });
+  const started = page.waitForRequest(request => {
+    const url = new URL(request.url());
+    return url.hostname === "site.api.espn.com" && url.pathname.endsWith("/scoreboard");
+  });
   await page.route("https://site.api.espn.com/**/scoreboard?*", async route => {
     await gate; await route.fallback().catch(() => {});
   });
   try {
     await harness.open({ path: "/guide", now: "2026-09-12T15:00:00Z", waitForScores: false });
     await expect(page.getByRole("status", { name: "Loading guide" })).toBeVisible();
+    await started;
     await page.clock.fastForward(41_000);
     await expect(dateInput(page)).toHaveValue("2026-09-12");
     await expect(page.getByRole("heading", { name: "Schedule temporarily unavailable" })).toBeVisible();
