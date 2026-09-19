@@ -19,7 +19,9 @@ for a deliberately partial local check use `npm run test:browser --
 --project=chromium-mobile` and report WebKit as untested. `BROWSER_TEST_PORT` can
 override the default local port 4178. No hosted deployment is required.
 
-The suite covers touch navigation and layout, independent daily/weekly counts,
+The suite covers touch navigation and layout, category toggles with the All
+reset, the Day/Week period control with period-relative counts, legacy `tab=`
+and explicit `cats=`/`period=` links,
 manual date navigation, Hide finals persistence, failed refresh retention and
 recovery, a fresh open after Eastern midnight, automatic polling rollover, and
 manual date selection during rollover. Alert scenarios cover readiness, service

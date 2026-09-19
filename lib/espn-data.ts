@@ -56,9 +56,17 @@ export function normalizeScoreboard(raw: unknown, date: string, fetchedAt = new 
     if (!started && (state === "upcoming" || state === "delayed")) normalized.pregameEvidenceInvalid = classifyPregameEvidence(c.odds, teams[0].id, teams[1].id).state === "invalid";
   }
   if (envelope.events.length && unreadable === envelope.events.length) throw new Error("ESPN returned unreadable games");
-  return { date, endDate, fetchedAt, games: [...games.values()], warnings: unreadable ? ["Some games could not be read from ESPN; the list may be incomplete."] : undefined };
+  const warnings: string[] = [];
+  if (unreadable) warnings.push("Some games could not be read from ESPN; the list may be incomplete.");
+  // A response filling the requested limit may have been truncated by ESPN.
+  if (envelope.events.length >= SCOREBOARD_LIMIT) warnings.push("ESPN returned its maximum number of games; the list may be incomplete.");
+  return { date, endDate, fetchedAt, games: [...games.values()], warnings: warnings.length ? warnings : undefined };
 }
 
+
+// Oversized limits may silently fall back to 25. ESPN returns the full day, and a
+// Thursday–Monday FBS week of roughly 60–80 games, with 200.
+export const SCOREBOARD_LIMIT = 200;
 
 export function scoreboardUrl(date: string, endDate = date, accOnly = false) {
   const url = new URL("https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard");
@@ -66,8 +74,7 @@ export function scoreboardUrl(date: string, endDate = date, accOnly = false) {
   // A Friday-Saturday request ending in Saturday returns only Friday's board.
   url.searchParams.set("dates", date.replaceAll("-", "") + (endDate !== date ? `-${shiftDate(endDate, 1).replaceAll("-", "")}` : ""));
   url.searchParams.set("groups", accOnly ? "1" : "80");
-  // Oversized limits may silently fall back to 25. ESPN returns the full day with 200.
-  url.searchParams.set("limit", "200");
+  url.searchParams.set("limit", String(SCOREBOARD_LIMIT));
   return url.toString();
 }
 

@@ -90,9 +90,9 @@ test("scope error suppresses while unrelated overnight errors leave a healthy ti
 
 test("zero-leaf hidden interval cannot revive cached timing after tab remount", async ({ page, harness }) => {
   setup(harness.state); await harness.open({ now }); await expect(status(page)).toHaveText("Halftime 12:55");
-  await page.getByRole("tab", { name: /One score/ }).click(); // Seven-point game still visible.
+  await page.getByRole("button", { name: /^One score/ }).click(); // Seven-point game still visible.
   await expect(status(page)).toHaveText("Halftime 12:55");
-  await page.getByRole("tab", { name: /Upsets/ }).click(); // Ranked away trails, remains visible.
+  await page.getByRole("button", { name: /^Upsets/ }).click(); // Ranked away trails, remains visible under the combined selection.
   await expect(status(page)).toHaveText("Halftime 12:55");
   // Hide the game through an empty daily date so no countdown leaf remains mounted.
   await page.getByLabel("Scoreboard date, Eastern time").fill("2026-09-03");
@@ -100,6 +100,7 @@ test("zero-leaf hidden interval cannot revive cached timing after tab remount", 
   harness.state.failSummary = true;
   await page.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, value: true }); document.dispatchEvent(new Event("visibilitychange")); });
   await page.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, value: false }); document.dispatchEvent(new Event("visibilitychange")); });
-  await page.getByRole("tab", { name: /ACC/ }).click();
+  // The weekly board remounts the game under the same selection.
+  await page.getByRole("group", { name: "Scoreboard period" }).getByRole("button", { name: "Week", exact: true }).click();
   await expect(status(page)).toHaveText("Halftime");
 });

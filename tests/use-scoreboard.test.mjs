@@ -48,50 +48,54 @@ function harness(t, loadScores, saved = {}) {
   return { render, storage, switchTo(s) { scope = s; return render(); }, async settle() { for (let i = 0; i < 6; i++) { await new Promise(resolve => setTimeout(resolve, 0)); render(); } return value; } };
 }
 
-const requestScope = (date, end, accOnly) => accOnly ? "acc" : date !== end ? "top25" : "daily";
+const requestScope = (date, end) => date !== end ? "week" : "daily";
 
-test("switching every tab keeps daily, ACC, and Top 25 boards without new requests", async t => {
+test("switching periods keeps the daily and weekly boards without new requests, and only the full-FBS week is fetched", async t => {
   const calendar = easternDate(), yesterday = shiftDate(calendar, -1), requests = [];
   const acc = game({ id: "acc" }); acc.teams[0].conferenceId = "1";
   const future = game({ id: "future-ranked", state: "upcoming", date: `${accWeek(calendar).end}T23:30:00Z` });
   const h = harness(t, async (date, signal, fetcher, end = date, accOnly = false) => {
     requests.push({ date, end, accOnly });
-    const scope = requestScope(date, end, accOnly);
-    return scoreboard(scope === "daily" && date === yesterday ? [] : [scope === "acc" ? acc : scope === "top25" ? future : game()], date, { endDate: end });
+    const scope = requestScope(date, end);
+    return scoreboard(scope === "daily" && date === yesterday ? [] : scope === "week" ? [acc, future] : [game()], date, { endDate: end });
   });
   h.render(); const initial = await h.settle();
-  assert.equal(initial.boards.daily.games.length, 1); assert.equal(initial.boards.acc.games[0].id, "acc");
-  assert.equal(initial.boards.top25.games[0].id, "future-ranked");
-  assert.equal(requests.length, 4);
-  for (const filter of ["top25", "acc", "watch", "close", "upset", "top25", "acc"]) {
-    const scope = scoreboardScope(filter), v = h.switchTo(scope);
+  assert.equal(initial.boards.daily.games.length, 1);
+  assert.deepEqual(initial.boards.week.games.map(g => g.id), ["acc", "future-ranked"]);
+  assert.equal(requests.length, 3);
+  // ORD-011: no ACC-only weekly request; ACC games come from the same full-FBS weekly board.
+  assert.ok(requests.every(request => request.accOnly === false));
+  assert.deepEqual(requests.filter(request => request.date !== request.end), [{ date: accWeek(calendar).start, end: accWeek(calendar).end, accOnly: false }]);
+  for (const period of ["week", "day", "week", "day"]) {
+    const scope = scoreboardScope(period), v = h.switchTo(scope);
     assert.equal(v.data, initial.boards[scope]);
     assert.deepEqual(v.boards, initial.boards);
     assert.equal(v.refresh, initial.refresh);
   }
-  await h.settle(); assert.equal(requests.length, 4);
+  await h.settle(); assert.equal(requests.length, 3);
   initial.setDate(shiftDate(calendar, -3));
   const changed = h.render(); assert.equal(changed.boards.daily, null);
-  assert.equal(changed.boards.acc, initial.boards.acc); assert.equal(changed.boards.top25, initial.boards.top25);
+  assert.equal(changed.boards.week, initial.boards.week);
   const next = await h.settle(); assert.equal(next.boards.daily.date, shiftDate(calendar, -3));
-  for (const scope of ["acc", "top25"]) assert.equal(h.switchTo(scope).data.date, accWeek(calendar).start);
+  assert.equal(h.switchTo("week").data.date, accWeek(calendar).start);
+  // Week to Day returns to the manually chosen day.
   assert.equal(h.switchTo("daily").date, shiftDate(calendar, -3));
   assert.equal(next.followToday, false);
   next.setDate(null); h.render();
   const resumed = await h.settle(); assert.equal(resumed.date, calendar); assert.equal(resumed.followToday, true);
 });
 
-for (const failedScope of ["daily", "acc", "top25"]) test(`failed ${failedScope} refresh keeps its board and isolates its error until recovery`, async t => {
+for (const failedScope of ["daily", "week"]) test(`failed ${failedScope} refresh keeps its board and isolates its error until recovery`, async t => {
   const yesterday = shiftDate(easternDate(), -1); let failing = false;
-  const h = harness(t, async (date, signal, fetcher, end = date, accOnly = false) => {
-    const scope = requestScope(date, end, accOnly);
+  const h = harness(t, async (date, signal, fetcher, end = date) => {
+    const scope = requestScope(date, end);
     if (scope === "daily" && date === yesterday) return scoreboard([], date);
     if (scope === failedScope && failing) throw new Error("feed unavailable");
     return scoreboard([game({ id: scope })], date, { endDate: end });
   });
   h.render(); const initial = await h.settle(); failing = true;
   await initial.refresh(); const refreshed = await h.settle();
-  for (const scope of ["daily", "acc", "top25"]) {
+  for (const scope of ["daily", "week"]) {
     const v = h.switchTo(scope);
     if (scope === failedScope) { assert.equal(v.data, initial.boards[scope]); assert.match(v.error, /Could not refresh/); }
     else { assert.ok(v.data); assert.notEqual(v.data, initial.boards[scope]); assert.equal(v.error, ""); }
@@ -100,64 +104,79 @@ for (const failedScope of ["daily", "acc", "top25"]) test(`failed ${failedScope}
   assert.equal(h.switchTo(failedScope).error, "");
 });
 
-test("unfinished overnight board is reused only for daily counts while both weeks load", async t => {
+test("unfinished overnight board is reused only for daily counts while the week loads", async t => {
   const yesterday = shiftDate(easternDate(), -1), requests = [];
   const h = harness(t, async (date, signal, fetcher, end = date, accOnly = false) => {
     requests.push({ date, end, accOnly });
-    return scoreboard([game({ id: requestScope(date, end, accOnly) })], date, { endDate: end });
+    return scoreboard([game({ id: requestScope(date, end) })], date, { endDate: end });
   });
   h.render(); const v = await h.settle();
   assert.equal(v.today, yesterday); assert.equal(v.boards.daily.date, yesterday);
-  for (const scope of ["acc", "top25"]) {
-    assert.equal(v.boards[scope].date, accWeek(yesterday).start);
-    assert.equal(v.boards[scope].endDate, accWeek(yesterday).end);
-    assert.equal(v.boards[scope].games[0].id, scope);
-  }
-  assert.equal(requests.length, 3);
+  assert.equal(v.boards.week.date, accWeek(yesterday).start);
+  assert.equal(v.boards.week.endDate, accWeek(yesterday).end);
+  assert.equal(v.boards.week.games[0].id, "week");
+  assert.equal(requests.length, 2);
 });
 
-test("saved ACC and full-FBS weekly history cannot cross-contaminate final categories or score changes", async t => {
+test("saved daily and weekly history cannot cross-contaminate final categories or score changes", async t => {
   const calendar = easternDate(), yesterday = shiftDate(calendar, -1), week = accWeek(calendar);
-  const accKey = `ss:board:${week.start}:${week.end}`, topKey = `ss:board:top25:${week.start}:${week.end}`;
+  const dailyKey = `ss:board:${calendar}:${calendar}`, weekKey = `ss:board:week:${week.start}:${week.end}`;
   const earlier = game(); earlier.teams[0].score = 21; earlier.teams[1].score = 20;
   const later = game(); later.teams[0].score = 0;
   const final = { ...later, state: "final" };
   const h = harness(t, async (date, signal, fetcher, end = date) =>
     scoreboard(date === end && date === yesterday ? [] : [structuredClone(final)], date, { endDate: end }), {
-    [accKey]: JSON.stringify(scoreboard([earlier], week.start, { endDate: week.end })),
-    [topKey]: JSON.stringify(scoreboard([later], week.start, { endDate: week.end })),
+    [dailyKey]: JSON.stringify(scoreboard([earlier], calendar)),
+    [weekKey]: JSON.stringify(scoreboard([later], week.start, { endDate: week.end })),
     "ss:board:top25:2020-09-03:2020-09-07": "expired",
+    "ss:board:week:2020-09-03:2020-09-07": "expired",
+    "ss:board:2020-09-03:2020-09-07": "expired",
   });
   h.render(); const v = await h.settle();
-  assert.equal(v.boards.acc.games[0].retainedCategories.close, true);
-  assert.equal(v.boards.acc.games[0].retainedCategories.upset, true);
-  assert.equal(v.boards.acc.games[0].teams[0].changed, true);
-  assert.equal(v.boards.top25.games[0].retainedCategories.close, false);
-  assert.equal(v.boards.top25.games[0].retainedCategories.upset, false);
-  assert.equal(v.boards.top25.games[0].teams[0].changed, false);
-  assert.equal(v.boards.daily.games[0].retainedCategories, undefined);
-  assert.equal(JSON.parse(h.storage.getItem(accKey)).games[0].retainedCategories.close, true);
-  assert.equal(JSON.parse(h.storage.getItem(topKey)).games[0].retainedCategories.close, false);
-  assert.equal(h.storage.getItem("ss:board:top25:2020-09-03:2020-09-07"), null);
+  assert.equal(v.boards.daily.games[0].retainedCategories.close, true);
+  assert.equal(v.boards.daily.games[0].retainedCategories.upset, true);
+  assert.equal(v.boards.daily.games[0].teams[0].changed, true);
+  assert.equal(v.boards.week.games[0].retainedCategories.close, false);
+  assert.equal(v.boards.week.games[0].retainedCategories.upset, false);
+  assert.equal(v.boards.week.games[0].teams[0].changed, false);
+  assert.equal(JSON.parse(h.storage.getItem(dailyKey)).games[0].retainedCategories.close, true);
+  assert.equal(JSON.parse(h.storage.getItem(weekKey)).games[0].retainedCategories.close, false);
+  for (const expired of ["ss:board:top25:2020-09-03:2020-09-07", "ss:board:week:2020-09-03:2020-09-07", "ss:board:2020-09-03:2020-09-07"]) assert.equal(h.storage.getItem(expired), null);
   await v.refresh(); const again = await h.settle();
-  assert.equal(again.boards.acc.games[0].retainedCategories.close, true);
-  assert.equal(again.boards.top25.games[0].retainedCategories.close, false);
+  assert.equal(again.boards.daily.games[0].retainedCategories.close, true);
+  assert.equal(again.boards.week.games[0].retainedCategories.close, false);
 });
 
-test("switching tabs during a Top 25 request neither aborts it nor repeats polling", async t => {
+test("the weekly board restores retained categories from its pre-1.9 top25 key and then owns the week key", async t => {
+  const calendar = easternDate(), yesterday = shiftDate(calendar, -1), week = accWeek(calendar);
+  const legacyKey = `ss:board:top25:${week.start}:${week.end}`, weekKey = `ss:board:week:${week.start}:${week.end}`;
+  const earlier = game(); earlier.teams[0].score = 21; earlier.teams[1].score = 20;
+  const final = game({ state: "final" }); final.teams[0].score = 0;
+  const h = harness(t, async (date, signal, fetcher, end = date) =>
+    scoreboard(date === end && date === yesterday ? [] : [structuredClone(final)], date, { endDate: end }), {
+    [legacyKey]: JSON.stringify(scoreboard([earlier], week.start, { endDate: week.end })),
+  });
+  h.render(); const v = await h.settle();
+  assert.equal(v.boards.week.games[0].retainedCategories.close, true);
+  assert.equal(v.boards.week.games[0].teams[0].changed, true);
+  assert.equal(JSON.parse(h.storage.getItem(weekKey)).games[0].retainedCategories.close, true);
+  assert.equal(v.boards.daily.games[0].retainedCategories, undefined);
+});
+
+test("switching periods during a weekly request neither aborts it nor repeats polling", async t => {
   const yesterday = shiftDate(easternDate(), -1), requests = [];
   let finish, weeklySignal;
-  const h = harness(t, async (date, signal, fetcher, end = date, accOnly = false) => {
-    const scope = requestScope(date, end, accOnly); requests.push(scope);
-    if (scope === "top25") { weeklySignal = signal; await new Promise(resolve => { finish = resolve; }); }
+  const h = harness(t, async (date, signal, fetcher, end = date) => {
+    const scope = requestScope(date, end); requests.push(scope);
+    if (scope === "week") { weeklySignal = signal; await new Promise(resolve => { finish = resolve; }); }
     return scoreboard(scope === "daily" && date === yesterday ? [] : [game()], date, { endDate: end });
   });
   h.render(); const loading = await h.settle();
-  assert.ok(loading.boards.daily); assert.ok(loading.boards.acc); assert.equal(loading.boards.top25, null);
-  for (const scope of ["top25", "daily", "acc", "top25"]) h.switchTo(scope);
-  assert.equal(weeklySignal.aborted, false); assert.equal(requests.length, 4);
+  assert.ok(loading.boards.daily); assert.equal(loading.boards.week, null);
+  for (const scope of ["week", "daily", "week"]) h.switchTo(scope);
+  assert.equal(weeklySignal.aborted, false); assert.equal(requests.length, 3);
   finish(); const ready = await h.settle();
-  assert.equal(ready.data, ready.boards.top25); assert.ok(ready.data); assert.equal(ready.refreshing, false);
+  assert.equal(ready.data, ready.boards.week); assert.ok(ready.data); assert.equal(ready.refreshing, false);
 });
 
 test("Tuesday rollover keeps Monday's week while unfinished and hides obsolete weekly boards once released", async t => {
@@ -170,14 +189,14 @@ test("Tuesday rollover keeps Monday's week while unfinished and hides obsolete w
   });
   h.render(); const held = await h.settle();
   assert.equal(held.today, "2026-09-07");
-  assert.equal(held.boards.acc.date, "2026-09-03"); assert.equal(held.boards.top25.endDate, "2026-09-07");
+  assert.equal(held.boards.week.date, "2026-09-03"); assert.equal(held.boards.week.endDate, "2026-09-07");
   unfinished = false; const refresh = held.refresh();
   const transitioning = await h.settle();
   assert.equal(transitioning.today, "2026-09-08");
-  assert.equal(transitioning.boards.acc, null); assert.equal(transitioning.boards.top25, null);
+  assert.equal(transitioning.boards.week, null);
   pendingWeeks.forEach(resolve => resolve()); await refresh;
   const next = await h.settle();
-  assert.equal(next.boards.acc.date, "2026-09-10"); assert.equal(next.boards.top25.endDate, "2026-09-14");
+  assert.equal(next.boards.week.date, "2026-09-10"); assert.equal(next.boards.week.endDate, "2026-09-14");
 });
 
 test("actual hook delay writes survive opaque storage transfer into a fresh hook and isolate scopes", async t => {
@@ -187,7 +206,7 @@ test("actual hook delay writes survive opaque storage transfer into a fresh hook
   const load = async (date, signal, fetcher, end = date) => {
     if (date === yesterday && end === date) return scoreboard([], date);
     const g = game({ state: phase === "final" ? "final" : phase });
-    // Only daily observes close live play; weekly scopes see a wide game.
+    // Only daily observes close live play; the weekly board sees a wide game.
     if (phase === "final" || (phase === "live" && end !== date)) g.teams[1].score = 35;
     return scoreboard([g], date, { endDate: end });
   };
@@ -203,10 +222,9 @@ test("actual hook delay writes survive opaque storage transfer into a fresh hook
   await t.test("fresh mount restores the persisted observation only for its own scope", async sub => {
     const h = harness(sub, load, saved); h.render(); const final = await h.settle();
     assert.equal(classify(final.boards.daily.games[0]).close, true);
-    assert.equal(classify(final.boards.acc.games[0]).close, false);
-    assert.equal(classify(final.boards.top25.games[0]).close, false);
+    assert.equal(classify(final.boards.week.games[0]).close, false);
     final.setDate("2026-09-03"); h.render(); const other = await h.settle();
     assert.equal(classify(other.boards.daily.games[0]).close, false);
-    assert.equal(other.boards.acc.date, week.start);
+    assert.equal(other.boards.week.date, week.start);
   });
 });

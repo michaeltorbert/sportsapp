@@ -33,11 +33,13 @@ test("refresh preserves actual notification view without rescroll or alert mutat
   const savedPush = await page.evaluate(() => localStorage.getItem("ss:push"));
   await page.getByLabel("Hide finals").check();
   await page.getByRole("button", { name: "Next day" }).click();
-  await page.getByRole("tab", { name: /^Upsets/ }).click();
+  await page.getByRole("button", { name: /^Upsets/ }).click();
   await detect(page, state);
   await page.getByRole("button", { name: "Refresh app", exact: true }).click();
   await expect.poll(() => new URL(page.url()).hash).toBe("");
-  await expect(page.getByRole("tab", { name: /^Upsets/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: /^Upsets/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "false");
+  expect(new URL(page.url()).searchParams.get("cats")).toBe("upset"); expect(new URL(page.url()).searchParams.has("tab")).toBe(false);
   await expect(dateInput(page)).toHaveValue("2026-09-06");
   await expect(page.getByLabel("Hide finals")).toBeChecked();
   await expect.poll(() => page.url()).not.toContain("_ss_update");
@@ -47,7 +49,31 @@ test("refresh preserves actual notification view without rescroll or alert mutat
   expect(harness.state.alertRequests.filter(r => r.method !== "GET")).toEqual([]);
   expect(await page.evaluate(() => window.__pushSimulation)).toEqual({ permissionRequests: 0, subscribes: 0, unsubscribes: 0 });
   await page.getByRole("link", { name: "Saturday Signal home" }).click();
-  await expect(page.getByRole("tab", { name: /^Watchlist/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: /^Upsets/ })).toHaveAttribute("aria-pressed", "false");
+});
+test("refresh restores a Week period with several categories, and Home returns to Day and All", async ({ page, harness }) => {
+  const state = await mockHealth(page);
+  await harness.open();
+  const periodButton = name => page.getByRole("group", { name: "Scoreboard period" }).getByRole("button", { name, exact: true });
+  await periodButton("Week").click();
+  await page.getByRole("button", { name: /^ACC/ }).click(); await page.getByRole("button", { name: /^Top 25/ }).click();
+  await expect(page.locator("article.game-card")).toHaveCount(5);
+  await detect(page, state);
+  await page.getByRole("button", { name: "Refresh app", exact: true }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get("cats")).toBe("acc,top25");
+  await expect.poll(() => page.url()).not.toContain("_ss_update");
+  const url = new URL(page.url());
+  expect(url.searchParams.get("cats")).toBe("acc,top25"); expect(url.searchParams.get("period")).toBe("week"); expect(url.searchParams.has("date")).toBe(false);
+  await expect(periodButton("Week")).toHaveAttribute("aria-pressed", "true");
+  for (const name of ["ACC", "Top 25"]) await expect(page.getByRole("button", { name: new RegExp(`^${name}`) })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("article.game-card")).toHaveCount(5);
+  await expect(page.locator(".week-label")).toHaveCount(1);
+  await page.getByRole("link", { name: "Saturday Signal home" }).click();
+  await expect(periodButton("Day")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Scoreboard date, Eastern time")).toHaveValue("2026-09-05");
+  await expect(page.locator("article.game-card")).toHaveCount(3);
 });
 test("failed explicit verification stays open; returning loaded identity clears stale notice", async ({ page, harness }) => {
   const state = await mockHealth(page); await harness.open(); const loaded = await page.locator("main").getAttribute("data-app-commit");

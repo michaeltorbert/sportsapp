@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.9.0 · 2026-09-19
+
+- Make ACC, Top 25, One score and Upsets independent toggles that combine, with All as the reset to the complete watchlist (#73, ORD-011).
+- Add a Day | Week control so any category combination applies to the selected date or the current Thursday–Monday football week; existing `tab=` links keep their meaning and app-update refresh restores the exact selection and period.
+- Serve every weekly category from the full-FBS weekly feed, retiring the ACC-only weekly request, and warn when ESPN returns its maximum number of games.
+
 ## 1.8.0 · 2026-09-18
 
 - Add an estimated halftime countdown anchored to ESPN’s recorded end of Q2, with an Awaiting 3rd quarter state after 20 minutes.

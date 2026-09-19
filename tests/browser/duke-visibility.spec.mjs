@@ -32,7 +32,8 @@ test('home visible, neutral hidden, weekly controls identify separate events and
  await expect(page.locator('#game-duke-home')).toBeVisible();
  await page.getByRole('button',{name:'Hide Duke game on Sep 5',exact:true}).click();
  await expect(page.locator('#game-duke-home')).toHaveCount(0);
- await page.getByRole('tab',{name:/^ACC/}).click();
+ await page.getByRole('group',{name:'Scoreboard period'}).getByRole('button',{name:'Week',exact:true}).click();
+ await page.getByRole('button',{name:/^ACC/}).click();
  await expect(page.getByRole('button',{name:'Show Duke game on Sep 6',exact:true})).toBeVisible();
  await expect(page.locator('#game-duke-neutral')).toHaveCount(0);
  await page.setViewportSize({width:320,height:740});

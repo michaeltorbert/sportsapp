@@ -98,7 +98,8 @@ test.describe('device time distinct from Eastern date', () => {
   test('one honest cue in daily and weekly views', async ({ page, harness }) => {
     await harness.open();
     await expect(page.locator('.timezone-cue')).toHaveText('Dates ET · Kickoffs PDT');
-    await page.getByRole('tab', { name: /^ACC/ }).tap();
+    await page.getByRole('group', { name: 'Scoreboard period' }).getByRole('button', { name: 'Week', exact: true }).tap();
+    await page.getByRole('button', { name: /^ACC/ }).tap();
     await expect(page.locator('.timezone-cue')).toHaveText('Dates ET · Kickoffs PDT');
     await expect(page.locator('#game-sunday-acc .game-day-label')).toHaveText('Sun, Sep 6');
     await expect(page.locator('#game-sunday-acc .game-status')).toHaveText('2:00 PM');

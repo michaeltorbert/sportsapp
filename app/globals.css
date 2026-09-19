@@ -30,10 +30,11 @@ button:focus-visible, a:focus-visible, .date-picker:focus-within { outline: 2px 
 .date-picker svg { color: #a1aec3; }.date-picker input { opacity: 0; position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; font-size: 16px; }
 .today-button { min-height: 44px; border: 1px solid #33435d; border-radius: 22px; padding: 0 16px; font-size: 14px; font-weight: 600; color: #cad6e8; }
 .today-button.is-today { border-color: transparent; background: #1a2639; color: #bfd2f2; }
-.score-tabs { gap: 0; }
+.score-tabs { display: flex; flex-direction: column; gap: 0; }
+.filter-tabs .filter-tab { background: transparent; cursor: pointer; }
 .score-tabs .filter-tabs { position: sticky; top: 0; z-index: 10; display: grid; grid-template-columns: 1.12fr .72fr 1.26fr .94fr; width: 100%; height: auto; min-height: 52px; gap: 4px; padding: 5px; border: 1px solid #293345; background: #111a28; border-radius: 14px; box-shadow: 0 8px 24px #090d1644; }
-.filter-tabs .filter-tab { min-height: 44px; height: 100%; padding: 8px 7px; border: 0; border-radius: 9px; gap: 6px; font-size: 14px; font-weight: 600; color: #b8c4d7; flex-wrap: wrap; white-space: normal; line-height: 1.2; }
-.filter-tabs .filter-tab[data-state="active"] { background: #d3fc81; color: #1b280a; box-shadow: 0 2px 8px #0002; }
+.filter-tabs .filter-tab { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; height: 100%; padding: 8px 7px; border: 0; border-radius: 9px; gap: 6px; font-size: 14px; font-weight: 600; color: #b8c4d7; flex-wrap: wrap; white-space: normal; line-height: 1.2; }
+.filter-tabs .filter-tab[aria-pressed="true"] { background: #d3fc81; color: #1b280a; box-shadow: 0 2px 8px #0002; }
 .tab-count { font-size: 12px; min-width: 17px; height: 19px; display: inline-grid; place-items: center; color: inherit; opacity: .7; font-variant-numeric: tabular-nums; }
 .watch-header { padding: 25px 0 22px; }.eyebrow { color: #95a5be; font-size: 12px; letter-spacing: 1.9px; font-weight: 700; margin-bottom: 8px; }
 h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px, 5.7vw, 34px); line-height: 1.16; }
@@ -84,6 +85,9 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .toggle-label { display: inline-flex; gap: 9px; min-height: 44px; align-items: center; color: #b9c6d9; font-size: 14px; cursor: pointer; }
 .toggle-label input { width: 18px; height: 18px; accent-color: #cefb70; flex-shrink: 0; }
 .kickoff-toggle { padding: 10px 0; align-items: flex-start; line-height: 1.5; }.kickoff-toggle input { margin-top: 3px; }
+.period-modes { display: flex; background: #182235; padding: 2px; border-radius: 9px; }
+.period-modes button { min-height: 44px; min-width: 52px; font-size: 12px; font-weight: 650; padding: 0 12px; border: 0; border-radius: 7px; color: #c5d0e0; }
+.period-modes button[aria-pressed="true"] { background: #d3fc81; color: #182408; }
 .week-label { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 3px; font-size: 15px; font-weight: 600; }.week-note { font-size: 10px; letter-spacing: 1px; color: #95a5bd; margin-left: 4px; }
 .overnight-note { color: #c5dc9e; background: #1c2a20; padding: 11px 13px; border-radius: 10px; margin: 0 0 14px; font-size: 13px; }
 .game-day-label { color: #b5c1d4; font-size: 11px; }.card-topline { flex-wrap: wrap; gap: 8px; }.game-day-label + .game-status { margin-left: auto; }
@@ -212,6 +216,7 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .compact-scoreboard .date-navigation { min-width: 0; }
 .compact-scoreboard .date-picker { min-width: 0; }
 .compact-scoreboard .today-button { padding: 0 12px; }
+.compact-scoreboard .period-modes button { min-height: 40px; min-width: 44px; padding: 0 9px; font-size: .75rem; }
 .compact-scoreboard .week-label { font-size: .875rem; }
 .compact-scoreboard .week-note { font-size: .625rem; }
 .compact-scoreboard .timezone-cue { color: #98a9c0; font-size: .6875rem; margin: 0 0 8px; overflow-wrap: anywhere; }

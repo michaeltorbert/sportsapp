@@ -138,6 +138,12 @@ export const test = base.extend({
 export { expect };
 export const dateInput = page => page.getByLabel("Scoreboard date, Eastern time");
 export const cards = page => page.locator("article.game-card");
+// Category toggles and the All reset are aria-pressed buttons named "<label> <count>".
+export const category = (page, label) => page.getByRole("button", { name: new RegExp(`^${label}(\\s|$)`) });
+export const period = (page, label) => page.getByRole("group", { name: "Scoreboard period" }).getByRole("button", { name: label, exact: true });
 export async function expectCount(page, label, count) {
-  await expect(page.getByRole("tab", { name: new RegExp(`^${label}`) }).locator(".tab-count")).toHaveText(String(count));
+  await expect(category(page, label).locator(".tab-count")).toHaveText(String(count));
+}
+export async function expectPressed(page, labels) {
+  for (const label of ["All", "ACC", "Top 25", "One score", "Upsets"]) await expect(category(page, label)).toHaveAttribute("aria-pressed", String(labels.includes(label)));
 }
