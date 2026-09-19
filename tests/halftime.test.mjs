@@ -136,9 +136,11 @@ test("completed reuse never restamps status; saturation permits expiry then reco
   const label = () => m.halftimeLabel(g, { fetchedAt: new Date(Date.now()).toISOString() }, false, Date.now(), true, true);
   await load(); t.mock.timers.tick(29000); await load(); assert.equal(calls, 1);
   fail = true; t.mock.timers.tick(61001); await load(); assert.equal(label(), "Halftime");
-  fail = false; await load(); assert.equal(label(), "Halftime 11:25");
+  // A failed extra backs off for a minute like a failed odds request.
+  fail = false; await load(); assert.equal(calls, 2); assert.equal(label(), "Halftime");
+  t.mock.timers.tick(60001); await load(); assert.equal(label(), "Halftime 10:25");
   m.invalidateHalftime(); assert.equal(label(), "Halftime"); await load(); assert.equal(calls, 4, "resume bypasses a pre-boundary completed result");
-  assert.equal(label(), "Halftime 11:25");
+  assert.equal(label(), "Halftime 10:25");
 });
 
 test("saturated odds allocation preserves coverage while halftime-only games recover on later polls", async t => {
@@ -336,6 +338,32 @@ test("HT-017 extras honor the odds failure backoff instead of retrying every pol
   }
   assert.equal(await requestsBy(baseline.enrichPregameLines), 2, "1.7.1 waits out the 60s backoff before the second summary request");
   assert.equal(await requestsBy(m.enrichPregameLines), 2, "the extra queue must not become a second retry channel during the backoff");
+});
+
+test("KIMI-F1 halftime-only extras record the same backoff after a failed summary", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const m = await bundle("tests/halftime-integration-entry.ts"), g = half("extra-backoff");
+  g.teams.forEach(team => { team.rank = null; team.rankKnown = true; team.conferenceId = "151"; });
+  const requests = []; let fail = true;
+  const fetcher = async url => { requests.push(new URL(url).searchParams.get("event")); if (fail) throw new Error("summary failed"); return Response.json(summary(g)); };
+  const load = () => m.enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  const label = () => m.halftimeLabel(g, { fetchedAt: new Date(Date.now()).toISOString() }, false, Date.now(), true, true);
+  await load(); t.mock.timers.tick(30000); await load();
+  assert.equal(requests.length, 1, "a failed extra is not retried on the next 30s poll");
+  fail = false; t.mock.timers.tick(30001); await load();
+  assert.equal(requests.length, 2); assert.equal(label(), "Halftime 11:55", "timing recovers on the first poll after the backoff");
+});
+
+test("CL-HT-A an extra failure never delays the odds queue", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const m = await bundle("tests/halftime-integration-entry.ts"), g = half("odds-independent");
+  let calls = 0, fail = false;
+  const fetcher = async () => { calls++; if (fail) throw new Error("summary failed"); return Response.json(summary(g)); };
+  const load = () => m.enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  await load(); assert.equal(calls, 1, "odds candidate fetched; no line recorded for five minutes");
+  t.mock.timers.tick(270000); fail = true; await load(); assert.equal(calls, 2, "halftime extra retried the summary and failed");
+  fail = false; t.mock.timers.tick(30001); await load();
+  assert.equal(calls, 3, "the expired absence entry makes the game an odds candidate again despite the recent extra failure");
 });
 
 test("HT-016 extra summary fetches never overwrite an unexpired pregame line", async t => {

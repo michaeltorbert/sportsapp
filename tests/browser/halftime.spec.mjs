@@ -49,21 +49,23 @@ test("estimate expiry and later Q3 do not invent a game restart", async ({ page,
 });
 test("summary expiry hides an unfrozen estimate and a later success restores it", async ({ page, harness }) => {
   setup(harness.state); await harness.open({ now }); await expect(status(page)).toHaveText("Halftime 12:55");
-  harness.state.failSummary = true;
+  harness.state.failSummary = true; await page.clock.pauseAt(new Date(Date.parse(now) + 1000));
+  // Polls at 30s and 90s fail (60s sits inside the backoff); the estimate hides at 90s.
   await page.clock.runFor(91000); await expect(status(page)).toHaveText("Halftime");
-  harness.state.failSummary = false; await page.getByRole("button", { name: "Refresh scores", exact: true }).click();
-  await expect(status(page)).toHaveText("Halftime 11:24");
+  harness.state.failSummary = false; await page.clock.fastForward(60000);
+  await expect(status(page)).toHaveText("Halftime 10:23");
 });
 test("visibility resume inside cache TTL requires post-boundary status, and offline hides immediately", async ({ page, harness, context }) => {
   setup(harness.state); await harness.open({ now }); await expect(status(page)).toHaveText("Halftime 12:55");
-  harness.state.failSummary = true;
+  harness.state.failSummary = true; await page.clock.pauseAt(new Date(Date.parse(now) + 1000));
   await page.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, value: true }); document.dispatchEvent(new Event("visibilitychange")); });
   await expect(status(page)).toHaveText("Halftime");
   await page.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, value: false }); document.dispatchEvent(new Event("visibilitychange")); });
   await expect(status(page)).toHaveText("Halftime");
   await expect(page.getByRole("button", { name: "Refresh scores", exact: true })).toBeEnabled();
-  harness.state.failSummary = false; await page.getByRole("button", { name: "Refresh scores", exact: true }).click();
-  await expect(status(page)).toHaveText("Halftime 12:55");
+  // The resume refresh fails and backs off; the first poll after the backoff restores a post-boundary status.
+  harness.state.failSummary = false; await page.clock.fastForward(60000);
+  await expect(status(page)).toHaveText("Halftime 11:54");
   await context.setOffline(true); await expect(status(page)).toHaveText("Halftime");
 });
 test("material device clock jump invalidates old status", async ({ page, harness }) => {

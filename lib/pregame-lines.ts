@@ -72,7 +72,7 @@ type Cached = { line?: PregameLine; expires: number };
 // Finished public results only: no in-flight promise is shared across requests.
 type Attempt = { order: number; retryAfter: number };
 type Completed = { line?: PregameLine; timing: HalftimeObservation; expires: number };
-type EnrichmentState = { cache: Map<string, Cached>; attempts: Map<string, Attempt>; completed: Map<string, Completed>; halftimeAttempts: Map<string, number>; claims: Map<string, symbol>; sequence: number };
+type EnrichmentState = { cache: Map<string, Cached>; attempts: Map<string, Attempt>; completed: Map<string, Completed>; halftimeAttempts: Map<string, Attempt>; claims: Map<string, symbol>; sequence: number };
 const states = new WeakMap<typeof fetch, EnrichmentState>();
 const key = halftimeKey;
 const oddsEligible = (game: Game) => game.teams.some(t => preferredConference(t) || teamRank(t) !== null);
@@ -81,7 +81,7 @@ const oddsEligible = (game: Game) => game.teams.some(t => preferredConference(t)
 export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal, fetcher: typeof fetch = fetch, generation = nextHalftimeGeneration(), observationEpoch = halftimeEpoch()): Promise<Scoreboard> {
   if (parent.aborted || board.stale) return board;
   observeHalftimeBoard(board, generation);
-  const state = states.get(fetcher) || { cache: new Map<string, Cached>(), attempts: new Map<string, Attempt>(), completed: new Map<string, Completed>(), halftimeAttempts: new Map<string, number>(), claims: new Map<string, symbol>(), sequence: 0 };
+  const state = states.get(fetcher) || { cache: new Map<string, Cached>(), attempts: new Map<string, Attempt>(), completed: new Map<string, Completed>(), halftimeAttempts: new Map<string, Attempt>(), claims: new Map<string, symbol>(), sequence: 0 };
   states.set(fetcher, state);
   const { cache, attempts, completed, halftimeAttempts, claims } = state;
   const rememberLine = (game: Game, line: PregameLine | undefined, observedAt: number) => {
@@ -109,12 +109,12 @@ export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal,
     .sort((a, b) => Number(b.state === "live") - Number(a.state === "live")
       || (attempts.get(key(a))?.order ?? 0) - (attempts.get(key(b))?.order ?? 0) || a.id.localeCompare(b.id)).slice(0, 12);
   const selected = new Set(candidates.map(key));
-  // Extras share the odds queue's failure backoff so a failed summary is not
-  // requested again on the next poll through a second channel.
+  // A failed summary backs off for a minute on either queue, so extras are
+  // never a second retry channel; an extra failure never delays odds work.
   const extra = games.filter(g => g.halftime && g.state === "live" && !selected.has(key(g))
-    && (attempts.get(key(g))?.retryAfter ?? 0) <= Date.now()
+    && Math.max(attempts.get(key(g))?.retryAfter ?? 0, halftimeAttempts.get(key(g))?.retryAfter ?? 0) <= Date.now()
     && !(completed.get(key(g))?.timing.epoch === observationEpoch))
-    .sort((a, b) => (halftimeAttempts.get(key(a)) ?? 0) - (halftimeAttempts.get(key(b)) ?? 0) || a.id.localeCompare(b.id))
+    .sort((a, b) => (halftimeAttempts.get(key(a))?.order ?? 0) - (halftimeAttempts.get(key(b))?.order ?? 0) || a.id.localeCompare(b.id))
     .slice(0, 12 - candidates.length);
   if (candidates.length || extra.length) {
     const controller = new AbortController(), abort = () => controller.abort();
@@ -161,7 +161,7 @@ export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal,
             // Operational retry order is separate from evidence that no line exists.
             // Let later games proceed after errors/deadlines, but not caller cancellation.
             if (!parent.aborted && !skippedClaim) {
-              halftimeAttempts.delete(key(game)); halftimeAttempts.set(key(game), ++state.sequence);
+              halftimeAttempts.delete(key(game)); halftimeAttempts.set(key(game), { order: ++state.sequence, retryAfter: failed ? Date.now() + 60000 : 0 });
               if (halftimeAttempts.size > 250) halftimeAttempts.delete(halftimeAttempts.keys().next().value!);
             }
             if (!parent.aborted && odds) {
