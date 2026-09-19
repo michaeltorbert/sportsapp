@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bundle } from "./helpers.mjs";
-const { validCommit, metadata, observe, refreshUrl, updateRestoration, initialTab } = await bundle("lib/app-update.ts");
+const { validCommit, metadata, observe, refreshUrl, updateRestoration, initialView } = await bundle("lib/app-update.ts");
 const A = "a".repeat(40), B = "b".repeat(40), C = "c".repeat(40);
 test("only full commits with descriptive versions are deployment metadata", () => {
   for (const commit of [null, "", "development", "abc1234", "g".repeat(40), 123]) assert.equal(metadata({ commit, version: "1" }), null);
@@ -19,15 +19,49 @@ test("confirmation needs two observations separated by ten seconds; hashes have 
   assert.equal(observe(null, A, metadata({ commit: A, version: "99" }).commit, 0), null);
 });
 test("refresh URL preserves actual view and unrelated URL data without replaying notification", () => {
-  const url = new URL(refreshUrl("https://example.test/?other=keep#game-abc", B, { date: "2026-09-05", followToday: false, filter: "acc", hideFinals: true, focusedGame: "abc" }));
+  const url = new URL(refreshUrl("https://example.test/?other=keep&tab=acc#game-abc", B, { date: "2026-09-05", followToday: false, selection: ["upset", "acc"], period: "day", hideFinals: true, focusedGame: "abc" }));
   assert.equal(url.hash, ""); assert.equal(url.searchParams.get("other"), "keep"); assert.equal(url.searchParams.get("date"), "2026-09-05");
-  assert.equal(initialTab(url.search), "acc"); assert.deepEqual(updateRestoration(url.search), { hideFinals: true, focusedGame: "abc" });
-  const home = new URL(refreshUrl(url.href + "#unrelated", B, { date: "2026-09-05", followToday: true, filter: "watch", hideFinals: false, focusedGame: "" }));
+  assert.equal(url.searchParams.has("tab"), false); assert.equal(url.searchParams.get("cats"), "acc,upset"); assert.equal(url.searchParams.has("period"), false);
+  assert.deepEqual(initialView(url.search), { selection: ["acc", "upset"], period: "day" }); assert.deepEqual(updateRestoration(url.search), { hideFinals: true, focusedGame: "abc" });
+  const home = new URL(refreshUrl(url.href + "#unrelated", B, { date: "2026-09-05", followToday: true, selection: [], period: "day", hideFinals: false, focusedGame: "" }));
   assert.equal(home.hash, "#unrelated"); assert.equal(home.searchParams.has("date"), false); assert.equal(home.searchParams.has("_ss_focus"), false);
+  assert.equal(home.searchParams.has("cats"), false); assert.equal(home.searchParams.has("period"), false);
+  assert.deepEqual(initialView(home.search), { selection: [], period: "day" });
   assert.deepEqual(updateRestoration(home.search), { hideFinals: false, focusedGame: "" });
   assert.equal(updateRestoration(`?_ss_update=${B}`), null);
   assert.equal(updateRestoration(`?_ss_update=${B}&_ss_hide_finals=1&_ss_focus=%3Cscript%3E`), null);
-  assert.equal(initialTab("?tab=invalid"), "watch");
+});
+test("ORD-011 view restoration round-trips every period and selection, including Week with All and Day with a weekly-named category", () => {
+  for (const view of [
+    { selection: [], period: "day" }, { selection: [], period: "week" },
+    { selection: ["acc"], period: "day" }, { selection: ["acc"], period: "week" }, { selection: ["top25"], period: "day" },
+    { selection: ["close", "upset"], period: "week" }, { selection: ["acc", "top25", "close", "upset"], period: "day" }, { selection: ["acc", "top25", "close", "upset"], period: "week" },
+  ]) {
+    for (const followToday of [true, false]) {
+      const url = new URL(refreshUrl("https://example.test/?tab=top25", B, { ...view, date: "2026-09-05", followToday, hideFinals: false, focusedGame: "" }));
+      assert.deepEqual(initialView(url.search), view, JSON.stringify({ view, followToday }));
+      assert.equal(url.searchParams.has("tab"), false);
+      assert.equal(url.searchParams.has("date"), !followToday);
+    }
+  }
+});
+test("legacy tab links keep their daily or weekly meaning and invalid values fall back to All on Day", () => {
+  assert.deepEqual(initialView("?tab=acc"), { selection: ["acc"], period: "week" });
+  assert.deepEqual(initialView("?tab=top25"), { selection: ["top25"], period: "week" });
+  assert.deepEqual(initialView("?tab=close"), { selection: ["close"], period: "day" });
+  assert.deepEqual(initialView("?tab=upset"), { selection: ["upset"], period: "day" });
+  assert.deepEqual(initialView("?tab=watch"), { selection: [], period: "day" });
+  assert.deepEqual(initialView("?tab=invalid"), { selection: [], period: "day" });
+  assert.deepEqual(initialView(null), { selection: [], period: "day" });
+  assert.deepEqual(initialView(""), { selection: [], period: "day" });
+  // Explicit parameters win over a stale tab, drop unknown tokens and duplicates, and never trust period values beyond day/week.
+  assert.deepEqual(initialView("?tab=acc&cats=upset"), { selection: ["upset"], period: "day" });
+  assert.deepEqual(initialView("?tab=upset&period=week"), { selection: ["upset"], period: "week" });
+  assert.deepEqual(initialView("?tab=acc&period=day"), { selection: ["acc"], period: "day" });
+  assert.deepEqual(initialView("?tab=acc&period=bogus"), { selection: ["acc"], period: "day" });
+  assert.deepEqual(initialView("?cats=upset,acc,upset,bogus,watch&period=week"), { selection: ["acc", "upset"], period: "week" });
+  assert.deepEqual(initialView("?cats=&period=month"), { selection: [], period: "day" });
+  assert.deepEqual(initialView("?cats=%3Cscript%3E&period=week"), { selection: [], period: "week" });
 });
 
 const { createAppUpdater } = await bundle("lib/app-update-controller.ts");
@@ -93,7 +127,7 @@ test("storage denial does not prevent dismissal, checking, or explicit navigatio
   await fresh.refresh(); assert.deepEqual(navigations, [B]); fresh.dispose();
 });
 test("slow initial scores cannot erase a manual URL date", () => {
-  const view = { date: "", followToday: false, filter: "watch", hideFinals: false, focusedGame: "" };
+  const view = { date: "", followToday: false, selection: [], period: "day", hideFinals: false, focusedGame: "" };
   assert.equal(new URL(refreshUrl("https://example.test/?date=2026-09-05", B, view)).searchParams.get("date"), "2026-09-05");
   assert.equal(new URL(refreshUrl("https://example.test/?date=invalid", B, view)).searchParams.has("date"), false);
   assert.equal(new URL(refreshUrl("https://example.test/?date=2026-09-05", B, { ...view, followToday: true })).searchParams.has("date"), false);

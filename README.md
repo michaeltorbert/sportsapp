@@ -1,6 +1,6 @@
 # Saturday Signal
 
-College-football scores, weekly ACC and Top 25 views, and optional Web Push alerts.
+College-football scores with combinable ACC, Top 25, One score and Upsets categories, Day and football-week views, and optional Web Push alerts.
 
 The migration in this branch targets **Cloudflare Workers**, using the free provider address `https://saturday-signal.scythe-wildflower.workers.dev`. A purchased domain is not required. GitHub is the source of truth for issues, reviews, tests, tags, and releases.
 

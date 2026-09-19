@@ -44,7 +44,7 @@ test("Florida–ECU can qualify without ranks, while absent or contrary evidence
   const g = match("florida-ecu", { sec: true, score: 7, otherScore: 21 });
   g.teams[0].name = "Florida"; g.teams[1].name = "ECU";
   assert.equal(classify(g).top25, false); assert.equal(classify(g).close, false); assert.equal(classify(g).upset, true);
-  assert.deepEqual(viewGames(scoreboard([g]), "watch").map(g => g.id), [g.id]);
+  assert.deepEqual(viewGames(scoreboard([g]), []).map(g => g.id), [g.id]);
   assert.match(upsetExplanation(g), /ECU leads Florida · SEC conference watch/);
   g.pregameLine = { favoriteId: "a", spread: 10.5, source: "ESPN" };
   assert.equal(gameExpectation(g).basis, "line"); assert.match(upsetExplanation(g), /pregame favorite/);
@@ -92,12 +92,12 @@ test("every filter preserves shared relative order, chronology and immutable inp
     match("earlier", { rank: 25, state: "upcoming", date: "2026-09-06T17:00:00Z" }), match("later", { rank: 1, state: "upcoming", date: "2026-09-06T20:00:00Z" }), match("final", { rank: 1, acc: true, state: "final" })];
   const before = structuredClone(games), ordered = sortGames(games).map(g => g.id);
   assert.deepEqual(sortGames([...games].reverse()).map(g => g.id), ordered); assert.deepEqual(games, before);
-  for (const filter of ["acc", "top25", "upset", "close", "watch"]) {
+  for (const filter of [["acc"], ["top25"], ["upset"], ["close"], [], ["acc", "upset"], ["acc", "top25", "close", "upset"]]) {
     const filtered = viewGames(scoreboard(games), filter).map(g => g.id);
     assert.deepEqual(filtered, ordered.filter(id => filtered.includes(id)));
   }
   assert.ok(ordered.indexOf("earlier") < ordered.indexOf("later")); assert.equal(ordered.at(-1), "final");
-  assert.equal(viewGames(scoreboard(games), "watch", true).some(g => g.state === "final"), false);
+  assert.equal(viewGames(scoreboard(games), [], true).some(g => g.state === "final"), false);
 });
 
 test("pregame lines survive kickoff and reload, but cannot migrate to a different matchup", () => {
@@ -138,7 +138,7 @@ test("expanded list eligibility does not redefine ranked push triggers or their 
 
 test("unranked SEC upset watches remain visible during a delay after kickoff", () => {
   const paused = match("paused-sec", { sec: true, state: "delayed", started: true, score: 7, otherScore: 21 });
-  for (const filter of ["watch", "upset"])
+  for (const filter of [[], ["upset"]])
     assert.deepEqual(viewGames(scoreboard([paused]), filter).map(g => g.id), [paused.id]);
   assert.equal(gamePriority(paused).stage, 0);
   assert.equal(classify({ ...paused, started: false }).upset, false, "an unstarted delay is not a game in progress");
@@ -146,7 +146,7 @@ test("unranked SEC upset watches remain visible during a delay after kickoff", (
   const stored = JSON.parse(JSON.stringify(scoreboard([paused])));
   const retained = retainFinalCategories(scoreboard([final]), stored);
   assert.equal(classify(retained.games[0]).upset, true, "a saved paused watch survives a comeback final");
-  assert.deepEqual(viewGames(retained, "upset").map(g => g.id), [paused.id]);
+  assert.deepEqual(viewGames(retained, ["upset"]).map(g => g.id), [paused.id]);
   assert.equal(upsetExplanation(retained.games[0]), null);
   stored.games[0].started = false;
   assert.equal(retainFinalCategories(scoreboard([final]), stored).games[0].retainedCategories, undefined);
@@ -175,11 +175,11 @@ function screenshotGames() {
 test("issue 66 screenshot alternatives precede both comfortable ranked ACC leads", () => {
   const games = screenshotGames();
   for (const input of [games, [...games].reverse(), [games[2], games[0], games[3], games[1]]]) {
-    const ordered = viewGames(scoreboard(input), "watch").map(g => g.id);
+    const ordered = viewGames(scoreboard(input), []).map(g => g.id);
     for (const higher of ["missouri-kansas", "bc-rutgers"])
       for (const lower of ["louisville-villanova", "virginia-norfolk"])
         assert.ok(ordered.indexOf(higher) < ordered.indexOf(lower), `${higher} above ${lower}`);
-    for (const filter of ["acc", "top25", "close", "upset"]) {
+    for (const filter of [["acc"], ["top25"], ["close"], ["upset"], ["acc", "top25"], ["close", "upset"]]) {
       const subset = viewGames(scoreboard(input), filter).map(g => g.id);
       assert.deepEqual(subset, ordered.filter(id => subset.includes(id)));
     }
@@ -290,7 +290,7 @@ test("ranked upset watch precedes Texas A&M winning in the reported third-quarte
       score: 17, otherScore: 13 });
     if (spread !== null) upset.pregameLine = { favoriteId: "a", spread, source: "fixture assumption" };
     for (const input of [[winning, upset], [upset, winning]]) {
-      for (const filter of ["watch", "top25"])
+      for (const filter of [[], ["top25"]])
         assert.deepEqual(viewGames(scoreboard(input), filter).map(g => g.id), [upset.id, winning.id]);
     }
     const recovered = structuredClone(upset);
@@ -321,13 +321,13 @@ test("Oregon upset ranks near the top of the seven screenshot games", () => {
     return g;
   });
   for (const input of [games, [...games].reverse()]) {
-    const ordered = viewGames(scoreboard(input), "watch").map(g => g.id);
+    const ordered = viewGames(scoreboard(input), []).map(g => g.id);
     assert.ok(ordered.indexOf("oregon-osu") <= 3, "ORD-005: upset stays above ordinary comfortable wins; exact position is not a user rule");
     assert.ok(ordered.indexOf("oregon-osu") < ordered.indexOf("tamu-asu"));
     assert.ok(ordered.indexOf("oregon-osu") < ordered.indexOf("georgia-wku"));
     assert.equal(ordered[0], "vt-odu", "ORD-007 supersedes the old Oregon-over-VT inference");
     assert.ok(ordered.indexOf("oregon-osu") < ordered.indexOf("penn-state-temple"));
-    assert.ok(viewGames(scoreboard(input), "top25").findIndex(g => g.id === "oregon-osu") <= 1);
+    assert.ok(viewGames(scoreboard(input), ["top25"]).findIndex(g => g.id === "oregon-osu") <= 1);
   }
 });
 
@@ -352,8 +352,8 @@ test("ORD-007 Duke and Virginia Tech lead each state group without crossing grou
       assert.deepEqual(new Set(group.slice(0, 2).map(g => g.id)), new Set([`${state}-150`, `${state}-259`]));
       assert.equal(group[2].id, `${state}-ordinary`);
     }
-    assert.equal(viewGames(scoreboard(input), "watch", true).some(g => g.state === "final"), false);
-    assert.equal(viewGames(scoreboard(input), "upset").some(g => g.teams.some(t => ["150", "259"].includes(t.id))), false,
+    assert.equal(viewGames(scoreboard(input), [], true).some(g => g.state === "final"), false);
+    assert.equal(viewGames(scoreboard(input), ["upset"]).some(g => g.teams.some(t => ["150", "259"].includes(t.id))), false,
       "pinning does not turn a comfortable favorite win into an upset");
   }
   const earlier = match("earlier", { state: "upcoming", date: "2026-09-12T12:00:00Z" });

@@ -4,7 +4,7 @@ import { accWeek, easternDate, gameDay, retainFinalCategories, shiftDate, validD
 import { retainHalftimeEnvironment } from "./halftime-clock";
 import { stripHalftimeTiming } from "./halftime";
 import { loadScores } from "./score-client";
-import { expiredBoardKey, matchingBoard, type BoardScope } from "./scoreboard-views";
+import { boardKey, expiredBoardKey, matchingBoard, type BoardScope } from "./scoreboard-views";
 
 import { useInitialSearch, useOnline, useTimezone } from "./browser-state";
 
@@ -24,8 +24,8 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
   const [chosenDate, setSelection] = useState<string | null | undefined>(undefined);
   const selection = dailyOnly ? (controlledDate ?? null) : chosenDate === undefined ? (query && validDate(query) ? query : null) : chosenDate;
   const [today, setToday] = useState(""), [date, setDate] = useState("");
-  const [boards, setBoards] = useState<Record<BoardScope, Scoreboard | null>>({ daily: null, acc: null, top25: null });
-  const [errors, setErrors] = useState<Record<BoardScope, string>>({ daily: "", acc: "", top25: "" });
+  const [boards, setBoards] = useState<Record<BoardScope, Scoreboard | null>>({ daily: null, week: null });
+  const [errors, setErrors] = useState<Record<BoardScope, string>>({ daily: "", week: "" });
   const [overnightError, setOvernightError] = useState("");
   const [guideDailyErrors, setGuideDailyErrors] = useState<Record<string, string>>({});
   const [refreshing, setRefreshing] = useState(false);
@@ -65,15 +65,17 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
       const activeDate = selection || effective;
       setDate(activeDate);
       setOvernightError(overnightWarning);
-      // Fetch all scopes independently. Switching tabs never discards another
-      // scope or restarts polling, and a failed scope cannot blank a healthy one.
+      // Fetch both periods independently. Switching periods or categories never
+      // discards the other board or restarts polling, and a failed board cannot
+      // blank a healthy one. Every category reads the full-FBS weekly feed (ORD-011).
       const update = async (range: { start: string; end: string }, boardScope: BoardScope) => {
-        // Keep existing daily/ACC history, with a separate full-FBS weekly cache.
-        const key = `ss:board:${boardScope === "top25" ? "top25:" : ""}${range.start}:${range.end}`;
+        // Daily history and the full-FBS weekly cache are stored separately.
+        const key = boardKey(boardScope, range.start, range.end);
         try {
-          const raw = boardScope === "daily" && prior?.date === activeDate ? prior : await loadScores(range.start, c.signal, fetch, range.end, boardScope === "acc");
+          const raw = boardScope === "daily" && prior?.date === activeDate ? prior : await loadScores(range.start, c.signal, fetch, range.end);
           if (controller.current !== c) return;
-          const old = cache.current.get(key) || readBoard(key);
+          // The weekly board's pre-1.9 key keeps retained final categories across the upgrade.
+          const old = cache.current.get(key) || readBoard(key) || (boardScope === "week" ? readBoard(boardKey(boardScope, range.start, range.end, true)) : null);
           const next = retainFinalCategories(raw, old);
           next.games = next.games.map(g => ({ ...g, teams: g.teams.map(t => ({ ...t, changed: !!old?.games.some(p => p.id === g.id && p.teams.some(o => o.id === t.id && o.score !== null && o.score !== t.score)) })) as [Team, Team] }));
           cache.current.set(key, next);
@@ -104,7 +106,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
         }
       };
       // A manual Guide date can load even when yesterday is slow or unavailable.
-      await Promise.all([update({ start: activeDate, end: activeDate }, "daily"), ...(dailyOnly ? [] : [update(week, "acc"), update(week, "top25")]), ...(manualGuide ? [checkOvernight()] : [])]);
+      await Promise.all([update({ start: activeDate, end: activeDate }, "daily"), ...(dailyOnly ? [] : [update(week, "week")]), ...(manualGuide ? [checkOvernight()] : [])]);
     } catch {
       if (controller.current === c) {
         const message = refreshError(navigator.onLine, dailyOnly);
@@ -129,15 +131,14 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
     document.addEventListener("visibilitychange", resume); window.addEventListener("online", resume); window.addEventListener("offline", offline);
     return () => { window.clearTimeout(initial); window.clearInterval(interval); controller.current?.abort(); controller.current = null; document.removeEventListener("visibilitychange", resume); window.removeEventListener("online", resume); window.removeEventListener("offline", offline); };
   }, [refresh, queryReady, dailyOnly]);
-  const chooseDate = (value: string | null) => { setErrors({ daily: "", acc: "", top25: "" }); setOvernightError(""); setSelection(value); setDate(value || held.current || easternDate()); };
-  // Weekly views follow the current football week; manual dates apply to daily tabs.
+  const chooseDate = (value: string | null) => { setErrors({ daily: "", week: "" }); setOvernightError(""); setSelection(value); setDate(value || held.current || easternDate()); };
+  // The weekly period follows the current football week; manual dates apply to Day.
   const range = today ? accWeek(today) : null;
   // Guide URL ownership includes null: Today must never fall back to a manual date.
   const displayDate = dailyOnly ? (selection ?? today) : date;
   const matching = {
     daily: matchingBoard(boards.daily, displayDate),
-    acc: range ? matchingBoard(boards.acc, range.start, range.end) : null,
-    top25: range ? matchingBoard(boards.top25, range.start, range.end) : null,
+    week: range ? matchingBoard(boards.week, range.start, range.end) : null,
   };
   const data = matching[scope];
   const error = errors[scope] || overnightError;

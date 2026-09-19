@@ -2,7 +2,7 @@
 
 The durable rule and conflict history is in [ordering-decisions.md](ordering-decisions.md). Read it before changing this implementation.
 
-Issue #10 combines team relevance, live drama, and upset significance. Every tab uses the same comparator for the games it includes. Live games come first, then delayed games, upcoming games, schedule updates, and finals. Within each state section, Duke and Virginia Tech come first. Both share one pinned tier; the existing priority/chronological tiebreakers order games within that tier and within the ordinary tier. Upcoming games remain chronological within each tier. Pinning does not change filter eligibility or the Hide finals setting. Equal live priorities use drama, a final-minute clock band, kickoff, and event ID as stable tiebreakers.
+Issue #10 combines team relevance, live drama, and upset significance. Every category selection and period uses the same comparator for the games it includes; the selection is a filter and adds no priority (ORD-011). Live games come first, then delayed games, upcoming games, schedule updates, and finals. Within each state section, Duke and Virginia Tech come first. Both share one pinned tier; the existing priority/chronological tiebreakers order games within that tier and within the ordinary tier. Upcoming games remain chronological within each tier. Pinning does not change filter eligibility or the Hide finals setting. Equal live priorities use drama, a final-minute clock band, kickoff, and event ID as stable tiebreakers.
 
 ## Live priority
 

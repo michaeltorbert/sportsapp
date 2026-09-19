@@ -101,9 +101,12 @@ test("Guide URL and update restoration keep explicit date/view and remove inheri
   assert.deepEqual(parseGuide("?date=bad&view=bad"), { date: null, view: "all" });
   const selection = parseGuide("?date=2026-09-12&view=watch");
   assert.equal(guideUrl("https://test/guide?tab=acc&_ss_focus=abc", selection), "/guide?date=2026-09-12&view=watch");
+  assert.equal(guideUrl("https://test/guide?cats=acc,upset&period=week&tab=acc", selection), "/guide?date=2026-09-12&view=watch");
   const url = new URL(refreshUrl("https://test/guide?tab=acc&_ss_hide_finals=1", "a".repeat(40), { page: "guide", date: selection.date, view: selection.view, followToday: false }));
   assert.equal(url.pathname, "/guide"); assert.equal(url.searchParams.get("view"), "watch"); assert.equal(url.searchParams.get("date"), "2026-09-12");
   assert.equal(url.searchParams.has("tab"), false); assert.equal(url.searchParams.has("_ss_hide_finals"), false);
+  const scoresCarried = new URL(refreshUrl("https://test/guide?cats=acc&period=week", "a".repeat(40), { page: "guide", date: selection.date, view: selection.view, followToday: false }));
+  assert.equal(scoresCarried.searchParams.has("cats"), false); assert.equal(scoresCarried.searchParams.has("period"), false);
   const today = new URL(refreshUrl(url.href, "a".repeat(40), { page: "guide", date: "2026-09-12", view: "all", followToday: true }));
   assert.equal(today.searchParams.has("date"), false); assert.equal(today.searchParams.has("view"), false);
 });

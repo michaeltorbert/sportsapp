@@ -41,7 +41,7 @@ test('ORD-010 hiding wins over pinning, hash focus, all categories, Guide bounds
  for(const games of [[d,other],[other,d]]){
   const raw=scoreboard(games),safe=v.protectDukeBoard(raw,p);
   assert.deepEqual(safe.games.map(g=>g.id),['other']);assert.equal(safe.games[0].teams[0].record,'');assert.equal(other.teams[0].record,'0-0');
-  for(const filter of ['watch','acc','top25','close','upset']) assert.equal(viewGames(safe,filter,false,d.id).some(g=>g.id===d.id),false);
+  for(const filter of [[],['acc'],['top25'],['close'],['upset'],['acc','top25','close','upset']]) assert.equal(viewGames(safe,filter,false,d.id).some(g=>g.id===d.id),false);
   assert.equal(guideBoard(safe,'all').allCount,1);assert.equal(guideBoard(safe,'all').start,guideBoard(scoreboard([other]),'all').start);
  }
 });

@@ -1,4 +1,4 @@
-import { test, expect, cards, expectCount } from "./fixtures.mjs";
+import { test, expect, cards, expectCount, category, period } from "./fixtures.mjs";
 
 test("primary failure renders browser CDN games without the hosted scoreboard", async ({ page, harness }) => {
   harness.state.failScores = true;
@@ -10,8 +10,10 @@ test("primary failure renders browser CDN games without the hosted scoreboard", 
   } } };
   await harness.open();
   await expect(cards(page).filter({ hasText: "ranked-live away" })).toBeVisible();
+  await expectCount(page, "Top 25", 1);
+  await period(page, "Week").click();
   await expectCount(page, "Top 25", 3);
-  await page.getByRole("tab", { name: /^ACC/ }).click();
+  await category(page, "ACC").click();
   await expect(cards(page).filter({ hasText: "sunday-acc away" })).toBeVisible();
   expect(harness.state.scoreRequests.length).toBeGreaterThan(0);
   expect(harness.state.cdnRequests.length).toBeGreaterThan(0);
