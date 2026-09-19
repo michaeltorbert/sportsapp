@@ -6,11 +6,13 @@ const { gamePriority, urgencyStage } = await bundle("lib/watch-priority.ts");
 const { gameExpectation, upsetExplanation } = await bundle("lib/upset.ts");
 const { viewGames } = await bundle("lib/scoreboard-views.ts");
 const { conditions, transitions } = await bundle("services/alerts/rules.ts");
+const { isPowerFour, twoUnrankedGroupOfSix } = await bundle("lib/conference-evidence.ts");
+const { normalizeScoreboard } = await bundle("lib/espn-data.ts");
 
-function match(id, { acc = false, bothAcc = false, sec = false, rank = null, otherRank = null, period = 4, clock = 120, score = 21, otherScore = 24, ...rest } = {}) {
+function match(id, { acc = false, bothAcc = false, sec = false, powerFour = null, conference = "151", otherConference = "151", rank = null, otherRank = null, period = 4, clock = 120, score = 21, otherScore = 24, ...rest } = {}) {
   const g = game({ id, period, clock, ...rest });
-  Object.assign(g.teams[0], { name: "Favorite", rank, score, conferenceId: acc || bothAcc ? "1" : sec ? "8" : "4" });
-  Object.assign(g.teams[1], { name: "Opponent", rank: otherRank, score: otherScore, conferenceId: bothAcc ? "1" : "151" });
+  Object.assign(g.teams[0], { name: "Favorite", rank, score, conferenceId: acc || bothAcc ? "1" : sec ? "8" : powerFour ?? conference });
+  Object.assign(g.teams[1], { name: "Opponent", rank: otherRank, score: otherScore, conferenceId: bothAcc ? "1" : otherConference });
   return g;
 }
 
@@ -298,6 +300,7 @@ test("ranked upset watch precedes Texas A&M winning in the reported third-quarte
     assert.equal(gamePriority(recovered).upset, 0, "the trailing bonus disappears after a recovery");
     upset.pregameLine = { favoriteId: "b", spread: 3, source: "contrary fixture assumption" };
     assert.equal(gamePriority(upset).upset, 0, "a ranked betting underdog does not gain upset priority");
+    assert.ok(gamePriority(upset).disruption > 0, "rank disruption is separate from the favorite-based upset");
   }
 });
 
@@ -379,4 +382,86 @@ test("ORD-006 ranked ties retain interest below comparable ranked upsets", () =>
   const marqueeTie = match("marquee-tie", { rank: 1, otherRank: 2, period: 3, score: 24, otherScore: 24 });
   assert.equal(sortGames([lowRanked, marqueeTie])[0].id, "marquee-tie",
     "retained tie interest avoids making every minor upset beat a top-two tie");
+});
+
+test("ORD-012 exact conference taxonomy and bounded Power Four relevance preserve late drama", () => {
+  const temple = match("temple-toledo", { conference: "151", otherConference: "15", score: 27, otherScore: 21 });
+  assert.equal(twoUnrankedGroupOfSix(temple), true);
+  for (const conference of ["1", "4", "5", "8", "151", "12", "15", "17", "9", "37", null, "unknown", "18", "20"]) {
+    const comparable = match(`conference-${conference}`, { conference, otherConference: conference, score: 27, otherScore: 21 });
+    const power = ["1", "4", "5", "8"].includes(conference);
+    assert.equal(isPowerFour(comparable.teams[0]), power);
+    assert.equal(twoUnrankedGroupOfSix(comparable), ["151", "12", "15", "17", "9", "37"].includes(conference));
+    assert.equal(gamePriority(comparable).relevance, conference === "1" ? 22 : power ? 4 : 0);
+    if (power) for (const input of [[temple, comparable], [comparable, temple]]) assert.equal(sortGames(input)[0].id, comparable.id);
+    if (power) {
+      comparable.teams[0].score = 49; comparable.teams[1].score = 0; comparable.period = 1;
+      assert.equal(sortGames([comparable, temple])[0].id, temple.id, "no absolute conference tier");
+    }
+  }
+  for (const rankKnown of [false, undefined]) {
+    const unknownRank = structuredClone(temple); unknownRank.teams[0].rankKnown = rankKnown;
+    assert.equal(twoUnrankedGroupOfSix(unknownRank), false);
+  }
+  const ranked = match("ranked-six", { conference: "9", otherConference: "17", rank: 20, score: 27, otherScore: 21 });
+  assert.equal(twoUnrankedGroupOfSix(ranked), false);
+  const power = match("big-ten", { powerFour: "5", otherConference: "4", score: 27, otherScore: 21 });
+  const trio = [ranked, power, temple];
+  for (const a of trio) for (const b of trio.filter(g => g !== a)) {
+    const c = trio.find(g => g !== a && g !== b);
+    assert.deepEqual(sortGames([a, b, c]).map(g => g.id), trio.map(g => g.id));
+  }
+  const acc = match("acc-sec", { conference: "1", otherConference: "8" });
+  assert.equal(gamePriority(acc).relevance, 24);
+});
+
+test("ORD-012 issue 74 rank disruption is line-independent and labels remain truthful", () => {
+  for (const line of [
+    { favoriteId: "a", spread: 3, source: "assumed narrow Iowa line" },
+    { favoriteId: "b", spread: 3, source: "assumed narrow Iowa State line" },
+    undefined, { favoriteId: null, spread: 0, source: "assumed pick'em" },
+    { favoriteId: "b", spread: 14, source: "assumed multiple-score line" },
+  ]) {
+    const iowa = match("iowa-state-iowa", { conference: "5", otherConference: "4", rank: 21, period: 2, clock: 471,
+      score: 0, otherScore: 9, pregameLine: line });
+    const ohio = match("ohio-state-texas", { conference: "5", otherConference: "8", rank: 1, otherRank: 4,
+      period: 1, clock: 0, intermission: true, score: 10, otherScore: 0 });
+    Object.assign(iowa.teams[0], { name: "Iowa" }); Object.assign(iowa.teams[1], { name: "Iowa State" });
+    assert.ok(gamePriority(iowa).disruption > 0);
+    if (!line || line.spread < 7) for (const input of [[iowa, ohio], [ohio, iowa]]) assert.equal(sortGames(input)[0].id, iowa.id);
+    if (line?.favoriteId === "b" || line?.spread === 0) {
+      assert.equal(gamePriority(iowa).upset, 0); assert.equal(upsetExplanation(iowa), null);
+    } else assert.match(upsetExplanation(iowa), line ? /pregame favorite/ : /rank-based upset/);
+  }
+});
+
+test("ORD-013 zero ties and one-to-three point recoveries retain the existing late window", () => {
+  for (const period of [1, 2, 3, 4, 5]) for (const clock of [301, 300]) {
+    const tied = match("tied", { conference: "8", otherConference: "5", rank: 11, period, clock, score: 0, otherScore: 0 });
+    const zero = match("zero", { conference: "151", otherConference: "15", period, clock, score: 0, otherScore: 0 });
+    assert.equal(gamePriority(zero).upset, 0); assert.equal(gamePriority(zero).disruption, 0);
+    assert.ok(gamePriority(tied).disruption > 0); assert.equal(classify(tied).upset, false);
+    for (const lead of [1, 2, 3]) {
+      const recovered = structuredClone(tied); recovered.teams[0].score = lead;
+      const late = period > 4 || period === 4 && clock <= 300;
+      assert.equal(gamePriority(recovered).disruption, late ? gamePriority(tied).disruption * 2 / 3 : 0);
+      assert.equal(gamePriority(recovered).upset, late ? gamePriority(tied).upset * 2 / 3 : 0);
+      assert.equal(classify(recovered).upset, false);
+    }
+  }
+});
+
+test("ORD-013 ESPN parser preserves Duke and Virginia Tech pins in either participant position", () => {
+  for (const id of ["150", "259"]) for (const side of [0, 1]) {
+    const competitors = ["opponent", "other"].map((teamId, index) => ({ id: teamId, homeAway: index === 0 ? "away" : "home",
+      score: index === side ? "49" : "0", curatedRank: { current: 99 }, team: { id: index === side ? id : teamId, displayName: "ESPN team", conferenceId: "1" } }));
+    competitors[side].id = id;
+    const board = normalizeScoreboard({ events: [{ id: `pin-${id}-${side}`, date: "2026-09-06T02:30:00Z",
+      status: { period: 2, clock: 450, type: { name: "STATUS_IN_PROGRESS", state: "in" } }, competitions: [{ competitors }] }] }, "2026-09-05");
+    assert.equal(board.games.length, 1);
+    const ordinary = match("ordinary", { conference: "5", otherConference: "8", rank: 1, period: 5 });
+    for (const games of [[ordinary, ...board.games], [...board.games, ordinary]]) {
+      assert.equal(viewGames(scoreboard(games), ["acc", "top25"])[0].id, board.games[0].id);
+    }
+  }
 });

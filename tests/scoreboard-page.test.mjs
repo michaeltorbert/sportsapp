@@ -181,7 +181,10 @@ test("Help discloses ranking-only alerts when the line-based list excludes a ran
   const { html } = render([], { boards, showHelp: true });
   assert.deepEqual(cardIds(html), ["ranked-underdog"]);
   assert.doesNotMatch(html, /class="badge upset-badge"|class="upset-reason"/);
-  assert.match(html, /Phone alerts are separate from these display categories and cover every qualifying game except Duke, regardless of the selected categories/);
+  assert.match(html, /Phone alerts are separate from these display categories/);
+  assert.match(html, /Close-game alerts prioritize stronger live games and may skip two-unranked Group-of-Six matchups/);
+  assert.match(html, /Selected categories do not filter notifications/);
+  assert.match(html, /Upcoming games remain chronological within those pin tiers/);
   assert.match(html, /Day shows the selected Eastern date\. Week shows the current football week/);
   assert.deepEqual(cardIds(render(["upset"], { boards }).html), []);
 });
