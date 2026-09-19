@@ -322,3 +322,31 @@ test("CL-A2 eligibility changes promote completed line evidence without restampi
   await m.enrichPregameLines(scoreboard([ranked]), new AbortController().signal, fetcher);
   assert.equal(requests, 2, "six-hour expiry anchors to original observation, not eligibility promotion");
 });
+
+test("HT-017 extras honor the odds failure backoff instead of retrying every poll", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const m = await bundle("tests/halftime-integration-entry.ts"), baseline = await bundle("tests/baselines/pregame-lines-1.7.1.ts");
+  async function requestsBy(enrich) {
+    const g = half("backoff"), requests = [];
+    let fail = true;
+    const fetcher = async url => { requests.push(new URL(url).searchParams.get("event")); if (fail) throw new Error("summary failed"); return Response.json(summary(g)); };
+    const load = () => enrich(scoreboard([g]), new AbortController().signal, fetcher);
+    await load(); t.mock.timers.tick(30000); await load(); fail = false; t.mock.timers.tick(30001); await load();
+    return requests.length;
+  }
+  assert.equal(await requestsBy(baseline.enrichPregameLines), 2, "1.7.1 waits out the 60s backoff before the second summary request");
+  assert.equal(await requestsBy(m.enrichPregameLines), 2, "the extra queue must not become a second retry channel during the backoff");
+});
+
+test("HT-016 extra summary fetches never overwrite an unexpired pregame line", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now });
+  const m = await bundle("tests/halftime-integration-entry.ts"), g = half("preserve-line");
+  let spread = -7;
+  const fetcher = async () => Response.json({ ...lineSummary(g), pickcenter: [{ ...lineSummary(g).pickcenter[0], spread }] });
+  const load = () => m.enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  assert.equal((await load()).games[0].pregameLine.spread, 7);
+  spread = -3; t.mock.timers.tick(30001);
+  assert.equal((await load()).games[0].pregameLine.spread, 7, "a changed halftime pickcenter cannot replace the retained six-hour line");
+  t.mock.timers.tick(6 * 3600000);
+  assert.equal((await load()).games[0].pregameLine.spread, 3, "an expired line is refreshed from the next summary");
+});

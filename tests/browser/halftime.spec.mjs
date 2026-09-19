@@ -16,13 +16,22 @@ test("320px before/after, exact countdown copy and isolated one-second ticking",
   await harness.open({ now }); await expect(status(page)).toHaveText("Halftime");
   await page.screenshot({ path: info.outputPath("halftime-before-320.png"), fullPage: true });
   harness.state.failSummary = false;
+  // A failed summary backs off for 60s on every channel: a refresh inside the
+  // window stays plain Halftime without another request, and the first poll
+  // after the window recovers the countdown, now 63s further along.
+  await page.clock.pauseAt(new Date(Date.parse(now) + 1000));
+  const failed = harness.state.summaryRequests, polled = harness.state.scoreRequests.length;
   await page.getByRole("button", { name: "Refresh scores", exact: true }).click();
-  await expect(status(page)).toHaveText("Halftime 12:55");
+  await expect.poll(() => harness.state.scoreRequests.length).toBeGreaterThan(polled);
+  await page.waitForTimeout(1000); await page.clock.runFor(2000);
+  await expect(status(page)).toHaveText(/^Halftime$/); expect(harness.state.summaryRequests).toBe(failed);
+  await page.clock.fastForward(60000);
+  await expect(status(page)).toHaveText("Halftime 11:52");
   await page.screenshot({ path: info.outputPath("halftime-after-320.png"), fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const requests = harness.state.summaryRequests, scores = harness.state.scoreRequests.length;
   await page.evaluate(() => { window.__outsideTickChanges = 0; const observer = new MutationObserver(changes => { window.__outsideTickChanges += changes.length; }); document.querySelectorAll(".tab-count,.team-name,.section-label").forEach(el => observer.observe(el, { childList: true, subtree: true, characterData: true })); });
-  await page.clock.runFor(1000); await expect(status(page)).toHaveText("Halftime 12:54");
+  await page.clock.runFor(1000); await expect(status(page)).toHaveText("Halftime 11:51");
   expect(harness.state.summaryRequests).toBe(requests); expect(harness.state.scoreRequests.length).toBe(scores);
   expect(await page.evaluate(() => window.__outsideTickChanges)).toBe(0);
   await expect(page.locator(".halftime-status[aria-live]")).toHaveCount(0);

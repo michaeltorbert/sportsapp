@@ -89,7 +89,9 @@ export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal,
     const known = cache.get(key(game));
     // Reuse may become odds-eligible after another scope supplies ranking or
     // conference metadata. Promote its evidence without restamping its TTL.
-    if (line || !known?.line || known.expires <= Date.now())
+    // A retained unexpired line stays authoritative: halftime extras must not
+    // swap the pregame favorite for a provider's in-game revision.
+    if (!known?.line || known.expires <= Date.now())
       cache.set(key(game), { line, expires: observedAt + (line ? 6 * 3600000 : 300000) });
     if (cache.size > 250) cache.delete(cache.keys().next().value!);
   };
@@ -107,7 +109,10 @@ export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal,
     .sort((a, b) => Number(b.state === "live") - Number(a.state === "live")
       || (attempts.get(key(a))?.order ?? 0) - (attempts.get(key(b))?.order ?? 0) || a.id.localeCompare(b.id)).slice(0, 12);
   const selected = new Set(candidates.map(key));
+  // Extras share the odds queue's failure backoff so a failed summary is not
+  // requested again on the next poll through a second channel.
   const extra = games.filter(g => g.halftime && g.state === "live" && !selected.has(key(g))
+    && (attempts.get(key(g))?.retryAfter ?? 0) <= Date.now()
     && !(completed.get(key(g))?.timing.epoch === observationEpoch))
     .sort((a, b) => (halftimeAttempts.get(key(a)) ?? 0) - (halftimeAttempts.get(key(b)) ?? 0) || a.id.localeCompare(b.id))
     .slice(0, 12 - candidates.length);
