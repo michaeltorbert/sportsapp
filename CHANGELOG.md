@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.8.0 · 2026-09-18
+
+- Add an estimated halftime countdown anchored to ESPN’s recorded end of Q2, with an Awaiting 3rd quarter state after 20 minutes.
+- Keep timing evidence in the browser session and hide estimates when status, visibility, connectivity or device-clock checks cannot support them.
+- Share the existing optional summary budget with odds, preserving odds priority and score fallback behavior. Guide timing and Watchlist ordering are unchanged.
+
 ## 1.7.1 · 2026-09-12
 
 - Replace spacious score cards with compact listings and expandable game details, retaining spoiler protection and focused-game behavior.

@@ -88,7 +88,7 @@ export const test = base.extend({
         return json({ ok: true });
       }
       if (url.hostname === "site.api.espn.com") {
-        if (url.pathname.endsWith("/summary")) return json({});
+        if (url.pathname.endsWith("/summary")) { state.summaryRequests = (state.summaryRequests || 0) + 1; return json(state.summary || {}, state.failSummary ? 503 : 200); }
         if (url.pathname.endsWith("/scoreboard")) {
           state.scoreRequests.push(url.search);
           const events = url.searchParams.get("groups") === "1" ? state.events.filter(e => e.competitions[0].competitors.some(c => c.team.conferenceId === "1")) : state.events;

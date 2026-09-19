@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { accWeek, easternDate, gameDay, retainFinalCategories, shiftDate, validDate, type Scoreboard, type Team } from "./football";
+import { retainHalftimeEnvironment } from "./halftime-clock";
+import { stripHalftimeTiming } from "./halftime";
 import { loadScores } from "./score-client";
 import { expiredBoardKey, matchingBoard, type BoardScope } from "./scoreboard-views";
 
@@ -9,7 +11,7 @@ import { useInitialSearch, useOnline, useTimezone } from "./browser-state";
 function readBoard(key: string): Scoreboard | null {
   try {
     const board = JSON.parse(localStorage.getItem(key) || "null");
-    return board && validDate(board.date) && Number.isFinite(Date.parse(board.fetchedAt)) && Array.isArray(board.games) && board.games.every((g: { teams?: unknown[] }) => Array.isArray(g.teams) && g.teams.length === 2) ? board : null;
+    return board && validDate(board.date) && Number.isFinite(Date.parse(board.fetchedAt)) && Array.isArray(board.games) && board.games.every((g: { teams?: unknown[] }) => Array.isArray(g.teams) && g.teams.length === 2) ? stripHalftimeTiming(board) : null;
   } catch { return null; }
 }
 function refreshError(online: boolean, guide: boolean) {
@@ -40,6 +42,8 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
     const timer = window.setInterval(() => setNow(Date.now()), 15000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(retainHalftimeEnvironment, []);
 
   const refresh = useCallback(async () => {
     if (document.hidden || controller.current) return;
@@ -137,5 +141,5 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
   };
   const data = matching[scope];
   const error = errors[scope] || overnightError;
-  return { date: displayDate, today, data, boards: matching, error, dailyError: dailyOnly ? guideDailyErrors[displayDate] || "" : errors.daily, overnightError, refreshing, online, now, timezone, refresh, setDate: chooseDate, followToday: selection === null };
+  return { date: displayDate, today, data, boards: matching, error, scopeError: errors[scope], dailyError: dailyOnly ? guideDailyErrors[displayDate] || "" : errors.daily, overnightError, refreshing, online, now, timezone, refresh, setDate: chooseDate, followToday: selection === null };
 }

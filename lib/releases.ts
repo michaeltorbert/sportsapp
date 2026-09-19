@@ -1,5 +1,6 @@
-export const VERSION = "1.7.1";
+export const VERSION = "1.8.0";
 export const releases = [
+  { version: "1.8.0", date: "September 18, 2026", changes: "Show a halftime countdown when fresh ESPN timing is available. Estimate a 20-minute break from the recorded end of Q2, then show Awaiting 3rd quarter until fresh game status changes. Missing or stale timing keeps the ordinary Halftime label." },
   { version: "1.7.1", date: "September 12, 2026", changes: "Fit more games on screen with compact listings and expandable details. Simplify the header and keep update status, Duke visibility and Hide finals together. Preserve readable layouts with larger text." },
   { version: "1.7.0", date: "September 12, 2026", changes: "Add Settings and Duke spoiler protection. Away and neutral-site games are hidden by default, with a saved hide or show choice for each game. Duke notifications stay off. Team records are omitted to avoid revealing hidden results." },
   { version: "1.6.3", date: "September 12, 2026", changes: "Keep Duke and Virginia Tech first within live, upcoming and finished games. Give ranked upset watches more priority and retain interest when a ranked game becomes tied. Preserve earlier ordering decisions with a cumulative rule log and regression tests." },

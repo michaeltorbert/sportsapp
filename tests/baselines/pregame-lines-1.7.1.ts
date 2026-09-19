@@ -1,7 +1,7 @@
+// FULL FILE baseline from sportsapp f8a70a8 lib/pregame-lines.ts; only relative import paths changed.
 import { z } from "zod";
-import type { Game, PregameLine, Scoreboard } from "./football";
-import { halftimeEpoch, halftimeKey, nextHalftimeGeneration, observeHalftime, observeHalftimeBoard, parseHalftime, type HalftimeObservation } from "./halftime";
-import { preferredConference, teamRank } from "./upset";
+import type { Game, PregameLine, Scoreboard } from "../../lib/football";
+import { preferredConference, teamRank } from "../../lib/upset";
 
 const teamId = z.union([z.string().min(1), z.number().int().nonnegative()]).transform(String);
 const spread = z.union([z.number(), z.string().trim().regex(/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/).transform(Number)]).pipe(z.number().finite());
@@ -71,116 +71,58 @@ export function summaryPregameLine(raw: unknown, game: Game) {
 type Cached = { line?: PregameLine; expires: number };
 // Finished public results only: no in-flight promise is shared across requests.
 type Attempt = { order: number; retryAfter: number };
-type Completed = { line?: PregameLine; timing: HalftimeObservation; expires: number };
-type EnrichmentState = { cache: Map<string, Cached>; attempts: Map<string, Attempt>; completed: Map<string, Completed>; halftimeAttempts: Map<string, Attempt>; claims: Map<string, symbol>; sequence: number };
+type EnrichmentState = { cache: Map<string, Cached>; attempts: Map<string, Attempt>; sequence: number };
 const states = new WeakMap<typeof fetch, EnrichmentState>();
-const key = halftimeKey;
-const oddsEligible = (game: Game) => game.teams.some(t => preferredConference(t) || teamRank(t) !== null);
+function key(game: Game) { return `${game.id}:${game.date}:${game.teams.map(t => t.id).join(":")}`; }
 
 /** Optional enrichment has a 1.5s total budget; failed odds never discard scores. */
-export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal, fetcher: typeof fetch = fetch, generation = nextHalftimeGeneration(), observationEpoch = halftimeEpoch()): Promise<Scoreboard> {
+export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal, fetcher: typeof fetch = fetch): Promise<Scoreboard> {
   if (parent.aborted || board.stale) return board;
-  observeHalftimeBoard(board, generation);
-  const state = states.get(fetcher) || { cache: new Map<string, Cached>(), attempts: new Map<string, Attempt>(), completed: new Map<string, Completed>(), halftimeAttempts: new Map<string, Attempt>(), claims: new Map<string, symbol>(), sequence: 0 };
+  const state = states.get(fetcher) || { cache: new Map<string, Cached>(), attempts: new Map<string, Attempt>(), sequence: 0 };
   states.set(fetcher, state);
-  const { cache, attempts, completed, halftimeAttempts, claims } = state;
-  const rememberLine = (game: Game, line: PregameLine | undefined, observedAt: number) => {
-    if (!oddsEligible(game)) return;
-    const known = cache.get(key(game));
-    // Reuse may become odds-eligible after another scope supplies ranking or
-    // conference metadata. Promote its evidence without restamping its TTL.
-    // A retained unexpired line stays authoritative: halftime extras must not
-    // swap the pregame favorite for a provider's in-game revision.
-    if (!known?.line || known.expires <= Date.now())
-      cache.set(key(game), { line, expires: observedAt + (line ? 6 * 3600000 : 300000) });
-    if (cache.size > 250) cache.delete(cache.keys().next().value!);
-  };
-  for (const [id, value] of completed) if (value.expires <= Date.now()) completed.delete(id);
-  const games = [...new Map(board.games.map(game => [key(game), game])).values()];
-  // Reuse only minimized completed records, retaining their original time and generation.
-  for (const game of games) {
-    const value = completed.get(key(game));
-    if (value) observeHalftime(game, value.timing);
-  }
-  const candidates = games.filter(g => !g.pregameLine && (g.state === "live" || g.state === "final" || (g.state === "delayed" && g.started))
-    && oddsEligible(g)
+  const { cache, attempts } = state;
+  const candidates = board.games.filter(g => !g.pregameLine && (g.state === "live" || g.state === "final" || (g.state === "delayed" && g.started))
+    && g.teams.some(t => preferredConference(t) || teamRank(t) !== null)
     && (attempts.get(key(g))?.retryAfter ?? 0) <= Date.now()
     && (!cache.has(key(g)) || cache.get(key(g))!.expires <= Date.now()))
     .sort((a, b) => Number(b.state === "live") - Number(a.state === "live")
       || (attempts.get(key(a))?.order ?? 0) - (attempts.get(key(b))?.order ?? 0) || a.id.localeCompare(b.id)).slice(0, 12);
-  const selected = new Set(candidates.map(key));
-  // A failed summary backs off for a minute on either queue, so extras are
-  // never a second retry channel; an extra failure never delays odds work.
-  const extra = games.filter(g => g.halftime && g.state === "live" && !selected.has(key(g))
-    && Math.max(attempts.get(key(g))?.retryAfter ?? 0, halftimeAttempts.get(key(g))?.retryAfter ?? 0) <= Date.now()
-    && !(completed.get(key(g))?.timing.epoch === observationEpoch))
-    .sort((a, b) => (halftimeAttempts.get(key(a))?.order ?? 0) - (halftimeAttempts.get(key(b))?.order ?? 0) || a.id.localeCompare(b.id))
-    .slice(0, 12 - candidates.length);
-  if (candidates.length || extra.length) {
+  if (candidates.length) {
     const controller = new AbortController(), abort = () => controller.abort();
     parent.addEventListener("abort", abort, { once: true });
     const timer = setTimeout(abort, 1500);
-    const run = async (queue: Game[], odds: boolean) => {
-      let index = 0;
-      await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
-        while (index < queue.length && !controller.signal.aborted) {
-          const game = queue[index++];
-          let failed = true, skippedClaim = false;
-          let releaseClaim: (() => void) | undefined;
+    let index = 0;
+    try {
+      await Promise.all(Array.from({ length: Math.min(4, candidates.length) }, async () => {
+        while (index < candidates.length && !controller.signal.aborted) {
+          const game = candidates[index++];
+          let failed = true;
           try {
-            const reuse = completed.get(key(game));
-            if (reuse && reuse.timing.epoch === observationEpoch) { rememberLine(game, reuse.line, reuse.timing.observedAt); failed = false; continue; }
-            if (!odds) {
-              // Only the owner fetches this extra need. Losers neither await nor
-              // share its promise or cancellation; a canceled owner may recover
-              // on a later poll. A new visibility epoch has an independent key.
-              const claimKey = `${observationEpoch}:${key(game)}`;
-              if (claims.has(claimKey) || claims.size >= 250) { skippedClaim = true; continue; }
-              const owner = Symbol(); claims.set(claimKey, owner);
-              releaseClaim = () => { if (claims.get(claimKey) === owner) claims.delete(claimKey); };
-              controller.signal.addEventListener("abort", releaseClaim, { once: true });
-            }
             const response = await fetcher(`https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=${encodeURIComponent(game.id)}`, { signal: controller.signal, mode: "cors", credentials: "omit", cache: "no-store" });
             if (!response.ok) continue;
-            const raw = await response.json();
+            const line = summaryPregameLine(await response.json(), game);
             if (controller.signal.aborted) continue;
-            const observedAt = Date.now(), line = summaryPregameLine(raw, game);
-            const timing = parseHalftime(raw, game, observedAt, generation, observationEpoch);
-            observeHalftime(game, timing);
-            if ((completed.get(key(game))?.timing.generation ?? -1) <= generation) {
-              completed.set(key(game), { line, timing, expires: observedAt + 30000 });
-              if (completed.size > 250) completed.delete(completed.keys().next().value!);
-            }
             failed = false;
+            const known = cache.get(key(game));
             // Concurrent tab refreshes may finish out of order; absence cannot erase valid evidence.
-            rememberLine(game, line, observedAt);
+            if (line || !known?.line || known.expires <= Date.now())
+              cache.set(key(game), { line, expires: Date.now() + (line ? 6 * 3600000 : 300000) });
+            if (cache.size > 250) cache.delete(cache.keys().next().value!);
           } catch { /* Missing favorite evidence is allowed; score refresh still succeeds. */ }
           finally {
-            releaseClaim?.();
-            if (releaseClaim) controller.signal.removeEventListener("abort", releaseClaim);
             // Operational retry order is separate from evidence that no line exists.
             // Let later games proceed after errors/deadlines, but not caller cancellation.
-            if (!parent.aborted && !skippedClaim) {
-              halftimeAttempts.delete(key(game)); halftimeAttempts.set(key(game), { order: ++state.sequence, retryAfter: failed ? Date.now() + 60000 : 0 });
-              if (halftimeAttempts.size > 250) halftimeAttempts.delete(halftimeAttempts.keys().next().value!);
-            }
-            if (!parent.aborted && odds) {
+            if (!parent.aborted) {
               attempts.delete(key(game)); attempts.set(key(game), { order: ++state.sequence, retryAfter: failed ? Date.now() + 60000 : 0 });
               if (attempts.size > 250) attempts.delete(attempts.keys().next().value!);
             }
           }
         }
       }));
-    };
-    try {
-      // Extra halftime work starts only after the original odds queue has completed.
-      // Both phases share the original deadline and twelve-candidate allowance.
-      await run(candidates, true);
-      await run(extra, false);
     } finally { clearTimeout(timer); parent.removeEventListener("abort", abort); }
   }
   return { ...board, games: board.games.map(game => {
     const cached = cache.get(key(game));
-    return !game.pregameLine && oddsEligible(game) && cached?.line && cached.expires > Date.now() ? { ...game, pregameLine: cached.line } : game;
+    return !game.pregameLine && cached?.line && cached.expires > Date.now() ? { ...game, pregameLine: cached.line } : game;
   }) };
 }
