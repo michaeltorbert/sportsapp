@@ -29,7 +29,7 @@ test("CI keeps updater engines isolated and gates every required result", () => 
   assert.match(workflow, /updater:\n    runs-on: ubuntu-latest/);
   assert.match(workflow, /npx playwright install --with-deps chromium webkit/);
   assert.match(workflow, /npm run test:updater/);
-  assert.match(workflow, /if: \$\{\{ !cancelled\(\) \}\}/);
+  assert.match(workflow, /test:\n    if: always\(\)/);
   assert.match(workflow, /needs: \[core, browser, updater\]/);
   assert.match(workflow, /test "\$CORE_RESULT" = success/);
   assert.match(workflow, /test "\$BROWSER_RESULT" = success/);
