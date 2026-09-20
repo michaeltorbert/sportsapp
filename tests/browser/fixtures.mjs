@@ -149,6 +149,8 @@ export const test = base.extend({
       simulated: ["ESPN responses", "alert-service responses", "notification permission", "PushManager", "service-worker registration", "installed standalone state"],
       alertRequests: state.alertRequests, scoreRequests: state.scoreRequests, cdnRequests: state.cdnRequests, hostedScoreRequests: state.hostedScoreRequests, unexpectedExternal: state.unexpectedExternal,
     }, null, 2) });
+    // Soft assertions still fail the test while allowing every crash/runtime
+    // check to report its evidence instead of stopping at the first failure.
     expect.soft(lifecycle.filter(entry => entry.event === "crash"), "No browser page crashes").toEqual([]);
     expect.soft(lifecycle.filter(entry => entry.event === "disconnected"), "Browser remains connected during the test").toEqual([]);
     expect.soft(state.unexpectedExternal, "No unmocked external request is permitted").toEqual([]);
