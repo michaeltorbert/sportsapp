@@ -1,11 +1,12 @@
-import { test, expect, event, cards, dateInput, expectCount, expectPressed, category, period } from "./fixtures.mjs";
+import { test, expect, event, cards, dateInput, expectCount, expectUpsetCount, expectPressed, category, period } from "./fixtures.mjs";
 
 test("mobile touch navigation toggles categories, resets with All, and keeps Day and Week counts period-relative", async ({ page, harness }, testInfo) => {
   await harness.open();
   await expect(dateInput(page)).toHaveValue("2026-09-05");
   await expectPressed(page, ["All"]);
   await expect(period(page, "Day")).toHaveAttribute("aria-pressed", "true");
-  for (const [name, count] of [["All", 3], ["ACC", 1], ["Top 25", 1], ["One score", 2], ["Upsets", 1]]) await expectCount(page, name, count);
+  for (const [name, count] of [["All", 3], ["ACC", 1], ["Top 25", 1], ["One score", 2]]) await expectCount(page, name, count);
+  await expectUpsetCount(page, 1, 1);
   await expect(cards(page)).toHaveCount(3);
   // ORD-011: All → ACC → ACC + Upsets → Upsets → All, with the union shown once per game.
   await category(page, "ACC").tap(); await expectPressed(page, ["ACC"]);
@@ -24,7 +25,8 @@ test("mobile touch navigation toggles categories, resets with All, and keeps Day
   await period(page, "Week").tap();
   await expect(period(page, "Week")).toHaveAttribute("aria-pressed", "true");
   await expect(dateInput(page)).toHaveCount(0); await expect(page.locator(".week-label")).toHaveCount(1);
-  for (const [name, count] of [["All", 6], ["ACC", 2], ["Top 25", 3], ["One score", 2], ["Upsets", 1]]) await expectCount(page, name, count);
+  for (const [name, count] of [["All", 6], ["ACC", 2], ["Top 25", 3], ["One score", 2]]) await expectCount(page, name, count);
+  await expectUpsetCount(page, 1, 1);
   await expect(cards(page)).toHaveCount(6);
   await expect(page.locator("#game-sunday-acc")).toBeVisible(); await expect(page.locator("#game-monday-ranked")).toBeVisible();
   await category(page, "Top 25").tap(); await expectPressed(page, ["Top 25"]);
@@ -61,6 +63,25 @@ test("mobile touch navigation toggles categories, resets with All, and keeps Day
   await page.getByRole("button", { name: "Previous day" }).tap();
   await expect(dateInput(page)).toHaveValue("2026-09-05");
   await expect(cards(page)).toHaveCount(3);
+});
+
+test("Upsets shows active and total watches without overflowing a 320px viewport", async ({ page, harness }) => {
+  harness.state.events = [
+    event("brewing-upset", { rank: 5 }),
+    event("concluded-upset", { rank: 8, state: "final" }),
+  ];
+  await page.setViewportSize({ width: 320, height: 700 });
+  await harness.open();
+  await expectUpsetCount(page, 1, 2);
+  await category(page, "Upsets").tap();
+  await expect(cards(page)).toHaveCount(2);
+  await page.getByLabel("Hide finals").tap();
+  await expectUpsetCount(page, 1, 1);
+  await expect(cards(page)).toHaveCount(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const box = await category(page, "Upsets").boundingBox();
+  expect(box.width).toBeGreaterThanOrEqual(40);
+  expect(box.height).toBeGreaterThanOrEqual(40);
 });
 
 test("legacy tab links keep their period and explicit category links restore multi-select on either period", async ({ page, harness }) => {
@@ -104,9 +125,11 @@ test("Hide finals persists after reload and updates every scope's count", async 
   await expectCount(page, "All", 2);
   await expectCount(page, "ACC", 0);
   await expectCount(page, "Top 25", 1);
+  await expectUpsetCount(page, 1, 1);
   await page.reload();
   await expect(page.getByLabel("Hide finals")).toBeChecked();
   await expectCount(page, "All", 2);
+  await expectUpsetCount(page, 1, 1);
   await period(page, "Week").tap();
   await expectCount(page, "All", 4); await expectCount(page, "ACC", 1); await expectCount(page, "Top 25", 2);
   await category(page, "ACC").tap();

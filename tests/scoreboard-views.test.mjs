@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bundle, game, scoreboard } from "./helpers.mjs";
-const { viewGames, matchingBoard, expiredBoardKey, scoreboardScope, toggleCategory, normalizeSelection, boardKey } = await bundle("lib/scoreboard-views.ts");
+const { viewGames, upsetCounts, matchingBoard, expiredBoardKey, scoreboardScope, toggleCategory, normalizeSelection, boardKey } = await bundle("lib/scoreboard-views.ts");
 const { gamePriority } = await bundle("lib/watch-priority.ts");
 const { classify } = await bundle("lib/football.ts");
 const { loadScores } = await bundle("lib/score-client.ts");
@@ -23,6 +23,21 @@ test("every count describes the displayed period's board and honors Hide finals"
   assert.deepEqual(counts("day", true), { all: 1, acc: 0, top25: 1, close: 1, upset: 1 });
   assert.equal(viewGames(null, []).length, 0);
   assert.equal(scoreboardScope("day"), "daily");
+});
+
+test("Upsets count active watches first and add only games that concluded as upsets", () => {
+  const activeUpset = changes => { const value = game(changes); value.teams[0].rank = 5; value.teams[1].rank = null; return value; };
+  const live = activeUpset({ id: "live-upset" });
+  const delayed = activeUpset({ id: "delayed-upset", state: "delayed" });
+  const final = activeUpset({ id: "final-upset", state: "final" });
+  const recovered = game({ id: "recovered-favorite", state: "final", retainedCategories: { acc: false, top25: false, close: false, upset: true } });
+  const plain = game({ id: "plain" });
+  plain.teams.forEach(team => { team.rank = null; });
+  plain.teams[1].score = plain.teams[0].score + 20;
+  const board = scoreboard([live, delayed, final, recovered, plain]);
+  assert.deepEqual(upsetCounts(board), { brewing: 2, total: 3 });
+  assert.deepEqual(upsetCounts(board, true), { brewing: 2, total: 2 });
+  assert.deepEqual(upsetCounts(null), { brewing: 0, total: 0 });
 });
 
 test("ORD-011 categories toggle independently, combine with OR once per game, and All is an exclusive reset", () => {
