@@ -16,7 +16,7 @@ for (const width of [320, 390]) for (const scale of [100, 150]) test(`SIMULATED 
   const descriptions = [
     ["Notifications", "Turning off stops future alerts; your choices stay saved."],
     ["Upset watch", "A ranked favorite under threat in Q4 or overtime."],
-    ["Any close game", "Selected games tied or within 8 points in Q4 or overtime."],
+    ["Any close game", "Games tied or within 8 points in Q4 or overtime. Stronger games take priority."],
     ["Upset final results", "A ranked team loses to an unranked or lower-ranked opponent."],
     ["ACC kickoff reminders", "10 minutes before a game involving an ACC team."],
   ];
@@ -58,6 +58,49 @@ for (const width of [320, 390]) for (const scale of [100, 150]) test(`SIMULATED 
   await sheet.getByRole("button", { name: "Close", exact: true }).scrollIntoViewIfNeeded();
   await sheet.getByRole("button", { name: "Close", exact: true }).tap();
   await expect(sheet).not.toBeVisible();
+});
+
+test("SIMULATED alert rail: 320px 200% text preserves words and disabled cues", async ({ page, harness }, info) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  harness.state.upsetFinal = false;
+  await harness.open({ push: { permission: "granted", existing: true, credentials: true } });
+  await page.getByRole("button", { name: "Alerts on", exact: true }).tap();
+  await page.addStyleTag({ content: '.alerts-sheet [data-slot="sheet-title"] { font-size: 46px; } .alerts-sheet [data-slot="sheet-description"] { font-size: 28px; } .alerts-sheet .help-body, .alerts-sheet .alert-setting strong, .alerts-sheet .alert-setting > .alert-switch { font-size: 32px; } .alerts-sheet .alert-setting small, .alerts-sheet .alert-footnote { font-size: 26px; } .alerts-sheet .alert-details { font-size: 28px; }' });
+  const master = page.getByRole("switch", { name: "Notifications", exact: true });
+  const on = page.getByRole("switch", { name: "Upset watch", exact: true });
+  const off = page.getByRole("switch", { name: "Upset final results", exact: true });
+  const checkGeometry = async control => {
+    const geometry = await control.evaluate(input => {
+      const face = input.nextElementSibling, thumb = face.querySelector('.alert-switch-thumb').getBoundingClientRect();
+      const word = face.querySelector(input.checked ? '.alert-switch-on' : '.alert-switch-off');
+      const text = word.getBoundingClientRect(), track = face.getBoundingClientRect();
+      return { gap: input.checked ? thumb.left - text.right : text.left - thumb.right, fontSize: getComputedStyle(word).fontSize, contained: text.left >= track.left && text.right <= track.right, width: input.getBoundingClientRect().width, height: input.getBoundingClientRect().height };
+    });
+    expect(geometry.gap).toBeGreaterThanOrEqual(1); expect(geometry.contained).toBe(true);
+    expect(geometry.fontSize).toBe("14px"); expect(Math.round(geometry.width)).toBe(56); expect(Math.round(geometry.height)).toBe(44);
+  };
+  expect(await on.locator("..").evaluate(el => getComputedStyle(el).fontSize)).toBe("32px");
+  expect(await page.locator('.alert-setting small').first().evaluate(el => getComputedStyle(el).fontSize)).toBe("26px");
+  await expect(on).toBeChecked(); await expect(off).not.toBeChecked();
+  for (const control of [on, off]) await checkGeometry(control);
+  await on.scrollIntoViewIfNeeded(); await capture(page, info, "320-200-on");
+  await off.scrollIntoViewIfNeeded(); await capture(page, info, "320-200-off");
+  await master.focus(); await master.press("Space"); await expect(master).not.toBeChecked();
+  for (const forcedColors of ["none", "active"]) {
+    await page.emulateMedia({ forcedColors });
+    if (forcedColors === "active" && !await page.evaluate(() => matchMedia('(forced-colors: active)').matches)) {
+      info.annotations.push({ type: "limitation", description: "Forced-colors emulation is unavailable." });
+      continue;
+    }
+    for (const [state, control] of [["on", on], ["off", off]]) {
+      await expect(control).toBeDisabled(); await checkGeometry(control);
+      expect(await control.evaluate(input => getComputedStyle(input.nextElementSibling).borderTopStyle)).toBe("dashed");
+      await control.scrollIntoViewIfNeeded(); await capture(page, info, `320-200-disabled-${state}-${forcedColors}`);
+    }
+  }
+  await expect(on).toBeChecked(); await expect(off).not.toBeChecked();
+  expect(await page.getByRole("dialog").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
 });
 
 test("SIMULATED alert rail: focus, busy, reduced motion and monochrome", async ({ page, harness, browserName }, info) => {

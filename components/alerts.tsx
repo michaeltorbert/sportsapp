@@ -11,7 +11,7 @@ type Status = Choices & { active: boolean; revision: number; preferencesVersion:
 const defaults: Choices = { upsetWatch: true, closeGame: false, upsetFinal: false, kickoff: false };
 const types: { key: keyof Choices; name: string; description: string }[] = [
   { key: "upsetWatch", name: "Upset watch", description: "A ranked favorite under threat in Q4 or overtime." },
-  { key: "closeGame", name: "Any close game", description: "Selected games tied or within 8 points in Q4 or overtime." },
+  { key: "closeGame", name: "Any close game", description: "Games tied or within 8 points in Q4 or overtime. Stronger games take priority." },
   { key: "upsetFinal", name: "Upset final results", description: "A ranked team loses to an unranked or lower-ranked opponent." },
   { key: "kickoff", name: "ACC kickoff reminders", description: "10 minutes before a game involving an ACC team." },
 ];

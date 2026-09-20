@@ -112,14 +112,14 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .alerts-sheet .alert-switch input:focus-visible { outline: 2px solid #cefb70; outline-offset: 2px; }
 .alerts-sheet .alert-switch-face { pointer-events: none; position: absolute; inset: 8px 2px; border: 1px solid #a1aec3; border-radius: 5px; background: #28364a; color: #edf4ff; }
 .alerts-sheet .alert-switch-thumb { position: absolute; left: 3px; top: 3px; width: 8px; height: 20px; border: 1px solid currentColor; border-radius: 2px; background: currentColor; transition: transform .15s ease; }
-.alerts-sheet .alert-switch-on, .alerts-sheet .alert-switch-off { position: absolute; top: 0; height: 26px; display: flex; align-items: center; font-size: .75em; font-weight: 750; line-height: 1; }
+.alerts-sheet .alert-switch-on, .alerts-sheet .alert-switch-off { position: absolute; top: 0; height: 26px; display: flex; align-items: center; font-size: min(.75em, 14px); font-weight: 750; line-height: 1; }
 .alerts-sheet .alert-switch-on { left: 3px; visibility: hidden; }
 .alerts-sheet .alert-switch-off { right: 3px; }
 .alerts-sheet .alert-switch input:checked + .alert-switch-face { background: #cefb70; border-color: #cefb70; color: #172308; }
 .alerts-sheet .alert-switch input:checked + .alert-switch-face .alert-switch-thumb { transform: translateX(36px); }
 .alerts-sheet .alert-switch input:checked + .alert-switch-face .alert-switch-on { visibility: visible; }
 .alerts-sheet .alert-switch input:checked + .alert-switch-face .alert-switch-off { visibility: hidden; }
-.alerts-sheet .alert-switch input:disabled + .alert-switch-face { background: #263142; border-color: #9aa8bb; color: #c5cfdd; }
+.alerts-sheet .alert-switch input:disabled + .alert-switch-face { background: #263142; border-color: #9aa8bb; border-style: dashed; color: #c5cfdd; }
 .alerts-sheet .alert-switch[data-pending="true"]::after { content: ""; pointer-events: none; position: absolute; inset: 3px -1px; border: 1px dashed #edf4ff; border-radius: 8px; }
 @media (prefers-reduced-motion: no-preference) { .alerts-sheet .alert-switch[data-pending="true"]::after { animation: alert-save-pulse 1s ease-in-out infinite alternate; } }
 @keyframes alert-save-pulse { to { opacity: .45; } }
