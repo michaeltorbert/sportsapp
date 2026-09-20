@@ -2,9 +2,10 @@
 
 ## 1.10.0 · 2026-09-19
 
-- Prioritize stronger live games with explicit Power Four and Group of Six conference evidence while preserving late-game drama, favorite evidence and the Duke/Virginia Tech pins (#82).
-- Separate ranking disruption from favorite-based upset interest so Watchlist labels remain truthful, including when a ranked underdog is favored (#74).
-- Hold an unranked Group of Six fourth-quarter close-game alert when a stronger fresh live candidate exists, without rewriting its original transition-time payload if it later delivers (#71).
+- Prioritize stronger live games with explicit Power Four and Group of Six conference evidence while preserving late-game drama, favorite evidence and the Duke/Virginia Tech pins (#82, ORD-012).
+- Separate ranking disruption from favorite-based upset interest so Watchlist labels remain truthful, including when a ranked underdog is favored (#74, ORD-012).
+- Hold an unranked Group of Six fourth-quarter close-game alert when a stronger fresh live candidate exists, without rewriting its original transition-time payload if it later delivers (#82, ORD-012).
+- Preserve existing tie and one-to-three-point narrow-lead priority, verify Duke and Virginia Tech pins through ESPN parsing, and clarify that upcoming chronology applies within preferred-team tiers (#71, ORD-013).
 - Replace fixed browser-test delays with observed health and request boundaries, and retain lifecycle, console, request and crash evidence for diagnosing intermittent WebKit failures (#69, #77).
 
 ## 1.9.0 · 2026-09-19
