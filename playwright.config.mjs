@@ -1,11 +1,15 @@
 import { defineConfig, devices } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 const sourceCommit = process.env.SOURCE_COMMIT || execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 const port = Number(process.env.BROWSER_TEST_PORT || 4178);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("Invalid BROWSER_TEST_PORT");
 const baseURL = `http://127.0.0.1:${port}`;
+// Bind diagnostics to the actual browser harness, including uncommitted helpers.
+const browserTestSources = [...new Set(execFileSync("git", ["ls-files", "-co", "--exclude-standard", "-z", "tests/browser", "playwright.config.mjs"], { encoding: "utf8" }).split("\0").filter(Boolean))]
+  .filter(path => existsSync(path)).sort().map(path => ({ path, sha256: createHash("sha256").update(readFileSync(path)).digest("hex") }));
 
 export default defineConfig({
   testDir: "./tests/browser",
@@ -22,6 +26,8 @@ export default defineConfig({
   reporter: [["list"], ["json", { outputFile: "output/playwright/results.json" }], ["html", { outputFolder: "output/playwright/report", open: "never" }]],
   metadata: {
     sourceCommit,
+    browserTestSources,
+    browserTestSourcesHash: createHash("sha256").update(JSON.stringify(browserTestSources)).digest("hex"),
     appVersion: JSON.parse(readFileSync("package.json", "utf8")).version,
     verification: "Desktop engines with mobile emulation. Scores, alert service, notification permission, service-worker registration and PushManager are simulated; no real push is sent.",
   },

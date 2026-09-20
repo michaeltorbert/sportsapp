@@ -1,14 +1,16 @@
 import { test, expect, dateInput } from "./fixtures.mjs";
+import { observeHealthBodies, consumeHealthAfter } from "./health-sync.mjs";
 const B = "b".repeat(40), C = "c".repeat(40);
 async function mockHealth(page, initial = B) {
+  await observeHealthBodies(page);
   const state = { commit: initial, count: 0, fail: false };
   await page.route("**/api/health", route => { state.count++; return route.fulfill({ status: state.fail ? 503 : 200, json: { version: "1", commit: state.commit } }); });
   return state;
 }
 async function detect(page, state) {
-  const received = page.waitForResponse(response => new URL(response.url()).pathname === "/api/health");
-  await page.clock.fastForward(3100); await (await received).finished(); await expect.poll(() => state.count).toBeGreaterThan(0);
-  await page.waitForTimeout(50);
+  expect(state.fail, "Update detection requires a successful health response").toBe(false);
+  await consumeHealthAfter(page, () => page.clock.fastForward(3100));
+  await expect.poll(() => state.count).toBeGreaterThan(0);
   await page.clock.fastForward(10100); await expect(page.getByRole("button", { name: "Refresh app", exact: true })).toBeVisible();
 }
 test("confirms twice, dismisses per target, manual override shares Help owner and failure is truthful", async ({ page, harness }, testInfo) => {

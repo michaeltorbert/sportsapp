@@ -13,8 +13,11 @@ npm run test:browser
 ```
 
 Linux runners install required libraries with `npx playwright install --with-deps
-chromium webkit`. The existing Tests workflow runs both engines against its
-production build, before rebuilding for preview. Missing engines fail explicitly;
+chromium webkit`. The existing Tests workflow runs each engine in a separate
+Playwright invocation against the same production build, giving each one a fresh
+local Worker process before rebuilding for preview. It retains both engines'
+reports and uploads `.wrangler/logs/` so a local Worker exit is diagnosable instead
+of appearing only as follow-on connection failures. Missing engines fail explicitly;
 for a deliberately partial local check use `npm run test:browser --
 --project=chromium-mobile` and report WebKit as untested. `BROWSER_TEST_PORT` can
 override the default local port 4178. No hosted deployment is required.

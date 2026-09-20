@@ -44,7 +44,12 @@ jobs:
       - name: Install browser engines
         run: npx playwright install --with-deps chromium webkit
       - name: Test mobile browser regressions (simulated scores and push)
-        run: npm run test:browser
+        run: |
+          npm run test:browser -- --project=chromium-mobile
+          mv output/playwright/results output/playwright/results-chromium-mobile
+          mv output/playwright/results.json output/playwright/results-chromium-mobile.json
+          mv output/playwright/report output/playwright/report-chromium-mobile
+          npm run test:browser -- --project=webkit-mobile
       - name: Test explicit app updates across two local builds
         run: npm run test:updater
       - name: Validate preview deployment package
@@ -61,6 +66,7 @@ jobs:
           name: tests-${{ github.sha }}
           path: |
             .release-evidence/tests.log
+            .wrangler/logs/
             output/playwright/
           include-hidden-files: true
           retention-days: 14
