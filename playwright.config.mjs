@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 
 const sourceCommit = process.env.SOURCE_COMMIT || execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
@@ -9,7 +9,7 @@ if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("Inv
 const baseURL = `http://127.0.0.1:${port}`;
 // Bind diagnostics to the actual browser harness, including uncommitted helpers.
 const browserTestSources = [...new Set(execFileSync("git", ["ls-files", "-co", "--exclude-standard", "-z", "tests/browser", "playwright.config.mjs"], { encoding: "utf8" }).split("\0").filter(Boolean))]
-  .sort().map(path => ({ path, sha256: createHash("sha256").update(readFileSync(path)).digest("hex") }));
+  .filter(path => existsSync(path)).sort().map(path => ({ path, sha256: createHash("sha256").update(readFileSync(path)).digest("hex") }));
 
 export default defineConfig({
   testDir: "./tests/browser",

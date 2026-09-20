@@ -20,6 +20,9 @@ export async function consumeHealthAfter(page, action) {
   const before = await page.evaluate(() => window.__healthBodiesConsumed);
   expect(Number.isInteger(before), "Install the health observer before navigation").toBe(true);
   const received = page.waitForResponse(response => new URL(response.url()).pathname === "/api/health" && response.ok());
+  // Observe rejection immediately if action fails before we await this waiter.
+  // Await the original promise below so a waiter failure still fails the test.
+  void received.catch(() => {});
   await action();
   expect(await (await received).finished(), "Health response completed successfully").toBeNull();
   // Node polling stays live while the page clock is installed/paused.

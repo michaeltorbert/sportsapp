@@ -387,6 +387,9 @@ test("unresolved initial Today timeout exposes a valid unavailable date instead 
     const url = new URL(request.url());
     return url.hostname === "site.api.espn.com" && url.pathname.endsWith("/scoreboard");
   });
+  // An earlier navigation/assertion failure must not leave a rejected waiter
+  // unobserved during teardown. Awaiting started below still reports its error.
+  void started.catch(() => {});
   await page.route("https://site.api.espn.com/**/scoreboard?*", async route => {
     await gate; await route.fallback().catch(() => {});
   });

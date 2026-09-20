@@ -8,6 +8,7 @@ async function mockHealth(page, initial = B) {
   return state;
 }
 async function detect(page, state) {
+  expect(state.fail, "Update detection requires a successful health response").toBe(false);
   await consumeHealthAfter(page, () => page.clock.fastForward(3100));
   await expect.poll(() => state.count).toBeGreaterThan(0);
   await page.clock.fastForward(10100); await expect(page.getByRole("button", { name: "Refresh app", exact: true })).toBeVisible();
