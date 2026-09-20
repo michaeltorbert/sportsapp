@@ -1,5 +1,10 @@
 # Saturday Signal releases
 
+## 1.11.0 · 2026-09-20
+
+- Show active Upsets first and the total of active plus completed upset results in parentheses (#75).
+- Keep recovered-favorite watches visible without counting them as completed upsets, with accessible labels and narrow-phone layout coverage.
+
 ## 1.10.0 · 2026-09-19
 
 - Prioritize stronger live games with explicit Power Four and Group of Six conference evidence while preserving late-game drama, favorite evidence and the Duke/Virginia Tech pins (#82, ORD-012).
