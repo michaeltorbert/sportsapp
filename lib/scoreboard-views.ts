@@ -42,6 +42,20 @@ export function viewGames(board: Scoreboard | null, selection: Selection, hideFi
   return sortGames((board?.games || []).filter(game => !(hideFinals && game.state === "final") && matchesSelection(game, selection, focusedGame)));
 }
 
+export type UpsetCounts = { brewing: number; total: number };
+
+// The first number is active watches. The parenthesized total adds only finals
+// that actually ended as upsets, excluding retained watches where the favorite recovered.
+export function upsetCounts(board: Scoreboard | null, hideFinals = false): UpsetCounts {
+  const games = viewGames(board, ["upset"], hideFinals);
+  const brewing = games.filter(game => game.state === "live" || (game.state === "delayed" && game.started)).length;
+  const concluded = games.filter(game => game.state === "final" && classify({ ...game, retainedCategories: undefined }).upset).length;
+  return {
+    brewing,
+    total: brewing + concluded,
+  };
+}
+
 export function matchingBoard(board: Scoreboard | null, start: string, end = start) {
   return board?.date === start && (board.endDate || board.date) === end ? board : null;
 }

@@ -67,6 +67,7 @@ function render(selection, { period = "day", hideFinals = false, focusedGame = "
 
 function cardIds(html) { return [...html.matchAll(/<article id="game-([^"]+)"/g)].map(match => match[1]); }
 function badge(html, category) { return Number(new RegExp(`class="filter-tab filter-${category}"[^>]*>.*?<span class="tab-count">(\\d+)</span>`).exec(html)?.[1]); }
+function upsetBadge(html) { const match = /class="tab-count upset-count" aria-hidden="true">(\d+) <span class="upset-total">\((\d+)\)<\/span>/.exec(html); return match ? match.slice(1).map(Number) : null; }
 function pressed(html) { return [...html.matchAll(/class="filter-tab filter-([a-z0-9]+)" aria-pressed="(true|false)"/g)].filter(m => m[2] === "true").map(m => m[1]); }
 
 test("Week with Top 25 renders weekly sections, future non-ACC and ACC games, dates, and period-relative counts", () => {
@@ -93,6 +94,21 @@ test("Hide finals removes the weekly final section and adjusts every weekly coun
   assert.equal(badge(html, "top25"), 5); assert.equal(cardIds(html).length, 5);
   assert.equal(badge(html, "watch"), 6);
   assert.doesNotMatch(html, /game-top-final|<h2>Final<\/h2>/); assert.match(html, /Coming up/);
+});
+
+test("Upsets shows brewing first, completed upset results in the total, and an accessible label", () => {
+  const live = game({ id: "brewing" });
+  live.teams[0].rank = 5; live.teams[1].rank = null;
+  const final = game({ id: "concluded", state: "final", retainedCategories: { acc: false, top25: false, close: false, upset: true } });
+  final.teams[0].rank = 5; final.teams[1].rank = null;
+  const recovered = game({ id: "recovered", state: "final", retainedCategories: { acc: false, top25: false, close: false, upset: true } });
+  const boards = fixtures(); boards.daily = scoreboard([live, final, recovered]);
+  const shown = render(["upset"], { boards }).html;
+  assert.deepEqual(upsetBadge(shown), [1, 2]);
+  assert.match(shown, /aria-label="Upsets, 1 brewing, 2 brewing or completed upsets"/);
+  const hidden = render(["upset"], { boards, hideFinals: true }).html;
+  assert.deepEqual(upsetBadge(hidden), [1, 1]);
+  assert.match(hidden, /aria-label="Upsets, 1 brewing, 1 brewing or completed upsets"/);
 });
 
 test("Day keeps manual date navigation and the All-only focused game; Week hides daily controls for every selection", () => {
@@ -142,7 +158,8 @@ test("empty weekly copy explains the weekly scope without offering hidden daily 
   const day = render(["acc", "upset"], { boards: { ...fixtures(), daily: scoreboard([]) } }).html;
   assert.match(day, /Nothing matches these categories\./); assert.match(day, /Choose another date/);
   const unknown = render([], { boards: { ...fixtures(), daily: null } }).html;
-  assert.equal((unknown.match(/<span class="tab-count">–<\/span>/g) || []).length, 5, "unloaded counts stay unknown, not zero");
+  assert.equal((unknown.match(/<span class="tab-count">–<\/span>/g) || []).length, 4, "ordinary unloaded counts stay unknown, not zero");
+  assert.match(unknown, /aria-label="Upsets, counts loading"[^>]*>.*?<span class="tab-count upset-count" aria-hidden="true">– \(–\)<\/span>/);
 });
 
 test("unranked SEC upset cards explain the favorite without inventing a ranking", () => {
