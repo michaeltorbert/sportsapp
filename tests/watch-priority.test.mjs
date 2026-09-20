@@ -445,6 +445,21 @@ test("ORD-012 worse-ranked betting favorite trailing a better-ranked opponent ga
   assert.match(upsetExplanation(g), /No\. 5 Opponent leads No\. 20 Favorite · pregame favorite/);
 });
 
+test("ORD-012 ranked favorite trailing an unknown-rank opponent retains only supported favorite significance", () => {
+  const unknown = match("unknown-rank-opponent", { conference: "5", otherConference: "8", rank: 20,
+    period: 4, clock: 180, score: 14, otherScore: 21,
+    pregameLine: { favoriteId: "a", spread: 3, source: "explicit fixture assumption" } });
+  unknown.teams[1].rankKnown = false;
+  assert.equal(gameExpectation(unknown).basis, "line");
+  assert.equal(gamePriority(unknown).upset, 8);
+  assert.equal(gamePriority(unknown).disruption, 0);
+  assert.match(upsetExplanation(unknown), /Opponent leads No\. 20 Favorite · pregame favorite/);
+  const known = structuredClone(unknown); known.id = "known-unranked-opponent"; known.teams[1].rankKnown = true;
+  assert.ok(gamePriority(known).disruption > 0);
+  for (const pair of [[unknown, known], [known, unknown]]) assert.equal(sortGames(pair)[0].id, known.id,
+    "known rank-disruption evidence outranks otherwise identical unknown evidence");
+});
+
 test("ORD-013 zero ties and one-to-three point recoveries retain the existing late window", () => {
   for (const period of [1, 2, 3, 4, 5]) for (const clock of [301, 300]) {
     const tied = match("tied", { conference: "8", otherConference: "5", rank: 11, period, clock, score: 0, otherScore: 0 });
