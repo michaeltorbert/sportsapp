@@ -19,7 +19,9 @@ and browser process, so an engine or local Worker failure cannot inherit resourc
 from the other engine or turn the rest of the combined suite into connection-failure
 noise. A final `test` gate requires the core job and both matrix entries. Each browser
 job retains its report and uploads `.wrangler/logs/` so a local Worker exit remains
-diagnosable. Missing engines fail explicitly;
+diagnosable. The two-build updater check also runs on its own clean runner with both
+engines installed, and the final gate requires it alongside core and the browser
+matrix. Missing engines fail explicitly;
 for a deliberately partial local check use `npm run test:browser --
 --project=chromium-mobile` and report WebKit as untested. `BROWSER_TEST_PORT` can
 override the default local port 4178. No hosted deployment is required.
