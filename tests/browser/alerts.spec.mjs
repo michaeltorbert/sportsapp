@@ -1,11 +1,107 @@
 import { test, expect, CREDENTIALS, ALERT_ORIGIN } from "./fixtures.mjs";
 
+const enlargedAlertText = '.alerts-sheet [data-slot="sheet-title"] { font-size: 34.5px; } .alerts-sheet [data-slot="sheet-description"] { font-size: 21px; } .alerts-sheet .help-body { font-size: 24px; } .alerts-sheet .alert-setting strong { font-size: 24px; } .alerts-sheet .alert-setting small, .alerts-sheet .alert-footnote { font-size: 19.5px; } .alerts-sheet .alert-setting > .alert-switch { font-size: 24px; } .alerts-sheet .alert-details { font-size: 21px; }';
+const capture = async (page, info, name) => page.screenshot({ path: process.env.ALERT_SCREENSHOT_DIR ? `${process.env.ALERT_SCREENSHOT_DIR}/after-${info.project.name}-${name}.png` : info.outputPath(`${name}.png`) });
+
+for (const width of [320, 390]) for (const scale of [100, 150]) test(`SIMULATED alert rail: ${width}px ${scale}% text, readable states and disclosure`, async ({ page, harness }, info) => {
+  await page.setViewportSize({ width, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  harness.state.upsetFinal = false;
+  await harness.open({ push: { permission: "granted", existing: true, credentials: true } });
+  await page.getByRole("button", { name: "Alerts on", exact: true }).tap();
+  if (scale === 150) await page.addStyleTag({ content: enlargedAlertText });
+  const sheet = page.getByRole("dialog");
+  const prefix = `${width}-${scale}`;
+  await capture(page, info, `${prefix}-on-off`);
+  const descriptions = [
+    ["Notifications", "Turning off stops future alerts; your choices stay saved."],
+    ["Upset watch", "A ranked favorite under threat in Q4 or overtime."],
+    ["Any close game", "Selected games tied or within 8 points in Q4 or overtime."],
+    ["Upset final results", "A ranked team loses to an unranked or lower-ranked opponent."],
+    ["ACC kickoff reminders", "10 minutes before a game involving an ACC team."],
+  ];
+  for (const [name, description] of descriptions) {
+    const control = sheet.getByRole("switch", { name, exact: true });
+    await expect(control).toHaveAccessibleDescription(description);
+    const box = await control.boundingBox();
+    expect(Math.round(box.width)).toBe(56); expect(Math.round(box.height)).toBe(44);
+    const geometry = await control.evaluate(input => {
+      const face = input.nextElementSibling, thumb = face.querySelector('.alert-switch-thumb').getBoundingClientRect();
+      const word = face.querySelector(input.checked ? '.alert-switch-on' : '.alert-switch-off');
+      const text = word.getBoundingClientRect(), track = face.getBoundingClientRect();
+      return { gap: input.checked ? thumb.left - text.right : text.left - thumb.right, textSize: parseFloat(getComputedStyle(word).fontSize), contained: text.left >= track.left && text.right <= track.right, pointerEvents: getComputedStyle(face).pointerEvents };
+    });
+    expect(geometry.gap).toBeGreaterThanOrEqual(1);
+    expect(geometry.textSize).toBeGreaterThanOrEqual(12);
+    expect(geometry.contained).toBe(true); expect(geometry.pointerEvents).toBe("none");
+  }
+  expect(await sheet.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const finals = sheet.getByRole("switch", { name: "Upset final results", exact: true });
+  await sheet.getByText("Upset final results", { exact: true }).tap();
+  await expect(finals).toBeChecked();
+  await finals.focus(); await finals.press("Space"); await expect(finals).not.toBeChecked();
+  const summary = sheet.locator("summary");
+  expect((await summary.boundingBox()).height).toBeGreaterThanOrEqual(44);
+  const writes = harness.state.alertRequests.filter(r => r.method !== "GET").length;
+  await summary.focus(); await summary.press("Enter");
+  await expect(sheet.locator("details")).toHaveAttribute("open", "");
+  await sheet.getByText("Scoreboard categories do not filter notifications.", { exact: false }).scrollIntoViewIfNeeded();
+  await capture(page, info, `${prefix}-expanded`);
+  expect(harness.state.alertRequests.filter(r => r.method !== "GET")).toHaveLength(writes);
+  const master = sheet.getByRole("switch", { name: "Notifications", exact: true });
+  await master.focus(); await master.press("Space"); await expect(master).not.toBeChecked();
+  const upset = sheet.getByRole("switch", { name: "Upset watch", exact: true });
+  await expect(upset).toBeChecked(); await expect(upset).toBeDisabled();
+  expect(await upset.evaluate(input => getComputedStyle(input.nextElementSibling).opacity)).toBe("1");
+  await upset.scrollIntoViewIfNeeded(); await capture(page, info, `${prefix}-disabled-on`);
+  await sheet.getByRole("button", { name: "Close", exact: true }).scrollIntoViewIfNeeded();
+  await sheet.getByRole("button", { name: "Close", exact: true }).tap();
+  await expect(sheet).not.toBeVisible();
+});
+
+test("SIMULATED alert rail: focus, busy, reduced motion and monochrome", async ({ page, harness, browserName }, info) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await harness.open({ push: { permission: "granted", existing: true, credentials: true } });
+  await page.getByRole("button", { name: "Alerts on", exact: true }).tap();
+  const control = page.getByRole("switch", { name: "Any close game", exact: true });
+  await page.keyboard.press("Tab"); await control.focus(); await control.press("ArrowRight");
+  await expect(control).toBeFocused();
+  expect(await control.evaluate(el => getComputedStyle(el).outlineWidth)).toBe("2px");
+  await capture(page, info, "focus");
+  let release; const held = new Promise(resolve => { release = resolve; });
+  const handler = async route => { if (route.request().method() === "PATCH") await held; await route.fallback(); };
+  await page.route(`${ALERT_ORIGIN}/subscriptions/*`, handler);
+  try {
+    await control.press("Space"); await expect(control).toHaveAttribute("aria-busy", "true");
+    expect(await control.locator("..").evaluate(el => getComputedStyle(el, "::after").animationName)).toBe("none");
+    await capture(page, info, "busy-reduced-motion");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    expect(await control.locator("..").evaluate(el => getComputedStyle(el, "::after").animationName)).toBe("alert-save-pulse");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  } finally { release(); await expect(control).toHaveAttribute("aria-busy", "false"); await page.unroute(`${ALERT_ORIGIN}/subscriptions/*`, handler); }
+  const grayscale = await page.addStyleTag({ content: '.alerts-sheet { filter: grayscale(1); }' });
+  await capture(page, info, "grayscale"); await grayscale.evaluate(el => el.remove());
+  await page.emulateMedia({ forcedColors: "active" });
+  if (await page.evaluate(() => matchMedia('(forced-colors: active)').matches)) {
+    expect(await control.evaluate(el => getComputedStyle(el.nextElementSibling).borderTopStyle)).toBe("solid");
+    await capture(page, info, "forced-colors");
+  } else info.annotations.push({ type: "limitation", description: `${browserName} does not expose forced-colors emulation.` });
+});
+
 test("SIMULATED close-game alerts disclose global slate prioritization", async ({ page, harness }) => {
   await harness.open({ push: { permission: "granted", existing: true, credentials: true } });
   await page.getByRole("button", { name: "Alerts on", exact: true }).tap();
+  await expect(page.getByText("Close-game alerts prioritize stronger live games", { exact: false })).not.toBeVisible();
+  const writes = harness.state.alertRequests.filter(r => r.method !== "GET").length;
+  const summary = page.locator(".alert-details summary");
+  await summary.focus(); await summary.press("Enter");
   await expect(page.getByText("Close-game alerts prioritize stronger live games", { exact: false })).toBeVisible();
   await expect(page.getByText("even if you disabled or already received the stronger alert", { exact: false })).toBeVisible();
   await expect(page.getByText("may skip two-unranked Group-of-Six matchups", { exact: false })).toBeVisible();
+  expect(harness.state.alertRequests.filter(r => r.method !== "GET")).toHaveLength(writes);
+  await summary.press("Space");
+  await expect(page.locator(".alert-details")).not.toHaveAttribute("open", "");
 });
 
 for (const code of [404, 503]) test(`SIMULATED preferences: settings GET ${code} preserves config and blocks unconfirmed writes`, async ({ page, harness }) => {
@@ -48,11 +144,19 @@ test("SIMULATED preferences: focused switch remains focused while a save is pend
   await page.route(`${ALERT_ORIGIN}/subscriptions/*`, handler);
   try {
     const control = page.getByRole("switch", { name: "Any close game", exact: true });
+    const thumb = control.locator("..").locator(".alert-switch-thumb");
+    const confirmedPosition = await thumb.evaluate(el => getComputedStyle(el).transform);
     await control.focus(); await control.press("Space");
     await expect(control).toHaveAttribute("aria-busy", "true"); await expect(control).toBeFocused();
+    await expect(control).toBeChecked();
+    expect(await thumb.evaluate(el => getComputedStyle(el).transform)).toBe(confirmedPosition);
+    await expect(page.locator('.alert-switch[data-pending="true"]')).toHaveCount(1);
+    await expect(control.locator("..")).toHaveAttribute("data-pending", "true");
     expect(await control.evaluate(el => el.disabled)).toBe(false);
     await expect.poll(() => writes).toBe(1); await page.keyboard.press("Space"); expect(writes).toBe(1);
     release(); await expect(control).toHaveAttribute("aria-busy", "false"); await expect(control).toBeFocused();
+    await expect(control).not.toBeChecked();
+    await expect(page.locator('.alert-switch[data-pending="true"]')).toHaveCount(0);
   } finally { release(); await page.unroute(`${ALERT_ORIGIN}/subscriptions/*`, handler); }
 });
 
@@ -66,7 +170,7 @@ for (const width of [320, 390]) test(`SIMULATED preferences: ${width}px large-te
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   for (const control of await dialog.getByRole("switch").all()) {
     // WebKit's transformed sheet can report 43.99994 for a 44 CSS-pixel target.
-    const box = await control.boundingBox(); expect(Math.round(box.width * 100) / 100).toBeGreaterThanOrEqual(44); expect(Math.round(box.height * 100) / 100).toBeGreaterThanOrEqual(44);
+    const box = await control.boundingBox(); expect(Math.round(box.width * 100) / 100).toBe(56); expect(Math.round(box.height * 100) / 100).toBe(44);
     await control.focus(); await expect(control).toBeFocused();
   }
   const master = page.getByRole("switch", { name: "Notifications", exact: true });
@@ -109,11 +213,14 @@ test("SIMULATED preferences: server activity alone cannot claim this browser is 
   await expect(page.getByRole("button", { name: "Enable alerts" })).toBeEnabled();
 });
 
-test("SIMULATED alerts: readiness updates automatically before enable becomes available", async ({ page, harness }) => {
+test("SIMULATED alerts: readiness updates automatically before enable becomes available", async ({ page, harness }, info) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   harness.state.ready = false;
   await harness.open();
   await page.getByRole("button", { name: "Alerts off", exact: true }).tap();
   await expect(page.getByRole("heading", { name: "Alerts are being set up" })).toBeVisible();
+  await page.getByRole("heading", { name: "Alerts are being set up" }).scrollIntoViewIfNeeded();
+  await capture(page, info, "setup");
   await expect(page.getByRole("button", { name: "Enable alerts" })).toHaveCount(0);
   harness.state.ready = true;
   await page.clock.fastForward(31_000);
