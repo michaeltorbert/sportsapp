@@ -41,6 +41,8 @@ export async function deliver(env: Env, now: number, games: Game[]) {
     const game = current.get(event.game_id);
     return game && Object.values(preferences).some(p => p.trigger === event.trigger) && conditions(game, now)[event.trigger];
   });
+  // conditions() already excludes Duke; covered by the Duke competition case
+  // in tests/alert-competition.test.mjs (stale/missing/Duke/kickoff/final controls).
   const strongerLiveGames = new Set(candidates.filter(event => {
     if (event.trigger !== "one-score-fourth" && event.trigger !== "ranked-trailing-fourth") return false;
     const game = current.get(event.game_id)!;

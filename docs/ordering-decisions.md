@@ -40,7 +40,6 @@ This is the cumulative product contract and conflict log. The numeric implementa
 
 - Source: issue #71 and accepted final planning candidate; active. Retain the existing tie and +1/+2/+3 state factors and late-finish boundary, without implementing pending ORD-008. Help now states that upcoming chronology applies within Duke/VT pin tiers. No prior ordering rule is superseded.
 - Coverage: `ORD-013 zero ties and one-to-three point recoveries retain the existing late window` tests 0–0, ranked ties and each narrow lead across quarters, the 301/300-second boundary and overtime. `ORD-013 ESPN parser preserves Duke and Virginia Tech pins in either participant position` passes ESPN-shaped IDs 150/259 through normalization and category views; the existing ORD-007 tests retain state-group and filter/Hide-finals coverage.
-- Product-lane validation: Codex ran the build and complete Node suite (308 passed), typecheck, lint (zero errors; five pre-existing warnings), workerd/static-home runtime checks (zero external requests), app and alerts Worker dry-runs, and all alert browser cases on Chromium/WebKit with one worker and zero retries (30 passed). The initial browser run had two new-test locator failures, corrected from “Alerts off” to the active fixture's “Alerts on”; the complete rerun passed. No deployment, version bump, schema/trigger change or real push was performed. Independent roster review is separate from these implementer checks.
 
 ### 2026-09-12 — initial ranked-trailing change
 

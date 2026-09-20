@@ -173,7 +173,7 @@ test("retained upset finals distinguish a comeback from a completed conference u
   assert.doesNotMatch(upset, /pregame favorite|No\. (null|undefined)/);
 });
 
-test("Help discloses ranking-only alerts when the line-based list excludes a ranked underdog", () => {
+test("Help separates selective alert policy from line-based display categories", () => {
   const underdog = game({ id: "ranked-underdog", pregameLine: { favoriteId: "b", spread: 3, source: "ESPN" } });
   Object.assign(underdog.teams[0], { rank: 12, score: 17 });
   Object.assign(underdog.teams[1], { rank: 15, score: 20 });

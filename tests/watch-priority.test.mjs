@@ -435,6 +435,16 @@ test("ORD-012 issue 74 rank disruption is line-independent and labels remain tru
   }
 });
 
+test("ORD-012 worse-ranked betting favorite trailing a better-ranked opponent gains only favorite upset significance", () => {
+  const g = match("worse-ranked-favorite", { conference: "5", otherConference: "8", rank: 20, otherRank: 5,
+    period: 4, clock: 180, score: 14, otherScore: 21,
+    pregameLine: { favoriteId: "a", spread: 3, source: "explicit fixture assumption" } });
+  assert.equal(gameExpectation(g).team.id, "a");
+  assert.equal(gamePriority(g).upset, 8);
+  assert.equal(gamePriority(g).disruption, 0);
+  assert.match(upsetExplanation(g), /No\. 5 Opponent leads No\. 20 Favorite · pregame favorite/);
+});
+
 test("ORD-013 zero ties and one-to-three point recoveries retain the existing late window", () => {
   for (const period of [1, 2, 3, 4, 5]) for (const clock of [301, 300]) {
     const tied = match("tied", { conference: "8", otherConference: "5", rank: 11, period, clock, score: 0, otherScore: 0 });
