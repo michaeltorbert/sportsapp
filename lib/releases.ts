@@ -1,5 +1,6 @@
-export const VERSION = "1.9.0";
+export const VERSION = "1.10.0";
 export const releases = [
+  { version: "1.10.0", date: "September 19, 2026", changes: "Prioritize stronger live games using conference, ranking and game-state evidence without reducing Watchlist interest to a binary tier. Keep ranking disruption distinct from favorite-based upset interest, and avoid a lower-interest close-game alert when stronger live candidates are already available." },
   { version: "1.9.0", date: "September 19, 2026", changes: "Combine ACC, Top 25, One score and Upsets with independent toggles, and use All to return to the complete watchlist. Choose Day or Week for any combination. Existing links and app refreshes keep your selection." },
   { version: "1.8.0", date: "September 18, 2026", changes: "Show a halftime countdown when fresh ESPN timing is available. Estimate a 20-minute break from the recorded end of Q2, then show Awaiting 3rd quarter until fresh game status changes. Missing or stale timing keeps the ordinary Halftime label." },
   { version: "1.7.1", date: "September 12, 2026", changes: "Fit more games on screen with compact listings and expandable details. Simplify the header and keep update status, Duke visibility and Hide finals together. Preserve readable layouts with larger text." },
