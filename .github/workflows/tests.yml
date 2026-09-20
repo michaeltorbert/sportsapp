@@ -11,7 +11,7 @@ concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  test:
+  core:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -41,15 +41,6 @@ jobs:
           npm run test:runtime
           npm run deploy:check
           npm run deploy:alerts -- --dry-run
-      - name: Install browser engines
-        run: npx playwright install --with-deps chromium webkit
-      - name: Test mobile browser regressions (simulated scores and push)
-        run: |
-          npm run test:browser -- --project=chromium-mobile
-          mv output/playwright/results output/playwright/results-chromium-mobile
-          mv output/playwright/results.json output/playwright/results-chromium-mobile.json
-          mv output/playwright/report output/playwright/report-chromium-mobile
-          npm run test:browser -- --project=webkit-mobile
       - name: Test explicit app updates across two local builds
         run: npm run test:updater
       - name: Validate preview deployment package
@@ -70,3 +61,56 @@ jobs:
             output/playwright/
           include-hidden-files: true
           retention-days: 14
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: chromium-mobile
+            engine: chromium
+          - project: webkit-mobile
+            engine: webkit
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+      WRANGLER_LOG_PATH: .wrangler/logs
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Record source commit
+        run: echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Build exact browser-test source
+        run: npm run build
+      - name: Install ${{ matrix.engine }}
+        run: npx playwright install --with-deps ${{ matrix.engine }}
+      - name: Test ${{ matrix.project }} regressions (simulated scores and push)
+        run: npm run test:browser -- --project=${{ matrix.project }}
+      - name: Save ${{ matrix.project }} evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: browser-${{ matrix.project }}-${{ github.sha }}
+          path: |
+            .wrangler/logs/
+            output/playwright/
+          include-hidden-files: true
+          retention-days: 14
+  test:
+    if: always()
+    needs: [core, browser]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require core and both browser engines
+        env:
+          CORE_RESULT: ${{ needs.core.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+        run: |
+          test "$CORE_RESULT" = success
+          test "$BROWSER_RESULT" = success
