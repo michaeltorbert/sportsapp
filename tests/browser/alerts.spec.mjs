@@ -1,5 +1,13 @@
 import { test, expect, CREDENTIALS, ALERT_ORIGIN } from "./fixtures.mjs";
 
+test("SIMULATED close-game alerts disclose global slate prioritization", async ({ page, harness }) => {
+  await harness.open({ push: { permission: "granted", existing: true, credentials: true } });
+  await page.getByRole("button", { name: "Alerts on", exact: true }).tap();
+  await expect(page.getByText("Close-game alerts prioritize stronger live games", { exact: false })).toBeVisible();
+  await expect(page.getByText("even if you disabled or already received the stronger alert", { exact: false })).toBeVisible();
+  await expect(page.getByText("may skip two-unranked Group-of-Six matchups", { exact: false })).toBeVisible();
+});
+
 for (const code of [404, 503]) test(`SIMULATED preferences: settings GET ${code} preserves config and blocks unconfirmed writes`, async ({ page, harness }) => {
   harness.state.getStatus = code;
   await harness.open({ push: { permission: "granted", existing: true, credentials: true } });

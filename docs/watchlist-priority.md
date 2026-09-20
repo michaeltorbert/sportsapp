@@ -11,7 +11,7 @@ The score is an internal ordering weight, not a probability or a percentage.
 | Component | Weight |
 | --- | --- |
 | ACC involvement | 20; another 2 for two ACC teams |
-| SEC involvement | 4 |
+| Non-ACC Power Four involvement (SEC, Big Ten or Big 12) | 4 once per game |
 | Best ranking | 30 for Top 5; 26 for Top 10; 14 for Top 25 |
 | Two ranked teams | 4 |
 | Relevance cap | 50 |
@@ -26,13 +26,13 @@ The relevance floor remains 35%, reached at a 30-point margin at kickoff, 26 at 
 
 The taper applies to either leader, while the separate supported upset bonus preserves additional interest when the expected winner trails. Significant upsets thus remain above otherwise identical comfortable favorite wins, without making every large upset deficit outrank a close late game. Final-minute tiebreak bands remain five minutes, two minutes, and one minute. Close one-score games retain those time bands; wider margins can gradually change relative priority as reported clocks advance. Kickoff and event ID still break otherwise equal scores.
 
-Historical screenshot comparison (explicit ordinary favorite assumptions; the screenshots do not establish betting lines):
+Historical screenshot comparison (explicit ordinary favorite assumptions; the screenshots do not establish betting lines). The current column includes subsequent tie/disruption and Power Four calibrations:
 
-| State | Previous priority | New priority |
+| State | Original priority | Current priority |
 | --- | ---: | ---: |
 | No. 24 Louisville 31–10 Villanova, Q2 1:53 | 34 | 18.26 |
-| No. 23 Missouri 0–0 Kansas, Q1 7:21 | 24 | 24 |
-| Boston College 14–0 Rutgers, end Q1 | 24 | 19.10 |
+| No. 23 Missouri 0–0 Kansas, Q1 7:21 | 24 | 33.19 |
+| Boston College 14–0 Rutgers, end Q1 | 24 | 22.32 |
 | No. 25 Virginia 28–3 Norfolk State, end Q2 | 11.90 | 13.13 |
 
 Both Missouri–Kansas and Rutgers–BC now precede both larger leads. Virginia's weight rises slightly because a 25-point first-half margin no longer triggers an abrupt floor; its relative position below the two alternatives remains correct. No prior pairwise preference fixture was removed or reversed.
@@ -45,7 +45,13 @@ Upset significance uses the largest supported signal rather than adding overlapp
 - Pregame spread: 16 for at least 14 points, 12 for at least 7, or 8 for a smaller nonzero spread.
 - Conference watch: 8.
 
-Significance is capped at 20. A ranked expected winner receives an additional `24 * (1 - comfort)` interest weight. Multiply both significance and additional interest by the score-state factor: 1 when trailing, 0.75 when a ranked expected winner is tied, 0.5 for a lead of up to three in the final five minutes or overtime, otherwise zero. Unranked ties retain the previous half-credit rule only in the final five minutes or overtime. The whole result also uses the existing stage and margin factors. These are implementation calibrations, not literal user-requested numbers.
+Favorite-based `upset` significance is capped at 20. Multiply it by the score-state factor: 1 when trailing, 0.75 when a ranked expected winner is tied, 0.5 for a lead of up to three in the final five minutes or overtime, otherwise zero. Unranked ties retain the previous half-credit rule only in the final five minutes or overtime.
+
+The distinct `disruption` component uses rankings and scores independently of the betting favorite. The better-ranked team must have a valid Top-25 rank and its opponent must have a worse valid rank or be known unranked. Its weight is `35 * (1 - comfort)`, multiplied by the same 1 / 0.75 / 0.5 score-state factors relative to that better-ranked team. Both components use stage factors 0.25 / 0.5 / 0.75 / 1 for Q1 / Q2 / Q3 / Q4-or-later and margin factors 1 through eight points, 0.75 through sixteen, then 0.5 in the first half or 0.25 later. These are coordinator-selected calibrations, not user-specified numbers. There is no display spread threshold.
+
+A worse-ranked betting favorite trailing a better-ranked opponent by more than three points receives favorite-based upset significance but no rank-disruption component: the better-ranked team is winning comfortably enough that no tie or late narrow-lead retention applies. The focused `ORD-012 worse-ranked betting favorite trailing a better-ranked opponent gains only favorite upset significance` regression covers this boundary.
+
+35 is the smallest whole-point disruption weight satisfying both narrow-line #74 fixtures with these retained factors: Iowa State 9–0 No. 21 Iowa, Q2 7:51 scores 40.82 when Iowa State is the assumed favorite, above No. 1 Ohio State 10–0 No. 4 Texas at end Q1 (40.53). Weight 34 would score 40.47 and fail. The assumption with Iowa favored, absent-line and pick’em variants are covered independently; multiple-score assumed lines do not establish an unconditional pairwise requirement.
 
 This preserves most upset interest when a ranked favorite ties, while keeping a comparable ranked favorite trailing an unranked opponent higher. Ties and narrow leads affect ordering without receiving an upset label. A ranked betting underdog still receives no favorite-based bonus for trailing. The additional interest reaches zero at the same large-margin threshold as the relevance floor. The existing 16/17-point upset-margin step remains pending clarification under ORD-008; it is not silently smoothed.
 
@@ -53,6 +59,8 @@ No. 11 Oklahoma trailing Michigan 0–10 at Q3 14:52 precedes No. 10 Texas A&M l
 
 
 ## Favorite evidence and labels
+
+Power Four relevance is bounded, never a binary tier above live drama. ACC remains 20/22, SEC-only remains 4, ACC-versus-SEC remains 24, and comparable Big Ten/Big 12 involvement gains the same 4 once. Group of Six means American, CUSA, MAC, Mountain West, Pac-12 and Sun Belt; unknown conferences, independents and FCS are not presumed Group of Six. No conference evidence changes category membership or favorite inference.
 
 1. A validated pregame line takes precedence, including a known pick'em. The favorite must belong to the game, explicit favorite flags must agree with the home-oriented spread, and equally preferred sources must not conflict.
 2. Without a valid line, known rankings identify a rank-based watch.
@@ -68,7 +76,7 @@ Pregame scoreboard odds are read only before kickoff. On a first visit after kic
 
 Relevant public ESPN schema was checked on 2026-09-06 using scoreboard, summary, team, and conference endpoints. Completed events retained lines in `pickcenter` when scoreboard odds were absent. No in-progress games were available during that observation, so live scoreboard odds were not independently verified and are deliberately ignored.
 
-Finals remain at the bottom. A comeback can retain an earlier upset-watch category without claiming an upset occurred. Actual finals disclose line, rank, or conference evidence. Existing phone alerts retain their ranked-upset contract. They compare rankings alone, so a ranked betting underdog trailing can still trigger an upset push even though the line-based watchlist shows no upset badge and excludes that game from Upsets. This deliberate compatibility boundary is stated in Help and covered by rendered-page and push tests. The expanded unranked watches do not gain phone notifications.
+Finals remain at the bottom. A comeback can retain an earlier upset-watch category without claiming an upset occurred. Actual finals disclose line, rank, or conference evidence. Phone alerts use their separate selective late-game rules and retained pregame evidence; display disruption never changes those conditions or trigger IDs. Close-game delivery applies the global slate gate documented in [the alert policy](../services/alerts/README.md#close-game-slate-prioritization-82). Category selections never filter notifications, and Duke notifications are always off. The expanded unranked display watches do not create new upset-watch triggers.
 
 Failed or timed-out summary attempts rotate behind events not yet attempted, so repeated failures cannot monopolize each refresh's request slots. Transport failures and deadline timeouts also receive a one-minute retry backoff. Caller cancellation does not count as a provider failure. This bounded retry bookkeeping is separate from favorite evidence and never asserts that a missing line was found.
 

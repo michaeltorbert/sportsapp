@@ -173,7 +173,7 @@ test("retained upset finals distinguish a comeback from a completed conference u
   assert.doesNotMatch(upset, /pregame favorite|No\. (null|undefined)/);
 });
 
-test("Help discloses ranking-only alerts when the line-based list excludes a ranked underdog", () => {
+test("Help separates selective alert policy from line-based display categories", () => {
   const underdog = game({ id: "ranked-underdog", pregameLine: { favoriteId: "b", spread: 3, source: "ESPN" } });
   Object.assign(underdog.teams[0], { rank: 12, score: 17 });
   Object.assign(underdog.teams[1], { rank: 15, score: 20 });
@@ -181,7 +181,10 @@ test("Help discloses ranking-only alerts when the line-based list excludes a ran
   const { html } = render([], { boards, showHelp: true });
   assert.deepEqual(cardIds(html), ["ranked-underdog"]);
   assert.doesNotMatch(html, /class="badge upset-badge"|class="upset-reason"/);
-  assert.match(html, /Phone alerts are separate from these display categories and cover every qualifying game except Duke, regardless of the selected categories/);
+  assert.match(html, /Phone alerts are separate from these display categories/);
+  assert.match(html, /Close-game alerts prioritize stronger live games and may skip two-unranked Group-of-Six matchups/);
+  assert.match(html, /Selected categories do not filter notifications/);
+  assert.match(html, /Upcoming games remain chronological within those pin tiers/);
   assert.match(html, /Day shows the selected Eastern date\. Week shows the current football week/);
   assert.deepEqual(cardIds(render(["upset"], { boards }).html), []);
 });
