@@ -3,7 +3,7 @@ import { test, expect, CREDENTIALS, ALERT_ORIGIN } from "./fixtures.mjs";
 const enlargedAlertText = '.alerts-sheet [data-slot="sheet-title"] { font-size: 34.5px; } .alerts-sheet [data-slot="sheet-description"] { font-size: 21px; } .alerts-sheet .help-body { font-size: 24px; } .alerts-sheet .alert-setting strong { font-size: 24px; } .alerts-sheet .alert-setting small, .alerts-sheet .alert-footnote { font-size: 19.5px; } .alerts-sheet .alert-setting > .alert-switch { font-size: 24px; } .alerts-sheet .alert-details { font-size: 21px; }';
 const capture = async (page, info, name) => page.screenshot({ path: process.env.ALERT_SCREENSHOT_DIR ? `${process.env.ALERT_SCREENSHOT_DIR}/after-${info.project.name}-${name}.png` : info.outputPath(`${name}.png`) });
 
-for (const width of [320, 390]) for (const scale of [100, 150]) test(`SIMULATED alert rail: ${width}px ${scale}% text, readable states and disclosure`, async ({ page, harness }, info) => {
+for (const width of [320, 390]) for (const scale of [100, 150]) test(`SIMULATED alert switch: ${width}px ${scale}% text, readable states and disclosure`, async ({ page, harness }, info) => {
   await page.setViewportSize({ width, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   harness.state.upsetFinal = false;
@@ -26,13 +26,12 @@ for (const width of [320, 390]) for (const scale of [100, 150]) test(`SIMULATED 
     const box = await control.boundingBox();
     expect(Math.round(box.width)).toBe(56); expect(Math.round(box.height)).toBe(44);
     const geometry = await control.evaluate(input => {
-      const face = input.nextElementSibling, thumb = face.querySelector('.alert-switch-thumb').getBoundingClientRect();
-      const word = face.querySelector(input.checked ? '.alert-switch-on' : '.alert-switch-off');
-      const text = word.getBoundingClientRect(), track = face.getBoundingClientRect();
-      return { gap: input.checked ? thumb.left - text.right : text.left - thumb.right, textSize: parseFloat(getComputedStyle(word).fontSize), contained: text.left >= track.left && text.right <= track.right, pointerEvents: getComputedStyle(face).pointerEvents };
+      const face = input.nextElementSibling, track = face.getBoundingClientRect();
+      const thumb = face.querySelector('.alert-switch-thumb').getBoundingClientRect();
+      const check = face.querySelector('.alert-switch-check');
+      return { contained: thumb.left >= track.left && thumb.right <= track.right && thumb.top >= track.top && thumb.bottom <= track.bottom, checkedCue: getComputedStyle(check).display !== 'none', checked: input.checked, width: input.getBoundingClientRect().width, height: input.getBoundingClientRect().height, pointerEvents: getComputedStyle(face).pointerEvents };
     });
-    expect(geometry.gap).toBeGreaterThanOrEqual(1);
-    expect(geometry.textSize).toBeGreaterThanOrEqual(12);
+    expect(geometry.checkedCue).toBe(geometry.checked);
     expect(geometry.contained).toBe(true); expect(geometry.pointerEvents).toBe("none");
   }
   expect(await sheet.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
@@ -60,7 +59,7 @@ for (const width of [320, 390]) for (const scale of [100, 150]) test(`SIMULATED 
   await expect(sheet).not.toBeVisible();
 });
 
-test("SIMULATED alert rail: 320px 200% text preserves words and disabled cues", async ({ page, harness }, info) => {
+test("SIMULATED alert switch: 320px 200% text preserves check marks and disabled cues", async ({ page, harness }, info) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   harness.state.upsetFinal = false;
@@ -72,13 +71,13 @@ test("SIMULATED alert rail: 320px 200% text preserves words and disabled cues", 
   const off = page.getByRole("switch", { name: "Upset final results", exact: true });
   const checkGeometry = async control => {
     const geometry = await control.evaluate(input => {
-      const face = input.nextElementSibling, thumb = face.querySelector('.alert-switch-thumb').getBoundingClientRect();
-      const word = face.querySelector(input.checked ? '.alert-switch-on' : '.alert-switch-off');
-      const text = word.getBoundingClientRect(), track = face.getBoundingClientRect();
-      return { gap: input.checked ? thumb.left - text.right : text.left - thumb.right, fontSize: getComputedStyle(word).fontSize, contained: text.left >= track.left && text.right <= track.right, width: input.getBoundingClientRect().width, height: input.getBoundingClientRect().height };
+      const face = input.nextElementSibling, track = face.getBoundingClientRect();
+      const thumb = face.querySelector('.alert-switch-thumb').getBoundingClientRect();
+      const check = face.querySelector('.alert-switch-check');
+      return { contained: thumb.left >= track.left && thumb.right <= track.right && thumb.top >= track.top && thumb.bottom <= track.bottom, checkedCue: getComputedStyle(check).display !== 'none', checked: input.checked, width: input.getBoundingClientRect().width, height: input.getBoundingClientRect().height, pointerEvents: getComputedStyle(face).pointerEvents };
     });
-    expect(geometry.gap).toBeGreaterThanOrEqual(1); expect(geometry.contained).toBe(true);
-    expect(geometry.fontSize).toBe("14px"); expect(Math.round(geometry.width)).toBe(56); expect(Math.round(geometry.height)).toBe(44);
+    expect(geometry.checkedCue).toBe(geometry.checked); expect(geometry.contained).toBe(true);
+    expect(Math.round(geometry.width)).toBe(56); expect(Math.round(geometry.height)).toBe(44);
   };
   expect(await on.locator("..").evaluate(el => getComputedStyle(el).fontSize)).toBe("32px");
   expect(await page.locator('.alert-setting small').first().evaluate(el => getComputedStyle(el).fontSize)).toBe("26px");
@@ -103,7 +102,7 @@ test("SIMULATED alert rail: 320px 200% text preserves words and disabled cues", 
   expect(await page.getByRole("dialog").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
 });
 
-test("SIMULATED alert rail: focus, busy, reduced motion and monochrome", async ({ page, harness, browserName }, info) => {
+test("SIMULATED alert switch: focus, busy, reduced motion and monochrome", async ({ page, harness, browserName }, info) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await harness.open({ push: { permission: "granted", existing: true, credentials: true } });
   await page.getByRole("button", { name: "Alerts on", exact: true }).tap();

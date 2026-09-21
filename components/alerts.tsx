@@ -18,7 +18,7 @@ const types: { key: keyof Choices; name: string; description: string }[] = [
 function AlertSwitch({ pending, ...input }: InputHTMLAttributes<HTMLInputElement> & { pending: boolean }) {
   return <span className="alert-switch" data-pending={pending}>
     <input {...input} type="checkbox" role="switch" />
-    <span className="alert-switch-face" aria-hidden="true"><span className="alert-switch-thumb" /><span className="alert-switch-on">ON</span><span className="alert-switch-off">OFF</span></span>
+    <span className="alert-switch-face" aria-hidden="true"><span className="alert-switch-thumb"><svg className="alert-switch-check" viewBox="0 0 16 16"><path d="m4 8 3 3 5-6" /></svg></span></span>
   </span>;
 }
 function saved(): Credentials | null { try { const v = JSON.parse(localStorage.getItem("ss:push") || "null"); return typeof v?.id === "string" && typeof v?.token === "string" ? v : null; } catch { return null; } }

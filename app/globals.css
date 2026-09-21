@@ -109,16 +109,14 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .alerts-sheet .alert-setting > .alert-switch { position: relative; flex: 0 0 56px; width: 56px; height: 44px; font-size: 16px; }
 .alerts-sheet .alert-switch input { appearance: none; position: absolute; inset: 0; margin: 0; width: 56px; height: 44px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; opacity: 1; }
 .alerts-sheet .alert-switch input:disabled { cursor: default; }
-.alerts-sheet .alert-switch input:focus-visible { outline: 2px solid #cefb70; outline-offset: 2px; }
-.alerts-sheet .alert-switch-face { pointer-events: none; position: absolute; inset: 8px 2px; border: 1px solid #a1aec3; border-radius: 5px; background: #28364a; color: #edf4ff; }
-.alerts-sheet .alert-switch-thumb { position: absolute; left: 3px; top: 3px; width: 8px; height: 20px; border: 1px solid currentColor; border-radius: 2px; background: currentColor; transition: transform .15s ease; }
-.alerts-sheet .alert-switch-on, .alerts-sheet .alert-switch-off { position: absolute; top: 0; height: 26px; display: flex; align-items: center; font-size: min(.75em, 14px); font-weight: 750; line-height: 1; }
-.alerts-sheet .alert-switch-on { left: 3px; visibility: hidden; }
-.alerts-sheet .alert-switch-off { right: 3px; }
+.alerts-sheet .alert-switch input:focus-visible { outline: 2px solid #fff; outline-offset: 3px; border-radius: 6px; }
+.alerts-sheet .alert-switch-face { pointer-events: none; position: absolute; inset: 7px 2px; border: 1px solid #a1aec3; border-radius: 999px; background: #28364a; color: #edf4ff; }
+.alerts-sheet .alert-switch-thumb { position: absolute; left: 2px; top: 2px; width: 24px; height: 24px; border: 0; border-radius: 50%; background: #fff; color: #172308; box-shadow: 0 1px 3px #0004; transition: transform .15s ease; }
 .alerts-sheet .alert-switch input:checked + .alert-switch-face { background: #cefb70; border-color: #cefb70; color: #172308; }
-.alerts-sheet .alert-switch input:checked + .alert-switch-face .alert-switch-thumb { transform: translateX(36px); }
-.alerts-sheet .alert-switch input:checked + .alert-switch-face .alert-switch-on { visibility: visible; }
-.alerts-sheet .alert-switch input:checked + .alert-switch-face .alert-switch-off { visibility: hidden; }
+.alerts-sheet .alert-switch input:checked + .alert-switch-face .alert-switch-thumb { transform: translateX(22px); }
+.alerts-sheet .alert-switch-check { display: none; }
+.alerts-sheet .alert-switch input:checked + .alert-switch-face .alert-switch-check { display: block; width: 16px; height: 16px; margin: 4px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.alerts-sheet .alert-switch input:checked:not(:disabled):not([aria-disabled="true"]) + .alert-switch-face { box-shadow: 0 0 11px 2px #cefb702e; }
 .alerts-sheet .alert-switch input:disabled + .alert-switch-face { background: #263142; border-color: #9aa8bb; border-style: dashed; color: #c5cfdd; }
 .alerts-sheet .alert-switch[data-pending="true"]::after { content: ""; pointer-events: none; position: absolute; inset: 3px -1px; border: 1px dashed #edf4ff; border-radius: 8px; }
 @media (prefers-reduced-motion: no-preference) { .alerts-sheet .alert-switch[data-pending="true"]::after { animation: alert-save-pulse 1s ease-in-out infinite alternate; } }
@@ -127,6 +125,7 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .alerts-sheet .alert-details summary { min-height: 44px; padding: 10px 0; cursor: pointer; color: #edf4ff; font-weight: 650; }
 .alerts-sheet .alert-details summary:focus-visible { outline: 2px solid #cefb70; outline-offset: 2px; }
 @media (forced-colors: active) {
+  .alerts-sheet .alert-switch-thumb { background: Canvas; color: CanvasText; border: 1px solid CanvasText; }
   .alerts-sheet .alert-switch-face { forced-color-adjust: none; background: Canvas; border-color: CanvasText; color: CanvasText; }
   .alerts-sheet .alert-switch input:checked + .alert-switch-face { background: Highlight; border-color: Highlight; color: HighlightText; }
   .alerts-sheet .alert-switch input:disabled + .alert-switch-face { background: Canvas; border-color: GrayText; color: GrayText; }
