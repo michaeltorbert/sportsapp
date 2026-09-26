@@ -84,6 +84,18 @@ test("Upsets shows active and total watches without overflowing a 320px viewport
   expect(box.height).toBeGreaterThanOrEqual(40);
 });
 
+test("September 26 known-ranked deficits appear in Day Upsets after refresh", async ({ page, harness }) => {
+  const oleMissFlorida = event("401856699", { date: "2026-09-26T19:30:00Z", rank: 4, scores: [3, 10] });
+  const iowaMichigan = event("401858463", { date: "2026-09-26T19:30:00Z", rank: 17, scores: [7, 10] });
+  oleMissFlorida.competitions[0].competitors[1].curatedRank.current = 21;
+  iowaMichigan.competitions[0].competitors[1].curatedRank.current = 18;
+  harness.state.events = [oleMissFlorida, iowaMichigan];
+  await harness.open({ now: "2026-09-26T21:06:00Z", path: "/?date=2026-09-26&cats=upset&period=day" });
+  await expectUpsetCount(page, 2, 2);
+  await expect(page.locator("#game-401856699")).toBeVisible();
+  await expect(page.locator("#game-401858463")).toBeVisible();
+});
+
 test("legacy tab links keep their period and explicit category links restore multi-select on either period", async ({ page, harness }) => {
   const visit = async path => { await page.goto(path); await expect(page.getByRole("button", { name: "Refresh scores" })).toBeEnabled(); };
   await harness.open({ path: "/?tab=acc" });
@@ -149,13 +161,21 @@ test("a failed refresh preserves loaded scores and healthy retry removes the war
   await expect(page.getByRole("alert")).toContainText("Could not refresh scores");
   await expect(page.getByRole("alert")).toContainText("Displayed scores may be out of date");
   expect(await cards(page).allTextContents()).toEqual(before);
-  await expectCount(page, "All", 3);
+  await expect(category(page, "All").locator(".tab-count")).toHaveText("–");
+  await expect(category(page, "Upsets")).toHaveAttribute("aria-label", "Upsets, counts unavailable while scores are stale");
+  await expect(category(page, "Upsets").locator(".tab-count")).toHaveText("– (–)");
   await period(page, "Week").tap();
   await category(page, "Top 25").tap();
   await expect(page.locator("#game-monday-ranked")).toBeVisible();
+  harness.state.events.push(event("recovered-rank-watch", { rank: 17, scores: [7, 10] }));
   harness.state.failScores = false;
   await page.getByRole("button", { name: "Retry", exact: true }).tap();
   await expect(page.getByRole("alert")).toHaveCount(0);
+  await period(page, "Day").tap();
+  await expectCount(page, "All", 4);
+  await expectUpsetCount(page, 2, 2);
+  await category(page, "Upsets").tap();
+  await expect(page.locator("#game-recovered-rank-watch")).toBeVisible();
 });
 
 test("fresh open after Eastern midnight holds unfinished yesterday then automatically rolls forward", async ({ page, harness }) => {

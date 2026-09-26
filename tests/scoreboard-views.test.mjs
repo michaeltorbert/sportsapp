@@ -40,6 +40,20 @@ test("Upsets count active watches first and add only games that concluded as ups
   assert.deepEqual(upsetCounts(null), { brewing: 0, total: 0 });
 });
 
+test("ORD-014 ranked live watches and completed upsets count despite contrary retained lines", () => {
+  const ranked = (id, state) => {
+    const value = game({ id, state });
+    value.teams[0].rank = 4; value.teams[0].rankKnown = true; value.teams[0].score = 3;
+    value.teams[1].rank = 21; value.teams[1].rankKnown = true; value.teams[1].score = 10;
+    value.pregameLine = { favoriteId: value.teams[1].id, spread: 3, source: "retained" };
+    return value;
+  };
+  const board = scoreboard([ranked("ole-miss-florida", "live"), ranked("iowa-michigan", "live"), ranked("finished", "final")]);
+  assert.deepEqual(viewGames(board, ["upset"]).map(g => g.id), ["iowa-michigan", "ole-miss-florida", "finished"]);
+  assert.deepEqual(upsetCounts(board), { brewing: 2, total: 3 });
+  assert.deepEqual(upsetCounts(board, true), { brewing: 2, total: 2 });
+});
+
 test("ORD-011 categories toggle independently, combine with OR once per game, and All is an exclusive reset", () => {
   let selection = [];
   const steps = [];

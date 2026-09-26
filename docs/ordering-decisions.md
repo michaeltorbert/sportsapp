@@ -33,6 +33,12 @@ This is the cumulative product contract and conflict log. The numeric implementa
 - Supersession: ORD-014 replaces only the global record-suppression clause of ORD-010. Hidden Duke games remain hidden under all existing rules. A shown Duke team's record, or a later record for an opponent from a hidden Duke game, can reflect that hidden result. This indirect possibility is accepted so every visible game can show team records, as the user requested after questioning the blanket suppression.
 - Ordering, eligibility, counts, alerts, pinning, and historical preference rules are unchanged.
 
+### 2026-09-26 — ORD-015 displayed Upsets use favorite or rank evidence
+
+- Source: user clarification after issue #95 refresh: “An upset is beating either a favored or higher ranked team.” Active for display categories and counts. A live, started delayed, or final game qualifies when any trailing validated pregame favorite **or** trailing known higher-ranked team has a score, including a retained valid line favoring the lower-ranked leader or pick’em. This includes unranked non-ACC/SEC betting favorites; without a line or known rank, no unrelated unranked watch is invented. Existing unranked ACC/SEC conference watches remain. Ties and unknown rankings do not invent rank evidence. An actual final counts toward the completed total; a retained watch after a comeback remains visible without increasing that total.
+- Supersession: ORD-015 supersedes ORD-009’s line-first restriction and ORD-012’s line-first display-label interpretation only for Upsets membership, explanation, and counts. `gameExpectation` and `gamePriority` continue the accepted ordering policy; phone alert eligibility, IDs, and delivery remain independent. ORD-001–008, ORD-010–013 otherwise retain their recorded scope.
+- Regression: `ORD-015 September 26 ranked games qualify across absent, opposite and pickem lines` and `expanded list eligibility does not redefine ranked push triggers or their dedupe IDs` in `tests/watch-priority.test.mjs`; count and recovery tests in `tests/scoreboard-views.test.mjs` and `tests/use-scoreboard.test.mjs`.
+
 ### 2026-09-19 — ORD-012 Power Four relevance, rank disruption and slate alert priority
 
 - Source: issues #82 and #74, authorized final planning candidate; active. Numeric calibration and the global gate are coordinator interpretations accepted in that plan, not verbatim user numbers.

@@ -112,3 +112,26 @@ test("a prior-season date outside the CDN calendar uses hosted data instead of a
   assert.equal(calls.length, 3);
   assert.equal(calls.at(-1), "/api/scores?date=2025-09-05&end=2025-09-05&acc=0");
 });
+
+test("all three browser paths can fail, then the next poll recovers through the hosted feed", async () => {
+  let healthy = false;
+  const calls = [];
+  const fetcher = async (url, options) => {
+    calls.push(String(url));
+    if (String(url).startsWith("/api/scores?")) {
+      assert.equal(options.mode, "same-origin");
+      return healthy ? hosted() : new Response(null, { status: 503 });
+    }
+    assertDirect(options);
+    return new Response(null, { status: 503 });
+  };
+  const signal = new AbortController().signal;
+  await assert.rejects(loadScores("2026-09-08", signal, fetcher), /503/);
+  assert.deepEqual(calls.map(url => url.startsWith("/api/") ? "hosted" : new URL(url).hostname),
+    ["site.api.espn.com", "cdn.espn.com", "hosted"]);
+  healthy = true; calls.length = 0;
+  const board = await loadScores("2026-09-08", signal, fetcher);
+  assert.deepEqual(board.games, []);
+  assert.deepEqual(calls.map(url => url.startsWith("/api/") ? "hosted" : new URL(url).hostname),
+    ["site.api.espn.com", "cdn.espn.com", "hosted"]);
+});
