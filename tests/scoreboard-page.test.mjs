@@ -176,25 +176,28 @@ test("unranked SEC upset cards explain the favorite without inventing a ranking"
 });
 
 test("validated pregame lines appear inline with the favorite and pick’em remains neutral", () => {
-  const favorite = game({ id: "favorite-line", state: "upcoming", pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } });
-  const pickem = game({ id: "pickem-line", state: "upcoming", pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } });
-  const missing = game({ id: "missing-line", state: "upcoming" });
+  const favorite = game({ id: "favorite-line", state: "upcoming", started: false, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } });
+  const pickem = game({ id: "pickem-line", state: "upcoming", started: false, pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } });
+  const missing = game({ id: "missing-line", state: "upcoming", started: false });
   const boards = fixtures(); boards.daily = scoreboard([favorite, pickem, missing]);
   const { html } = render([], { boards });
   const favoriteCard = html.match(/<article id="game-favorite-line"[\s\S]*?<\/article>/)?.[0];
   const pickemCard = html.match(/<article id="game-pickem-line"[\s\S]*?<\/article>/)?.[0];
   const missingCard = html.match(/<article id="game-missing-line"[\s\S]*?<\/article>/)?.[0];
-  assert.match(favoriteCard, /class="team-label">Team b<\/span><span class="team-line"[^>]*>.*?−7\.5<\/span><\/span>/);
+  assert.match(favoriteCard, /class="team-label">Team b<\/span><span class="team-line"[^>]*>.*?−7\.5<\/span><\/span><\/span>/);
   assert.equal((favoriteCard.match(/class="team-line"/g) || []).length, 1);
   assert.match(favoriteCard, /Team b favored by 7\.5 points before kickoff, ESPN/);
+  assert.doesNotMatch(favoriteCard, /<small>Pregame<\/small>/);
   assert.match(pickemCard, /class="pickem-line"[^>]*>.*?PK<\/span><\/span>/);
   assert.doesNotMatch(pickemCard, /class="team-line"/);
   assert.doesNotMatch(missingCard, /class="(?:team-line|pickem-line)"/);
   for (const state of ["live", "final"]) {
     const gameWithLine = game({ id: `${state}-line`, state, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } });
     boards.daily = scoreboard([gameWithLine]);
-    assert.match(render([], { boards }).html, /class="team-label">Team b<\/span><span class="team-line"[^>]*>.*?−7\.5<\/span><\/span>/);
+    assert.match(render([], { boards }).html, /class="team-label">Team b<\/span><span class="team-line"[^>]*>.*?<small>Pregame<\/small><span>−7\.5<\/span>/);
   }
+  boards.daily = scoreboard([game({ id: "live-pickem", pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
+  assert.match(render([], { boards }).html, /class="pickem-line"[^>]*>.*?Pregame PK<\/span>/);
 });
 
 test("retained upset finals distinguish a comeback from a completed conference upset", () => {
