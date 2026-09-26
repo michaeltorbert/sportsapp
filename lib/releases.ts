@@ -1,5 +1,6 @@
-export const VERSION = "1.12.1";
+export const VERSION = "1.12.2";
 export const releases = [
+  { version: "1.12.2", date: "September 26, 2026", changes: "Show only actual completed upsets in Upsets after a favorite recovers. In Final, place ranked Power Four matchups above known unranked Group-of-Six matchups while preserving Duke and Virginia Tech pins." },
   { version: "1.12.1", date: "September 26, 2026", changes: "Show live and completed upsets when a pregame favorite or known higher-ranked team trails, including unranked favorites outside ACC/SEC and contrary lines. Show unknown counts while scores are stale and restore counts after a successful refresh." },
   { version: "1.12.0", date: "September 26, 2026", changes: "Make alert settings easier to scan and operate with clear switch states, a focused saving cue, and concise descriptions. Move detailed alert policy into an expandable explanation. Alert delivery behavior is unchanged." },
   { version: "1.11.0", date: "September 20, 2026", changes: "Show active Upsets first and the total of active plus completed upset results in parentheses. Keep recovered-favorite watches visible without counting them as completed upsets." },

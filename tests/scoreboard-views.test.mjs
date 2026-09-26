@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { bundle, game, scoreboard } from "./helpers.mjs";
 const { viewGames, upsetCounts, matchingBoard, expiredBoardKey, scoreboardScope, toggleCategory, normalizeSelection, boardKey } = await bundle("lib/scoreboard-views.ts");
 const { gamePriority } = await bundle("lib/watch-priority.ts");
-const { classify } = await bundle("lib/football.ts");
+const { classify, retainFinalCategories } = await bundle("lib/football.ts");
 const { upsetExplanation } = await bundle("lib/upset.ts");
 const { loadScores } = await bundle("lib/score-client.ts");
 
@@ -36,9 +36,28 @@ test("Upsets count active watches first and add only games that concluded as ups
   plain.teams.forEach(team => { team.rank = null; });
   plain.teams[1].score = plain.teams[0].score + 20;
   const board = scoreboard([live, delayed, final, recovered, plain]);
+  assert.equal(viewGames(board, ["upset"]).some(game => game.id === recovered.id), false);
   assert.deepEqual(upsetCounts(board), { brewing: 2, total: 3 });
   assert.deepEqual(upsetCounts(board, true), { brewing: 2, total: 2 });
   assert.deepEqual(upsetCounts(null), { brewing: 0, total: 0 });
+});
+
+test("ORD-016 Virginia Tech comeback leaves Upsets but remains in its other categories", () => {
+  const live = game({ id: "vt-bc", state: "live", pregameLine: { favoriteId: "259", spread: 14.5, source: "fixture" } });
+  Object.assign(live.teams[0], { id: "259", name: "Virginia Tech", conferenceId: "1", rank: null, score: 7 });
+  Object.assign(live.teams[1], { id: "103", name: "Boston College", conferenceId: "1", rank: null, score: 14 });
+  assert.deepEqual(viewGames(scoreboard([live]), ["upset"]).map(game => game.id), [live.id]);
+  const finished = structuredClone(live);
+  finished.state = "final"; finished.teams[0].score = 21;
+  const board = retainFinalCategories(scoreboard([finished]), scoreboard([live]));
+  const final = board.games[0];
+  assert.equal(final.retainedCategories.upset, true, "historical observation can survive in stored data");
+  assert.equal(classify(final).upset, false, "the final result determines Upsets membership");
+  assert.deepEqual(viewGames(board, ["upset"]), []);
+  for (const selection of [[], ["acc"], ["close"]])
+    assert.deepEqual(viewGames(board, selection).map(game => game.id), [final.id]);
+  assert.deepEqual(upsetCounts(board), { brewing: 0, total: 0 });
+  assert.deepEqual(viewGames(board, [], true), []);
 });
 
 test("ORD-015 ranked live watches and completed upsets count despite contrary retained lines", () => {

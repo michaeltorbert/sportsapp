@@ -26,11 +26,11 @@ test("live games combine interest and drama, use stable finish bands, and keep f
   const games = [g("other", false, false, 5, 0, 0), g("ranked", false, true, 4, 0, 0), g("acc-q3", true, false, 3, 0, 0), g("acc-big", true, false, 4, 21, 0), g("acc-clock", true, false, 4, 7, 120), g("acc-first", true, false, 4, 7, 10), g("final", true, true, 5, 0, 0, "final"), g("upcoming", true, true, 0, 0, 0, "upcoming")];
   assert.deepEqual(sortGames(games).map(g => g.id), ["ranked", "acc-first", "acc-clock", "other", "acc-q3", "acc-big", "upcoming", "final"]);
 });
-test("finals retain their last live category through a reload", () => {
+test("finals retain their last close category but drop a recovered upset watch", () => {
   const live = game(); live.teams[0].rank = 5;
   const final = structuredClone(live); final.state = "final"; final.teams[0].score = 35;
   const retained = retainFinalCategories(scoreboard([final]), scoreboard([live]));
-  assert.equal(classify(retained.games[0]).close, true); assert.equal(classify(retained.games[0]).upset, true);
+  assert.equal(classify(retained.games[0]).close, true); assert.equal(classify(retained.games[0]).upset, false);
   assert.equal(classify(retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(retained))).games[0]).close, true);
   assert.equal(classify(final).close, false); assert.equal(classify(final).upset, false);
 });

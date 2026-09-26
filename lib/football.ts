@@ -1,5 +1,6 @@
-import { upsetWatch } from "./upset";
+import { teamRank, upsetWatch } from "./upset";
 import { gamePriority, isPinnedGame, teamRelevance } from "./watch-priority";
+import { isPowerFour, twoUnrankedGroupOfSix } from "./conference-evidence";
 
 export type Team = { id: string; name: string; abbreviation: string; logo: string | null; score: number | null; rank: number | null; rankKnown?: boolean; record: string; conferenceId: string | null; changed?: boolean };
 export type Categories = { acc: boolean; top25: boolean; close: boolean; upset: boolean };
@@ -24,13 +25,19 @@ export function classify(game: Game): Categories {
   const active = game.state === "live" || game.state === "final";
   const upsetActive = active || (game.state === "delayed" && game.started);
   const kept = game.state === "final" ? game.retainedCategories : undefined;
-  if (!upsetActive || a.score === null || b.score === null) return kept || { acc, top25, close: false, upset: false };
+  if (!upsetActive || a.score === null || b.score === null) return kept ? { ...kept, upset: false } : { acc, top25, close: false, upset: false };
   const close = active && Math.abs(a.score - b.score) <= 8;
-  if (a.score === b.score) return { acc, top25, close, upset: kept?.upset || false };
+  if (a.score === b.score) return { acc, top25, close, upset: false };
   const upset = upsetWatch(game) !== null;
-  return { acc, top25, close: close || !!kept?.close, upset: upset || !!kept?.upset };
+  return { acc, top25, close: close || !!kept?.close, upset };
 }
 export function margin(game: Game) { const [a, b] = game.teams; return a.score === null || b.score === null ? Infinity : Math.abs(a.score - b.score); }
+// A final with ranked Power Four participation should not sit below a known
+// two-unranked Group-of-Six final solely because it kicked off later.
+function finalInterestTier(game: Game) {
+  if (game.teams.some(team => isPowerFour(team) && teamRank(team) !== null)) return 2;
+  return twoUnrankedGroupOfSix(game) ? 0 : 1;
+}
 export function sortGames(games: Game[]) {
   const state = { live: 0, delayed: 1, upcoming: 2, other: 3, final: 4 };
   return [...games].sort((a, b) => {
@@ -38,6 +45,10 @@ export function sortGames(games: Game[]) {
     if (byState) return byState;
     const byPin = Number(isPinnedGame(b)) - Number(isPinnedGame(a));
     if (byPin) return byPin;
+    if (a.state === "final") {
+      const byFinalInterest = finalInterestTier(b) - finalInterestTier(a);
+      if (byFinalInterest) return byFinalInterest;
+    }
     if (a.state === "live") {
       const ap = gamePriority(a), bp = gamePriority(b);
       const priority = bp.total - ap.total || bp.drama - ap.drama || bp.finishBand - ap.finishBand;
