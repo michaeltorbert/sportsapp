@@ -1,5 +1,10 @@
 # Saturday Signal releases
 
+## 1.12.0 · 2026-09-26
+
+- Improve alert settings with clearer on, off, focus, saving and unavailable switch states, including narrow-screen and larger-text support (#62, #63, #90).
+- Shorten the visible alert descriptions and place the full policy in an expandable explanation. Alert delivery behavior is unchanged.
+
 ## 1.11.0 · 2026-09-20
 
 - Show active Upsets first and the total of active plus completed upset results in parentheses (#75).

@@ -1,5 +1,6 @@
-export const VERSION = "1.11.0";
+export const VERSION = "1.12.0";
 export const releases = [
+  { version: "1.12.0", date: "September 26, 2026", changes: "Make alert settings easier to scan and operate with clear switch states, a focused saving cue, and concise descriptions. Move detailed alert policy into an expandable explanation. Alert delivery behavior is unchanged." },
   { version: "1.11.0", date: "September 20, 2026", changes: "Show active Upsets first and the total of active plus completed upset results in parentheses. Keep recovered-favorite watches visible without counting them as completed upsets." },
   { version: "1.10.0", date: "September 19, 2026", changes: "Prioritize stronger live games using conference, ranking and game-state evidence without reducing Watchlist interest to a binary tier. Keep ranking disruption distinct from favorite-based upset interest, and avoid a lower-interest close-game alert when stronger live candidates are already available." },
   { version: "1.9.0", date: "September 19, 2026", changes: "Combine ACC, Top 25, One score and Upsets with independent toggles, and use All to return to the complete watchlist. Choose Day or Week for any combination. Existing links and app refreshes keep your selection." },
