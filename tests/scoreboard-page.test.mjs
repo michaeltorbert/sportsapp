@@ -197,10 +197,13 @@ test("validated pregame lines appear inline with the favorite and pick’em rema
     boards.daily = scoreboard([gameWithLine]);
     const liveOrFinal = render([], { boards }).html;
     assert.match(liveOrFinal, /class="team-label">Team b<\/span><span class="team-line"[^>]*>.*?class="team-line-visible"[^>]*>−7\.5<\/span>/);
+    assert.match(liveOrFinal, /class="sr-only">Pregame betting line: favored by 7\.5 points, ESPN<\/span>/);
     assert.doesNotMatch(liveOrFinal, /<small>Pregame<\/small>/);
   }
   boards.daily = scoreboard([game({ id: "live-pickem", pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
-  assert.match(render([], { boards }).html, /class="pickem-line"[^>]*>.*?>PK<\/span>/);
+  const livePickem = render([], { boards }).html;
+  assert.match(livePickem, /class="pickem-line"[^>]*>.*?>PK<\/span>/);
+  assert.match(livePickem, /class="sr-only">Pregame pick’em line, ESPN<\/span>/);
   boards.daily = scoreboard([game({ id: "live-before-clock", state: "live", started: false, period: 0, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } })]);
   assert.match(render([], { boards }).html, /class="team-line-visible"[^>]*>−7\.5<\/span>/);
   boards.daily = scoreboard([game({ id: "live-pickem-before-clock", state: "live", started: false, period: 0, pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
