@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type InputHTMLAttributes } from "react";
 import { Bell, BellRing } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { usePushEnvironment } from "@/lib/browser-state";
@@ -10,11 +10,17 @@ type Choices = { upsetWatch: boolean; closeGame: boolean; upsetFinal: boolean; k
 type Status = Choices & { active: boolean; revision: number; preferencesVersion: number };
 const defaults: Choices = { upsetWatch: true, closeGame: false, upsetFinal: false, kickoff: false };
 const types: { key: keyof Choices; name: string; description: string }[] = [
-  { key: "upsetWatch", name: "Upset watch", description: "A meaningful threat to a ranked favorite in Q4 or overtime, including ties and an underdog within 8 points." },
-  { key: "closeGame", name: "Any close game", description: "Any game tied or within 8 points in Q4 or overtime." },
-  { key: "upsetFinal", name: "Upset final results", description: "A ranked team loses to an unranked or lower-ranked opponent. A separate result alert." },
+  { key: "upsetWatch", name: "Upset watch", description: "A ranked favorite under threat in Q4 or overtime." },
+  { key: "closeGame", name: "Any close game", description: "Games tied or within 8 points in Q4 or overtime. Stronger games take priority." },
+  { key: "upsetFinal", name: "Upset final results", description: "A ranked team loses to an unranked or lower-ranked opponent." },
   { key: "kickoff", name: "ACC kickoff reminders", description: "10 minutes before a game involving an ACC team." },
 ];
+function AlertSwitch({ pending, ...input }: InputHTMLAttributes<HTMLInputElement> & { pending: boolean }) {
+  return <span className="alert-switch" data-pending={pending}>
+    <input {...input} type="checkbox" role="switch" />
+    <span className="alert-switch-face" aria-hidden="true"><span className="alert-switch-thumb"><svg className="alert-switch-check" viewBox="0 0 16 16"><path d="m4 8 3 3 5-6" /></svg></span></span>
+  </span>;
+}
 function saved(): Credentials | null { try { const v = JSON.parse(localStorage.getItem("ss:push") || "null"); return typeof v?.id === "string" && typeof v?.token === "string" ? v : null; } catch { return null; } }
 function keyBytes(v: string) { return Uint8Array.from(atob(v.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - v.length % 4) % 4)), c => c.charCodeAt(0)); }
 function valid(v: Status) { return v.preferencesVersion === 1 && Number.isSafeInteger(v.revision) && v.revision >= 0 && typeof v.active === "boolean" && types.every(t => typeof v[t.key] === "boolean"); }
@@ -28,6 +34,7 @@ export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
   const [service, setService] = useState(""), [config, setConfig] = useState<Config | null>(null), [record, setRecord] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
+  const [pending, setPending] = useState<keyof Choices | "active" | null>(null);
   const [resetNeeded, setResetNeeded] = useState(false), [online, setOnline] = useState(true);
   const [localReady, setLocalReady] = useState(false);
   const [accessConfirmed, setAccessConfirmed] = useState(false);
@@ -77,10 +84,10 @@ export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
     document.addEventListener("visibilitychange", check); window.addEventListener("online", check); window.addEventListener("offline", check);
     return () => { alive = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", check); window.removeEventListener("online", check); window.removeEventListener("offline", check); };
   }, []);
-  function start() { if (writing.current) return false; writing.current = true; sequence.current++; setBusy(true); setMessage("Saving…"); return true; }
-  function finish() { writing.current = false; setBusy(false); }
-  async function update(patch: Partial<Choices> & { active?: boolean }) {
-    const credentials = saved(); if (!credentials || !record || !accessConfirmed || !start()) return;
+  function start(key?: keyof Choices | "active") { if (writing.current) return false; writing.current = true; sequence.current++; setPending(key ?? null); setBusy(true); setMessage("Saving…"); return true; }
+  function finish() { writing.current = false; setPending(null); setBusy(false); }
+  async function update(patch: Partial<Choices> & { active?: boolean }, key: keyof Choices | "active") {
+    const credentials = saved(); if (!credentials || !record || !accessConfirmed || !start(key)) return;
     try {
       const r = await fetch(`${service}/subscriptions/${credentials.id}`, { method: "PATCH", credentials: "omit", headers: { "Content-Type": "application/json", Authorization: `Bearer ${credentials.token}` }, body: JSON.stringify({ ...patch, revision: record.revision }), signal: AbortSignal.timeout(10000) });
       if (!r.ok) throw Error(); const v: Status = await r.json(); if (!valid(v)) throw Error();
@@ -91,7 +98,7 @@ export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
     } finally { finish(); }
   }
   async function enable() {
-    if (!registration || !config?.ready || config.preferencesVersion !== 1 || !online || (saved() && !accessConfirmed) || (ios && !standalone) || !start()) return;
+    if (!registration || !config?.ready || config.preferencesVersion !== 1 || !online || (saved() && !accessConfirmed) || (ios && !standalone) || !start("active")) return;
     try {
       // Keep the permission request directly in the user gesture before any network await.
       const permission = await Notification.requestPermission();
@@ -129,13 +136,20 @@ export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
     } catch { setMessage("Could not reset alerts. Reconnect and try again."); } finally { finish(); }
   }
   const canEnable = supported && (!ios || standalone) && !!registration && config?.ready && config.preferencesVersion === 1 && online && (!saved() || accessConfirmed);
-  return <Sheet><SheetTrigger asChild><button className={iconOnly ? "icon-button alerts-trigger" : "alerts-button"} aria-label={iconOnly ? enabled ? "Alerts on" : "Alerts off" : undefined}>{enabled ? <BellRing size={16} /> : <Bell size={16} />}<span className={iconOnly ? "sr-only" : undefined}>{enabled ? "Alerts on" : iconOnly ? "Alerts off" : "Alerts"}</span></button></SheetTrigger><SheetContent side="bottom" className="help-sheet"><SheetHeader><SheetTitle>Catch the game-changing moments.</SheetTitle><SheetDescription>Choose alerts for this device.</SheetDescription></SheetHeader><div className="help-body">
-<label className="alert-setting"><span><strong>Notifications</strong><small>Off keeps your choices. A notification already sent cannot be recalled.</small></span><input role="switch" aria-label="Notifications" type="checkbox" checked={enabled} aria-disabled={busy} aria-busy={busy} disabled={!online || (!!saved() && !accessConfirmed) || (enabled ? !service : !canEnable)} onChange={e => { if (writing.current) return; if (e.target.checked) void enable(); else void update({ active: false }); }} /></label>
-    {types.map(t => <label key={t.key} className="alert-setting"><span><strong>{t.name}</strong><small id={`alert-${t.key}`}>{t.description}</small></span><input role="switch" aria-label={t.name} aria-describedby={`alert-${t.key}`} type="checkbox" checked={choices[t.key]} aria-disabled={busy} aria-busy={busy} disabled={!enabled || !online || !accessConfirmed} onChange={e => { if (!writing.current) void update({ [t.key]: e.target.checked }); }} /></label>)}
+  return <Sheet><SheetTrigger asChild><button className={iconOnly ? "icon-button alerts-trigger" : "alerts-button"} aria-label={iconOnly ? enabled ? "Alerts on" : "Alerts off" : undefined}>{enabled ? <BellRing size={16} /> : <Bell size={16} />}<span className={iconOnly ? "sr-only" : undefined}>{enabled ? "Alerts on" : iconOnly ? "Alerts off" : "Alerts"}</span></button></SheetTrigger><SheetContent side="bottom" className="help-sheet alerts-sheet"><SheetHeader><SheetTitle>Catch the game-changing moments.</SheetTitle><SheetDescription>Choose alerts for this device.</SheetDescription></SheetHeader><div className="help-body">
+<label className="alert-setting"><span><strong>Notifications</strong><small id="alert-active">Turning off stops future alerts; your choices stay saved.</small></span><AlertSwitch pending={pending === "active"} aria-label="Notifications" aria-describedby="alert-active" checked={enabled} aria-disabled={busy} aria-busy={busy} disabled={!online || (!!saved() && !accessConfirmed) || (enabled ? !service : !canEnable)} onChange={e => { if (writing.current) return; if (e.target.checked) void enable(); else void update({ active: false }, "active"); }} /></label>
+    {types.map(t => <label key={t.key} className="alert-setting"><span><strong>{t.name}</strong><small id={`alert-${t.key}`}>{t.description}</small></span><AlertSwitch pending={pending === t.key} aria-label={t.name} aria-describedby={`alert-${t.key}`} checked={choices[t.key]} aria-disabled={busy} aria-busy={busy} disabled={!enabled || !online || !accessConfirmed} onChange={e => { if (!writing.current) void update({ [t.key]: e.target.checked }, t.key); }} /></label>)}
     {enabled && types.every(t => !choices[t.key]) && <p role="status">No alert types are selected. You will not receive game alerts.</p>}
     {ios && !standalone ? <div className="install-tip"><h3>Add to Home Screen for alerts</h3><p>In Safari, tap Share → Add to Home Screen. Keep Open as Web App enabled if offered. Open the new icon, return to Alerts, and tap Enable alerts.</p></div> : !supported ? <p>This browser does not support push alerts. Try Safari on your iPhone’s Home Screen or Chrome on Android.</p> : loading ? <p>Checking alert availability…</p> : !online ? <p>You are offline. Reconnect to save or check alert settings.</p> : !config?.ready ? <div className="install-tip"><h3>Alerts are being set up</h3><p>Live scores are available now. Background alerts will become available when setup is complete.</p></div> : config.preferencesVersion !== 1 ? <p>Alert settings need a newer service version. Try again later.</p> : !enabled && (!saved() || accessConfirmed) && !resetNeeded && <button className="solid-button alert-enable" onClick={enable} disabled={busy || !registration || !canEnable}>Enable alerts</button>}
     {message && <p role="status">{message}</p>}{resetNeeded && <button className="text-link" onClick={reset} disabled={busy}>Reset alerts</button>}
-    <p className="alert-footnote">Duke notifications are always off. Close-game alerts prioritize stronger live games and may skip two-unranked Group-of-Six matchups. This applies across the slate even if you disabled or already received the stronger alert. Scoreboard categories do not filter notifications. Close games and upset watch share at most one live notification attempt per game; optional finals are separate. New selections start from the next successful score check and do not replay current or past conditions.</p>
-    <p className="alert-footnote">Upset watch requires a ranked pregame favorite of 7+ points. Without a line, it uses a ranked team against a confirmed unranked opponent, or a rank gap of 10+. Pick’em and conflicting expectations do not qualify. Alerts depend on ESPN’s feed and your device’s settings.</p>
+    <p className="alert-footnote">Duke alerts stay off. Scoreboard filters do not affect alerts.</p>
+    <details className="alert-details"><summary>How alerts work</summary>
+      <p>Close-game alerts prioritize stronger live games and may skip two-unranked Group-of-Six matchups. This applies across the slate even if you disabled or already received the stronger alert.</p>
+      <p>Close games and upset watch share at most one live notification attempt per game; optional finals are separate.</p>
+      <p>New selections start from the next successful score check and do not replay current or past conditions. A notification already sent cannot be recalled.</p>
+      <p>Upset watch requires a ranked pregame favorite of 7+ points. Without a line, it uses a ranked team against a confirmed unranked opponent, or a rank gap of 10+. Pick’em and conflicting expectations do not qualify.</p>
+      <p>Upset watch looks for a meaningful threat to a ranked favorite in Q4 or overtime, including ties and an underdog within 8 points.</p>
+      <p>Scoreboard categories do not filter notifications. Alerts depend on ESPN’s feed and the device’s settings.</p>
+    </details>
   </div></SheetContent></Sheet>;
 }
