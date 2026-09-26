@@ -175,6 +175,22 @@ test("unranked SEC upset cards explain the favorite without inventing a ranking"
   assert.doesNotMatch(html, /No\. (null|undefined)/);
 });
 
+test("validated pregame lines appear inline with the favorite and pick’em remains neutral", () => {
+  const favorite = game({ id: "favorite-line", state: "upcoming", pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } });
+  const pickem = game({ id: "pickem-line", state: "upcoming", pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } });
+  const missing = game({ id: "missing-line", state: "upcoming" });
+  const boards = fixtures(); boards.daily = scoreboard([favorite, pickem, missing]);
+  const { html } = render([], { boards });
+  const favoriteCard = html.match(/<article id="game-favorite-line"[\s\S]*?<\/article>/)?.[0];
+  const pickemCard = html.match(/<article id="game-pickem-line"[\s\S]*?<\/article>/)?.[0];
+  const missingCard = html.match(/<article id="game-missing-line"[\s\S]*?<\/article>/)?.[0];
+  assert.match(favoriteCard, /class="team-line"[^>]*>−7\.5<\/span>/);
+  assert.equal((favoriteCard.match(/class="team-line"/g) || []).length, 1);
+  assert.match(pickemCard, /class="pickem-line"[^>]*>PK<\/span>/);
+  assert.doesNotMatch(pickemCard, /class="team-line"/);
+  assert.doesNotMatch(missingCard, /class="(?:team-line|pickem-line)"/);
+});
+
 test("retained upset finals distinguish a comeback from a completed conference upset", () => {
   const final = game({ id: "retained", state: "final", retainedCategories: { acc: false, top25: false, close: false, upset: true } });
   Object.assign(final.teams[0], { name: "Florida", conferenceId: "8", rank: null, score: 28 });
