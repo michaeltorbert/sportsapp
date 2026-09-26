@@ -175,6 +175,69 @@ test("unranked SEC upset cards explain the favorite without inventing a ranking"
   assert.doesNotMatch(html, /No\. (null|undefined)/);
 });
 
+test("validated lines move from the summary to details after kickoff", () => {
+  const summaryOf = html => html.split("</summary>")[0];
+  const favorite = game({ id: "favorite-line", state: "upcoming", started: false, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } });
+  const pickem = game({ id: "pickem-line", state: "upcoming", started: false, pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } });
+  const missing = game({ id: "missing-line", state: "upcoming", started: false });
+  const boards = fixtures(); boards.daily = scoreboard([favorite, pickem, missing]);
+  const { html } = render([], { boards });
+  const favoriteCard = html.match(/<article id="game-favorite-line"[\s\S]*?<\/article>/)?.[0];
+  const pickemCard = html.match(/<article id="game-pickem-line"[\s\S]*?<\/article>/)?.[0];
+  const missingCard = html.match(/<article id="game-missing-line"[\s\S]*?<\/article>/)?.[0];
+  assert.match(favoriteCard, /class="team-label">Team b<\/span><span class="team-line"[^>]*>.*?−7\.5<\/span><\/span><\/span>/);
+  assert.equal((favoriteCard.match(/class="team-line"/g) || []).length, 1);
+  assert.match(favoriteCard, /Team b<\/span><span class="team-line"[^>]*><span class="sr-only">Pregame betting line: favored by 7\.5 points, ESPN/);
+  assert.doesNotMatch(favoriteCard, /<small>Pregame<\/small>/);
+  assert.match(pickemCard, /class="pickem-line"[^>]*>.*?PK<\/span><\/span>/);
+  assert.doesNotMatch(pickemCard, /Pregame PK/);
+  assert.doesNotMatch(pickemCard, /class="team-line"/);
+  assert.doesNotMatch(missingCard, /class="(?:team-line|pickem-line)"/);
+  for (const state of ["live", "final"]) {
+    const gameWithLine = game({ id: `${state}-line`, state, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } });
+    boards.daily = scoreboard([gameWithLine]);
+    const liveOrFinal = render([], { boards }).html;
+    assert.doesNotMatch(summaryOf(liveOrFinal), /class="(?:team-line|pickem-line)"/);
+    assert.match(liveOrFinal, /class="detail-line"><span>Line<\/span><strong>Team b −7\.5<\/strong><span>ESPN<\/span>/);
+  }
+  boards.daily = scoreboard([game({ id: "live-pickem", pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
+  const livePickem = render([], { boards }).html;
+  assert.doesNotMatch(summaryOf(livePickem), /class="(?:team-line|pickem-line)"/);
+  assert.match(livePickem, /class="detail-line"><span>Line<\/span><strong>PK<\/strong><span>ESPN<\/span>/);
+  boards.daily = scoreboard([game({ id: "live-before-clock", state: "live", started: false, period: 0, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } })]);
+  const liveBeforeClock = render([], { boards }).html;
+  assert.doesNotMatch(summaryOf(liveBeforeClock), /class="team-line"/);
+  assert.match(liveBeforeClock, /class="detail-line"[^>]*>.*?Team b −7\.5/);
+  boards.daily = scoreboard([game({ id: "live-pickem-before-clock", state: "live", started: false, period: 0, pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
+  const pickemBeforeClock = render([], { boards }).html;
+  assert.doesNotMatch(summaryOf(pickemBeforeClock), /class="pickem-line"/);
+  assert.match(pickemBeforeClock, /class="detail-line"[^>]*>.*?<strong>PK<\/strong>/);
+  for (const started of [true, false]) {
+    boards.daily = scoreboard([game({ id: `delayed-${started}`, state: "delayed", started, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } })]);
+    const delayed = render([], { boards }).html;
+    assert.equal(summaryOf(delayed).includes('class="team-line"'), !started);
+    assert.equal(delayed.includes('class="detail-line"'), started);
+  }
+  boards.daily = scoreboard([game({ id: "away-favorite", state: "upcoming", started: false, pregameLine: { favoriteId: "a", spread: 3.5, source: "ESPN" } })]);
+  const awayCard = render([], { boards }).html.match(/<article id="game-away-favorite"[\s\S]*?<\/article>/)?.[0];
+  assert.match(awayCard, /class="team-label">Team a<\/span><span class="team-line"[^>]*>.*?−3\.5<\/span>/);
+  assert.doesNotMatch(awayCard, /class="team-label">Team b<\/span><span class="team-line"/);
+});
+
+test("shown teams display ESPN overall records without crowding the score label", () => {
+  for (const state of ["upcoming", "live", "final"]) {
+    const withRecords = game({ id: `records-${state}`, state, started: state !== "upcoming" });
+    withRecords.teams[0].record = "3-1";
+    withRecords.teams[1].record = "";
+    const boards = fixtures(); boards.daily = scoreboard([withRecords]);
+    const card = render([], { boards }).html.match(new RegExp(`<article id="game-records-${state}"[\\s\\S]*?<\\/article>`))?.[0];
+    assert.match(card, /class="team-record" aria-hidden="true">3-1<\/span>/);
+    assert.equal((card.match(/class="team-record"/g) || []).length, 1);
+    assert.match(card, /aria-label="Team a, 3-1: (?:14|no score yet)"/);
+    assert.match(card, /aria-label="Team b: (?:21|no score yet)"/);
+  }
+});
+
 test("retained upset finals distinguish a comeback from a completed conference upset", () => {
   const final = game({ id: "retained", state: "final", retainedCategories: { acc: false, top25: false, close: false, upset: true } });
   Object.assign(final.teams[0], { name: "Florida", conferenceId: "8", rank: null, score: 28 });

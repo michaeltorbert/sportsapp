@@ -45,7 +45,5 @@ export function rememberDukeGames(prefs: DukePreferences, games: Game[], now: nu
 }
 export function protectDukeBoard(board: Scoreboard | null, prefs: DukePreferences | null): Scoreboard | null {
   if (!board) return null;
-  // Records update independently of selected dates. Omit them universally:
-  // this device cannot establish that every older Duke result has been seen.
-  return { ...board, games: board.games.filter(game => !dukeHidden(game, prefs)).map(game => ({ ...game, teams: game.teams.map(team => ({ ...team, record: "" })) as Game["teams"] })) };
+  return { ...board, games: board.games.filter(game => !dukeHidden(game, prefs)) };
 }

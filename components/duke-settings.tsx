@@ -33,7 +33,7 @@ export function DukeSettings({ games, visibility }: { games: Game[]; visibility:
       <fieldset disabled={!visibility.prefs}><legend>For future Duke games</legend>{modes.map(option => <label className="duke-mode" key={option.value}><input type="radio" name="duke-default" checked={mode === option.value} onChange={() => visibility.setMode(option.value)} />{option.label}</label>)}</fieldset>
       <p>Applies to games that haven’t started. Games already played or individually hidden or shown keep their setting.</p>
       <h3>Duke notifications</h3><p>Always off, even when you show a game.</p>
-      <p className="settings-note">Each device has its own viewing preferences. Team records are omitted to avoid revealing hidden results.</p>
+      <p className="settings-note">Each device has its own viewing preferences. Shown games include team records when ESPN provides them.</p>
       {visibility.storageWarning && <p role="alert">{visibility.storageWarning}</p>}
       </div></SheetContent></Sheet>;
 }
