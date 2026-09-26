@@ -5,6 +5,8 @@ const { parsePregameLine, classifyPregameEvidence, summaryPregameLine, enrichPre
 const { normalizeScoreboard } = await bundle("lib/espn-data.ts");
 const { loadScores } = await bundle("lib/score-client.ts");
 const { gamePriority } = await bundle("lib/watch-priority.ts");
+const { classify } = await bundle("lib/football.ts");
+const { upsetCounts } = await bundle("lib/scoreboard-views.ts");
 const { retainExpectation, meaningfulUpset } = await bundle("services/alerts/expectation.ts");
 
 function odds(changes = {}) {
@@ -121,6 +123,34 @@ test("first visit after kickoff obtains a pregame line without losing scores; co
   assert.equal(summaries, 1);
   const failed = await loadScores("2026-09-06", signal, async url => url.includes("/summary?") ? Promise.reject(new Error("offline")) : Response.json({ events: [live] }));
   assert.equal(failed.games[0].pregameLine, undefined); assert.deepEqual(failed.games[0].teams.map(t => t.score), [21, 7]);
+});
+
+test("ORD-015 first visit after kickoff recovers an unranked non-ACC/SEC favorite", async () => {
+  const live = event({ status: { period: 4, clock: 120, type: { name: "STATUS_IN_PROGRESS", state: "in" } } });
+  delete live.competitions[0].odds;
+  live.competitions[0].competitors[0].team.conferenceId = "15";
+  live.competitions[0].competitors[1].team.conferenceId = "17";
+  live.competitions[0].competitors[0].score = "21";
+  live.competitions[0].competitors[1].score = "7";
+  const normalized = normalizeScoreboard({ events: [live] }, "2026-09-06").games[0];
+  assert.equal(normalized.pregameLine, undefined);
+  assert.equal(classify(normalized).upset, false, "unranked game without a line has no upset evidence");
+  let summaries = 0;
+  const fetcher = async url => {
+    if (url.includes("/summary?")) { summaries++; return Response.json(summary(normalized)); }
+    return Response.json({ events: [live] });
+  };
+  const board = await loadScores("2026-09-06", new AbortController().signal, fetcher);
+  const recovered = board.games[0];
+  assert.equal(summaries, 1);
+  assert.equal(recovered.pregameLine.favoriteId, "b");
+  assert.equal(classify(recovered).upset, true);
+  assert.deepEqual(upsetCounts(board), { brewing: 1, total: 1 });
+  assert.equal(gamePriority(recovered).upset, 0, "display expansion does not change ordering");
+  assert.deepEqual(recovered.teams.map(team => team.score), [21, 7]);
+  const again = await loadScores("2026-09-06", new AbortController().signal, fetcher);
+  assert.equal(again.games[0].pregameLine.favoriteId, "b");
+  assert.equal(summaries, 1, "a completed summary lookup remains cached");
 });
 
 test("a game paused after kickoff can recover its line without triggering live urgency", async () => {

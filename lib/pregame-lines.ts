@@ -1,7 +1,6 @@
 import { z } from "zod";
 import type { Game, PregameLine, Scoreboard } from "./football";
 import { halftimeEpoch, halftimeKey, nextHalftimeGeneration, observeHalftime, observeHalftimeBoard, parseHalftime, type HalftimeObservation } from "./halftime";
-import { preferredConference, teamRank } from "./upset";
 
 const teamId = z.union([z.string().min(1), z.number().int().nonnegative()]).transform(String);
 const spread = z.union([z.number(), z.string().trim().regex(/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/).transform(Number)]).pipe(z.number().finite());
@@ -75,7 +74,6 @@ type Completed = { line?: PregameLine; timing: HalftimeObservation; expires: num
 type EnrichmentState = { cache: Map<string, Cached>; attempts: Map<string, Attempt>; completed: Map<string, Completed>; halftimeAttempts: Map<string, Attempt>; claims: Map<string, symbol>; sequence: number };
 const states = new WeakMap<typeof fetch, EnrichmentState>();
 const key = halftimeKey;
-const oddsEligible = (game: Game) => game.teams.some(t => preferredConference(t) || teamRank(t) !== null);
 
 /** Optional enrichment has a 1.5s total budget; failed odds never discard scores. */
 export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal, fetcher: typeof fetch = fetch, generation = nextHalftimeGeneration(), observationEpoch = halftimeEpoch()): Promise<Scoreboard> {
@@ -85,10 +83,7 @@ export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal,
   states.set(fetcher, state);
   const { cache, attempts, completed, halftimeAttempts, claims } = state;
   const rememberLine = (game: Game, line: PregameLine | undefined, observedAt: number) => {
-    if (!oddsEligible(game)) return;
     const known = cache.get(key(game));
-    // Reuse may become odds-eligible after another scope supplies ranking or
-    // conference metadata. Promote its evidence without restamping its TTL.
     // A retained unexpired line stays authoritative: halftime extras must not
     // swap the pregame favorite for a provider's in-game revision.
     if (!known?.line || known.expires <= Date.now())
@@ -103,7 +98,6 @@ export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal,
     if (value) observeHalftime(game, value.timing);
   }
   const candidates = games.filter(g => !g.pregameLine && (g.state === "live" || g.state === "final" || (g.state === "delayed" && g.started))
-    && oddsEligible(g)
     && (attempts.get(key(g))?.retryAfter ?? 0) <= Date.now()
     && (!cache.has(key(g)) || cache.get(key(g))!.expires <= Date.now()))
     .sort((a, b) => Number(b.state === "live") - Number(a.state === "live")
@@ -181,6 +175,6 @@ export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal,
   }
   return { ...board, games: board.games.map(game => {
     const cached = cache.get(key(game));
-    return !game.pregameLine && oddsEligible(game) && cached?.line && cached.expires > Date.now() ? { ...game, pregameLine: cached.line } : game;
+    return !game.pregameLine && cached?.line && cached.expires > Date.now() ? { ...game, pregameLine: cached.line } : game;
   }) };
 }

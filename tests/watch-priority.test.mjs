@@ -79,6 +79,7 @@ test("ORD-015 September 26 ranked games qualify across absent, opposite and pick
       assert.match(upsetExplanation(live), line?.favoriteId === "a" ? /pregame favorite/ : /rank-based upset/);
       const final = { ...live, state: "final" };
       assert.equal(classify(final).upset, true);
+      assert.equal(conditions(final, Date.now())["upset-final"], true, "ranked final alert still follows its existing rule");
       assert.equal(conditions(final, Date.now())["upset-final"], conditions({ ...final, pregameLine: undefined }, Date.now())["upset-final"], "alert final rule remains independent");
       if (line?.favoriteId === "b" || line?.spread === 0) assert.equal(gamePriority(live).upset, 0, "display category does not change line-first ordering");
     }
