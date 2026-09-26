@@ -52,6 +52,45 @@ test('320px row keeps records, betting line, and score readable together', async
   await page.screenshot({ path: info.outputPath('records-line-320.png'), fullPage: true, animations: 'disabled' });
 });
 
+test('after kickoff the line moves below the collapsed score row', async ({ page, harness }, info) => {
+  const withRecords = game => {
+    const [away, home] = game.competitions[0].competitors;
+    away.team.shortDisplayName = 'Mississippi State';
+    home.team.shortDisplayName = 'North Carolina';
+    away.records = [{ type: 'total', summary: '3-1' }];
+    home.records = [{ type: 'total', summary: '2-2' }];
+    return game;
+  };
+  const upcoming = withRecords(event('line-transition', { state: 'upcoming', rank: 5 }));
+  const [away, home] = upcoming.competitions[0].competitors;
+  upcoming.competitions[0].odds = [{ spread: -7.5, provider: { name: 'ESPN' },
+    awayTeamOdds: { favorite: false, team: { id: away.team.id } },
+    homeTeamOdds: { favorite: true, team: { id: home.team.id } } }];
+  harness.state.events = [upcoming];
+  await page.setViewportSize({ width: 320, height: 700 });
+  await harness.open({ path: '/?date=2026-09-05' });
+  const row = page.locator('#game-line-transition');
+  await expect(row.locator('summary .team-line-visible')).toHaveText('−7.5');
+
+  harness.state.events = [withRecords(event('line-transition', { state: 'live', rank: 5 }))];
+  await page.getByRole('button', { name: 'Refresh scores' }).click();
+  await expect(row.locator('.game-status')).toContainText('4th');
+  await expect(row.locator('summary .team-line, summary .pickem-line')).toHaveCount(0);
+  await expect(row.locator('summary .team-record')).toHaveText(['3-1', '2-2']);
+  await expect(row.locator('.detail-line')).toBeHidden();
+  await row.locator('summary').click();
+  await expect(row.locator('.detail-line')).toContainText('North Carolina −7.5');
+  await expect(row.locator('.detail-line')).toContainText('ESPN');
+  await page.screenshot({ path: info.outputPath('live-line-in-details-320.png'), fullPage: true, animations: 'disabled' });
+
+  harness.state.events = [withRecords(event('line-transition', { state: 'final', rank: 5 }))];
+  await page.getByRole('button', { name: 'Refresh scores' }).click();
+  await expect(row.locator('.game-status')).toHaveText('Final');
+  await expect(row.locator('summary .team-line, summary .pickem-line')).toHaveCount(0);
+  await expect(row.locator('.detail-line')).toContainText('North Carolina −7.5');
+  await geometry(page);
+});
+
 test('details support keyboard and touch, preserve live-to-final context and show overall records', async ({ page, harness }, info) => {
   const game = event('context', { rank: 5 });
   game.competitions[0].situation = { possession: 'context-away', isRedZone: true, downDistanceText: '3rd & 2 at HOME 12' };

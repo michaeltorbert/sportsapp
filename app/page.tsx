@@ -39,6 +39,7 @@ function emptyTitle(selection: Selection, period: Period) {
   }
 }
 function localTime(date: string) { return Number.isFinite(Date.parse(date)) ? new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(date)) : "Time TBD"; }
+function lineInSummary(game: Game) { return !game.started && game.state !== "live" && game.state !== "final"; }
 
 function TeamRow({ team, game, opponent }: { team: Team; game: Game; opponent: Team }) {
   const leading = team.score !== null && opponent.score !== null && team.score > opponent.score;
@@ -46,7 +47,7 @@ function TeamRow({ team, game, opponent }: { team: Team; game: Game; opponent: T
   const line = game.pregameLine?.favoriteId === team.id && game.pregameLine.spread > 0 ? game.pregameLine : null;
   return <span className={`team-row ${leading ? "leading" : ""}`}>
     <span className="team-logo" aria-hidden="true">{team.logo && !failed ? <img src={team.logo} width="32" height="32" alt="" loading="lazy" onError={() => setFailed(true)} /> : <span>{team.abbreviation.slice(0, 3)}</span>}</span>
-    <span className="team-identity"><span className="team-name">{team.rank !== null && <span className="rank">{team.rank}</span>}<span className="team-label">{team.name}</span>{line && <span className="team-line" title={`Pregame line · ${line.source}`}><span className="sr-only">Pregame betting line: favored by {line.spread} points, {line.source}</span><span className="team-line-visible" aria-hidden="true">−{line.spread}</span></span>}{game.possession === team.id && game.state === "live" && <span className="possession" role="img" aria-label="Possession">◆</span>}</span>{team.record && <span className="team-record" aria-hidden="true">{team.record}</span>}</span>
+    <span className="team-identity"><span className="team-name">{team.rank !== null && <span className="rank">{team.rank}</span>}<span className="team-label">{team.name}</span>{line && lineInSummary(game) && <span className="team-line" title={`Pregame line · ${line.source}`}><span className="sr-only">Pregame betting line: favored by {line.spread} points, {line.source}</span><span className="team-line-visible" aria-hidden="true">−{line.spread}</span></span>}{game.possession === team.id && game.state === "live" && <span className="possession" role="img" aria-label="Possession">◆</span>}</span>{team.record && <span className="team-record" aria-hidden="true">{team.record}</span>}</span>
     <span className={`score ${team.changed ? "score-changed" : ""}`} aria-label={`${team.name}${team.record ? `, ${team.record}` : ""}: ${game.started && team.score !== null ? team.score : "no score yet"}`}>{game.started && team.score !== null ? team.score : "–"}</span>
   </span>;
 }
@@ -55,16 +56,20 @@ function GameCard({ game, board, scopeError, showDate = false, expanded, onExpan
   const margin = away.score !== null && home.score !== null ? Math.abs(away.score - home.score) : null;
   const explanation = upsetExplanation(game), watch = upsetWatch(game);
   const upsetLabel = game.state === "final" && !result.upset ? "Earlier upset watch" : watch?.basis === "conference" ? "Conference watch" : game.state === "final" ? "Upset final" : "Upset watch";
+  const line = game.pregameLine;
+  const favorite = line?.favoriteId === away.id ? away : line?.favoriteId === home.id ? home : null;
+  const detailLine = !lineInSummary(game) && line && ((line.favoriteId === null && line.spread === 0) || (favorite && line.spread > 0));
   return <article id={`game-${game.id}`} className={`game-card ${tags.upset ? "upset-card" : ""} ${game.state === "final" ? "final-card" : ""}`}>
     <details open={expanded} onToggle={event => { if (event.currentTarget.open !== expanded) onExpanded(event.currentTarget.open); }}>
       <summary className="game-summary">
         <span className="sr-only">Game details: </span>
         <span className="game-overview"><span className="teams"><TeamRow team={away} opponent={home} game={game} /><TeamRow team={home} opponent={away} game={game} /></span>
-        <span className="game-meta">{showDate && <span className="game-day-label">{new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" }).format(new Date(game.date))}</span>}<span className={`game-status status-${game.state}`}>{game.state === "live" && <span className="live-dot" />}{game.state === "delayed" && <TriangleAlert size={14} />}{game.state === "upcoming" && game.timeValid ? localTime(game.date) : game.halftime && game.state === "live" ? <HalftimeStatus game={game} board={board} scopeError={scopeError} /> : game.status}</span>{game.pregameLine?.favoriteId === null && game.pregameLine.spread === 0 && <span className="pickem-line" title={`Pregame line · ${game.pregameLine.source}`}><span className="sr-only">Pregame pick’em line, {game.pregameLine.source}</span><span aria-hidden="true">PK</span></span>}<span className="broadcast">{game.broadcast && <><Tv size={13} /><span>{game.broadcast}</span></>}</span>{tags.upset && <span className="compact-upset">{upsetLabel}</span>}{game.state === "live" && game.redZone && <span className="compact-red-zone">RED ZONE</span>}</span>
+        <span className="game-meta">{showDate && <span className="game-day-label">{new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" }).format(new Date(game.date))}</span>}<span className={`game-status status-${game.state}`}>{game.state === "live" && <span className="live-dot" />}{game.state === "delayed" && <TriangleAlert size={14} />}{game.state === "upcoming" && game.timeValid ? localTime(game.date) : game.halftime && game.state === "live" ? <HalftimeStatus game={game} board={board} scopeError={scopeError} /> : game.status}</span>{lineInSummary(game) && game.pregameLine?.favoriteId === null && game.pregameLine.spread === 0 && <span className="pickem-line" title={`Pregame line · ${game.pregameLine.source}`}><span className="sr-only">Pregame pick’em line, {game.pregameLine.source}</span><span aria-hidden="true">PK</span></span>}<span className="broadcast">{game.broadcast && <><Tv size={13} /><span>{game.broadcast}</span></>}</span>{tags.upset && <span className="compact-upset">{upsetLabel}</span>}{game.state === "live" && game.redZone && <span className="compact-red-zone">RED ZONE</span>}</span>
         </span>
         <ChevronRight className="details-chevron" size={14} aria-hidden="true" />
       </summary>
       <div className="game-details">
+    {detailLine && <div className="detail-line"><span>Line</span><strong>{favorite ? `${favorite.name} −${line.spread}` : "PK"}</strong><span>{line.source}</span></div>}
     {result.upset && <div className="upset-reason"><Zap size={14} fill="currentColor" /><span>{explanation}</span></div>}
     {game.state === "live" && game.downDistance && <div className={`drive ${game.redZone ? "red-zone" : ""}`}>{game.redZone && <span>RED ZONE</span>}{game.downDistance}</div>}
     {game.state === "delayed" && <div className="delay-note">{game.started ? "Play paused. Watching for an update." : "Kickoff delayed. Watching for an update."}</div>}
