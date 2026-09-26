@@ -78,7 +78,7 @@ Relevant public ESPN schema was checked on 2026-09-06 using scoreboard, summary,
 
 Finals remain at the bottom. A trailing known higher-ranked team can count as a completed upset even when a valid pregame line favored the winner. A comeback can retain an earlier upset-watch category without claiming an upset occurred. Actual finals disclose line, rank, or conference evidence. Phone alerts use their separate selective late-game rules and retained pregame evidence; display disruption never changes those conditions or trigger IDs. Close-game delivery applies the global slate gate documented in [the alert policy](../services/alerts/README.md#close-game-slate-prioritization-82). Category selections never filter notifications, and Duke notifications are always off. The expanded unranked display watches do not create new upset-watch triggers.
 
-Failed or timed-out summary attempts rotate behind events not yet attempted, so repeated failures cannot monopolize each refresh's request slots. Transport failures and deadline timeouts also receive a one-minute retry backoff. Caller cancellation does not count as a provider failure. This bounded retry bookkeeping is separate from favorite evidence and never asserts that a missing line was found.
+Failed or timed-out summary attempts rotate behind events not yet attempted within the same live/preferred tier, so repeated failures cannot monopolize that tier's request slots. Transport failures and deadline timeouts also receive a one-minute retry backoff. Caller cancellation does not count as a provider failure. This bounded retry bookkeeping is separate from favorite evidence and never asserts that a missing line was found.
 
 ## Verification
 
