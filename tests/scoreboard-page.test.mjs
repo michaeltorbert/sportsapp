@@ -53,13 +53,13 @@ function fixtures() {
 }
 
 // Home's useState order: selection, period, hideFinals, focusedGame, expanded games.
-function render(selection, { period = "day", hideFinals = false, focusedGame = "", showHelp = false, boards = fixtures(), effects = [], changes = [] } = {}) {
+function render(selection, { period = "day", hideFinals = false, focusedGame = "", showHelp = false, boards = fixtures(), stale = false, effects = [], changes = [] } = {}) {
   let state = 0, selectedScope;
   globalThis.scorePageTest = {
     ...jsxRuntime, showHelp, element: React.createElement,
     effect(fn) { effects.push(fn); },
     useState(initial) { const slot = state++; return [[selection, period, hideFinals, focusedGame][slot] ?? initial, value => changes.push({ slot, value })]; },
-    scoreboard(scope) { selectedScope = scope; return { date: "2026-08-29", today: "2026-09-05", boards, data: boards[scope], error: "", refreshing: false, online: true, now: Date.now(), timezone: "EDT", refresh() {}, setDate() {}, followToday: true }; },
+    scoreboard(scope) { selectedScope = scope; return { date: "2026-08-29", today: "2026-09-05", boards, data: boards[scope] && (stale ? boards[scope] : { ...boards[scope], fetchedAt: new Date().toISOString() }), error: "", refreshing: false, online: true, now: Date.now(), timezone: "EDT", refresh() {}, setDate() {}, followToday: true }; },
   };
   try { return { html: renderToStaticMarkup(React.createElement(Home)), scope: selectedScope }; }
   finally { delete globalThis.scorePageTest; }
@@ -109,6 +109,22 @@ test("Upsets shows brewing first, completed upset results in the total, and an a
   const hidden = render(["upset"], { boards, hideFinals: true }).html;
   assert.deepEqual(upsetBadge(hidden), [1, 1]);
   assert.match(hidden, /aria-label="Upsets, 1 brewing, 1 brewing or completed upsets"/);
+});
+
+test("stale score cards remain visible while counts are unknown", () => {
+  const fresh = render(["upset"]); const stale = render(["upset"], { stale: true });
+  assert.deepEqual(cardIds(stale.html), cardIds(fresh.html));
+  assert.match(stale.html, /Upsets, counts unavailable while scores are stale/);
+  for (const label of ["All", "ACC", "Top 25", "One score"])
+    assert.match(stale.html, new RegExp(`aria-label="${label}, count unavailable while scores are stale"`));
+  assert.match(stale.html, /class="tab-count upset-count" aria-hidden="true">– \(–\)/);
+  assert.match(stale.html, /class="filter-tab filter-watch"[^>]*><span>All<\/span><span class="tab-count">–<\/span>/);
+  assert.match(stale.html, /Waiting for a fresh score update/);
+  const help = render(["upset"], { stale: true, showHelp: true }).html;
+  assert.match(help, /When scores are stale, offline, or more than 90 seconds old/);
+  assert.match(help, /previously loaded game cards remain visible with a warning/);
+  assert.match(help, /category counts show dashes instead of fresh numbers/);
+  assert.match(help, /Counts return after a successful refresh/);
 });
 
 test("Day keeps manual date navigation and the All-only focused game; Week hides daily controls for every selection", () => {
@@ -253,20 +269,21 @@ test("retained upset finals distinguish a comeback from a completed conference u
   assert.doesNotMatch(upset, /pregame favorite|No\. (null|undefined)/);
 });
 
-test("Help separates selective alert policy from line-based display categories", () => {
+test("Help separates selective alert policy from rank-or-line display categories", () => {
   const underdog = game({ id: "ranked-underdog", pregameLine: { favoriteId: "b", spread: 3, source: "ESPN" } });
   Object.assign(underdog.teams[0], { rank: 12, score: 17 });
   Object.assign(underdog.teams[1], { rank: 15, score: 20 });
   const boards = fixtures(); boards.daily = scoreboard([underdog]);
   const { html } = render([], { boards, showHelp: true });
   assert.deepEqual(cardIds(html), ["ranked-underdog"]);
-  assert.doesNotMatch(html, /class="badge upset-badge"|class="upset-reason"/);
+  assert.match(html, /class="badge upset-badge"/);
+  assert.match(html, /rank-based upset/);
   assert.match(html, /Phone alerts are separate from these display categories/);
   assert.match(html, /Close-game alerts prioritize stronger live games and may skip two-unranked Group-of-Six matchups/);
   assert.match(html, /Selected categories do not filter notifications/);
   assert.match(html, /Upcoming games remain chronological within those pin tiers/);
   assert.match(html, /Day shows the selected Eastern date\. Week shows the current football week/);
-  assert.deepEqual(cardIds(render(["upset"], { boards }).html), []);
+  assert.deepEqual(cardIds(render(["upset"], { boards }).html), ["ranked-underdog"]);
 });
 
 test("live conference watches use the same honest badge as conference finals", () => {

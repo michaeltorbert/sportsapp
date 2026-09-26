@@ -63,12 +63,69 @@ test("Florida–ECU can qualify without ranks, while absent or contrary evidence
   }
 });
 
-test("intraconference unranked SEC favorites are supported; unrelated unranked favorites stay out", () => {
+test("ORD-015 September 26 ranked games qualify across absent, opposite and pickem lines", () => {
+  for (const [id, higher, lower, higherRank, lowerRank, higherScore, lowerScore] of [
+    ["401856699", "Ole Miss", "Florida", 4, 21, 3, 10],
+    ["401858463", "Iowa", "Michigan", 17, 18, 7, 10],
+  ]) {
+    const fixture = match(id, { rank: higherRank, otherRank: lowerRank, period: 2, score: higherScore, otherScore: lowerScore });
+    Object.assign(fixture.teams[0], { name: higher, rankKnown: true });
+    Object.assign(fixture.teams[1], { name: lower, rankKnown: true });
+    for (const line of [undefined, { favoriteId: "a", spread: 3, source: "fixture" },
+      { favoriteId: "b", spread: 3, source: "fixture" }, { favoriteId: null, spread: 0, source: "fixture" }]) {
+      const live = { ...fixture, pregameLine: line };
+      assert.equal(classify(live).upset, true, `${id}: ${JSON.stringify(line)}`);
+      assert.deepEqual(viewGames(scoreboard([live], "2026-09-26"), ["upset"]).map(g => g.id), [id]);
+      assert.match(upsetExplanation(live), line?.favoriteId === "a" ? /pregame favorite/ : /rank-based upset/);
+      const final = { ...live, state: "final" };
+      assert.equal(classify(final).upset, true);
+      assert.equal(conditions(final, Date.now())["upset-final"], true, "ranked final alert still follows its existing rule");
+      assert.equal(conditions(final, Date.now())["upset-final"], conditions({ ...final, pregameLine: undefined }, Date.now())["upset-final"], "alert final rule remains independent");
+      if (line?.favoriteId === "b" || line?.spread === 0) assert.equal(gamePriority(live).upset, 0, "display category does not change line-first ordering");
+    }
+    const prior = { ...fixture, state: "upcoming", started: false, pregameLine: { favoriteId: "b", spread: 3, source: "retained" } };
+    const retained = retainFinalCategories(scoreboard([fixture], "2026-09-26"), scoreboard([prior], "2026-09-26")).games[0];
+    assert.equal(retained.pregameLine.favoriteId, "b");
+    assert.equal(classify(retained).upset, true);
+  }
+});
+
+test("ORD-015 any validated unranked pregame favorite can qualify for displayed Upsets", () => {
+  const g = match("mac-mountain-west", { conference: "15", otherConference: "17", score: 7, otherScore: 21 });
+  g.teams.forEach(team => { team.rank = null; team.rankKnown = true; });
+  assert.equal(classify(g).upset, false, "no line or ranking does not invent a favorite");
+  assert.equal(gameExpectation(g), null);
+  g.pregameLine = { favoriteId: "a", spread: 6.5, source: "validated ESPN pregame line" };
+  assert.equal(gameExpectation(g), null, "ordering does not add unrelated unranked games");
+  assert.equal(gamePriority(g).upset, 0);
+  assert.equal(classify(g).upset, true);
+  assert.match(upsetExplanation(g), /pregame favorite/);
+  assert.deepEqual(viewGames(scoreboard([g]), ["upset"]).map(game => game.id), [g.id]);
+  assert.equal(conditions(g, Date.now())["ranked-trailing-fourth"], false);
+  assert.equal(conditions({ ...g, state: "final" }, Date.now())["upset-final"], false);
+  g.pregameLine = { favoriteId: "b", spread: 6.5, source: "validated ESPN pregame line" };
+  assert.equal(classify(g).upset, false, "a line favoring the leader does not create a watch");
+  g.pregameLine = { favoriteId: null, spread: 0, source: "validated pick'em" };
+  assert.equal(classify(g).upset, false);
+  for (const invalid of [
+    { favoriteId: "a", spread: 0, source: "invalid" },
+    { favoriteId: "not-in-matchup", spread: 3, source: "invalid" },
+    { favoriteId: "a", spread: Infinity, source: "invalid" },
+  ]) {
+    g.pregameLine = invalid;
+    assert.equal(gameExpectation(g), null);
+    assert.equal(classify(g).upset, false, "malformed lines do not establish a display favorite");
+  }
+});
+
+test("intraconference unranked SEC favorites and validated unrelated favorites qualify without rank", () => {
   const g = match("sec", { sec: true, score: 7, otherScore: 21, pregameLine: { favoriteId: "a", spread: 3, source: "ESPN" } });
   g.teams[1].conferenceId = "8";
   assert.equal(classify(g).upset, true);
   g.teams[0].conferenceId = "15"; g.teams[1].conferenceId = "17";
-  assert.equal(classify(g).upset, false);
+  assert.equal(classify(g).upset, true, "validated favorite evidence applies across conferences");
+  delete g.pregameLine;
+  assert.equal(classify(g).upset, false, "absent line and rankings do not invent a watch");
   g.teams[0].rank = 20;
   assert.equal(classify(g).upset, true, "ranked teams get credit regardless of conference");
 });
@@ -134,7 +191,7 @@ test("expanded list eligibility does not redefine ranked push triggers or their 
   }
   assert.equal(conditions({ ...g, state: "final" }, Date.now())["upset-final"], false);
   g.teams[0].rank = 5; g.pregameLine.favoriteId = "b";
-  assert.equal(classify(g).upset, false); assert.equal(conditions(g, Date.now())["ranked-trailing-fourth"], true);
+  assert.equal(classify(g).upset, true); assert.equal(conditions(g, Date.now())["ranked-trailing-fourth"], true);
   assert.ok(transitions(null, g, Date.now()).some(e => e.id === "sec:ranked-trailing-fourth"));
 });
 
@@ -430,7 +487,7 @@ test("ORD-012 issue 74 rank disruption is line-independent and labels remain tru
     assert.ok(gamePriority(iowa).disruption > 0);
     if (!line || line.spread < 7) for (const input of [[iowa, ohio], [ohio, iowa]]) assert.equal(sortGames(input)[0].id, iowa.id);
     if (line?.favoriteId === "b" || line?.spread === 0) {
-      assert.equal(gamePriority(iowa).upset, 0); assert.equal(upsetExplanation(iowa), null);
+      assert.equal(gamePriority(iowa).upset, 0); assert.match(upsetExplanation(iowa), /rank-based upset/);
     } else assert.match(upsetExplanation(iowa), line ? /pregame favorite/ : /rank-based upset/);
   }
 });

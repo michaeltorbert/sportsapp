@@ -5,6 +5,8 @@ const { parsePregameLine, classifyPregameEvidence, summaryPregameLine, enrichPre
 const { normalizeScoreboard } = await bundle("lib/espn-data.ts");
 const { loadScores } = await bundle("lib/score-client.ts");
 const { gamePriority } = await bundle("lib/watch-priority.ts");
+const { classify } = await bundle("lib/football.ts");
+const { upsetCounts } = await bundle("lib/scoreboard-views.ts");
 const { retainExpectation, meaningfulUpset } = await bundle("services/alerts/expectation.ts");
 
 function odds(changes = {}) {
@@ -123,6 +125,34 @@ test("first visit after kickoff obtains a pregame line without losing scores; co
   assert.equal(failed.games[0].pregameLine, undefined); assert.deepEqual(failed.games[0].teams.map(t => t.score), [21, 7]);
 });
 
+test("ORD-015 first visit after kickoff recovers an unranked non-ACC/SEC favorite", async () => {
+  const live = event({ status: { period: 4, clock: 120, type: { name: "STATUS_IN_PROGRESS", state: "in" } } });
+  delete live.competitions[0].odds;
+  live.competitions[0].competitors[0].team.conferenceId = "15";
+  live.competitions[0].competitors[1].team.conferenceId = "17";
+  live.competitions[0].competitors[0].score = "21";
+  live.competitions[0].competitors[1].score = "7";
+  const normalized = normalizeScoreboard({ events: [live] }, "2026-09-06").games[0];
+  assert.equal(normalized.pregameLine, undefined);
+  assert.equal(classify(normalized).upset, false, "unranked game without a line has no upset evidence");
+  let summaries = 0;
+  const fetcher = async url => {
+    if (url.includes("/summary?")) { summaries++; return Response.json(summary(normalized)); }
+    return Response.json({ events: [live] });
+  };
+  const board = await loadScores("2026-09-06", new AbortController().signal, fetcher);
+  const recovered = board.games[0];
+  assert.equal(summaries, 1);
+  assert.equal(recovered.pregameLine.favoriteId, "b");
+  assert.equal(classify(recovered).upset, true);
+  assert.deepEqual(upsetCounts(board), { brewing: 1, total: 1 });
+  assert.equal(gamePriority(recovered).upset, 0, "display expansion does not change ordering");
+  assert.deepEqual(recovered.teams.map(team => team.score), [21, 7]);
+  const again = await loadScores("2026-09-06", new AbortController().signal, fetcher);
+  assert.equal(again.games[0].pregameLine.favoriteId, "b");
+  assert.equal(summaries, 1, "a completed summary lookup remains cached");
+});
+
 test("a game paused after kickoff can recover its line without triggering live urgency", async () => {
   const paused = game({ id: "paused", state: "delayed", started: true });
   const board = await enrichPregameLines(scoreboard([paused]), new AbortController().signal, async () => Response.json(summary(paused)));
@@ -156,6 +186,42 @@ test("optional line requests are bounded and caller cancellation cannot retain t
   const pending = enrichPregameLines(scoreboard([game({ id: "canceled" })]), c.signal, () => new Promise(r => { resolve = r; }));
   c.abort(); resolve(Response.json(summary(game({ id: "canceled" }))));
   assert.equal((await pending).games[0].pregameLine, undefined);
+});
+
+test("ranked and ACC games get first live lookup slots without closing recovery to other games", async () => {
+  const unrelated = Array.from({ length: 12 }, (_, i) => game({ id: `queue-unranked-${i}` }));
+  for (const g of unrelated) g.teams.forEach(team => { team.rank = null; team.rankKnown = true; team.conferenceId = "15"; });
+  const ranked = game({ id: "queue-ranked" });
+  const acc = game({ id: "queue-acc" });
+  acc.teams.forEach(team => { team.rank = null; team.rankKnown = true; team.conferenceId = "15"; });
+  acc.teams[0].conferenceId = "1";
+  const games = [...unrelated, ranked, acc], byId = new Map(games.map(g => [g.id, g]));
+  for (const ordered of [games, [...games].reverse()]) {
+    const calls = [];
+    const fetcher = async url => {
+      const id = new URL(url).searchParams.get("event"); calls.push(id);
+      return Response.json(summary(byId.get(id)));
+    };
+    const board = await enrichPregameLines(scoreboard(ordered), new AbortController().signal, fetcher);
+    assert.equal(calls.length, 12);
+    assert.ok(calls.includes(ranked.id));
+    assert.ok(calls.includes(acc.id));
+    assert.equal(board.games.filter(g => g.pregameLine).length, 12);
+    assert.equal(board.games.filter(g => g.id.startsWith("queue-unranked-") && g.pregameLine).length, 10,
+      "remaining request slots still recover unrelated favorites");
+  }
+});
+
+test("a full preferred-line cache still displays a newly recovered unrelated line", async () => {
+  const preferred = Array.from({ length: 250 }, (_, i) => game({ id: `preferred-cache-${i}` }));
+  const unrelated = game({ id: "unrelated-cache-line" });
+  unrelated.teams.forEach(team => { team.rank = null; team.rankKnown = true; team.conferenceId = "15"; });
+  const byId = new Map([...preferred, unrelated].map(g => [g.id, g]));
+  const fetcher = async url => Response.json(summary(byId.get(new URL(url).searchParams.get("event"))));
+  for (let index = 0; index < preferred.length; index += 12)
+    await enrichPregameLines(scoreboard(preferred.slice(index, index + 12)), new AbortController().signal, fetcher);
+  const board = await enrichPregameLines(scoreboard([unrelated]), new AbortController().signal, fetcher);
+  assert.equal(board.games[0].pregameLine.favoriteId, "b", "cache eviction cannot hide the current board's valid line");
 });
 
 test("failed summary requests yield slots to healthy later games and back off briefly", async t => {

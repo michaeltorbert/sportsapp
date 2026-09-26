@@ -11,21 +11,37 @@ export function teamRank(team: Team) {
 }
 export function preferredConference(team: Team) { return team.conferenceId === ACC || team.conferenceId === SEC; }
 
+function rankExpectation(game: Game): Expectation | null {
+  const [a, b] = game.teams, ar = teamRank(a), br = teamRank(b);
+  if ((a.rankKnown !== true && ar === null) || (b.rankKnown !== true && br === null)) return null;
+  if (ar !== null && (br === null || ar < br)) return { team: a, opponent: b, basis: "rank", spread: null };
+  if (br !== null && (ar === null || br < ar)) return { team: b, opponent: a, basis: "rank", spread: null };
+  return null;
+}
+
+function lineExpectation(game: Game): Expectation | null {
+  const [away, home] = game.teams;
+  const line = game.pregameLine;
+  const favorite = game.teams.find(team => team.id === line?.favoriteId);
+  if (!favorite || !line || !Number.isFinite(line.spread) || line.spread <= 0) return null;
+  return { team: favorite, opponent: favorite === away ? home : away, basis: "line", spread: line.spread };
+}
+
 /** Pregame lines take precedence over rank; a pick'em supplies no favorite. */
 export function gameExpectation(game: Game): Expectation | null {
   const [a, b] = game.teams, line = game.pregameLine;
   if (line) {
     if (line.favoriteId === null && line.spread === 0) return null;
-    const favorite = game.teams.find(t => t.id === line.favoriteId);
-    if (favorite && Number.isFinite(line.spread) && line.spread > 0) {
-      if (!preferredConference(favorite) && !game.teams.some(t => teamRank(t) !== null)) return null;
-      return { team: favorite, opponent: favorite === a ? b : a, basis: "line", spread: line.spread };
+    const expected = lineExpectation(game);
+    if (expected) {
+      if (!preferredConference(expected.team) && !game.teams.some(t => teamRank(t) !== null)) return null;
+      return expected;
     }
   }
+  const ranked = rankExpectation(game);
+  if (ranked) return ranked;
   const ar = teamRank(a), br = teamRank(b);
   if ((a.rankKnown !== true && ar === null) || (b.rankKnown !== true && br === null)) return null;
-  if (ar !== null && (br === null || ar < br)) return { team: a, opponent: b, basis: "rank", spread: null };
-  if (br !== null && (ar === null || br < ar)) return { team: b, opponent: a, basis: "rank", spread: null };
   // A conference watch is not a claimed betting favorite.
   if (ar !== null || br !== null || a.rankKnown !== true || b.rankKnown !== true) return null;
   for (const [team, opponent] of [[a, b], [b, a]]) {
@@ -37,8 +53,11 @@ export function gameExpectation(game: Game): Expectation | null {
 
 export function upsetWatch(game: Game) {
   if (game.state !== "live" && game.state !== "final" && !(game.state === "delayed" && game.started)) return null;
-  const expected = gameExpectation(game);
-  return expected && expected.team.score !== null && expected.opponent.score !== null && expected.team.score < expected.opponent.score ? expected : null;
+  const line = lineExpectation(game);
+  const trailing = (candidate: Expectation | null) => candidate && candidate.team.score !== null && candidate.opponent.score !== null && candidate.team.score < candidate.opponent.score ? candidate : null;
+  // Display categories count a trailing favorite OR a trailing known higher-ranked team.
+  // Ordering and alerts continue to use their own expectation and eligibility rules.
+  return trailing(line) || trailing(line ? null : gameExpectation(game)) || trailing(rankExpectation(game));
 }
 
 /** Preserve the original notification contract independently of watchlist tuning. */

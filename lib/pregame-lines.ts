@@ -68,14 +68,16 @@ export function summaryPregameLine(raw: unknown, game: Game) {
   return parsePregameLine(parsed.data.pickcenter, away.id, home.id);
 }
 
-type Cached = { line?: PregameLine; expires: number };
+type Cached = { line?: PregameLine; expires: number; preferred: boolean };
 // Finished public results only: no in-flight promise is shared across requests.
 type Attempt = { order: number; retryAfter: number };
 type Completed = { line?: PregameLine; timing: HalftimeObservation; expires: number };
 type EnrichmentState = { cache: Map<string, Cached>; attempts: Map<string, Attempt>; completed: Map<string, Completed>; halftimeAttempts: Map<string, Attempt>; claims: Map<string, symbol>; sequence: number };
 const states = new WeakMap<typeof fetch, EnrichmentState>();
 const key = halftimeKey;
-const oddsEligible = (game: Game) => game.teams.some(t => preferredConference(t) || teamRank(t) !== null);
+// Recovery is open to every scoreboard game; this only prioritizes scarce
+// lookup and cache slots for the games the original watchlist already tracked.
+const oddsPreferred = (game: Game) => game.teams.some(team => preferredConference(team) || teamRank(team) !== null);
 
 /** Optional enrichment has a 1.5s total budget; failed odds never discard scores. */
 export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal, fetcher: typeof fetch = fetch, generation = nextHalftimeGeneration(), observationEpoch = halftimeEpoch()): Promise<Scoreboard> {
@@ -84,16 +86,30 @@ export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal,
   const state = states.get(fetcher) || { cache: new Map<string, Cached>(), attempts: new Map<string, Attempt>(), completed: new Map<string, Completed>(), halftimeAttempts: new Map<string, Attempt>(), claims: new Map<string, symbol>(), sequence: 0 };
   states.set(fetcher, state);
   const { cache, attempts, completed, halftimeAttempts, claims } = state;
+  const freshLines = new Map<string, PregameLine>();
   const rememberLine = (game: Game, line: PregameLine | undefined, observedAt: number) => {
-    if (!oddsEligible(game)) return;
-    const known = cache.get(key(game));
-    // Reuse may become odds-eligible after another scope supplies ranking or
-    // conference metadata. Promote its evidence without restamping its TTL.
+    const id = key(game), known = cache.get(id), now = Date.now();
+    const preferred = !!known?.preferred || oddsPreferred(game);
     // A retained unexpired line stays authoritative: halftime extras must not
     // swap the pregame favorite for a provider's in-game revision.
-    if (!known?.line || known.expires <= Date.now())
-      cache.set(key(game), { line, expires: observedAt + (line ? 6 * 3600000 : 300000) });
-    if (cache.size > 250) cache.delete(cache.keys().next().value!);
+    if (known?.line && known.expires > now) {
+      known.preferred = preferred;
+      freshLines.set(id, known.line);
+      return;
+    }
+    cache.delete(id);
+    cache.set(id, { line, expires: observedAt + (line ? 6 * 3600000 : 300000), preferred });
+    if (line) freshLines.set(id, line);
+    if (cache.size > 250) {
+      // Evict expired and empty evidence first, then unrelated lines. An
+      // all-preferred cache remains bounded by evicting its oldest entry.
+      let victim: string | undefined, lowest = Infinity;
+      for (const [candidate, value] of cache) {
+        const retention = value.expires <= now ? -1 : value.line ? (value.preferred ? 2 : 1) : 0;
+        if (retention < lowest) { victim = candidate; lowest = retention; }
+      }
+      if (victim) cache.delete(victim);
+    }
   };
   for (const [id, value] of completed) if (value.expires <= Date.now()) completed.delete(id);
   const games = [...new Map(board.games.map(game => [key(game), game])).values()];
@@ -101,12 +117,15 @@ export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal,
   for (const game of games) {
     const value = completed.get(key(game));
     if (value) observeHalftime(game, value.timing);
+    // A later scope can add ranking or conference evidence to an existing line.
+    const cached = cache.get(key(game));
+    if (cached && oddsPreferred(game)) cached.preferred = true;
   }
   const candidates = games.filter(g => !g.pregameLine && (g.state === "live" || g.state === "final" || (g.state === "delayed" && g.started))
-    && oddsEligible(g)
     && (attempts.get(key(g))?.retryAfter ?? 0) <= Date.now()
     && (!cache.has(key(g)) || cache.get(key(g))!.expires <= Date.now()))
     .sort((a, b) => Number(b.state === "live") - Number(a.state === "live")
+      || Number(oddsPreferred(b)) - Number(oddsPreferred(a))
       || (attempts.get(key(a))?.order ?? 0) - (attempts.get(key(b))?.order ?? 0) || a.id.localeCompare(b.id)).slice(0, 12);
   const selected = new Set(candidates.map(key));
   // A failed summary backs off for a minute on either queue, so extras are
@@ -180,7 +199,8 @@ export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal,
     } finally { clearTimeout(timer); parent.removeEventListener("abort", abort); }
   }
   return { ...board, games: board.games.map(game => {
-    const cached = cache.get(key(game));
-    return !game.pregameLine && oddsEligible(game) && cached?.line && cached.expires > Date.now() ? { ...game, pregameLine: cached.line } : game;
+    const id = key(game), cached = cache.get(id);
+    const line = freshLines.get(id) || (cached && cached.expires > Date.now() ? cached.line : undefined);
+    return !game.pregameLine && line ? { ...game, pregameLine: line } : game;
   }) };
 }
