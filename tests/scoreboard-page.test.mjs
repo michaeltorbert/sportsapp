@@ -120,6 +120,11 @@ test("stale score cards remain visible while counts are unknown", () => {
   assert.match(stale.html, /class="tab-count upset-count" aria-hidden="true">– \(–\)/);
   assert.match(stale.html, /class="filter-tab filter-watch"[^>]*><span>All<\/span><span class="tab-count">–<\/span>/);
   assert.match(stale.html, /Waiting for a fresh score update/);
+  const help = render(["upset"], { stale: true, showHelp: true }).html;
+  assert.match(help, /When scores are stale, offline, or more than 90 seconds old/);
+  assert.match(help, /previously loaded game cards remain visible with a warning/);
+  assert.match(help, /category counts show dashes instead of fresh numbers/);
+  assert.match(help, /Counts return after a successful refresh/);
 });
 
 test("Day keeps manual date navigation and the All-only focused game; Week hides daily controls for every selection", () => {

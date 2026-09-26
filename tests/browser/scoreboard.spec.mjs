@@ -204,6 +204,10 @@ test("a failed refresh preserves loaded scores and healthy retry removes the war
   await expectUpsetCount(page, 2, 2);
   await category(page, "Upsets").tap();
   await expect(page.locator("#game-recovered-rank-watch")).toBeVisible();
+  await page.getByRole("button", { name: "How this scoreboard works" }).tap();
+  await expect(page.locator(".help-body")).toContainText("When scores are stale, offline, or more than 90 seconds old");
+  await expect(page.locator(".help-body")).toContainText("category counts show dashes instead of fresh numbers");
+  await expect(page.locator(".help-body")).toContainText("Counts return after a successful refresh");
 });
 
 test("fresh open after Eastern midnight holds unfinished yesterday then automatically rolls forward", async ({ page, harness }) => {
