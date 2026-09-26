@@ -189,6 +189,7 @@ test("validated pregame lines appear inline with the favorite and pick’em rema
   assert.match(favoriteCard, /Team b favored by 7\.5 points before kickoff, ESPN/);
   assert.doesNotMatch(favoriteCard, /<small>Pregame<\/small>/);
   assert.match(pickemCard, /class="pickem-line"[^>]*>.*?PK<\/span><\/span>/);
+  assert.doesNotMatch(pickemCard, /Pregame PK/);
   assert.doesNotMatch(pickemCard, /class="team-line"/);
   assert.doesNotMatch(missingCard, /class="(?:team-line|pickem-line)"/);
   for (const state of ["live", "final"]) {
@@ -202,6 +203,11 @@ test("validated pregame lines appear inline with the favorite and pick’em rema
   assert.match(render([], { boards }).html, /class="team-line-visible"[^>]*><small>Pregame<\/small><span>−7\.5<\/span>/);
   boards.daily = scoreboard([game({ id: "live-pickem-before-clock", state: "live", started: false, period: 0, pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
   assert.match(render([], { boards }).html, /class="pickem-line"[^>]*>.*?Pregame PK<\/span>/);
+  for (const [started, cue] of [[true, true], [false, false]]) {
+    boards.daily = scoreboard([game({ id: `delayed-${started}`, state: "delayed", started, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } })]);
+    const delayed = render([], { boards }).html;
+    assert.equal(delayed.includes("<small>Pregame</small>"), cue);
+  }
 });
 
 test("retained upset finals distinguish a comeback from a completed conference upset", () => {
