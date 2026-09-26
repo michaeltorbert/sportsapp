@@ -31,7 +31,7 @@ for (const width of [390, 320]) test(`compact default geometry at ${width}px`, a
   await page.screenshot({ path: info.outputPath(`compact-${width}.png`), fullPage: true, animations: 'disabled' });
 });
 
-test('320px row keeps records, betting line, and score readable together', async ({ page, harness }, info) => {
+test('320px pregame row keeps records and score readable with the line in details', async ({ page, harness }, info) => {
   const matchup = event('record-line', { state: 'upcoming', rank: 5 });
   const [away, home] = matchup.competitions[0].competitors;
   away.team.shortDisplayName = 'Mississippi State';
@@ -46,13 +46,16 @@ test('320px row keeps records, betting line, and score readable together', async
   await harness.open({ path: '/?date=2026-09-05' });
   const row = page.locator('#game-record-line');
   await expect(row.locator('.team-record')).toHaveText(['3-1', '2-2']);
-  await expect(row.locator('.team-line-visible')).toHaveText('−14.5');
-  await expect(row.locator('.team-line-visible')).not.toContainText('Pregame');
+  await expect(row.locator('summary')).not.toContainText('−14.5');
+  await expect(row.locator('.detail-line')).toBeHidden();
+  await row.locator('summary').click();
+  await expect(row.locator('.detail-line')).toContainText('North Carolina −14.5');
+  await expect(row.locator('.detail-line')).toContainText('ESPN');
   await geometry(page);
-  await page.screenshot({ path: info.outputPath('records-line-320.png'), fullPage: true, animations: 'disabled' });
+  await page.screenshot({ path: info.outputPath('pregame-line-in-details-320.png'), fullPage: true, animations: 'disabled' });
 });
 
-test('after kickoff the line moves below the collapsed score row', async ({ page, harness }, info) => {
+test('after kickoff the line remains below the collapsed score row', async ({ page, harness }, info) => {
   const withRecords = game => {
     const [away, home] = game.competitions[0].competitors;
     away.team.shortDisplayName = 'Mississippi State';
@@ -70,12 +73,16 @@ test('after kickoff the line moves below the collapsed score row', async ({ page
   await page.setViewportSize({ width: 320, height: 700 });
   await harness.open({ path: '/?date=2026-09-05' });
   const row = page.locator('#game-line-transition');
-  await expect(row.locator('summary .team-line-visible')).toHaveText('−7.5');
+  await expect(row.locator('summary')).not.toContainText('−7.5');
+  await expect(row.locator('.detail-line')).toBeHidden();
+  await row.locator('summary').click();
+  await expect(row.locator('.detail-line')).toContainText('North Carolina −7.5');
+  await row.locator('summary').click();
 
   harness.state.events = [withRecords(event('line-transition', { state: 'live', rank: 5 }))];
   await page.getByRole('button', { name: 'Refresh scores' }).click();
   await expect(row.locator('.game-status')).toContainText('4th');
-  await expect(row.locator('summary .team-line, summary .pickem-line')).toHaveCount(0);
+  await expect(row.locator('summary')).not.toContainText('−7.5');
   await expect(row.locator('summary .team-record')).toHaveText(['3-1', '2-2']);
   await expect(row.locator('.detail-line')).toBeHidden();
   await row.locator('summary').click();
@@ -86,7 +93,7 @@ test('after kickoff the line moves below the collapsed score row', async ({ page
   harness.state.events = [withRecords(event('line-transition', { state: 'final', rank: 5 }))];
   await page.getByRole('button', { name: 'Refresh scores' }).click();
   await expect(row.locator('.game-status')).toHaveText('Final');
-  await expect(row.locator('summary .team-line, summary .pickem-line')).toHaveCount(0);
+  await expect(row.locator('summary')).not.toContainText('−7.5');
   await expect(row.locator('.detail-line')).toContainText('North Carolina −7.5');
   await geometry(page);
 });
