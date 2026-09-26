@@ -30,7 +30,7 @@ This is the cumulative product contract and conflict log. The numeric implementa
 ### 2026-09-26 — ORD-014 show records on visible games
 
 - Source: the user's request to show each team's record and subsequent challenge to the broad record-suppression rationale. Records are secondary text next to each shown team's identity. ESPN's overall record is used as supplied; missing records are omitted.
-- Supersession: ORD-014 replaces only the global record-suppression clause of ORD-010. Hidden Duke games remain hidden under all existing rules. A shown Duke team's record may reflect an earlier hidden result; the user specifically questioned treating that possibility as a reason to suppress every team's record.
+- Supersession: ORD-014 replaces only the global record-suppression clause of ORD-010. Hidden Duke games remain hidden under all existing rules. A shown Duke team's record, or a later record for an opponent from a hidden Duke game, can reflect that hidden result. This indirect possibility is accepted so every visible game can show team records, as the user requested after questioning the blanket suppression.
 - Ordering, eligibility, counts, alerts, pinning, and historical preference rules are unchanged.
 
 ### 2026-09-19 — ORD-012 Power Four relevance, rank disruption and slate alert priority
