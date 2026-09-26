@@ -198,6 +198,10 @@ test("validated pregame lines appear inline with the favorite and pick’em rema
   }
   boards.daily = scoreboard([game({ id: "live-pickem", pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
   assert.match(render([], { boards }).html, /class="pickem-line"[^>]*>.*?Pregame PK<\/span>/);
+  boards.daily = scoreboard([game({ id: "live-before-clock", state: "live", started: false, period: 0, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } })]);
+  assert.match(render([], { boards }).html, /class="team-line-visible"[^>]*><small>Pregame<\/small><span>−7\.5<\/span>/);
+  boards.daily = scoreboard([game({ id: "live-pickem-before-clock", state: "live", started: false, period: 0, pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
+  assert.match(render([], { boards }).html, /class="pickem-line"[^>]*>.*?Pregame PK<\/span>/);
 });
 
 test("retained upset finals distinguish a comeback from a completed conference upset", () => {
