@@ -106,6 +106,15 @@ test("ORD-014 any validated unranked pregame favorite can qualify for displayed 
   assert.equal(classify(g).upset, false, "a line favoring the leader does not create a watch");
   g.pregameLine = { favoriteId: null, spread: 0, source: "validated pick'em" };
   assert.equal(classify(g).upset, false);
+  for (const invalid of [
+    { favoriteId: "a", spread: 0, source: "invalid" },
+    { favoriteId: "not-in-matchup", spread: 3, source: "invalid" },
+    { favoriteId: "a", spread: Infinity, source: "invalid" },
+  ]) {
+    g.pregameLine = invalid;
+    assert.equal(gameExpectation(g), null);
+    assert.equal(classify(g).upset, false, "malformed lines do not establish a display favorite");
+  }
 });
 
 test("intraconference unranked SEC favorites and validated unrelated favorites qualify without rank", () => {

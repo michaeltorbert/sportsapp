@@ -84,16 +84,42 @@ test("Upsets shows active and total watches without overflowing a 320px viewport
   expect(box.height).toBeGreaterThanOrEqual(40);
 });
 
-test("September 26 known-ranked deficits appear in Day Upsets after refresh", async ({ page, harness }) => {
-  const oleMissFlorida = event("401856699", { date: "2026-09-26T19:30:00Z", rank: 4, scores: [3, 10] });
-  const iowaMichigan = event("401858463", { date: "2026-09-26T19:30:00Z", rank: 17, scores: [7, 10] });
-  oleMissFlorida.competitions[0].competitors[1].curatedRank.current = 21;
-  iowaMichigan.competitions[0].competitors[1].curatedRank.current = 18;
-  harness.state.events = [oleMissFlorida, iowaMichigan];
+test("September 26 ranked deficits enter Day Upsets after retaining contrary pregame lines", async ({ page, harness }) => {
+  const scenarios = [
+    ["401856699", 4, 21, [3, 10]],
+    ["401858463", 17, 18, [7, 10]],
+  ];
+  const makeEvent = ([id, higherRank, lowerRank, scores], state) => {
+    const result = event(id, { date: "2026-09-26T19:30:00Z", state, rank: higherRank, scores });
+    const competitors = result.competitions[0].competitors;
+    competitors[1].curatedRank.current = lowerRank;
+    if (state === "upcoming") result.competitions[0].odds = [{
+      spread: -3, provider: { id: "100", name: "ESPN pregame", priority: 1 },
+      awayTeamOdds: { favorite: false, team: { id: competitors[0].id } },
+      homeTeamOdds: { favorite: true, team: { id: competitors[1].id } },
+    }];
+    return result;
+  };
+  harness.state.events = scenarios.map(scenario => makeEvent(scenario, "upcoming"));
   await harness.open({ now: "2026-09-26T21:06:00Z", path: "/?date=2026-09-26&cats=upset&period=day" });
+  await expectUpsetCount(page, 0, 0);
+  const retainedFavorites = () => page.evaluate(() => Object.fromEntries(
+    JSON.parse(localStorage.getItem("ss:board:2026-09-26:2026-09-26") || "{}").games?.map(game => [game.id, game.pregameLine?.favoriteId]) || []));
+  expect(await retainedFavorites()).toEqual({
+    "401856699": "401856699-home", "401858463": "401858463-home",
+  });
+  harness.state.events = scenarios.map(scenario => makeEvent(scenario, "live"));
+  await page.getByRole("button", { name: "Refresh scores" }).tap();
   await expectUpsetCount(page, 2, 2);
-  await expect(page.locator("#game-401856699")).toBeVisible();
-  await expect(page.locator("#game-401858463")).toBeVisible();
+  expect(await retainedFavorites()).toEqual({
+    "401856699": "401856699-home", "401858463": "401858463-home",
+  });
+  for (const [id] of scenarios) {
+    const card = page.locator(`#game-${id}`);
+    await expect(card).toBeVisible();
+    await card.locator("summary").tap();
+    await expect(card.locator(".upset-reason")).toContainText("rank-based upset");
+  }
 });
 
 test("legacy tab links keep their period and explicit category links restore multi-select on either period", async ({ page, harness }) => {
@@ -163,6 +189,8 @@ test("a failed refresh preserves loaded scores and healthy retry removes the war
   expect(await cards(page).allTextContents()).toEqual(before);
   await expect(category(page, "All").locator(".tab-count")).toHaveText("–");
   await expect(category(page, "Upsets")).toHaveAttribute("aria-label", "Upsets, counts unavailable while scores are stale");
+  for (const label of ["All", "ACC", "Top 25", "One score"])
+    await expect(category(page, label)).toHaveAttribute("aria-label", `${label}, count unavailable while scores are stale`);
   await expect(category(page, "Upsets").locator(".tab-count")).toHaveText("– (–)");
   await period(page, "Week").tap();
   await category(page, "Top 25").tap();

@@ -115,6 +115,8 @@ test("stale score cards remain visible while counts are unknown", () => {
   const fresh = render(["upset"]); const stale = render(["upset"], { stale: true });
   assert.deepEqual(cardIds(stale.html), cardIds(fresh.html));
   assert.match(stale.html, /Upsets, counts unavailable while scores are stale/);
+  for (const label of ["All", "ACC", "Top 25", "One score"])
+    assert.match(stale.html, new RegExp(`aria-label="${label}, count unavailable while scores are stale"`));
   assert.match(stale.html, /class="tab-count upset-count" aria-hidden="true">– \(–\)/);
   assert.match(stale.html, /class="filter-tab filter-watch"[^>]*><span>All<\/span><span class="tab-count">–<\/span>/);
   assert.match(stale.html, /Waiting for a fresh score update/);
