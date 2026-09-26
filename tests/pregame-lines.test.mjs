@@ -188,6 +188,42 @@ test("optional line requests are bounded and caller cancellation cannot retain t
   assert.equal((await pending).games[0].pregameLine, undefined);
 });
 
+test("ranked and ACC games get first live lookup slots without closing recovery to other games", async () => {
+  const unrelated = Array.from({ length: 12 }, (_, i) => game({ id: `queue-unranked-${i}` }));
+  for (const g of unrelated) g.teams.forEach(team => { team.rank = null; team.rankKnown = true; team.conferenceId = "15"; });
+  const ranked = game({ id: "queue-ranked" });
+  const acc = game({ id: "queue-acc" });
+  acc.teams.forEach(team => { team.rank = null; team.rankKnown = true; team.conferenceId = "15"; });
+  acc.teams[0].conferenceId = "1";
+  const games = [...unrelated, ranked, acc], byId = new Map(games.map(g => [g.id, g]));
+  for (const ordered of [games, [...games].reverse()]) {
+    const calls = [];
+    const fetcher = async url => {
+      const id = new URL(url).searchParams.get("event"); calls.push(id);
+      return Response.json(summary(byId.get(id)));
+    };
+    const board = await enrichPregameLines(scoreboard(ordered), new AbortController().signal, fetcher);
+    assert.equal(calls.length, 12);
+    assert.ok(calls.includes(ranked.id));
+    assert.ok(calls.includes(acc.id));
+    assert.equal(board.games.filter(g => g.pregameLine).length, 12);
+    assert.equal(board.games.filter(g => g.id.startsWith("queue-unranked-") && g.pregameLine).length, 10,
+      "remaining request slots still recover unrelated favorites");
+  }
+});
+
+test("a full preferred-line cache still displays a newly recovered unrelated line", async () => {
+  const preferred = Array.from({ length: 250 }, (_, i) => game({ id: `preferred-cache-${i}` }));
+  const unrelated = game({ id: "unrelated-cache-line" });
+  unrelated.teams.forEach(team => { team.rank = null; team.rankKnown = true; team.conferenceId = "15"; });
+  const byId = new Map([...preferred, unrelated].map(g => [g.id, g]));
+  const fetcher = async url => Response.json(summary(byId.get(new URL(url).searchParams.get("event"))));
+  for (let index = 0; index < preferred.length; index += 12)
+    await enrichPregameLines(scoreboard(preferred.slice(index, index + 12)), new AbortController().signal, fetcher);
+  const board = await enrichPregameLines(scoreboard([unrelated]), new AbortController().signal, fetcher);
+  assert.equal(board.games[0].pregameLine.favoriteId, "b", "cache eviction cannot hide the current board's valid line");
+});
+
 test("failed summary requests yield slots to healthy later games and back off briefly", async t => {
   t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-09-06T20:00:00Z") });
   const games = Array.from({ length: 13 }, (_, i) => game({ id: `retry-${String(i).padStart(2, "0")}` }));

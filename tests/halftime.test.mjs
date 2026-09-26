@@ -275,11 +275,16 @@ test("CL-A1 timeout releases claims and new epochs do not wait for old work", as
   assert.equal(m.halftimeLabel(g, scoreboard([g]), false, Date.now(), true, true), "Halftime 12:54");
 });
 
-test("CL-A2 expanded line recovery respects the bounded cache under halftime pressure", async t => {
+test("CL-A2 ranked, ACC and SEC lines survive unrelated halftime cache pressure", async t => {
   t.mock.timers.enable({ apis: ["Date"], now });
-  const m = await bundle("tests/halftime-integration-entry.ts"), preferred = extraGame("cache-preferred"), byId = new Map([[preferred.id, preferred]]);
+  const m = await bundle("tests/halftime-integration-entry.ts"), ranked = extraGame("cache-ranked"), acc = extraGame("cache-acc"), sec = extraGame("cache-sec");
+  for (const [preferred, conferenceId] of [[acc, "1"], [sec, "8"]]) {
+    preferred.teams.forEach(team => { team.rank = null; team.rankKnown = true; team.conferenceId = "151"; });
+    preferred.teams[0].conferenceId = conferenceId;
+  }
+  const protectedGames = [ranked, acc, sec], byId = new Map(protectedGames.map(g => [g.id, g]));
   const requests = [], fetcher = async url => { const id = new URL(url).searchParams.get("event"); requests.push(id); return Response.json(lineSummary(byId.get(id))); };
-  await m.enrichPregameLines(scoreboard([preferred]), new AbortController().signal, fetcher);
+  await m.enrichPregameLines(scoreboard(protectedGames), new AbortController().signal, fetcher);
   const unrelated = Array.from({ length: 251 }, (_, i) => {
     const g = half(`cache-unranked-${i}`); g.teams.forEach(team => { team.rank = null; team.rankKnown = true; team.conferenceId = "151"; }); byId.set(g.id, g); return g;
   });
@@ -288,10 +293,13 @@ test("CL-A2 expanded line recovery respects the bounded cache under halftime pre
     assert.ok(board.games.every(g => g.pregameLine?.source === "halftime-source"), "valid lines remain available to unranked games");
   }
   t.mock.timers.tick(30001);
-  const missingLine = { ...preferred, halftime: false, period: 3 }; delete missingLine.pregameLine;
-  const refreshed = await m.enrichPregameLines(scoreboard([missingLine]), new AbortController().signal, fetcher);
-  assert.equal(refreshed.games[0].pregameLine.source, "halftime-source");
-  assert.equal(requests.filter(id => id === preferred.id).length, 2, "bounded cache evicts the oldest line and recovers it on demand");
+  const missingLines = protectedGames.map(preferred => { const missing = { ...preferred, halftime: false, period: 3 }; delete missing.pregameLine; return missing; });
+  const refreshed = await m.enrichPregameLines(scoreboard(missingLines), new AbortController().signal, fetcher);
+  assert.ok(refreshed.games.every(g => g.pregameLine?.source === "halftime-source"));
+  for (const preferred of protectedGames) assert.equal(requests.filter(id => id === preferred.id).length, 1, `${preferred.id} retains its six-hour line`);
+  const unrelatedAgain = await m.enrichPregameLines(scoreboard([unrelated[0]]), new AbortController().signal, fetcher);
+  assert.equal(unrelatedAgain.games[0].pregameLine.source, "halftime-source");
+  assert.equal(requests.filter(id => id === unrelated[0].id).length, 2, "unrelated entries remain recoverable after bounded eviction");
 });
 
 test("CL-A4 board sweeps emit once while preserving generation and sticky resumption", t => {
