@@ -1,6 +1,6 @@
-import { teamRank, upsetWatch } from "./upset";
+import { upsetWatch } from "./upset";
 import { gamePriority, isPinnedGame, teamRelevance } from "./watch-priority";
-import { isPowerFour, twoUnrankedGroupOfSix } from "./conference-evidence";
+import { twoUnrankedGroupOfSix } from "./conference-evidence";
 
 export type Team = { id: string; name: string; abbreviation: string; logo: string | null; score: number | null; rank: number | null; rankKnown?: boolean; record: string; conferenceId: string | null; changed?: boolean };
 export type Categories = { acc: boolean; top25: boolean; close: boolean; upset: boolean };
@@ -32,10 +32,9 @@ export function classify(game: Game): Categories {
   return { acc, top25, close: close || !!kept?.close, upset };
 }
 export function margin(game: Game) { const [a, b] = game.teams; return a.score === null || b.score === null ? Infinity : Math.abs(a.score - b.score); }
-// A final with ranked Power Four participation should not sit below a known
-// two-unranked Group-of-Six final solely because it kicked off later.
+// Known two-unranked Group-of-Six finals follow other finals, preserving
+// kickoff order among ACC and ranked Power Four games.
 function finalInterestTier(game: Game) {
-  if (game.teams.some(team => isPowerFour(team) && teamRank(team) !== null)) return 2;
   return twoUnrankedGroupOfSix(game) ? 0 : 1;
 }
 export function sortGames(games: Game[]) {

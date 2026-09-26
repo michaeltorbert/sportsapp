@@ -481,18 +481,20 @@ test("ORD-017 ranked Power Four finals precede known unranked Group-of-Six final
   const group = match("hawaii-wyoming", { state: "final", conference: "17", otherConference: "17",
     date: "2026-09-26T16:00:00Z", score: 10, otherScore: 27,
     pregameLine: { favoriteId: "a", spread: 3, source: "fixture" } });
-  const neutral = match("wake-louisville", { state: "final", conference: "1", otherConference: "1",
-    date: "2026-09-26T18:00:00Z", score: 30, otherScore: 27 });
+  const accUnranked = match("unranked-acc", { state: "final", conference: "1", otherConference: "1",
+    date: "2026-09-26T17:30:00Z", score: 30, otherScore: 27 });
+  const accRanked = match("wake-louisville", { state: "final", conference: "1", otherConference: "1",
+    otherRank: 16, date: "2026-09-26T18:00:00Z", score: 30, otherScore: 27 });
   const unknown = match("unknown-evidence", { state: "final", conference: null, otherConference: "17",
     date: "2026-09-26T17:00:00Z", score: 14, otherScore: 21 });
   unknown.teams[0].rankKnown = false;
   const pinned = match("vt-bc", { state: "final", conference: "1", otherConference: "1",
     date: "2026-09-26T20:00:00Z", score: 21, otherScore: 14 });
   pinned.teams[0].id = "259";
-  const games = [group, rankedOther, unknown, pinned, neutral, ranked];
+  const games = [group, rankedOther, unknown, pinned, accRanked, accUnranked, ranked];
   for (const input of [games, [...games].reverse()]) {
     const ordered = sortGames(input).map(game => game.id);
-    assert.deepEqual(ordered, ["vt-bc", "ole-miss-florida", "iowa-michigan", "unknown-evidence", "wake-louisville", "hawaii-wyoming"]);
+    assert.deepEqual(ordered, ["vt-bc", "unknown-evidence", "unranked-acc", "wake-louisville", "ole-miss-florida", "iowa-michigan", "hawaii-wyoming"]);
     for (const selection of [[], ["upset"], ["acc"], ["top25"], ["close"]]) {
       const subset = viewGames(scoreboard(input), selection).map(game => game.id);
       assert.deepEqual(subset, ordered.filter(id => subset.includes(id)), `shared order for ${selection}`);

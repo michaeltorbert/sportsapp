@@ -3,7 +3,7 @@
 ## 1.12.2 · 2026-09-26
 
 - Remove recovered-favorite finals from Upsets while preserving other matching categories and the completed-upset count (#97, ORD-016).
-- In Final, sort matchups with a ranked Power Four team above known two-unranked Group-of-Six matchups, after Duke/Virginia Tech pins (#98, ORD-017). Live-game priority and alerts are unchanged.
+- In Final, put known two-unranked Group-of-Six matchups after other games, following Duke/Virginia Tech pins; preserve kickoff order among the other finals (#98, ORD-017). Live-game priority and alerts are unchanged.
 
 ## 1.12.1 · 2026-09-26
 
