@@ -4,9 +4,13 @@ function duke(id, home=false, neutral=false, date='2026-09-05T23:30:00Z'){
  const t=g.competitions[0].competitors[home?1:0].team;t.id='150';t.shortDisplayName='Duke';t.abbreviation='DUKE';return g;
 }
 test('Duke reveal is per-game, persisted, shared with Guide and never bypassed by focus',async({page,harness})=>{
- harness.state.events=[duke('duke-away'),event('ordinary',{acc:true})];
+ const hidden=duke('duke-away'),ordinary=event('ordinary',{acc:true});
+ for(const team of hidden.competitions[0].competitors)team.records=[{type:'total',summary:'2-1'}];
+ for(const team of ordinary.competitions[0].competitors)team.records=[{type:'total',summary:'3-1'}];
+ harness.state.events=[hidden,ordinary];
  await harness.open({path:'/?date=2026-09-05#game-duke-away'});
  await expect(page.locator('#game-duke-away')).toHaveCount(0);
+ await expect(page.locator('#game-ordinary .team-record')).toHaveText(['3-1','3-1']);
  await page.getByRole('button',{name:'Show Duke game on Sep 5',exact:true}).click();
  await expect(page.getByRole('alertdialog')).toContainText('Show this game only?');
  await page.getByRole('button',{name:'Keep hidden',exact:true}).click();
@@ -14,6 +18,7 @@ test('Duke reveal is per-game, persisted, shared with Guide and never bypassed b
  await page.getByRole('button',{name:'Show Duke game on Sep 5',exact:true}).click();
  await page.getByRole('button',{name:'Show this game only',exact:true}).click();
  await expect(page.locator('#game-duke-away')).toBeVisible();
+ await expect(page.locator('#game-duke-away .team-record')).toHaveText(['2-1','2-1']);
  await page.reload();await expect(page.locator('#game-duke-away')).toBeVisible();
  await page.getByRole('link',{name:'Guide',exact:true}).click();
  await expect(page.locator('.guide-game[data-game="duke-away"]')).toBeVisible();

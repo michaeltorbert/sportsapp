@@ -58,9 +58,9 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .team-row { display: flex; align-items: center; gap: 11px; padding: 5px 0; min-height: 55px; }
 .team-logo { width: 40px; height: 40px; flex: 0 0 40px; display: grid; place-items: center; background: #edf1f7; border-radius: 10px; padding: 4px; color: #253348; }.team-logo img { width: 32px; height: 32px; object-fit: contain; }.team-logo span { font-size: 12px; font-weight: 800; }
 .team-identity { min-width: 0; flex: 1; }.team-name { display: flex; align-items: baseline; gap: 6px; font-size: 19px; font-weight: 660; letter-spacing: -.45px; color: #eaf0f9; line-height: 1.22; }.team-label { min-width: 0; overflow-wrap: anywhere; }.team-line, .pickem-line { flex: 0 0 auto; color: #b9d58d; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0; white-space: nowrap; }
-.team-line-visible { display: inline-flex; align-items: baseline; gap: 3px; line-height: 1.1; }.team-line-visible small { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .25px; }
+.team-line-visible { display: inline-flex; align-items: baseline; line-height: 1.1; }
 .rank { font-size: 12px; font-weight: 700; color: #adc0dc; letter-spacing: 0; min-width: 10px; }
-.team-record { display: flex; flex-wrap: wrap; gap: 8px; color: #96a6bf; font-size: 12px; margin-top: 3px; line-height: 1.3; }.possession { color: #c4e695; }
+.team-record { display: block; width: fit-content; color: #aebcd0; font-size: 11px; font-weight: 560; font-variant-numeric: tabular-nums; line-height: 1.2; margin-top: 2px; }.possession { color: #c4e695; }
 .score { font-size: 36px; line-height: 1.1; font-weight: 760; font-variant-numeric: tabular-nums; letter-spacing: -1.6px; color: #a9b7cb; min-width: 46px; text-align: right; }.leading .score { color: #fff; }.score-changed { animation: score-flash 2.5s ease-out; }
 .upset-reason { display: flex; gap: 6px; align-items: center; padding: 3px 17px 12px; color: #ffc086; font-size: 12px; font-weight: 600; }.upset-reason svg { flex-shrink: 0; }
 .drive, .delay-note { color: #adbbcf; padding: 1px 17px 12px; font-size: 12px; }.red-zone { color: #ff9f89; }.red-zone > span { font-size: 12px; font-weight: 750; margin-right: 8px; }.delay-note { color: #d0b28e; }
@@ -265,8 +265,9 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .compact-scoreboard .team-logo { width: 22px; height: 24px; flex: 0 0 22px; border-radius: 4px; padding: 2px; }
 .compact-scoreboard .team-logo img { width: 20px; height: 20px; }
 .compact-scoreboard .team-logo span { font-size: .5rem; }
-.compact-scoreboard .team-identity { display: flex; gap: 3px; align-items: center; }
+.compact-scoreboard .team-identity { display: block; }
 .compact-scoreboard .team-name { min-width: 0; font-size: .875rem; letter-spacing: -.015em; gap: 4px; line-height: 1.25; }
+.compact-scoreboard .team-record { font-size: .625rem; margin-top: 1px; }
 .compact-scoreboard .rank { font-size: .625rem; min-width: 0; flex-shrink: 0; }
 .compact-scoreboard .possession { font-size: .55rem; flex-shrink: 0; }
 .compact-scoreboard .score { font-size: 1.375rem; min-width: 2.1ch; letter-spacing: -.03em; flex-shrink: 0; }

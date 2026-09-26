@@ -36,14 +36,16 @@ test('future default changes preserve even unseen older games and explicit futur
 test('malformed saved preferences fail closed',()=>{
  for(const raw of ['broken','{}',JSON.stringify({version:1,rules:[{from:0,mode:'show'}],overrides:{game1:'false'}})]) assert.equal(v.dukeHidden(duke(1,{neutralSite:false}),v.parseDukePreferences(raw)),true);
 });
-test('ORD-010 hiding wins over pinning, hash focus, all categories, Guide bounds and record rendering',()=>{
+test('ORD-010 hiding wins over pinning, hash focus, all categories and Guide bounds while shown records remain',()=>{
  const d=duke(0,{date:'2026-09-05T13:00Z'}),other=game({id:'other'}),p=v.defaultDukePreferences();
  for(const games of [[d,other],[other,d]]){
   const raw=scoreboard(games),safe=v.protectDukeBoard(raw,p);
-  assert.deepEqual(safe.games.map(g=>g.id),['other']);assert.equal(safe.games[0].teams[0].record,'');assert.equal(other.teams[0].record,'0-0');
+  assert.deepEqual(safe.games.map(g=>g.id),['other']);assert.equal(safe.games[0].teams[0].record,'0-0');assert.equal(other.teams[0].record,'0-0');
   for(const filter of [[],['acc'],['top25'],['close'],['upset'],['acc','top25','close','upset']]) assert.equal(viewGames(safe,filter,false,d.id).some(g=>g.id===d.id),false);
   assert.equal(guideBoard(safe,'all').allCount,1);assert.equal(guideBoard(safe,'all').start,guideBoard(scoreboard([other]),'all').start);
  }
+ const home=duke(1,{id:'duke-home',neutralSite:false});home.teams[1].record='2-1';
+ assert.equal(v.protectDukeBoard(scoreboard([home]),p).games[0].teams[1].record,'2-1');
 });
 test('no Duke triggers or transition events in either participant position, including kickoff and final',()=>{
  for(const side of [0,1])for(const state of ['live','upcoming','final','delayed']){
