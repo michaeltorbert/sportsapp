@@ -4,6 +4,7 @@ import { bundle, game, scoreboard } from "./helpers.mjs";
 const { viewGames, upsetCounts, matchingBoard, expiredBoardKey, scoreboardScope, toggleCategory, normalizeSelection, boardKey } = await bundle("lib/scoreboard-views.ts");
 const { gamePriority } = await bundle("lib/watch-priority.ts");
 const { classify } = await bundle("lib/football.ts");
+const { upsetExplanation } = await bundle("lib/upset.ts");
 const { loadScores } = await bundle("lib/score-client.ts");
 
 test("every count describes the displayed period's board and honors Hide finals", () => {
@@ -52,6 +53,26 @@ test("ORD-014 ranked live watches and completed upsets count despite contrary re
   assert.deepEqual(viewGames(board, ["upset"]).map(g => g.id), ["iowa-michigan", "ole-miss-florida", "finished"]);
   assert.deepEqual(upsetCounts(board), { brewing: 2, total: 3 });
   assert.deepEqual(upsetCounts(board, true), { brewing: 2, total: 2 });
+});
+
+test("ORD-014 either a higher-ranked loser or favored loser counts as a completed upset", () => {
+  const result = (id, awayScore, homeScore) => {
+    const value = game({ id, state: "final" });
+    Object.assign(value.teams[0], { name: "Higher", rank: 4, rankKnown: true, score: awayScore });
+    Object.assign(value.teams[1], { name: "Lower favorite", rank: 21, rankKnown: true, score: homeScore });
+    value.pregameLine = { favoriteId: value.teams[1].id, spread: 3, source: "validated pregame line" };
+    return value;
+  };
+  const rankUpset = result("rank-upset", 3, 10);
+  const lineUpset = result("line-upset", 10, 3);
+  assert.equal(classify(rankUpset).upset, true);
+  assert.equal(classify(lineUpset).upset, true);
+  assert.match(upsetExplanation(rankUpset), /No\. 21 Lower favorite beat No\. 4 Higher · rank-based upset/);
+  assert.match(upsetExplanation(lineUpset), /No\. 4 Higher beat No\. 21 Lower favorite · pregame favorite/);
+  const board = scoreboard([rankUpset, lineUpset]);
+  assert.deepEqual(new Set(viewGames(board, ["upset"]).map(game => game.id)), new Set(["rank-upset", "line-upset"]));
+  assert.deepEqual(upsetCounts(board), { brewing: 0, total: 2 });
+  assert.deepEqual(upsetCounts(board, true), { brewing: 0, total: 0 });
 });
 
 test("ORD-011 categories toggle independently, combine with OR once per game, and All is an exclusive reset", () => {

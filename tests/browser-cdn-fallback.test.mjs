@@ -113,7 +113,7 @@ test("a prior-season date outside the CDN calendar uses hosted data instead of a
   assert.equal(calls.at(-1), "/api/scores?date=2025-09-05&end=2025-09-05&acc=0");
 });
 
-test("all three browser paths can fail, then the next poll recovers through the hosted feed", async () => {
+test("all three browser paths can fail, then a later load recovers through the hosted feed", async () => {
   let healthy = false;
   const calls = [];
   const fetcher = async (url, options) => {
