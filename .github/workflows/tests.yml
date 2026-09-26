@@ -67,8 +67,24 @@ jobs:
         include:
           - project: chromium-mobile
             engine: chromium
+            shardIndex: 1
+            shardTotal: 1
           - project: webkit-mobile
             engine: webkit
+            shardIndex: 1
+            shardTotal: 4
+          - project: webkit-mobile
+            engine: webkit
+            shardIndex: 2
+            shardTotal: 4
+          - project: webkit-mobile
+            engine: webkit
+            shardIndex: 3
+            shardTotal: 4
+          - project: webkit-mobile
+            engine: webkit
+            shardIndex: 4
+            shardTotal: 4
     env:
       WRANGLER_SEND_METRICS: 'false'
       WRANGLER_LOG_PATH: .wrangler/logs
@@ -88,12 +104,12 @@ jobs:
       - name: Install ${{ matrix.engine }}
         run: npx playwright install --with-deps ${{ matrix.engine }}
       - name: Test ${{ matrix.project }} regressions (simulated scores and push)
-        run: npm run test:browser -- --project=${{ matrix.project }}
+        run: npm run test:browser -- --project=${{ matrix.project }} --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
       - name: Save ${{ matrix.project }} evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: browser-${{ matrix.project }}-${{ github.sha }}
+          name: browser-${{ matrix.project }}-${{ matrix.shardIndex }}of${{ matrix.shardTotal }}-${{ github.sha }}
           path: |
             .wrangler/logs/
             output/playwright/

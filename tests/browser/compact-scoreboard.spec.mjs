@@ -31,10 +31,70 @@ for (const width of [390, 320]) test(`compact default geometry at ${width}px`, a
   await page.screenshot({ path: info.outputPath(`compact-${width}.png`), fullPage: true, animations: 'disabled' });
 });
 
-test('details support keyboard and touch, preserve live-to-final context and never show records', async ({ page, harness }, info) => {
+test('320px row keeps records, betting line, and score readable together', async ({ page, harness }, info) => {
+  const matchup = event('record-line', { state: 'upcoming', rank: 5 });
+  const [away, home] = matchup.competitions[0].competitors;
+  away.team.shortDisplayName = 'Mississippi State';
+  home.team.shortDisplayName = 'North Carolina';
+  away.records = [{ type: 'total', summary: '3-1' }];
+  home.records = [{ type: 'total', summary: '2-2' }];
+  matchup.competitions[0].odds = [{ spread: -14.5, provider: { name: 'ESPN' },
+    awayTeamOdds: { favorite: false, team: { id: away.team.id } },
+    homeTeamOdds: { favorite: true, team: { id: home.team.id } } }];
+  harness.state.events = [matchup];
+  await page.setViewportSize({ width: 320, height: 700 });
+  await harness.open({ path: '/?date=2026-09-05' });
+  const row = page.locator('#game-record-line');
+  await expect(row.locator('.team-record')).toHaveText(['3-1', '2-2']);
+  await expect(row.locator('.team-line-visible')).toHaveText('−14.5');
+  await expect(row.locator('.team-line-visible')).not.toContainText('Pregame');
+  await geometry(page);
+  await page.screenshot({ path: info.outputPath('records-line-320.png'), fullPage: true, animations: 'disabled' });
+});
+
+test('after kickoff the line moves below the collapsed score row', async ({ page, harness }, info) => {
+  const withRecords = game => {
+    const [away, home] = game.competitions[0].competitors;
+    away.team.shortDisplayName = 'Mississippi State';
+    home.team.shortDisplayName = 'North Carolina';
+    away.records = [{ type: 'total', summary: '3-1' }];
+    home.records = [{ type: 'total', summary: '2-2' }];
+    return game;
+  };
+  const upcoming = withRecords(event('line-transition', { state: 'upcoming', rank: 5 }));
+  const [away, home] = upcoming.competitions[0].competitors;
+  upcoming.competitions[0].odds = [{ spread: -7.5, provider: { name: 'ESPN' },
+    awayTeamOdds: { favorite: false, team: { id: away.team.id } },
+    homeTeamOdds: { favorite: true, team: { id: home.team.id } } }];
+  harness.state.events = [upcoming];
+  await page.setViewportSize({ width: 320, height: 700 });
+  await harness.open({ path: '/?date=2026-09-05' });
+  const row = page.locator('#game-line-transition');
+  await expect(row.locator('summary .team-line-visible')).toHaveText('−7.5');
+
+  harness.state.events = [withRecords(event('line-transition', { state: 'live', rank: 5 }))];
+  await page.getByRole('button', { name: 'Refresh scores' }).click();
+  await expect(row.locator('.game-status')).toContainText('4th');
+  await expect(row.locator('summary .team-line, summary .pickem-line')).toHaveCount(0);
+  await expect(row.locator('summary .team-record')).toHaveText(['3-1', '2-2']);
+  await expect(row.locator('.detail-line')).toBeHidden();
+  await row.locator('summary').click();
+  await expect(row.locator('.detail-line')).toContainText('North Carolina −7.5');
+  await expect(row.locator('.detail-line')).toContainText('ESPN');
+  await page.screenshot({ path: info.outputPath('live-line-in-details-320.png'), fullPage: true, animations: 'disabled' });
+
+  harness.state.events = [withRecords(event('line-transition', { state: 'final', rank: 5 }))];
+  await page.getByRole('button', { name: 'Refresh scores' }).click();
+  await expect(row.locator('.game-status')).toHaveText('Final');
+  await expect(row.locator('summary .team-line, summary .pickem-line')).toHaveCount(0);
+  await expect(row.locator('.detail-line')).toContainText('North Carolina −7.5');
+  await geometry(page);
+});
+
+test('details support keyboard and touch, preserve live-to-final context and show overall records', async ({ page, harness }, info) => {
   const game = event('context', { rank: 5 });
   game.competitions[0].situation = { possession: 'context-away', isRedZone: true, downDistanceText: '3rd & 2 at HOME 12' };
-  for (const team of game.competitions[0].competitors) team.records = [{ summary: 'SECRET-RECORD' }];
+  for (const team of game.competitions[0].competitors) team.records = [{ type: 'total', summary: '3-1' }];
   harness.state.events = [game];
   await harness.open({ path: '/?date=2026-09-05' });
   const row = page.locator('#game-context'), details = row.locator('details'), summary = row.locator('summary');
@@ -47,7 +107,7 @@ test('details support keyboard and touch, preserve live-to-final context and nev
   await expect(details).toHaveAttribute('open', '');
   await expect(row.getByRole('link', { name: /Open context away vs context home on ESPN/ })).toHaveAttribute('href', /espn.com/);
   await expect(row.locator('.drive')).toContainText('3rd & 2');
-  await expect(row).not.toContainText('SECRET-RECORD');
+  await expect(row.locator('.team-record')).toHaveText(['3-1', '3-1']);
   await page.screenshot({ path: info.outputPath('compact-expanded.png'), fullPage: true, animations: 'disabled' });
   harness.state.events = [event('context', { rank: 5, state: 'final', scores: [28, 21] })];
   await page.clock.fastForward(31_000);

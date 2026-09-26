@@ -16,8 +16,9 @@ test("browser CI runs engines on independent runners and retains crash logs", ()
   assert.match(workflow, /browser:\n    runs-on: ubuntu-latest/);
   assert.match(workflow, /- project: chromium-mobile\n            engine: chromium/);
   assert.match(workflow, /- project: webkit-mobile\n            engine: webkit/);
-  assert.match(workflow, /npm run test:browser -- --project=\$\{\{ matrix\.project \}\}/);
-  assert.match(workflow, /browser-\$\{\{ matrix\.project \}\}-\$\{\{ github\.sha \}\}/);
+  for (const index of [1, 2, 3, 4]) assert.match(workflow, new RegExp(`- project: webkit-mobile\\n            engine: webkit\\n            shardIndex: ${index}\\n            shardTotal: 4`));
+  assert.match(workflow, /npm run test:browser -- --project=\$\{\{ matrix\.project \}\} --shard=\$\{\{ matrix\.shardIndex \}\}\/\$\{\{ matrix\.shardTotal \}\}/);
+  assert.match(workflow, /browser-\$\{\{ matrix\.project \}\}-\$\{\{ matrix\.shardIndex \}\}of\$\{\{ matrix\.shardTotal \}\}-\$\{\{ github\.sha \}\}/);
   assert.match(workflow, /fail-fast: false/);
   assert.doesNotMatch(workflow, /continue-on-error:/);
   assert.doesNotMatch(workflow, /mv output\/playwright\/results/);
