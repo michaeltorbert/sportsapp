@@ -63,7 +63,7 @@ test("Florida–ECU can qualify without ranks, while absent or contrary evidence
   }
 });
 
-test("ORD-014 September 26 ranked games qualify across absent, opposite and pickem lines", () => {
+test("ORD-015 September 26 ranked games qualify across absent, opposite and pickem lines", () => {
   for (const [id, higher, lower, higherRank, lowerRank, higherScore, lowerScore] of [
     ["401856699", "Ole Miss", "Florida", 4, 21, 3, 10],
     ["401858463", "Iowa", "Michigan", 17, 18, 7, 10],
@@ -89,7 +89,7 @@ test("ORD-014 September 26 ranked games qualify across absent, opposite and pick
   }
 });
 
-test("ORD-014 any validated unranked pregame favorite can qualify for displayed Upsets", () => {
+test("ORD-015 any validated unranked pregame favorite can qualify for displayed Upsets", () => {
   const g = match("mac-mountain-west", { conference: "15", otherConference: "17", score: 7, otherScore: 21 });
   g.teams.forEach(team => { team.rank = null; team.rankKnown = true; });
   assert.equal(classify(g).upset, false, "no line or ranking does not invent a favorite");

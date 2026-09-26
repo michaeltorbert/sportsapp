@@ -41,7 +41,7 @@ test("Upsets count active watches first and add only games that concluded as ups
   assert.deepEqual(upsetCounts(null), { brewing: 0, total: 0 });
 });
 
-test("ORD-014 ranked live watches and completed upsets count despite contrary retained lines", () => {
+test("ORD-015 ranked live watches and completed upsets count despite contrary retained lines", () => {
   const ranked = (id, state) => {
     const value = game({ id, state });
     value.teams[0].rank = 4; value.teams[0].rankKnown = true; value.teams[0].score = 3;
@@ -55,7 +55,7 @@ test("ORD-014 ranked live watches and completed upsets count despite contrary re
   assert.deepEqual(upsetCounts(board, true), { brewing: 2, total: 2 });
 });
 
-test("ORD-014 either a higher-ranked loser or favored loser counts as a completed upset", () => {
+test("ORD-015 either a higher-ranked loser or favored loser counts as a completed upset", () => {
   const result = (id, awayScore, homeScore) => {
     const value = game({ id, state: "final" });
     Object.assign(value.teams[0], { name: "Higher", rank: 4, rankKnown: true, score: awayScore });

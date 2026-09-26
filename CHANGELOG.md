@@ -2,7 +2,7 @@
 
 ## 1.12.1 · 2026-09-26
 
-- Include any trailing validated pregame favorite or known higher-ranked team in displayed Upsets and counts, including unranked favorites outside ACC/SEC and contrary or pick’em lines (#95, ORD-014). Preserve ordering and phone-alert rules.
+- Include any trailing validated pregame favorite or known higher-ranked team in displayed Upsets and counts, including unranked favorites outside ACC/SEC and contrary or pick’em lines (#95, ORD-015). Preserve ordering and phone-alert rules.
 - Keep the last cards visible but show unknown category counts while scores are stale; restore fresh counts after a successful refresh.
 - Cover the direct ESPN, CDN and hosted fallback failure/recovery sequence. The historical iPhone transport failure remains unproven.
 
