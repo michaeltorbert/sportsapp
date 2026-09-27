@@ -125,29 +125,34 @@ test("ORD-018 ranked, Power Four and unknown-evidence games remain eligible with
 });
 
 test("ORD-018 excluded queued event is terminal after evidence confirmation and cannot replay after slate changes", async () => {
-  const { db, sqlite } = database();
-  try {
-    enroll(sqlite);
-    const unknown = matchup("queued"); unknown.teams[0].rankKnown = false;
-    const originalTime = now - 60000;
-    await saveGameStates(db, [unknown], originalTime);
-    assert.deepEqual(events(sqlite), ["queued:one-score-fourth"]);
-    const known = matchup("queued");
-    await saveGameStates(db, [known], now - 30000);
-    assert.deepEqual(sqlite.prepare("SELECT game_id,trigger FROM rule_baselines").all().map(row => [row.game_id, row.trigger]), [["queued", "one-score-fourth"]]);
-    sqlite.prepare("UPDATE rule_baselines SET observed_at=? WHERE game_id='queued'").run(originalTime - 1000);
-    assert.equal(sqlite.prepare("SELECT created_at FROM alert_events WHERE game_id='queued'").get().created_at, originalTime);
-    const strong = matchup("other", ["5", "4"], [5, null]);
-    const lostEvidence = matchup("queued"); lostEvidence.teams[0].rankKnown = false;
-    await saveGameStates(db, [lostEvidence, strong], now - 20000);
-    await deliver({ DB: db }, now - 20000, [lostEvidence, strong]);
-    await saveGameStates(db, [lostEvidence], now - 10000);
-    await deliver({ DB: db }, now, [lostEvidence]);
-    assert.equal(events(sqlite).filter(id => id.startsWith("queued:")).length, 1);
-    assert.equal(deliveries(sqlite).includes("queued:one-score-fourth"), false);
-    assert.equal(sqlite.prepare("SELECT count(*) n FROM alert_suppressions WHERE game_id='queued'").get().n, 0);
-    assert.equal(sqlite.prepare("SELECT created_at FROM alert_events WHERE game_id='queued'").get().created_at, originalTime);
-  } finally { sqlite.close(); }
+  for (const baselineAge of ["production", "older-than-event"]) {
+    const { db, sqlite } = database();
+    try {
+      enroll(sqlite);
+      const unknown = matchup("queued"); unknown.teams[0].rankKnown = false;
+      const originalTime = now - 60000;
+      await saveGameStates(db, [unknown], originalTime);
+      assert.deepEqual(events(sqlite), ["queued:one-score-fourth"]);
+      const known = matchup("queued");
+      await saveGameStates(db, [known], now - 30000);
+      assert.deepEqual(sqlite.prepare("SELECT game_id,trigger FROM rule_baselines").all().map(row => [row.game_id, row.trigger]), [["queued", "one-score-fourth"]]);
+      if (baselineAge === "older-than-event") sqlite.prepare("UPDATE rule_baselines SET observed_at=? WHERE game_id='queued'").run(originalTime - 1000);
+      assert.equal(sqlite.prepare("SELECT observed_at FROM rule_baselines WHERE game_id='queued'").get().observed_at,
+        baselineAge === "production" ? now - 30000 : originalTime - 1000);
+      assert.equal(sqlite.prepare("SELECT created_at FROM alert_events WHERE game_id='queued'").get().created_at, originalTime);
+      const strong = matchup("other", ["5", "4"], [5, null]);
+      const lostEvidence = matchup("queued"); lostEvidence.teams[0].rankKnown = false;
+      await saveGameStates(db, [lostEvidence, strong], now - 20000);
+      await deliver({ DB: db }, now - 20000, [lostEvidence, strong]);
+      assert.ok(deliveries(sqlite).some(id => id.startsWith("other:")), baselineAge);
+      await saveGameStates(db, [lostEvidence], now - 10000);
+      await deliver({ DB: db }, now, [lostEvidence]);
+      assert.equal(events(sqlite).filter(id => id.startsWith("queued:")).length, 1, baselineAge);
+      assert.equal(deliveries(sqlite).includes("queued:one-score-fourth"), false, baselineAge);
+      assert.equal(sqlite.prepare("SELECT count(*) n FROM alert_suppressions WHERE game_id='queued'").get().n, 0, baselineAge);
+      assert.equal(sqlite.prepare("SELECT created_at FROM alert_events WHERE game_id='queued'").get().created_at, originalTime, baselineAge);
+    } finally { sqlite.close(); }
+  }
 });
 
 test("ORD-018 a positive rank or conference correction creates the first valid event", async () => {
