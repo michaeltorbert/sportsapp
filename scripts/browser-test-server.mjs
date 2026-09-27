@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
-import { appendEvidence, resourceSnapshot, writeServerState } from "./browser-server-diagnostics.mjs";
+import { anomalyText, appendEvidence, resourceSnapshot, writeServerState } from "./browser-server-diagnostics.mjs";
 
 const separator = process.argv.indexOf("--");
 if (separator < 0 || separator === process.argv.length - 1) throw new Error("Usage: browser-test-server.mjs -- <command> [args]");
@@ -53,11 +53,12 @@ process.on("SIGTERM", () => stop("SIGTERM"));
 process.on("SIGINT", () => stop("SIGINT"));
 
 function recordLine(stream, line) {
-  const record = { utc: new Date().toISOString(), stream, line };
+  const text = anomalyText(line);
+  const record = { utc: new Date().toISOString(), stream, line, ...(text && text !== line ? { text } : {}) };
   appendEvidence(directory, "wrangler-stdio.jsonl", record);
   tail.push(record);
   if (tail.length > 200) tail.shift();
-  if (!state.firstAnomaly && /broken pipe|disconnected|\[ERROR\]|uncaught|segmentation|out of memory/i.test(line)) {
+  if (!state.firstAnomaly && text) {
     state.firstAnomaly = record;
     writeServerState(directory, state);
     sample("first-anomaly");
