@@ -288,7 +288,11 @@ test("ORD-016/017 rendered Final puts ranked Power Four above unranked Group of 
   assert.deepEqual(cardIds(upsets), ["ole-miss-florida", "hawaii-wyoming"]);
   assert.deepEqual(upsetBadge(upsets), [0, 2]);
   assert.doesNotMatch(upsets, /Earlier upset watch|game-vt-bc/);
-  assert.deepEqual(cardIds(render([], { boards }).html), ["vt-bc", "ole-miss-florida", "hawaii-wyoming"]);
+  const all = render([], { boards }).html;
+  assert.deepEqual(cardIds(all), ["vt-bc", "ole-miss-florida", "hawaii-wyoming"]);
+  const vtCard = all.match(/<article id="game-vt-bc"[\s\S]*?<\/article>/)?.[0];
+  assert.ok(vtCard);
+  assert.doesNotMatch(vtCard, /Earlier upset watch|Upset final|Conference watch|class="compact-upset"|class="badge upset-badge"/);
 });
 
 test("Help separates selective alert policy from rank-or-line display categories", () => {
