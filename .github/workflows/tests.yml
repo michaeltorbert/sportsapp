@@ -88,6 +88,8 @@ jobs:
     env:
       WRANGLER_SEND_METRICS: 'false'
       WRANGLER_LOG_PATH: .wrangler/logs
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      BROWSER_TEST_SHARD: ${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
@@ -105,11 +107,31 @@ jobs:
         run: npx playwright install --with-deps ${{ matrix.engine }}
       - name: Test ${{ matrix.project }} regressions (simulated scores and push)
         run: npm run test:browser -- --project=${{ matrix.project }} --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+      - name: Record browser runner state
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p output/playwright/server
+          {
+            date -u
+            uptime || true
+            free -m || true
+            df -h . || true
+            ps -eo pid,ppid,rss,pcpu,etime,comm --sort=-rss | head -40 || true
+            cat /proc/pressure/memory /sys/fs/cgroup/memory.events 2>&1 || true
+            dmesg -T 2>&1 | tail -80 || true
+          } > output/playwright/server/runner-state.txt 2>&1
+          {
+            echo '### Browser harness'
+            echo "Run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT; shard $BROWSER_TEST_SHARD"
+            echo "PR head $PR_HEAD_SHA; tested commit $SOURCE_COMMIT"
+            node -e 'const fs=require("fs"); try { const s=JSON.parse(fs.readFileSync("output/playwright/server/state.json")); if(s.exit) console.log(`Wrangler exit ${s.exit.signal||s.exit.code} at ${s.exit.utc}; diagnostics in browser artifact`); } catch {}'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Save ${{ matrix.project }} evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: browser-${{ matrix.project }}-${{ matrix.shardIndex }}of${{ matrix.shardTotal }}-${{ github.sha }}
+          name: browser-${{ matrix.project }}-${{ matrix.shardIndex }}of${{ matrix.shardTotal }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             .wrangler/logs/
             output/playwright/
