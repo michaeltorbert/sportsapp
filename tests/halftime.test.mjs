@@ -362,7 +362,7 @@ test("KIMI-F1 halftime-only extras record the same backoff after a failed summar
   assert.equal(requests.length, 2); assert.equal(label(), "Halftime 11:55", "timing recovers on the first poll after the backoff");
 });
 
-test("HT-021 deadline-aborted halftime extra keeps its backoff but can recover on the 60s poll", async t => {
+test("HT-021 deadline-aborted halftime extra keeps its backoff and honors the 2s boundary", async t => {
   t.mock.timers.enable({ apis: ["Date", "setTimeout"], now });
   const m = await bundle("tests/halftime-integration-entry.ts"), g = extraGame("deadline-backoff");
   let calls = 0, hang = true, abortAt;
@@ -385,10 +385,28 @@ test("HT-021 deadline-aborted halftime extra keeps its backoff but can recover o
   t.mock.timers.tick(29499); await load();
   assert.equal(calls, 1, "a retry more than 2s before its deadline stays blocked");
   t.mock.timers.tick(1); await load();
-  assert.equal(calls, 2, "a retry exactly 2s before its deadline is eligible by the 60s poll");
+  assert.equal(calls, 2, "a retry exactly 2s before its backoff expires is eligible");
   t.mock.timers.tick(500); await load();
-  assert.equal(calls, 2, "the next poll reuses the recovered summary");
+  assert.equal(calls, 2, "the 60s poll reuses the recovered summary");
   assert.equal(m.halftimeLabel(g, { fetchedAt: new Date(Date.now()).toISOString() }, false, Date.now(), true, true), "Halftime 11:55");
+});
+
+test("HT-021 deadline-aborted extra can first retry on the 60s poll", async t => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now });
+  const m = await bundle("tests/halftime-integration-entry.ts"), g = extraGame("deadline-next-poll");
+  let calls = 0, hang = true;
+  const fetcher = async (_url, options) => {
+    calls++;
+    if (!hang) return Response.json(summary(g));
+    return new Promise((_, reject) => options.signal.addEventListener("abort", () => reject(new DOMException("deadline", "AbortError")), { once: true }));
+  };
+  const load = () => m.enrichPregameLines(scoreboard([g]), new AbortController().signal, fetcher);
+  const pending = load(); await new Promise(setImmediate);
+  t.mock.timers.tick(1500); await pending;
+  hang = false; t.mock.timers.tick(28500); await load();
+  assert.equal(calls, 1, "the 30s poll remains inside the halftime backoff");
+  t.mock.timers.tick(30000); await load();
+  assert.equal(calls, 2, "the 60s poll first retries the timed-out extra");
 });
 
 test("HT-021 deadline-aborted extra does not arm the odds attempts map", async t => {
