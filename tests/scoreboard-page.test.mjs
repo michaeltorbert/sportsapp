@@ -215,12 +215,12 @@ test("validated lines move from the summary to details after kickoff", () => {
     boards.daily = scoreboard([gameWithLine]);
     const liveOrFinal = render([], { boards }).html;
     assert.doesNotMatch(summaryOf(liveOrFinal), /class="(?:team-line|pickem-line)"/);
-    assert.match(liveOrFinal, /class="detail-line"><span>Line<\/span><strong>Team b −7\.5<\/strong><span>ESPN<\/span>/);
+    assert.match(liveOrFinal, /class="detail-line"><span class="sr-only">Pregame betting line: Team b favored by 7\.5 points, ESPN<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">Team b −7\.5<\/strong><span aria-hidden="true">ESPN<\/span>/);
   }
   boards.daily = scoreboard([game({ id: "live-pickem", pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
   const livePickem = render([], { boards }).html;
   assert.doesNotMatch(summaryOf(livePickem), /class="(?:team-line|pickem-line)"/);
-  assert.match(livePickem, /class="detail-line"><span>Line<\/span><strong>PK<\/strong><span>ESPN<\/span>/);
+  assert.match(livePickem, /class="detail-line"><span class="sr-only">Pregame pick’em line, ESPN<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">PK<\/strong><span aria-hidden="true">ESPN<\/span>/);
   boards.daily = scoreboard([game({ id: "live-before-clock", state: "live", started: false, period: 0, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } })]);
   const liveBeforeClock = render([], { boards }).html;
   assert.doesNotMatch(summaryOf(liveBeforeClock), /class="team-line"/);
@@ -228,7 +228,7 @@ test("validated lines move from the summary to details after kickoff", () => {
   boards.daily = scoreboard([game({ id: "live-pickem-before-clock", state: "live", started: false, period: 0, pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
   const pickemBeforeClock = render([], { boards }).html;
   assert.doesNotMatch(summaryOf(pickemBeforeClock), /class="pickem-line"/);
-  assert.match(pickemBeforeClock, /class="detail-line"[^>]*>.*?<strong>PK<\/strong>/);
+  assert.match(pickemBeforeClock, /class="detail-line"[^>]*>.*?<strong aria-hidden="true">PK<\/strong>/);
   for (const started of [true, false]) {
     boards.daily = scoreboard([game({ id: `delayed-${started}`, state: "delayed", started, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } })]);
     const delayed = render([], { boards }).html;
@@ -239,6 +239,33 @@ test("validated lines move from the summary to details after kickoff", () => {
   const awayCard = render([], { boards }).html.match(/<article id="game-away-favorite"[\s\S]*?<\/article>/)?.[0];
   assert.match(awayCard, /class="team-label">Team a<\/span><span class="team-line"[^>]*>.*?−3\.5<\/span>/);
   assert.doesNotMatch(awayCard, /class="team-label">Team b<\/span><span class="team-line"/);
+});
+
+test("screen readers hear pregame context for the line instead of the visible label and minus sign", () => {
+  const cardOf = (html, id) => html.match(new RegExp(`<article id="game-${id}"[\\s\\S]*?<\\/article>`))?.[0];
+  const line = { favoriteId: "a", spread: 1, source: "ESPN BET" };
+  const boards = fixtures(); boards.daily = scoreboard([game({ id: "one-point-live", pregameLine: line }), game({ id: "one-point-upcoming", state: "upcoming", started: false, pregameLine: line })]);
+  const { html } = render([], { boards });
+  const detail = cardOf(html, "one-point-live").match(/<div class="detail-line">([\s\S]*?)<\/div>/)?.[1];
+  assert.match(detail, /^<span class="sr-only">Pregame betting line: Team a favored by 1 point, ESPN BET<\/span>/);
+  assert.equal(detail.replace(/^<span class="sr-only">.*?<\/span>/, "").match(/<(?:span|strong)(?: [^>]*)?>/g).every(tag => tag.includes('aria-hidden="true"')), true);
+  assert.match(cardOf(html, "one-point-upcoming"), /<span class="sr-only">Pregame betting line: favored by 1 point, ESPN BET<\/span><span class="team-line-visible" aria-hidden="true">−1<\/span>/);
+});
+
+test("canceled, postponed and no-contest games omit a retained line from the row and details", () => {
+  for (const [status, started] of [["Canceled", false], ["Postponed", false], ["No Contest", true]]) {
+    for (const pregameLine of [{ favoriteId: "b", spread: 7.5, source: "ESPN" }, { favoriteId: null, spread: 0, source: "ESPN" }]) {
+      const before = game({ id: "called-off", state: "upcoming", started: false, pregameLine });
+      // ESPN parsing supplies no line once play or the schedule changes; retention carries the earlier one.
+      const after = game({ id: "called-off", state: "other", status, started });
+      const retained = retainFinalCategories(scoreboard([after]), scoreboard([before]));
+      assert.deepEqual(retained.games[0].pregameLine, pregameLine, "the event keeps its betting evidence");
+      const boards = fixtures(); boards.daily = retained;
+      const card = render([], { boards }).html.match(/<article id="game-called-off"[\s\S]*?<\/article>/)?.[0];
+      assert.match(card, new RegExp(`class="game-status status-other">${status}<`));
+      assert.doesNotMatch(card, /class="(?:team-line|pickem-line|detail-line)"|Pregame|−7\.5|>PK</);
+    }
+  }
 });
 
 test("shown teams display ESPN overall records without crowding the score label", () => {

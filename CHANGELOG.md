@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.12.3 · 2026-09-26
+
+- Omit the betting line from canceled, postponed, no-contest and forfeited games, in both the score row and game details (#93).
+- Give the line in expanded game details the same pregame screen-reader context as the inline line, without a visible “Pregame” label or an announced minus sign (#93).
+- Align the expanded line with other game details and scale it and the red-zone label with larger text. Show only win-loss(-tie) team records; a malformed ESPN record is omitted instead of dropping the game (#93).
+
 ## 1.12.2 · 2026-09-26
 
 - Remove recovered-favorite finals from Upsets while preserving other matching categories and the completed-upset count (#97, ORD-016).

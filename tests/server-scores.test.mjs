@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bundle } from "./helpers.mjs";
-const { normalizeCdnRange } = await bundle("lib/espn-data.ts");
+const { normalizeCdnRange, normalizeScoreboard } = await bundle("lib/espn-data.ts");
 const { getScoreboard } = await bundle("lib/espn.ts");
 function feed() {
   return { content: { sbData: { season: { type: 2 }, week: { number: 1 }, leagues: [{ calendar: [{ value: "2", entries: [{ value: "1", startDate: "2026-08-22T07:00Z", endDate: "2026-09-08T06:59Z" }] }] }], events: [] } } };
@@ -24,6 +24,22 @@ test("CDN range normalization filters Eastern dates and ACC teams, and rejects p
   assert.deepEqual(normalizeCdnRange(raw, "2026-09-05", "2026-09-05", true).games.map(game => game.id), ["late"]);
   raw.content.sbData.events.push({ invalid: true });
   assert.throws(() => normalizeCdnRange(raw, "2026-09-05"), /incomplete/);
+});
+test("overall records keep only win-loss shapes, and malformed records never drop the game", () => {
+  const cases = [
+    [[{ type: "total", summary: " 10-2 " }], "10-2"], [[{ name: "overall", summary: "5-5-1" }], "5-5-1"],
+    [[{ type: "home", summary: "4-0" }, { type: "total", summary: "7-1" }], "7-1"],
+    [[{ type: "total", summary: "Overall record pending conference review 2026" }], ""], [[{ type: "total", summary: "7-1, 4-0 Conf" }], ""],
+    [[{ type: "total", summary: "123-4" }], ""], [[{ type: "total", summary: null }], ""], [[{ type: "total", summary: 31 }], ""],
+    [[null, "7-1"], ""], ["7-1", ""], [{ type: "total", summary: "7-1" }, ""], [undefined, ""],
+  ];
+  const raw = { events: cases.map(([records], i) => ({ id: String(i), date: "2026-09-05T20:00Z", status: { type: { name: "STATUS_SCHEDULED", state: "pre" } }, competitions: [{ competitors: [
+    { id: `a${i}`, homeAway: "away", team: { id: `a${i}` }, records },
+    { id: `h${i}`, homeAway: "home", team: { id: `h${i}` } },
+  ] }] })) };
+  const board = normalizeScoreboard(raw, "2026-09-05");
+  assert.deepEqual(board.games.map(game => game.teams[0].record), cases.map(([, record]) => record));
+  assert.equal(board.warnings, undefined);
 });
 test("server scores recover from the Cloudflare site-API 403 without returning another week's board", async t => {
   const calls = [];
