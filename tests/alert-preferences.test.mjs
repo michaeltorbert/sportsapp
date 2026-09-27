@@ -87,7 +87,7 @@ test("upset payloads name the watch and actual score for tied, behind and far-ah
     const g = ranked(); g.teams[0].score = 14; g.teams[1].score = score;
     const event = transitions(null, g, now).find(e => e.trigger === "ranked-trailing-fourth");
     assert.equal(event.payload.title, "Upset watch · 4th quarter");
-    assert.equal(event.payload.body, `a 14, b ${score}`);
+    assert.equal(event.payload.body, `#5 Team a 14\n#20 Team b ${score}`);
     assert.doesNotMatch(event.payload.body, /close|finish/i);
   }
 });
