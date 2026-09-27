@@ -84,6 +84,20 @@ test("ORD-018 exclusion covers every trigger, including previously recorded even
   }
 });
 
+test("ORD-018 all six Group-of-Six conference IDs exclude known-unranked games", async () => {
+  for (const conference of ["151", "12", "15", "17", "9", "37"]) {
+    const { db, sqlite } = database();
+    try {
+      enroll(sqlite);
+      const excluded = matchup(`excluded-${conference}`, [conference, "12"]);
+      const retained = await saveGameStates(db, [excluded], now - 1);
+      await deliver({ DB: db }, now, retained);
+      assert.deepEqual(events(sqlite), [], conference);
+      assert.deepEqual(deliveries(sqlite), [], conference);
+    } finally { sqlite.close(); }
+  }
+});
+
 test("ORD-018 ranked, Power Four and unknown-evidence games remain eligible without a slate priority hold", async () => {
   for (const variant of ["ranked", "power-four", "unknown-rank", "unknown-conference", "independent", "fcs", "unknown-id"]) {
     const { db, sqlite } = database();
@@ -121,6 +135,7 @@ test("ORD-018 excluded queued event is terminal after evidence confirmation and 
     const known = matchup("queued");
     await saveGameStates(db, [known], now - 30000);
     assert.deepEqual(sqlite.prepare("SELECT game_id,trigger FROM rule_baselines").all().map(row => [row.game_id, row.trigger]), [["queued", "one-score-fourth"]]);
+    sqlite.prepare("UPDATE rule_baselines SET observed_at=? WHERE game_id='queued'").run(originalTime - 1000);
     assert.equal(sqlite.prepare("SELECT created_at FROM alert_events WHERE game_id='queued'").get().created_at, originalTime);
     const strong = matchup("other", ["5", "4"], [5, null]);
     const lostEvidence = matchup("queued"); lostEvidence.teams[0].rankKnown = false;
@@ -135,8 +150,8 @@ test("ORD-018 excluded queued event is terminal after evidence confirmation and 
   } finally { sqlite.close(); }
 });
 
-test("ORD-018 a real correction creates the first valid event; missing evidence alone is not an exclusion", async () => {
-  for (const correction of ["ranked", "power-four", "unknown-rank"]) {
+test("ORD-018 a positive rank or conference correction creates the first valid event", async () => {
+  for (const correction of ["ranked", "power-four"]) {
     const { db, sqlite } = database();
     try {
       enroll(sqlite);
@@ -147,7 +162,6 @@ test("ORD-018 a real correction creates the first valid event; missing evidence 
       const corrected = matchup("correction");
       if (correction === "ranked") corrected.teams[1].rank = 25;
       if (correction === "power-four") corrected.teams[0].conferenceId = "5";
-      if (correction === "unknown-rank") corrected.teams[0].rankKnown = false;
       const retained = await saveGameStates(db, [corrected], now - 1);
       await deliver({ DB: db }, now, retained);
       assert.ok(events(sqlite).includes("correction:one-score-fourth"), correction);
@@ -155,4 +169,19 @@ test("ORD-018 a real correction creates the first valid event; missing evidence 
       assert.equal(sqlite.prepare("SELECT count(*) n FROM rule_baselines").get().n, 0);
     } finally { sqlite.close(); }
   }
+});
+
+test("ORD-018 loss of rank evidence permits a first event when none existed before", async () => {
+  const { db, sqlite } = database();
+  try {
+    enroll(sqlite);
+    await saveGameStates(db, [matchup("unknown-later")], now - 60000);
+    assert.deepEqual(events(sqlite), []);
+    const unknown = matchup("unknown-later"); unknown.teams[0].rankKnown = false;
+    const retained = await saveGameStates(db, [unknown], now - 1);
+    await deliver({ DB: db }, now, retained);
+    assert.ok(events(sqlite).includes("unknown-later:one-score-fourth"));
+    assert.ok(deliveries(sqlite).some(id => id.startsWith("unknown-later:")));
+    assert.equal(sqlite.prepare("SELECT count(*) n FROM rule_baselines").get().n, 0);
+  } finally { sqlite.close(); }
 });
