@@ -332,7 +332,7 @@ test("Help separates selective alert policy from rank-or-line display categories
   assert.match(html, /class="badge upset-badge"/);
   assert.match(html, /rank-based upset/);
   assert.match(html, /Phone alerts are separate from these display categories/);
-  assert.match(html, /Close-game alerts prioritize stronger live games and may skip two-unranked Group-of-Six matchups/);
+  assert.match(html, /Game alerts are off when ESPN confirms both teams are unranked and from Group-of-Six conferences/);
   assert.match(html, /Selected categories do not filter notifications/);
   assert.match(html, /Upcoming games remain chronological within those pin tiers/);
   assert.match(html, /Day shows the selected Eastern date\. Week shows the current football week/);
