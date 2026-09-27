@@ -6,7 +6,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import ServerExitReporter from "./browser/server-exit-reporter.mjs";
-import { readServerState, recordUnavailable, serverFailureMessage } from "../scripts/browser-server-diagnostics.mjs";
+import { anomalyText, readServerState, recordUnavailable, serverFailureMessage } from "../scripts/browser-server-diagnostics.mjs";
 
 const supervisor = resolve("scripts/browser-test-server.mjs");
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -50,6 +50,31 @@ test("unexpected server exit keeps first anomaly, resources, and a failing statu
   assert.match(JSON.stringify(state.exit.tail), /Broken pipe without newline/);
   assert.match(readFileSync(join(dir, "evidence/resources.jsonl"), "utf8"), /unexpected-exit/);
   assert.equal(readServerState(join(dir, "evidence"), "stale"), null);
+});
+
+test("ANSI-colored Wrangler error is the first anomaly without losing raw stderr", async t => {
+  const dir = mkdtempSync(join(tmpdir(), "browser-server-ansi-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const line = "\x1b[31m✘ \x1b[41;31m[\x1b[41;97mERROR\x1b[41;31m]\x1b[0m \x1b[1m\x1b[0m";
+  const child = launch(dir, "ansi", `process.stderr.write(${JSON.stringify(`${line}\n\nIf you think this is a bug\n`)}); process.exit(1);`);
+  const [code] = await once(child, "close");
+  assert.equal(code, 1);
+  const state = readServerState(join(dir, "evidence"), "ansi");
+  assert.equal(state.firstAnomaly.stream, "stderr");
+  assert.equal(state.firstAnomaly.line, line);
+  assert.equal(state.firstAnomaly.text, "✘ [ERROR] ");
+  assert.equal(anomalyText(line), "✘ [ERROR] ");
+  assert.equal(anomalyText("\x1b[31mUncaught\x1b[0m exception"), "Uncaught exception");
+  assert.equal(anomalyText("ordinary output"), null);
+  assert.equal(anomalyText(""), null);
+  const message = serverFailureMessage(state);
+  assert.match(message, /first stderr anomaly.*\[ERROR\]/);
+  assert.doesNotMatch(message, /\x1b/);
+  assert.equal(state.exit.code, 1);
+  const samples = readFileSync(join(dir, "evidence/resources.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  const firstIndex = samples.findIndex(sample => sample.reason === "first-anomaly");
+  const exitIndex = samples.findIndex(sample => sample.reason === "unexpected-exit");
+  assert.ok(firstIndex >= 0 && exitIndex > firstIndex);
 });
 
 test("a failed fixture health request stops a shard even while Wrangler remains alive", async t => {

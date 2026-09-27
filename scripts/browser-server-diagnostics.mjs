@@ -1,6 +1,12 @@
 import { appendFileSync, existsSync, linkSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import os from "node:os";
+import { stripVTControlCharacters } from "node:util";
+
+export function anomalyText(line) {
+  const text = stripVTControlCharacters(line);
+  return /broken pipe|disconnected|\[ERROR\]|uncaught|segmentation|out of memory/i.test(text) ? text : null;
+}
 
 export function readServerState(directory, runId) {
   try {
@@ -89,7 +95,7 @@ export function serverFailureMessage(state) {
   const exit = state?.exit;
   if (!exit) return null;
   const reason = exit.signal ? `signal ${exit.signal}` : `code ${exit.code}`;
-  const anomaly = state.firstAnomaly ? `; first ${state.firstAnomaly.stream} anomaly ${state.firstAnomaly.utc}: ${state.firstAnomaly.line}` : "";
+  const anomaly = state.firstAnomaly ? `; first ${state.firstAnomaly.stream} anomaly ${state.firstAnomaly.utc}: ${state.firstAnomaly.text ?? stripVTControlCharacters(state.firstAnomaly.line)}` : "";
   return `Local Wrangler server exited unexpectedly at ${exit.utc} (${reason})${anomaly}. Diagnostics: ${state.directory}`;
 }
 
