@@ -216,9 +216,10 @@ test("import with an unrelated nonexistent argv path does not start the CLI", t 
   const directory = mkdtempSync(join(tmpdir(), "alert-poll-import-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const url = new URL("../scripts/check-alerts-poll.mjs", import.meta.url).href;
+  // Node 22 warns about the test database's experimental SQLite import.
   const child = spawnSync(process.execPath,
     ["--input-type=module", "--eval", `await import(${JSON.stringify(url)});`, join(directory, "missing.mjs")],
-    { encoding: "utf8", timeout: 30000 });
+    { encoding: "utf8", timeout: 30000, env: { ...process.env, NODE_NO_WARNINGS: "1" } });
   assert.equal(child.status, 0, child.stderr);
   assert.equal(child.stdout, "");
   assert.equal(child.stderr, "");
