@@ -1,4 +1,5 @@
 import { test as base, expect } from "@playwright/test";
+import { appendEvidence, readServerState, readUnavailable, recordUnavailable, resourceSnapshot, serverFailureMessage, unavailableMessage } from "../../scripts/browser-server-diagnostics.mjs";
 
 export const NOW = "2026-09-06T03:59:00Z"; // Saturday, 11:59 p.m. Eastern.
 export const ALERT_ORIGIN = "https://alerts.example.test";
@@ -60,13 +61,36 @@ async function installPushSimulation(page, options) {
 }
 
 export const test = base.extend({
+  serverGuard: [async ({}, provide, testInfo) => {
+    const { browserRunId, serverDiagnosticsDir } = testInfo.config.metadata;
+    const state = readServerState(serverDiagnosticsDir, browserRunId);
+    if (!state) throw new Error(`Browser server diagnostics state is missing or has a different run ID: ${serverDiagnosticsDir}`);
+    if (state?.phase === "exited") throw new Error(serverFailureMessage(state));
+    const unavailable = readUnavailable(serverDiagnosticsDir, browserRunId);
+    if (unavailable) throw new Error(unavailableMessage(unavailable, serverDiagnosticsDir));
+    await provide();
+  }, { auto: true }],
   harness: async ({ page, browser, browserName, request }, provide, testInfo) => {
+    const { browserRunId, serverDiagnosticsDir } = testInfo.config.metadata;
+    const startedAt = new Date().toISOString();
+    const serverState = () => readServerState(serverDiagnosticsDir, browserRunId);
+    const failedServer = serverState();
+    if (!failedServer) throw new Error(`Browser server diagnostics state is missing or has a different run ID: ${serverDiagnosticsDir}`);
+    if (failedServer?.phase === "exited") throw new Error(serverFailureMessage(failedServer));
+    appendEvidence(serverDiagnosticsDir, "test-timeline.jsonl", { event: "start", utc: startedAt, title: testInfo.title, file: testInfo.file, workerIndex: testInfo.workerIndex });
     const state = {
       events: standardEvents(), failScores: false, ready: true, failConfig: false,
       active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 0, preferencesVersion: 1, failSave: false, conflict: false, alertRequests: [], scoreRequests: [], cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], unexpectedExternal: [], errors: [],
     };
     const lifecycle = [];
-    const recordLifecycle = event => lifecycle.push({ event, utc: new Date().toISOString(), url: page.url() });
+    const recordLifecycle = event => {
+      const entry = { event, utc: new Date().toISOString(), url: page.url() };
+      if (event === "crash" || event === "disconnected") {
+        entry.resources = resourceSnapshot(serverState()?.serverPid);
+        appendEvidence(serverDiagnosticsDir, "browser-exits.jsonl", { ...entry, title: testInfo.title, file: testInfo.file });
+      }
+      lifecycle.push(entry);
+    };
     const onCrash = () => recordLifecycle("crash");
     const onClose = () => recordLifecycle("close");
     const onDisconnect = () => recordLifecycle("disconnected");
@@ -120,7 +144,14 @@ export const test = base.extend({
       state.unexpectedExternal.push(req.url());
       return route.abort();
     });
-    const health = await (await request.get("/api/health")).json();
+    let health;
+    try { health = await (await request.get("/api/health")).json(); }
+    catch (error) {
+      const failed = serverState();
+      if (failed?.phase === "exited") throw new Error(serverFailureMessage(failed), { cause: error });
+      const unavailable = recordUnavailable(serverDiagnosticsDir, browserRunId, error.message, failed?.serverPid);
+      throw new Error(unavailableMessage(unavailable, serverDiagnosticsDir), { cause: error });
+    }
     expect(health).toEqual({ version: testInfo.config.metadata.appVersion, commit: testInfo.config.metadata.sourceCommit });
     await provide({
       state,
@@ -139,6 +170,7 @@ export const test = base.extend({
     page.off("crash", onCrash);
     page.off("close", onClose);
     browser.off("disconnected", onDisconnect);
+    appendEvidence(serverDiagnosticsDir, "test-timeline.jsonl", { event: "end", utc: new Date().toISOString(), title: testInfo.title, file: testInfo.file, status: testInfo.status, errors: testInfo.errors.map(error => error.message) });
     await testInfo.attach("browser-evidence", { contentType: "application/json", body: JSON.stringify({
       utc: new Date().toISOString(), ...testInfo.config.metadata, deployedLocalBuild: health,
       browser: browserName, engineVersion: browser.version(), viewport: page.viewportSize(),

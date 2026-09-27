@@ -7,8 +7,15 @@ for (const ci of [false, true]) test(`browser configuration ${ci ? "serializes C
   const env = { ...process.env, SOURCE_COMMIT: "config-test", BROWSER_TEST_PORT: "4178" };
   delete env.CI;
   if (ci) env.CI = "true";
-  const result = JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e", "import c from './playwright.config.mjs'; console.log(JSON.stringify({ workers:c.workers,retries:c.retries,reuse:c.webServer.reuseExistingServer,projects:c.projects.map(p=>p.name) }));"], { cwd: new URL("..", import.meta.url), env, encoding: "utf8" }));
-  assert.deepEqual(result, { workers: ci ? 1 : 2, retries: 0, reuse: false, projects: ["chromium-mobile", "webkit-mobile"] });
+  const result = JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e", "import c from './playwright.config.mjs'; console.log(JSON.stringify({ workers:c.workers,retries:c.retries,reuse:c.webServer.reuseExistingServer,projects:c.projects.map(p=>p.name),command:c.webServer.command,shutdown:c.webServer.gracefulShutdown,metadata:c.metadata }));"], { cwd: new URL("..", import.meta.url), env, encoding: "utf8" }));
+  assert.equal(result.workers, ci ? 1 : 2);
+  assert.equal(result.retries, 0);
+  assert.equal(result.reuse, false);
+  assert.deepEqual(result.projects, ["chromium-mobile", "webkit-mobile"]);
+  assert.match(result.command, /^node scripts\/browser-test-server\.mjs -- node node_modules\/wrangler\/bin\/wrangler\.js dev .*--local --ip 127\.0\.0\.1 --port 4178 --inspector-port 0$/);
+  assert.deepEqual(result.shutdown, { signal: "SIGTERM", timeout: 5000 });
+  assert.match(result.metadata.browserRunId, /^[0-9a-f-]{36}$/);
+  assert.equal(result.metadata.ci.testedSha, "config-test");
 });
 
 test("browser CI runs engines on independent runners and retains crash logs", () => {
@@ -18,7 +25,9 @@ test("browser CI runs engines on independent runners and retains crash logs", ()
   assert.match(workflow, /- project: webkit-mobile\n            engine: webkit/);
   for (const index of [1, 2, 3, 4]) assert.match(workflow, new RegExp(`- project: webkit-mobile\\n            engine: webkit\\n            shardIndex: ${index}\\n            shardTotal: 4`));
   assert.match(workflow, /npm run test:browser -- --project=\$\{\{ matrix\.project \}\} --shard=\$\{\{ matrix\.shardIndex \}\}\/\$\{\{ matrix\.shardTotal \}\}/);
-  assert.match(workflow, /browser-\$\{\{ matrix\.project \}\}-\$\{\{ matrix\.shardIndex \}\}of\$\{\{ matrix\.shardTotal \}\}-\$\{\{ github\.sha \}\}/);
+  assert.match(workflow, /browser-\$\{\{ matrix\.project \}\}-\$\{\{ matrix\.shardIndex \}\}of\$\{\{ matrix\.shardTotal \}\}-\$\{\{ github\.sha \}\}-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}-\$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
+  assert.match(workflow, /PR_HEAD_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
+  assert.match(workflow, /- name: Record browser runner state\n        if: always\(\)/);
   assert.match(workflow, /fail-fast: false/);
   assert.doesNotMatch(workflow, /continue-on-error:/);
   assert.doesNotMatch(workflow, /mv output\/playwright\/results/);
