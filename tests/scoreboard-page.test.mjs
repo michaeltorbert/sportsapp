@@ -210,6 +210,11 @@ test("validated lines move from the summary to details after kickoff", () => {
   assert.doesNotMatch(pickemCard, /Pregame PK/);
   assert.doesNotMatch(pickemCard, /class="team-line"/);
   assert.doesNotMatch(missingCard, /class="(?:team-line|pickem-line)"/);
+  for (const card of [favoriteCard, pickemCard]) {
+    assert.match(card, /class="detail-line"><span class="sr-only">Line source: ESPN<\/span>/);
+    assert.match(card, /<span aria-hidden="true">Line<\/span>.*?<span aria-hidden="true">ESPN<\/span>/);
+  }
+  assert.doesNotMatch(missingCard, /class="detail-line"/);
   for (const state of ["live", "final"]) {
     const gameWithLine = game({ id: `${state}-line`, state, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } });
     boards.daily = scoreboard([gameWithLine]);
@@ -233,7 +238,7 @@ test("validated lines move from the summary to details after kickoff", () => {
     boards.daily = scoreboard([game({ id: `delayed-${started}`, state: "delayed", started, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } })]);
     const delayed = render([], { boards }).html;
     assert.equal(summaryOf(delayed).includes('class="team-line"'), !started);
-    assert.equal(delayed.includes('class="detail-line"'), started);
+    assert.equal(delayed.includes('class="detail-line"'), true);
   }
   boards.daily = scoreboard([game({ id: "away-favorite", state: "upcoming", started: false, pregameLine: { favoriteId: "a", spread: 3.5, source: "ESPN" } })]);
   const awayCard = render([], { boards }).html.match(/<article id="game-away-favorite"[\s\S]*?<\/article>/)?.[0];
