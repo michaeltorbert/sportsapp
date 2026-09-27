@@ -266,6 +266,8 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .compact-scoreboard .team-logo { width: 22px; height: 24px; flex: 0 0 22px; border-radius: 4px; padding: 2px; }
 .compact-scoreboard .team-logo img { width: 20px; height: 20px; }
 .compact-scoreboard .team-logo span { font-size: .5rem; }
+.compact-scoreboard .team-logo.team-logo-fallback { width: max-content; min-width: 22px; height: auto; min-height: 24px; flex: 0 0 auto; }
+.compact-scoreboard .team-logo-fallback span { line-height: 1; white-space: nowrap; }
 .compact-scoreboard .team-identity { display: block; }
 .compact-scoreboard .team-name { min-width: 0; font-size: .875rem; letter-spacing: -.015em; gap: 4px; line-height: 1.25; }
 .compact-scoreboard .team-record { font-size: .625rem; margin-top: 1px; }

@@ -52,6 +52,74 @@ test('320px row keeps records, betting line, and score readable together', async
   await page.screenshot({ path: info.outputPath('records-line-320.png'), fullPage: true, animations: 'disabled' });
 });
 
+test('text logo fallbacks stay inside their boxes at 200 percent text', async ({ page, harness }, info) => {
+  const live = event('fallback-live', { state: 'live', rank: 5 });
+  const upcoming = event('fallback-upcoming', { state: 'upcoming', rank: 12 });
+  live.competitions[0].competitors[0].team.abbreviation = 'WMW';
+  upcoming.competitions[0].competitors[0].team.abbreviation = 'MSU';
+  live.competitions[0].competitors[1].team.logo = 'https://a.espncdn.com/test-logo.png';
+  await page.route('https://a.espncdn.com/**', route => route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', 'base64') }));
+  harness.state.events = [live, upcoming];
+  await harness.open({ path: '/?date=2026-09-05' });
+
+  for (const width of [320, 390, 768]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const scale of [100, 200]) {
+      await page.addStyleTag({ content: `html { font-size: ${scale}%; }` });
+      await expect(page.locator('.team-logo-fallback')).toHaveCount(3);
+      const sizes = await page.locator('.team-logo').evaluateAll(logos => logos.map(logo => {
+        const box = logo.getBoundingClientRect();
+        const text = logo.querySelector('span');
+        let glyph = null;
+        if (text) { const range = document.createRange(); range.selectNodeContents(text); glyph = range.getBoundingClientRect(); }
+        return { fallback: !!text, width: box.width, height: box.height, scrollWidth: logo.scrollWidth, clientWidth: logo.clientWidth,
+          scrollHeight: logo.scrollHeight, clientHeight: logo.clientHeight, fontSize: text && parseFloat(getComputedStyle(text).fontSize),
+          contained: !glyph || (glyph.left >= box.left - .5 && glyph.right <= box.right + .5 && glyph.top >= box.top - .5 && glyph.bottom <= box.bottom + .5) };
+      }));
+      for (const logo of sizes) {
+        expect(logo.contained, `fallback glyph at ${width}px/${scale}%`).toBe(true);
+        expect(logo.scrollWidth).toBeLessThanOrEqual(logo.clientWidth);
+        expect(logo.scrollHeight).toBeLessThanOrEqual(logo.clientHeight);
+        if (logo.fallback) { expect(logo.width).toBeGreaterThanOrEqual(22); expect(logo.height).toBeGreaterThanOrEqual(24); expect(logo.fontSize).toBe(scale === 200 ? 16 : 8); }
+        else { expect(logo.width).toBe(22); expect(logo.height).toBe(24); }
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await rowFits(page, page.locator('#game-fallback-live'));
+      await rowFits(page, page.locator('#game-fallback-upcoming'));
+      if (width === 320) await page.screenshot({ path: info.outputPath(`fallback-${width}-${scale}.png`), fullPage: true, animations: 'disabled' });
+    }
+  }
+});
+
+test('touch users can expand upcoming lines to read favorite and pickem sources', async ({ page, harness }, info) => {
+  const favorite = event('touch-favorite', { state: 'upcoming', rank: 5 });
+  const pickem = event('touch-pickem', { state: 'upcoming', rank: 12 });
+  for (const [matchup, spread] of [[favorite, -7.5], [pickem, 0]]) {
+    const [away, home] = matchup.competitions[0].competitors;
+    matchup.competitions[0].odds = [{ spread, provider: { name: 'ESPN BET Sportsbook' },
+      awayTeamOdds: { favorite: false, team: { id: away.team.id } },
+      homeTeamOdds: { favorite: spread !== 0, team: { id: home.team.id } } }];
+  }
+  harness.state.events = [favorite, pickem];
+  await page.setViewportSize({ width: 320, height: 844 });
+  await harness.open({ path: '/?date=2026-09-05' });
+  for (const [id, inline] of [['touch-favorite', '−7.5'], ['touch-pickem', 'PK']]) {
+    const row = page.locator(`#game-${id}`), summary = row.locator('summary'), line = row.locator('.detail-line');
+    await expect(summary.locator(id === 'touch-favorite' ? '.team-line-visible' : '.pickem-line [aria-hidden]')).toHaveText(inline);
+    await expect(line).toBeHidden();
+    await summary.tap();
+    await expect(line).toBeVisible();
+    await expect(line.locator('[aria-hidden="true"]').last()).toHaveText('ESPN BET Sportsbook');
+    expect((await line.ariaSnapshot())).toContain('Line source: ESPN BET Sportsbook');
+    expect((await line.locator('[aria-hidden="true"]').allInnerTexts()).join(' ')).not.toMatch(/Pregame/i);
+    await rowFits(page, row);
+    await row.screenshot({ path: info.outputPath(`${id}-expanded-320.png`), animations: 'disabled' });
+  }
+  await page.addStyleTag({ content: 'html { font-size: 200%; }' });
+  for (const row of await page.locator('#game-touch-favorite, #game-touch-pickem').all()) await rowFits(page, row);
+  await page.screenshot({ path: info.outputPath('touch-sources-320-large-text.png'), fullPage: true, animations: 'disabled' });
+});
+
 test('after kickoff the line moves below the collapsed score row', async ({ page, harness }, info) => {
   const withRecords = game => {
     const [away, home] = game.competitions[0].competitors;
