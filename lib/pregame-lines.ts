@@ -75,6 +75,7 @@ type Completed = { line?: PregameLine; timing: HalftimeObservation; expires: num
 type EnrichmentState = { cache: Map<string, Cached>; attempts: Map<string, Attempt>; completed: Map<string, Completed>; halftimeAttempts: Map<string, Attempt>; claims: Map<string, symbol>; sequence: number };
 const states = new WeakMap<typeof fetch, EnrichmentState>();
 const key = halftimeKey;
+const halftimeRetryToleranceMs = 2000;
 // Recovery is open to every scoreboard game; this only prioritizes scarce
 // lookup and cache slots for the games the original watchlist already tracked.
 const oddsPreferred = (game: Game) => game.teams.some(team => preferredConference(team) || teamRank(team) !== null);
@@ -128,10 +129,12 @@ export async function enrichPregameLines(board: Scoreboard, parent: AbortSignal,
       || Number(oddsPreferred(b)) - Number(oddsPreferred(a))
       || (attempts.get(key(a))?.order ?? 0) - (attempts.get(key(b))?.order ?? 0) || a.id.localeCompare(b.id)).slice(0, 12);
   const selected = new Set(candidates.map(key));
-  // A failed summary backs off for a minute on either queue, so extras are
-  // never a second retry channel; an extra failure never delays odds work.
+  // A failed summary backs off for a minute on either queue. Only the
+  // halftime retry gate has a small poll-alignment tolerance; the odds gate
+  // remains exact so extras are never a second odds retry channel.
   const extra = games.filter(g => g.halftime && g.state === "live" && !selected.has(key(g))
-    && Math.max(attempts.get(key(g))?.retryAfter ?? 0, halftimeAttempts.get(key(g))?.retryAfter ?? 0) <= Date.now()
+    && (attempts.get(key(g))?.retryAfter ?? 0) <= Date.now()
+    && (halftimeAttempts.get(key(g))?.retryAfter ?? 0) <= Date.now() + halftimeRetryToleranceMs
     && !(completed.get(key(g))?.timing.epoch === observationEpoch))
     .sort((a, b) => (halftimeAttempts.get(key(a))?.order ?? 0) - (halftimeAttempts.get(key(b))?.order ?? 0) || a.id.localeCompare(b.id))
     .slice(0, 12 - candidates.length);
