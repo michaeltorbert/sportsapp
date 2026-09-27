@@ -1,5 +1,13 @@
 # Saturday Signal releases
 
+## 1.12.4 · 2026-09-27
+
+- Suppress every alert type for known matchups between two unranked Group-of-Six teams. Make existing pending events terminal when they become excluded, while preserving subscriptions, trigger IDs and delivery history (#101, ORD-018).
+- Keep fallback team labels readable at larger text sizes and show the betting line and its source in expanded upcoming-game details (#102).
+- Allow a bounded two-second tolerance for halftime-only retry backoff so a deadline timeout can recover on the 60-second poll; preserve the exact odds retry gate (#80).
+- Repair the opt-in local poll diagnostic's CDN/date-API allowlist and source/error attribution, with deterministic tests proving that real push transport stays blocked. Production feed behavior is unchanged (#58).
+- Capture browser-test server exits, stderr and resource evidence promptly; recognize colored Wrangler errors and stabilize queued updater tests. The initiating cause of intermittent Wrangler exits remains under investigation in #94.
+
 ## 1.12.3 · 2026-09-26
 
 - Omit the betting line from canceled, postponed, no-contest and forfeited games, in both the score row and game details (#93).

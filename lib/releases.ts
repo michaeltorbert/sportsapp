@@ -1,5 +1,6 @@
-export const VERSION = "1.12.3";
+export const VERSION = "1.12.4";
 export const releases = [
+  { version: "1.12.4", date: "September 27, 2026", changes: "Suppress alerts for known matchups between two unranked Group-of-Six teams. Keep fallback team labels readable with larger text, and show betting-line sources in expanded upcoming games. Improve halftime timing recovery after a summary timeout." },
   { version: "1.12.3", date: "September 26, 2026", changes: "Omit betting lines from canceled, postponed and other called-off games. Screen readers now hear the line in game details as a pregame line. Keep game details aligned and scaled with larger text, and omit malformed team records without losing the game." },
   { version: "1.12.2", date: "September 26, 2026", changes: "Show only actual completed upsets in Upsets after a favorite recovers. In Final, place known two-unranked Group-of-Six matchups after other games while preserving Duke and Virginia Tech pins and the other games’ kickoff order." },
   { version: "1.12.1", date: "September 26, 2026", changes: "Show live and completed upsets when a pregame favorite or known higher-ranked team trails, including unranked favorites outside ACC/SEC and contrary lines. Show unknown counts while scores are stale and restore counts after a successful refresh." },
