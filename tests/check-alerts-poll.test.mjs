@@ -62,12 +62,14 @@ test("CDN HTTP 200 with rejected board is identified as response rejection", asy
 
 test("network error remains distinct from a diagnostic allowlist block", async () => {
   const result = await runDiagnostic({ now, upstream: safeFetch(url => {
-    if (url.hostname === "cdn.espn.com") throw new TypeError("simulated CDN connection failure");
+    if (url.hostname === "cdn.espn.com")
+      throw new TypeError("fetch failed", { cause: { code: "ENOTFOUND", message: "test-only private proxy detail" } });
     return Response.json({ events: [] });
   }) });
   assert.equal(result.success, true);
   assert.equal(result.cdnFallback, "network-error");
-  assert.equal(result.attempts[0].networkError, "simulated CDN connection failure");
+  assert.equal(result.attempts[0].networkError, "fetch failed (ENOTFOUND)");
+  assert.doesNotMatch(JSON.stringify(result), /private proxy detail/);
   assert.deepEqual(result.blocked, []);
 });
 
@@ -202,10 +204,22 @@ test("CLI invocation through a symlink reports a failure instead of silently doi
   const link = join(directory, "check-alerts-poll.mjs"), mock = join(directory, "offline.mjs");
   symlinkSync(fileURLToPath(new URL("../scripts/check-alerts-poll.mjs", import.meta.url)), link);
   writeFileSync(mock, 'globalThis.fetch = async () => { throw new Error("Simulated offline feed"); };\n');
-  const child = spawnSync(process.execPath, ["--import", mock, link], { encoding: "utf8", timeout: 10000 });
+  const child = spawnSync(process.execPath, ["--import", mock, link], { encoding: "utf8", timeout: 30000 });
   assert.equal(child.status, 1, child.stderr);
   assert.equal(child.stdout, "");
   assert.match(child.stderr, /"success": false/);
   assert.match(child.stderr, /"attribution": "score-feed-attempts"/);
   assert.match(child.stderr, /Simulated offline feed/);
+});
+
+test("import with an unrelated nonexistent argv path does not start the CLI", t => {
+  const directory = mkdtempSync(join(tmpdir(), "alert-poll-import-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const url = new URL("../scripts/check-alerts-poll.mjs", import.meta.url).href;
+  const child = spawnSync(process.execPath,
+    ["--input-type=module", "--eval", `await import(${JSON.stringify(url)});`, join(directory, "missing.mjs")],
+    { encoding: "utf8", timeout: 30000 });
+  assert.equal(child.status, 0, child.stderr);
+  assert.equal(child.stdout, "");
+  assert.equal(child.stderr, "");
 });

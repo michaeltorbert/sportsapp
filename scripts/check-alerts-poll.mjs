@@ -77,7 +77,9 @@ export function guardedFetch(upstream, now, attempts, blocked) {
       attempt.status = response.status;
       return response;
     } catch (error) {
-      attempt.networkError = error instanceof Error ? error.message : "Unknown request failure";
+      const code = error instanceof Error && typeof error.cause?.code === "string" && /^[A-Z][A-Z0-9_]{0,39}$/.test(error.cause.code)
+        ? ` (${error.cause.code})` : "";
+      attempt.networkError = error instanceof Error ? `${error.message}${code}` : "Unknown request failure";
       throw error;
     }
   };
@@ -125,7 +127,13 @@ export async function runDiagnostic({ now = Date.now(), upstream = globalThis.fe
   }
 }
 
-if (process.argv[1] && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))) {
+function isDirectInvocation() {
+  if (!process.argv[1]) return false;
+  try { return realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url)); }
+  catch { return false; }
+}
+
+if (isDirectInvocation()) {
   try {
     const result = await runDiagnostic();
     (result.success ? console.log : console.error)(JSON.stringify(result, null, 2));
