@@ -1,5 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { cdnFeed, database } from "./helpers.mjs";
 import { classifyRequest, guardedFetch, runDiagnostic } from "../scripts/check-alerts-poll.mjs";
 
@@ -64,6 +69,21 @@ test("network error remains distinct from a diagnostic allowlist block", async (
   assert.equal(result.cdnFallback, "network-error");
   assert.equal(result.attempts[0].networkError, "simulated CDN connection failure");
   assert.deepEqual(result.blocked, []);
+});
+
+test("a CDN redirect is labeled as deliberately not followed", async () => {
+  const forwarded = [];
+  const result = await runDiagnostic({ now, upstream: safeFetch(url => {
+    forwarded.push(url.href);
+    return url.hostname === "cdn.espn.com"
+      ? new Response(null, { status: 302, headers: { Location: "https://redirect.example.invalid/" } })
+      : Response.json({ events: [] });
+  }) });
+  assert.equal(result.success, true);
+  assert.equal(result.acceptedSource, "site-api");
+  assert.equal(result.cdnFallback, "redirect-not-followed");
+  assert.deepEqual(result.attempts.map(attempt => attempt.status), [302, 200]);
+  assert.deepEqual(forwarded, [cdn, siteApi]);
 });
 
 test("both source failures retain the poller's source labels without claiming production failure", async () => {
@@ -174,4 +194,18 @@ test("a seeded local subscription still cannot reach a real push destination", a
   assert.ok(result.blocked.some(entry => entry.destination === "https://fcm.googleapis.com"));
   assert.ok(logs.some(message => message.includes("push_send_failed")));
   assert.equal(fixture.sqlite.prepare("SELECT count(*) AS n FROM deliveries WHERE status='uncertain'").get().n, 1);
+});
+
+test("CLI invocation through a symlink reports a failure instead of silently doing nothing", t => {
+  const directory = mkdtempSync(join(tmpdir(), "alert-poll-link-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const link = join(directory, "check-alerts-poll.mjs"), mock = join(directory, "offline.mjs");
+  symlinkSync(fileURLToPath(new URL("../scripts/check-alerts-poll.mjs", import.meta.url)), link);
+  writeFileSync(mock, 'globalThis.fetch = async () => { throw new Error("Simulated offline feed"); };\n');
+  const child = spawnSync(process.execPath, ["--import", mock, link], { encoding: "utf8", timeout: 10000 });
+  assert.equal(child.status, 1, child.stderr);
+  assert.equal(child.stdout, "");
+  assert.match(child.stderr, /"success": false/);
+  assert.match(child.stderr, /"attribution": "score-feed-attempts"/);
+  assert.match(child.stderr, /Simulated offline feed/);
 });

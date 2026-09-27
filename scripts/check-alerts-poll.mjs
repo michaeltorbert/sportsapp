@@ -1,6 +1,7 @@
 // Opt-in local poll diagnostic. Only the poller's exact ESPN scoreboard reads
 // may leave this process; push destinations and redirects are never followed.
 import { resolve } from "node:path";
+import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { bundle, database } from "../tests/helpers.mjs";
 
@@ -101,6 +102,8 @@ export async function runDiagnostic({ now = Date.now(), upstream = globalThis.fe
     const deliveries = sqlite.prepare("SELECT count(*) AS n FROM deliveries").get().n;
     const common = { checkedAt: new Date(now).toISOString(), attempts, blocked, subscriptions, deliveries, scope };
     if (blocked.length) return { success: false, attribution: "diagnostic-allowlist", message: "Diagnostic blocked a request outside its scoreboard allowlist", ...common };
+    // The production poller has no typed error result. Match only its aggregate
+    // feed error; a later database error must remain a local-poller failure.
     if (failure) return { success: false,
       attribution: failure.startsWith("ESPN score feeds failed (") ? "score-feed-attempts" : "local-poller",
       message: failure, ...common };
@@ -109,6 +112,7 @@ export async function runDiagnostic({ now = Date.now(), upstream = globalThis.fe
     const cdnAttempts = attempts.filter(attempt => attempt.source.startsWith("cdn"));
     const cdnFallback = acceptedSource === "site-api" ?
       cdnAttempts.some(attempt => attempt.networkError) ? "network-error" :
+      cdnAttempts.some(attempt => attempt.status >= 300 && attempt.status < 400) ? "redirect-not-followed" :
       cdnAttempts.some(attempt => !(attempt.status >= 200 && attempt.status < 300)) ? "http-error" : "response-rejected" : null;
     return { success: true, acceptedSource, cdnFallback,
       games: sqlite.prepare("SELECT count(*) AS n FROM game_states").get().n,
@@ -121,7 +125,7 @@ export async function runDiagnostic({ now = Date.now(), upstream = globalThis.fe
   }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))) {
   try {
     const result = await runDiagnostic();
     (result.success ? console.log : console.error)(JSON.stringify(result, null, 2));
