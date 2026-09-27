@@ -16,10 +16,10 @@ Linux runners install the required engine with `npx playwright install --with-de
 The Tests workflow runs Chromium and WebKit as separate matrix jobs on independent
 runners. Each engine gets a fresh dependency install, production build, local Worker,
 and browser process, so an engine or local Worker failure cannot inherit resources
-from the other engine or turn the rest of the combined suite into connection-failure
-noise. A final `test` gate requires the core job and both matrix entries. Each browser
-job retains its report and uploads `.wrangler/logs/` so a local Worker exit remains
-diagnosable. The two-build updater check also runs on its own clean runner with both
+from the other engine. WebKit is split into four shards. A final `test` gate
+requires the core job and every browser shard. Each browser job retains its
+report, `.wrangler/logs/`, and `output/playwright/server/` diagnostics. The
+two-build updater check also runs on its own clean runner with both
 engines installed, and the final gate requires it alongside core and the browser
 matrix. Missing engines fail explicitly;
 for a deliberately partial local check use `npm run test:browser --
@@ -48,3 +48,27 @@ assert `/api/health` matches the expected source and package version, so stale
 builds fail. Commit source changes before collecting final release evidence;
 if testing an uncommitted artifact, preserve its diff separately with results.
 CI uploads this directory with the existing test evidence artifact.
+
+The browser harness supervises local Wrangler and records timestamped stdout and
+stderr, periodic runner and server resources, and the first error-like line in
+`output/playwright/server/`. An error line is evidence, not proof the server has
+exited. On an unexpected server exit, the harness saves the actual code or signal,
+prints the first exit to the test log, and interrupts the remaining browser
+tests. If no Wrangler exit has been recorded but the existing fixture's direct
+health request fails, the fixture records that first failure and stops the shard as
+well. A test dispatched during the short observation window fails at fixture
+setup before its body runs. Browser crash/disconnect events capture an immediate
+resource snapshot. Normal Playwright teardown is marked separately. Use
+`npm run test:browser` for this stop behavior; a bare `npx playwright test`
+does not set `BROWSER_TEST_STOP_ON_SERVER_EXIT=1`.
+
+CI's browser artifact name includes the tested commit, run ID, attempt, and PR
+head SHA. Playwright metadata and the job summary also distinguish the tested
+merge commit from the PR head. The always-run runner snapshot includes memory,
+process, and kernel output where available. These diagnostics can help classify
+a future WebKit failure; they do not establish the cause of earlier exits.
+The supervisor detects the Wrangler process exit; a workerd-only exit is caught
+when it makes the fixture health request fail. A still-responsive Wrangler
+process with a failing application request needs its own test failure and
+artifact analysis. Issue #94 remains open until a future instrumented failure
+supports a cause classification.

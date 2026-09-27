@@ -216,7 +216,10 @@ for (const mode of ["hidden", "offline"]) {
         expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("ss:app-update-dismissed")))).toContain(B);
         // Clear the confirmed candidate with an ordinary background observation.
         state.commit = loaded;
-        await page.clock.fastForward(2100);
+        // Keep the baseline request and Help click within the same throttle
+        // window even when WebKit setup is slow on a CI runner.
+        const pausedAt = await page.evaluate(() => Date.now()) + 2100;
+        await page.clock.pauseAt(pausedAt);
         const baseline = state.count;
         const baselineResponse = page.waitForResponse(response => new URL(response.url()).pathname === "/api/health");
         await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -238,6 +241,7 @@ for (const mode of ["hidden", "offline"]) {
         try {
           await page.getByRole("button", { name: "How this scoreboard works" }).click();
           const help = page.locator(".help-body"), check = page.getByRole("button", { name: "Check for app update", exact: true });
+          if (timing === "queued") expect(await page.evaluate(() => Date.now())).toBe(pausedAt);
           await check.click();
           await expect(help).toContainText("Checking for an app update…");
           if (timing === "in-flight") await expect.poll(() => controlledCalls).toBe(1);

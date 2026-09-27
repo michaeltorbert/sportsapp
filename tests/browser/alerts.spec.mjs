@@ -131,16 +131,15 @@ test("SIMULATED alert switch: focus, busy, reduced motion and monochrome", async
   } else info.annotations.push({ type: "limitation", description: `${browserName} does not expose forced-colors emulation.` });
 });
 
-test("SIMULATED close-game alerts disclose global slate prioritization", async ({ page, harness }) => {
+test("SIMULATED game alerts disclose the known-unranked Group-of-Six exclusion", async ({ page, harness }) => {
   await harness.open({ push: { permission: "granted", existing: true, credentials: true } });
   await page.getByRole("button", { name: "Alerts on", exact: true }).tap();
-  await expect(page.getByText("Close-game alerts prioritize stronger live games", { exact: false })).not.toBeVisible();
+  await expect(page.getByText("Game alerts are off when ESPN confirms both teams are unranked", { exact: false })).not.toBeVisible();
   const writes = harness.state.alertRequests.filter(r => r.method !== "GET").length;
   const summary = page.locator(".alert-details summary");
   await summary.focus(); await summary.press("Enter");
-  await expect(page.getByText("Close-game alerts prioritize stronger live games", { exact: false })).toBeVisible();
-  await expect(page.getByText("even if you disabled or already received the stronger alert", { exact: false })).toBeVisible();
-  await expect(page.getByText("may skip two-unranked Group-of-Six matchups", { exact: false })).toBeVisible();
+  await expect(page.getByText("Game alerts are off when ESPN confirms both teams are unranked", { exact: false })).toBeVisible();
+  await expect(page.getByText("Unknown rankings or conferences do not count as confirmed.", { exact: false })).toBeVisible();
   expect(harness.state.alertRequests.filter(r => r.method !== "GET")).toHaveLength(writes);
   await summary.press("Space");
   await expect(page.locator(".alert-details")).not.toHaveAttribute("open", "");
