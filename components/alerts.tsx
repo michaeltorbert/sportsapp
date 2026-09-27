@@ -144,7 +144,7 @@ export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
     {message && <p role="status">{message}</p>}{resetNeeded && <button className="text-link" onClick={reset} disabled={busy}>Reset alerts</button>}
     <p className="alert-footnote">Duke alerts stay off. Scoreboard filters do not affect alerts.</p>
     <details className="alert-details"><summary>How alerts work</summary>
-      <p>Close-game alerts prioritize stronger live games and may skip two-unranked Group-of-Six matchups. This applies across the slate even if you disabled or already received the stronger alert.</p>
+      <p>Game alerts are off when ESPN confirms both teams are unranked and from Group-of-Six conferences. Unknown rankings or conferences do not count as confirmed.</p>
       <p>Close games and upset watch share at most one live notification attempt per game; optional finals are separate.</p>
       <p>New selections start from the next successful score check and do not replay current or past conditions. A notification already sent cannot be recalled.</p>
       <p>Upset watch requires a ranked pregame favorite of 7+ points. Without a line, it uses a ranked team against a confirmed unranked opponent, or a rank gap of 10+. Pick’em and conflicting expectations do not qualify.</p>

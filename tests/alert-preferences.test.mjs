@@ -96,8 +96,8 @@ test("alert panel policy copy stays synchronized with exported selectivity const
   const source = readFileSync(new URL("../components/alerts.tsx", import.meta.url), "utf8");
   assert.ok(source.includes(`favorite of ${MIN_UPSET_SPREAD}+ points`));
   assert.ok(source.includes(`rank gap of ${MIN_UPSET_RANK_GAP}+`));
-  assert.ok(source.includes("Close-game alerts prioritize stronger live games and may skip two-unranked Group-of-Six matchups."));
-  assert.ok(source.includes("even if you disabled or already received the stronger alert"));
+  assert.ok(source.includes("Game alerts are off when ESPN confirms both teams are unranked and from Group-of-Six conferences."));
+  assert.ok(source.includes("Unknown rankings or conferences do not count as confirmed."));
 });
 
 test("poll persists a pregame line through Q4 and claims the selected upset delivery once", async () => {

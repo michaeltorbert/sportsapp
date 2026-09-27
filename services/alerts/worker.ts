@@ -3,9 +3,8 @@ import { VERSION } from "../../lib/releases";
 import { normalizeScoreboard, scoreboardCdnUrl, scoreboardUrl } from "../../lib/espn-data";
 import { easternDate, shiftDate, type Game } from "../../lib/football";
 import { conditions, nextPollAt, transitions, type AlertEvent, type Snapshot, type Trigger } from "./rules";
-import { meaningfulUpset, retainExpectation } from "./expectation";
-import { isPowerFour, twoUnrankedGroupOfSix } from "../../lib/conference-evidence";
-import { teamRank } from "../../lib/upset";
+import { retainExpectation } from "./expectation";
+import { twoUnrankedGroupOfSix } from "../../lib/conference-evidence";
 import { activationBaselines, forTrigger, preferences, preferenceTypes, status as preferenceStatus, validPatch, type Settings, type Preference } from "./preferences";
 import { encode, hash, sendPush, validSubscription } from "./web-push";
 
@@ -35,23 +34,12 @@ export async function deliver(env: Env, now: number, games: Game[]) {
   if (!subscriber) return;
   const { results: events } = await env.DB.prepare("SELECT id,game_id,trigger,payload,created_at FROM alert_events WHERE created_at >= ? AND created_at > (SELECT value FROM poll_state WHERE id='preferences_epoch') ORDER BY created_at,CASE trigger WHEN 'ranked-trailing-fourth' THEN 0 ELSE 1 END,id").bind(now - 180000).all<StoredEvent>();
   const current = new Map(games.map(game => [game.id, game]));
-  // Freeze eligibility and slate competition before any recipient or claim is
-  // processed. The gate is global, even for disabled/already-delivered triggers.
+  // Recheck current eligibility before any recipient or claim is processed.
   const candidates = events.filter(event => {
     const game = current.get(event.game_id);
     return game && Object.values(preferences).some(p => p.trigger === event.trigger) && conditions(game, now)[event.trigger];
   });
-  // conditions() already excludes Duke; covered by the Duke competition case
-  // in tests/alert-competition.test.mjs (stale/missing/Duke/kickoff/final controls).
-  const strongerLiveGames = new Set(candidates.filter(event => {
-    if (event.trigger !== "one-score-fourth" && event.trigger !== "ranked-trailing-fourth") return false;
-    const game = current.get(event.game_id)!;
-    return game.teams.some(team => teamRank(team) !== null || isPowerFour(team)) || meaningfulUpset(game);
-  }).map(event => event.game_id));
-  const deliverable = candidates.filter(event => event.trigger !== "one-score-fourth"
-    || !twoUnrankedGroupOfSix(current.get(event.game_id)!)
-    || ![...strongerLiveGames].some(id => id !== event.game_id));
-  for (const event of deliverable) {
+  for (const event of candidates) {
     const pref = forTrigger(event.trigger), flag = event.trigger === "acc-kickoff" ? "s.kickoff" : `p.${pref.column}`;
     const live = event.trigger === "one-score-fourth" || event.trigger === "ranked-trailing-fourth";
     let after = "";
@@ -164,6 +152,14 @@ export async function saveGameStates(db: Database, games: Game[], now: number, b
   for (let i = 0; i < events.length; i += 16) {
     const rows = events.slice(i, i + 16);
     statements.push(db.prepare(`INSERT OR IGNORE INTO alert_events(id,game_id,trigger,game_day,created_at,payload) VALUES ${rows.map(() => "(?,?,?,?,?,?)").join(",")}`).bind(...rows.flatMap(event => [event.id, event.gameId, event.trigger, event.gameDay, event.createdAt, JSON.stringify(event.payload)])));
+  }
+  const excluded = retained.filter(twoUnrankedGroupOfSix).map(game => game.id);
+  if (excluded.length) {
+    // An existing event becomes terminal when source evidence confirms the
+    // exclusion. No row is added without an event, so a later correction can
+    // still create its first eligible event.
+    statements.push(db.prepare("INSERT OR IGNORE INTO rule_baselines(game_id,trigger,observed_at) SELECT game_id,trigger,? FROM alert_events WHERE game_id IN (SELECT value FROM json_each(?))")
+      .bind(now, JSON.stringify(excluded)));
   }
   for (let i = 0; i < changed.length; i += 25) {
     const rows = changed.slice(i, i + 25);
