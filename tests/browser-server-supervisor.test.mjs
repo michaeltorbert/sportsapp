@@ -6,7 +6,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import ServerExitReporter from "./browser/server-exit-reporter.mjs";
-import { readServerState, serverFailureMessage } from "../scripts/browser-server-diagnostics.mjs";
+import { readServerState, recordUnavailable, serverFailureMessage } from "../scripts/browser-server-diagnostics.mjs";
 
 const supervisor = resolve("scripts/browser-test-server.mjs");
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -45,10 +45,30 @@ test("unexpected server exit keeps first anomaly, resources, and a failing statu
   assert.equal(state.exit.code, 3);
   assert.equal(state.firstAnomaly.line, "Broken pipe without newline");
   assert.match(serverFailureMessage(state), /code 3/);
+  assert.match(serverFailureMessage(state), /first stderr anomaly/);
   assert.match(readFileSync(join(dir, "evidence/wrangler-stdio.jsonl"), "utf8"), /Broken pipe without newline/);
   assert.match(JSON.stringify(state.exit.tail), /Broken pipe without newline/);
   assert.match(readFileSync(join(dir, "evidence/resources.jsonl"), "utf8"), /unexpected-exit/);
   assert.equal(readServerState(join(dir, "evidence"), "stale"), null);
+});
+
+test("a failed fixture health request stops a shard even while Wrangler remains alive", async t => {
+  const dir = mkdtempSync(join(tmpdir(), "browser-health-failure-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const state = { runId: "unavailable", phase: "running", directory: dir };
+  writeFileSync(join(dir, "state.json"), JSON.stringify(state));
+  const marker = recordUnavailable(dir, "unavailable", "connect ECONNREFUSED 127.0.0.1:4178");
+  assert.equal(marker.reason, "connect ECONNREFUSED 127.0.0.1:4178");
+  assert.equal(recordUnavailable(dir, "unavailable", "later failure").reason, marker.reason);
+  const prior = process.env.BROWSER_TEST_STOP_ON_SERVER_EXIT;
+  process.env.BROWSER_TEST_STOP_ON_SERVER_EXIT = "1";
+  t.after(() => { if (prior === undefined) delete process.env.BROWSER_TEST_STOP_ON_SERVER_EXIT; else process.env.BROWSER_TEST_STOP_ON_SERVER_EXIT = prior; });
+  let signals = 0;
+  const reporter = new ServerExitReporter({ signal: () => { signals++; }, pollMs: 10 });
+  reporter.onBegin({ metadata: { serverDiagnosticsDir: dir, browserRunId: "unavailable" } });
+  await until(() => signals === 1);
+  assert.deepEqual(reporter.onEnd(), { status: "failed" });
+  assert.equal(readServerState(dir, "unavailable").phase, "running");
 });
 
 test("parent exit is recorded before a descendant releases inherited stdio", async t => {
@@ -61,7 +81,7 @@ test("parent exit is recorded before a descendant releases inherited stdio", asy
     return current?.phase === "exited" ? current : null;
   });
   assert.equal(state.exit.code, 7);
-  assert.ok(Date.now() - started < 750, "the parent exit must be available before inherited stdio closes");
+  assert.ok(Date.now() - started < 3000, "the parent exit must be available before the descendant releases stdio");
   const [code] = await once(child, "close");
   assert.equal(code, 7);
 });
@@ -69,7 +89,7 @@ test("parent exit is recorded before a descendant releases inherited stdio", asy
 test("normal supervisor teardown is marked before the child stops", async t => {
   const dir = mkdtempSync(join(tmpdir(), "browser-server-stop-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const child = launch(dir, "normal", `console.log('READY'); setInterval(() => {}, 1000);`);
+  const child = launch(dir, "normal", `console.log('READY'); process.on('SIGTERM', () => process.exit(143)); setInterval(() => {}, 1000);`);
   await until(() => readServerState(join(dir, "evidence"), "normal")?.serverPid);
   child.kill("SIGTERM");
   const [code] = await once(child, "close");

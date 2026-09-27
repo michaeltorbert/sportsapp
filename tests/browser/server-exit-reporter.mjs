@@ -1,4 +1,4 @@
-import { readServerState, serverFailureMessage } from "../../scripts/browser-server-diagnostics.mjs";
+import { readServerState, readUnavailable, serverFailureMessage, unavailableMessage } from "../../scripts/browser-server-diagnostics.mjs";
 
 export default class ServerExitReporter {
   constructor(options = {}) {
@@ -17,8 +17,10 @@ export default class ServerExitReporter {
   check() {
     if (this.stopping || this.detected) return;
     const state = readServerState(this.directory, this.runId);
-    if (state?.phase !== "exited" || !state.exit) return;
-    this.detected = serverFailureMessage(state);
+    const unavailable = readUnavailable(this.directory, this.runId);
+    if (state?.phase === "exited" && state.exit) this.detected = serverFailureMessage(state);
+    else if (unavailable) this.detected = unavailableMessage(unavailable, this.directory);
+    else return;
     process.stderr.write(`[browser-harness] ${this.detected}\n`);
     this.signal();
   }
@@ -27,8 +29,9 @@ export default class ServerExitReporter {
     this.stopping = true;
     clearInterval(this.timer);
     const state = readServerState(this.directory, this.runId);
-    if (state?.phase === "exited" && state.exit) {
-      if (!this.detected) process.stderr.write(`[browser-harness] ${serverFailureMessage(state)}\n`);
+    const unavailable = readUnavailable(this.directory, this.runId);
+    if ((state?.phase === "exited" && state.exit) || unavailable) {
+      if (!this.detected) process.stderr.write(`[browser-harness] ${state?.exit ? serverFailureMessage(state) : unavailableMessage(unavailable, this.directory)}\n`);
       return { status: "failed" };
     }
   }

@@ -34,6 +34,8 @@ function killGroup(signal) {
 
 function stop(signal) {
   if (stopping) return;
+  // Node may have reaped Wrangler before delivering its exit callback.
+  if (!state.exit && (child.exitCode !== null || child.signalCode !== null)) recordUnexpectedExit(child.exitCode, child.signalCode);
   stopping = true;
   if (!state.exit) {
     state.phase = "stopping";

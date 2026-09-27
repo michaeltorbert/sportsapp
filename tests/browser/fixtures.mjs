@@ -1,5 +1,5 @@
 import { test as base, expect } from "@playwright/test";
-import { appendEvidence, readServerState, resourceSnapshot, serverFailureMessage } from "../../scripts/browser-server-diagnostics.mjs";
+import { appendEvidence, readServerState, readUnavailable, recordUnavailable, resourceSnapshot, serverFailureMessage, unavailableMessage } from "../../scripts/browser-server-diagnostics.mjs";
 
 export const NOW = "2026-09-06T03:59:00Z"; // Saturday, 11:59 p.m. Eastern.
 export const ALERT_ORIGIN = "https://alerts.example.test";
@@ -64,7 +64,10 @@ export const test = base.extend({
   serverGuard: [async ({}, provide, testInfo) => {
     const { browserRunId, serverDiagnosticsDir } = testInfo.config.metadata;
     const state = readServerState(serverDiagnosticsDir, browserRunId);
+    if (!state) throw new Error(`Browser server diagnostics state is missing or has a different run ID: ${serverDiagnosticsDir}`);
     if (state?.phase === "exited") throw new Error(serverFailureMessage(state));
+    const unavailable = readUnavailable(serverDiagnosticsDir, browserRunId);
+    if (unavailable) throw new Error(unavailableMessage(unavailable, serverDiagnosticsDir));
     await provide();
   }, { auto: true }],
   harness: async ({ page, browser, browserName, request }, provide, testInfo) => {
@@ -72,6 +75,7 @@ export const test = base.extend({
     const startedAt = new Date().toISOString();
     const serverState = () => readServerState(serverDiagnosticsDir, browserRunId);
     const failedServer = serverState();
+    if (!failedServer) throw new Error(`Browser server diagnostics state is missing or has a different run ID: ${serverDiagnosticsDir}`);
     if (failedServer?.phase === "exited") throw new Error(serverFailureMessage(failedServer));
     appendEvidence(serverDiagnosticsDir, "test-timeline.jsonl", { event: "start", utc: startedAt, title: testInfo.title, file: testInfo.file, workerIndex: testInfo.workerIndex });
     const state = {
@@ -145,7 +149,8 @@ export const test = base.extend({
     catch (error) {
       const failed = serverState();
       if (failed?.phase === "exited") throw new Error(serverFailureMessage(failed), { cause: error });
-      throw error;
+      const unavailable = recordUnavailable(serverDiagnosticsDir, browserRunId, error.message, failed?.serverPid);
+      throw new Error(unavailableMessage(unavailable, serverDiagnosticsDir), { cause: error });
     }
     expect(health).toEqual({ version: testInfo.config.metadata.appVersion, commit: testInfo.config.metadata.sourceCommit });
     await provide({

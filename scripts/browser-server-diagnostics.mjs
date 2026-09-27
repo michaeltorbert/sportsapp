@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, linkSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import os from "node:os";
 
@@ -12,10 +12,33 @@ export function readServerState(directory, runId) {
   }
 }
 
+export function readUnavailable(directory, runId) {
+  try {
+    const unavailable = JSON.parse(readFileSync(join(directory, "first-unavailable.json"), "utf8"));
+    return unavailable.runId === runId ? unavailable : null;
+  } catch { return null; }
+}
+
 export function writeServerState(directory, state) {
   const temp = join(directory, `state-${process.pid}.tmp`);
   writeFileSync(temp, JSON.stringify(state, null, 2));
   renameSync(temp, join(directory, "state.json"));
+}
+
+export function recordUnavailable(directory, runId, reason, serverPid) {
+  const existing = readUnavailable(directory, runId);
+  if (existing) return existing;
+  const unavailable = { runId, utc: new Date().toISOString(), reason, resources: resourceSnapshot(serverPid) };
+  const temp = join(directory, `unavailable-${process.pid}.tmp`);
+  writeFileSync(temp, JSON.stringify(unavailable, null, 2));
+  try {
+    // Keep the first failure when local runs have two workers racing here.
+    linkSync(temp, join(directory, "first-unavailable.json"));
+    return unavailable;
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    return readUnavailable(directory, runId) || unavailable;
+  } finally { unlinkSync(temp); }
 }
 
 function readOptional(path) {
@@ -66,6 +89,10 @@ export function serverFailureMessage(state) {
   const exit = state?.exit;
   if (!exit) return null;
   const reason = exit.signal ? `signal ${exit.signal}` : `code ${exit.code}`;
-  const anomaly = state.firstAnomaly ? `; first stderr anomaly ${state.firstAnomaly.utc}: ${state.firstAnomaly.line}` : "";
+  const anomaly = state.firstAnomaly ? `; first ${state.firstAnomaly.stream} anomaly ${state.firstAnomaly.utc}: ${state.firstAnomaly.line}` : "";
   return `Local Wrangler server exited unexpectedly at ${exit.utc} (${reason})${anomaly}. Diagnostics: ${state.directory}`;
+}
+
+export function unavailableMessage(unavailable, directory) {
+  return `Local Worker health request failed at ${unavailable.utc} without a recorded Wrangler exit (${unavailable.reason}). Diagnostics: ${directory}`;
 }
