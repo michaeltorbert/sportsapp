@@ -4,7 +4,7 @@ import { easternDate, shiftDate, type Game, type Scoreboard, type Team } from ".
 
 const numberLike = z.union([z.string(), z.number()]);
 const statusSchema = z.object({ period: z.number().optional(), clock: z.number().optional(), type: z.object({ name: z.string(), state: z.string(), completed: z.boolean().optional(), shortDetail: z.string().optional(), detail: z.string().optional(), description: z.string().optional() }) });
-const competitorSchema = z.object({ id: z.string(), homeAway: z.string(), score: numberLike.nullish(), curatedRank: z.object({ current: z.number().optional() }).optional(), team: z.object({ id: z.string(), shortDisplayName: z.string().optional(), displayName: z.string().optional(), location: z.string().optional(), abbreviation: z.string().optional(), logo: z.string().optional(), conferenceId: numberLike.optional() }), records: z.array(z.object({ type: z.string().optional(), name: z.string().optional(), summary: z.string().optional() })).optional() });
+const competitorSchema = z.object({ id: z.string(), homeAway: z.string(), score: numberLike.nullish(), curatedRank: z.object({ current: z.number().optional() }).optional(), team: z.object({ id: z.string(), shortDisplayName: z.string().optional(), displayName: z.string().optional(), location: z.string().optional(), abbreviation: z.string().optional(), logo: z.string().optional(), conferenceId: numberLike.optional() }), records: z.unknown().optional() });
 const eventSchema = z.object({ id: z.string(), date: z.string(), status: statusSchema.optional(), links: z.array(z.object({ rel: z.array(z.string()).optional(), href: z.string() })).optional(), competitions: z.array(z.object({ date: z.string().optional(), timeValid: z.boolean().optional(), neutralSite: z.unknown().optional(), odds: z.unknown().optional(), status: statusSchema.optional(), competitors: z.array(competitorSchema), broadcasts: z.unknown().optional(), broadcast: z.unknown().optional(), situation: z.object({ possession: numberLike.optional(), downDistanceText: z.string().optional(), isRedZone: z.boolean().optional() }).optional() })) });
 
 // Optional listing metadata must never make an otherwise readable game incomplete.
@@ -22,7 +22,14 @@ export function broadcastNames(raw: unknown, fallback: unknown): string[] {
 function score(value: string | number | null | undefined) { if (value === null || value === undefined || value === "") return null; const n = Number(value); return Number.isFinite(n) && n >= 0 ? n : null; }
 function espnLink(value: string | undefined, fallback: string) { try { const u = new URL(value || ""); return u.protocol === "https:" && (u.hostname === "espn.com" || u.hostname.endsWith(".espn.com")) ? u.href : fallback; } catch { return fallback; } }
 function logoLink(value: string | undefined) { try { const u = new URL(value || ""); return u.protocol === "https:" && u.hostname.endsWith(".espncdn.com") ? u.href : null; } catch { return null; } }
-function team(c: z.infer<typeof competitorSchema>): Team { const rank = c.curatedRank?.current; return { id: c.team.id, name: c.team.shortDisplayName || c.team.location || c.team.displayName || c.team.abbreviation || "Team", abbreviation: c.team.abbreviation || "", logo: logoLink(c.team.logo), conferenceId: c.team.conferenceId === undefined ? null : String(c.team.conferenceId), score: score(c.score), rank: rank && rank >= 1 && rank <= 25 ? rank : null, rankKnown: typeof rank === "number" && rank >= 1, record: c.records?.find(r => r.type === "total" || r.name === "overall")?.summary?.trim() || "" }; }
+// Records are optional listing metadata. Show only wins-losses or
+// wins-losses-ties so a malformed summary cannot drop the game or crowd its row.
+function overallRecord(raw: unknown) {
+  const entry = Array.isArray(raw) ? raw.find(r => r && typeof r === "object" && (r.type === "total" || r.name === "overall")) : undefined;
+  const summary = typeof entry?.summary === "string" ? entry.summary.trim() : "";
+  return /^\d{1,2}-\d{1,2}(?:-\d{1,2})?$/.test(summary) ? summary : "";
+}
+function team(c: z.infer<typeof competitorSchema>): Team { const rank = c.curatedRank?.current; return { id: c.team.id, name: c.team.shortDisplayName || c.team.location || c.team.displayName || c.team.abbreviation || "Team", abbreviation: c.team.abbreviation || "", logo: logoLink(c.team.logo), conferenceId: c.team.conferenceId === undefined ? null : String(c.team.conferenceId), score: score(c.score), rank: rank && rank >= 1 && rank <= 25 ? rank : null, rankKnown: typeof rank === "number" && rank >= 1, record: overallRecord(c.records) }; }
 
 const eventsEnvelopeSchema = z.object({ events: z.array(z.unknown()) });
 function eventsEnvelope(raw: unknown) {
