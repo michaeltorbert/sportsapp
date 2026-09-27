@@ -113,7 +113,9 @@ test('details support keyboard and touch, preserve live-to-final context and sho
   await page.clock.fastForward(31_000);
   await expect(row.locator('.game-status')).toHaveText('Final');
   await expect(details).toHaveAttribute('open', '');
-  await expect(summary).toContainText('Earlier upset watch');
+  await expect(summary).not.toContainText('Earlier upset watch');
+  await expect(summary.locator('.compact-upset')).toHaveCount(0);
+  await expect(row.locator('.upset-badge')).toHaveCount(0);
   await summary.tap(); await expect(details).not.toHaveAttribute('open');
   await summary.press('Space'); await expect(details).toHaveAttribute('open', '');
 });

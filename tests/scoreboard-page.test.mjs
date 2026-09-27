@@ -106,6 +106,7 @@ test("Upsets shows brewing first, completed upset results in the total, and an a
   const shown = render(["upset"], { boards }).html;
   assert.deepEqual(upsetBadge(shown), [1, 2]);
   assert.match(shown, /aria-label="Upsets, 1 brewing, 2 brewing or completed upsets"/);
+  assert.deepEqual(cardIds(shown), ["brewing", "concluded"]);
   const hidden = render(["upset"], { boards, hideFinals: true }).html;
   assert.deepEqual(upsetBadge(hidden), [1, 1]);
   assert.match(hidden, /aria-label="Upsets, 1 brewing, 1 brewing or completed upsets"/);
@@ -254,19 +255,44 @@ test("shown teams display ESPN overall records without crowding the score label"
   }
 });
 
-test("retained upset finals distinguish a comeback from a completed conference upset", () => {
+test("recovered finals leave Upsets while completed conference upsets remain", () => {
   const final = game({ id: "retained", state: "final", retainedCategories: { acc: false, top25: false, close: false, upset: true } });
   Object.assign(final.teams[0], { name: "Florida", conferenceId: "8", rank: null, score: 28 });
   Object.assign(final.teams[1], { name: "East Carolina", conferenceId: "151", rank: null, score: 21 });
   const boards = fixtures(); boards.daily = scoreboard([final]);
   const comeback = render(["upset"], { boards }).html;
-  assert.match(comeback, /Earlier upset watch/);
-  assert.doesNotMatch(comeback, /Upset final|East Carolina beat Florida/);
+  assert.deepEqual(cardIds(comeback), []);
+  assert.doesNotMatch(comeback, /Earlier upset watch|Upset final|East Carolina beat Florida/);
   final.teams[0].score = 7;
   const upset = render(["upset"], { boards }).html;
   assert.match(upset, /Conference watch/);
   assert.match(upset, /East Carolina beat Florida · SEC conference watch/);
   assert.doesNotMatch(upset, /pregame favorite|No\. (null|undefined)/);
+});
+
+test("ORD-016/017 rendered Final puts ranked Power Four above unranked Group of Six without Virginia Tech's earlier watch", () => {
+  const vt = game({ id: "vt-bc", state: "final", date: "2026-09-26T16:00:00Z",
+    pregameLine: { favoriteId: "259", spread: 14.5, source: "fixture" },
+    retainedCategories: { acc: true, top25: false, close: true, upset: true } });
+  Object.assign(vt.teams[0], { id: "259", name: "Virginia Tech", conferenceId: "1", rank: null, score: 21 });
+  Object.assign(vt.teams[1], { id: "103", name: "Boston College", conferenceId: "1", rank: null, score: 14 });
+  const ranked = game({ id: "ole-miss-florida", state: "final", date: "2026-09-27T01:00:00Z" });
+  Object.assign(ranked.teams[0], { name: "Ole Miss", conferenceId: "8", rank: 4, score: 28 });
+  Object.assign(ranked.teams[1], { name: "Florida", conferenceId: "8", rank: 21, score: 52 });
+  const group = game({ id: "hawaii-wyoming", state: "final", date: "2026-09-26T17:00:00Z",
+    pregameLine: { favoriteId: "a", spread: 3, source: "fixture" } });
+  Object.assign(group.teams[0], { name: "Hawai‘i", conferenceId: "17", rank: null, score: 10 });
+  Object.assign(group.teams[1], { name: "Wyoming", conferenceId: "17", rank: null, score: 27 });
+  const boards = fixtures(); boards.daily = scoreboard([group, vt, ranked]);
+  const upsets = render(["upset"], { boards }).html;
+  assert.deepEqual(cardIds(upsets), ["ole-miss-florida", "hawaii-wyoming"]);
+  assert.deepEqual(upsetBadge(upsets), [0, 2]);
+  assert.doesNotMatch(upsets, /Earlier upset watch|game-vt-bc/);
+  const all = render([], { boards }).html;
+  assert.deepEqual(cardIds(all), ["vt-bc", "ole-miss-florida", "hawaii-wyoming"]);
+  const vtCard = all.match(/<article id="game-vt-bc"[\s\S]*?<\/article>/)?.[0];
+  assert.ok(vtCard);
+  assert.doesNotMatch(vtCard, /Earlier upset watch|Upset final|Conference watch|class="compact-upset"|class="badge upset-badge"/);
 });
 
 test("Help separates selective alert policy from rank-or-line display categories", () => {
@@ -298,8 +324,8 @@ test("live conference watches use the same honest badge as conference finals", (
   const final = structuredClone(g); final.state = "final"; final.teams[0].score = 35;
   boards.daily = retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(scoreboard([paused]))));
   const completed = render(["upset"], { boards }).html;
-  assert.deepEqual(cardIds(completed), [g.id]);
-  assert.match(completed, /Earlier upset watch/);
+  assert.deepEqual(cardIds(completed), []);
+  assert.doesNotMatch(completed, /Earlier upset watch/);
   assert.doesNotMatch(completed, /class="upset-reason"/);
 });
 

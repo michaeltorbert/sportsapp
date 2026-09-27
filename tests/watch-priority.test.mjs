@@ -174,10 +174,11 @@ test("pregame lines survive kickoff and reload, but cannot migrate to a differen
   assert.equal(retainFinalCategories(scoreboard([replacement]), board).games[0].pregameLine, undefined);
   const comeback = match("sec", { sec: true, state: "final", score: 35, otherScore: 24 });
   const retained = retainFinalCategories(scoreboard([comeback]), board).games[0];
-  assert.equal(classify(retained).upset, true); assert.equal(upsetExplanation(retained), null);
+  assert.equal(classify(retained).upset, false); assert.equal(upsetExplanation(retained), null);
+  assert.deepEqual(viewGames(scoreboard([retained]), ["upset"]), []);
   const rescheduled = { ...comeback, date: "2026-09-06T21:00:00Z" };
   const moved = retainFinalCategories(scoreboard([rescheduled]), board).games[0];
-  assert.equal(classify(moved).upset, true, "same-event categories survive schedule updates");
+  assert.equal(classify(moved).upset, false, "a historical watch cannot turn a win into a final upset");
   assert.equal(moved.pregameLine, undefined, "a reschedule must not assert the original betting baseline still applies");
   const ranked = match("both-ranked", { rank: 24, otherRank: 25 });
   assert.match(upsetExplanation(ranked), /No\. 25 Opponent leads No\. 24 Favorite/);
@@ -204,8 +205,8 @@ test("unranked SEC upset watches remain visible during a delay after kickoff", (
   const final = match("paused-sec", { sec: true, state: "final", score: 35, otherScore: 21 });
   const stored = JSON.parse(JSON.stringify(scoreboard([paused])));
   const retained = retainFinalCategories(scoreboard([final]), stored);
-  assert.equal(classify(retained.games[0]).upset, true, "a saved paused watch survives a comeback final");
-  assert.deepEqual(viewGames(retained, ["upset"]).map(g => g.id), [paused.id]);
+  assert.equal(classify(retained.games[0]).upset, false, "a saved paused watch ends at a comeback final");
+  assert.deepEqual(viewGames(retained, ["upset"]).map(g => g.id), []);
   assert.equal(upsetExplanation(retained.games[0]), null);
   stored.games[0].started = false;
   assert.equal(retainFinalCategories(scoreboard([final]), stored).games[0].retainedCategories, undefined);
@@ -470,6 +471,38 @@ test("ORD-012 exact conference taxonomy and bounded Power Four relevance preserv
   }
   const acc = match("acc-sec", { conference: "1", otherConference: "8" });
   assert.equal(gamePriority(acc).relevance, 24);
+});
+
+test("ORD-017 ranked Power Four finals precede known unranked Group-of-Six finals", () => {
+  const ranked = match("ole-miss-florida", { state: "final", conference: "8", otherConference: "8",
+    rank: 4, otherRank: 21, date: "2026-09-27T01:00:00Z", score: 28, otherScore: 52 });
+  const rankedOther = match("iowa-michigan", { state: "final", conference: "5", otherConference: "5",
+    rank: 17, otherRank: 18, date: "2026-09-27T01:30:00Z", score: 20, otherScore: 19 });
+  const group = match("hawaii-wyoming", { state: "final", conference: "17", otherConference: "17",
+    date: "2026-09-26T16:00:00Z", score: 10, otherScore: 27,
+    pregameLine: { favoriteId: "a", spread: 3, source: "fixture" } });
+  const accUnranked = match("unranked-acc", { state: "final", conference: "1", otherConference: "1",
+    date: "2026-09-26T17:30:00Z", score: 30, otherScore: 27 });
+  const accRanked = match("wake-louisville", { state: "final", conference: "1", otherConference: "1",
+    otherRank: 16, date: "2026-09-26T18:00:00Z", score: 30, otherScore: 27 });
+  const unknown = match("unknown-evidence", { state: "final", conference: null, otherConference: "17",
+    date: "2026-09-26T17:00:00Z", score: 14, otherScore: 21 });
+  unknown.teams[0].rankKnown = false;
+  const pinned = match("vt-bc", { state: "final", conference: "1", otherConference: "1",
+    date: "2026-09-26T20:00:00Z", score: 21, otherScore: 14 });
+  pinned.teams[0].id = "259";
+  const games = [group, rankedOther, unknown, pinned, accRanked, accUnranked, ranked];
+  for (const input of [games, [...games].reverse()]) {
+    const ordered = sortGames(input).map(game => game.id);
+    assert.deepEqual(ordered, ["vt-bc", "unknown-evidence", "unranked-acc", "wake-louisville", "ole-miss-florida", "iowa-michigan", "hawaii-wyoming"]);
+    for (const selection of [[], ["upset"], ["acc"], ["top25"], ["close"]]) {
+      const subset = viewGames(scoreboard(input), selection).map(game => game.id);
+      assert.deepEqual(subset, ordered.filter(id => subset.includes(id)), `shared order for ${selection}`);
+    }
+  }
+  assert.equal(twoUnrankedGroupOfSix(group), true);
+  assert.equal(twoUnrankedGroupOfSix(unknown), false, "unknown evidence cannot establish the lowest tier");
+  assert.equal(sortGames([{ ...group, state: "live" }, ranked])[0].id, group.id, "final tier never crosses state groups");
 });
 
 test("ORD-012 issue 74 rank disruption is line-independent and labels remain truthful", () => {

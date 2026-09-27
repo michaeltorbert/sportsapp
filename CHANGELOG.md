@@ -1,5 +1,10 @@
 # Saturday Signal releases
 
+## 1.12.2 · 2026-09-26
+
+- Remove recovered-favorite finals from Upsets while preserving other matching categories and the completed-upset count (#97, ORD-016).
+- In Final, put known two-unranked Group-of-Six matchups after other games, following Duke/Virginia Tech pins; preserve kickoff order among the other finals (#98, ORD-017). Live-game priority and alerts are unchanged.
+
 ## 1.12.1 · 2026-09-26
 
 - Include any trailing validated pregame favorite or known higher-ranked team in displayed Upsets and counts, including unranked favorites outside ACC/SEC and contrary or pick’em lines (#95, ORD-015). Preserve ordering and phone-alert rules.
