@@ -7,6 +7,7 @@ import { retainExpectation } from "./expectation";
 import { twoUnrankedGroupOfSix } from "../../lib/conference-evidence";
 import { activationBaselines, forTrigger, preferences, preferenceTypes, status as preferenceStatus, validPatch, type Settings, type Preference } from "./preferences";
 import { encode, hash, sendPush, validSubscription } from "./web-push";
+import { SAMPLE_KIND, samplePayload } from "./sample";
 
 type Result<T = Record<string, unknown>> = { results: T[]; meta: { changes: number } };
 export interface Statement {
@@ -19,6 +20,12 @@ export interface Database { prepare(sql: string): Statement; batch(statements: S
 export type Env = { DB: Database; SITE_ORIGIN: string; ADDITIONAL_SITE_ORIGINS?: string; VAPID_PUBLIC_KEY: string; VAPID_PRIVATE_KEY: string; VAPID_SUBJECT: string };
 type StoredSubscription = { id: string; endpoint: string; p256dh: string; auth: string; token_hash: string; kickoff: number; active: number; created_at: number };
 type StoredEvent = { id: string; game_id: string; trigger: Trigger; payload: string; created_at: number };
+type Context = { waitUntil(promise: Promise<unknown>): void };
+// The exact subscription and settings generation a sample was scheduled for.
+type Generation = { endpoint: string; p256dh: string; auth: string; token_hash: string; revision: number };
+type TestRow = { status: string; attempted_at: number };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+export const SAMPLE_DELAY_MS = 10000, SAMPLE_LATE_MS = 15000, SAMPLE_OVERDUE_MS = 30000;
 const setValue = (db: Database, id: string, value: number) => db.prepare("INSERT INTO poll_state(id,value) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value").bind(id, value);
 
 export async function claimDelivery(db: Database, eventId: string, subscriptionId: string, now: number) {
@@ -76,13 +83,71 @@ export async function deliver(env: Env, now: number, games: Game[]) {
 }
 // Tests use the delivery ledger only: never create a football event for a device test.
 // The caller must prove ownership of one active subscription and supply a stable UUID.
-async function testNotification(request: Request, env: Env, sub: StoredSubscription, origin: string) {
+// A sample shares the test ledger key, cooldown and owner checks. Its status
+// prefix records the kind so one UUID can never send two different payloads.
+const isSample = (row: TestRow) => row.status.startsWith("sample:");
+const kindConflict = { body: { error: "This test ID was already used for a different kind of test. No notification was sent.", code: "test-kind-conflict" }, status: 409 };
+function sampleResult(testId: string, row: TestRow, now: number) {
+  const state = row.status.slice("sample:".length), open = state === "scheduled" || state === "sending";
+  const overdue = open && now - row.attempted_at > SAMPLE_OVERDUE_MS;
+  return {
+    body: {
+      testId, sample: SAMPLE_KIND, status: state, attempted: false,
+      // late/suppressed are written only from scheduled, so no send began.
+      attemptHistory: state === "late" || state === "suppressed" ? "none" : state === "scheduled" ? "pending" : state === "sending" ? "unknown" : "attempted",
+      scheduledAt: new Date(row.attempted_at).toISOString(), receiptConfirmed: false,
+      ...(open ? { overdue } : {}),
+      ...(overdue ? { warning: "No result has been recorded. This does not show whether the sample was or was not sent." } : {}),
+    },
+    status: open ? 202 : 200,
+  };
+}
+async function sendSample(env: Env, subscriptionId: string, eventId: string, testId: string, origin: string, generation: Generation) {
+  const started = Date.now();
+  const settle = (status: string) => env.DB.prepare("UPDATE deliveries SET status=? WHERE event_id=? AND subscription_id=? AND status='sample:scheduled'").bind(status, eventId, subscriptionId).run();
+  await new Promise(resolve => setTimeout(resolve, SAMPLE_DELAY_MS));
+  if (Date.now() - started > SAMPLE_LATE_MS) { await settle("sample:late"); return; }
+  // Final guard immediately before transport. Only an exact one-row change
+  // authorizes the send; missing metadata or a reread never does.
+  let changes: unknown;
+  try {
+    const guard = await env.DB.prepare(`UPDATE deliveries SET status='sample:sending' WHERE event_id=? AND subscription_id=? AND status='sample:scheduled'
+      AND EXISTS(SELECT 1 FROM subscriptions s JOIN subscription_settings p ON p.subscription_id=s.id WHERE s.id=? AND s.active=1 AND s.token_hash=? AND s.endpoint=? AND s.p256dh=? AND s.auth=? AND p.revision=?)`)
+      .bind(eventId, subscriptionId, subscriptionId, generation.token_hash, generation.endpoint, generation.p256dh, generation.auth, generation.revision).run();
+    changes = guard?.meta?.changes;
+  } catch { changes = undefined; }
+  if (changes !== 1) { await settle("sample:suppressed"); return; }
+  // A settings change committed after this guard can still race the send.
+  let status = "sample:uncertain", code = 0;
+  try {
+    code = await sendPush({ endpoint: generation.endpoint, keys: { p256dh: generation.p256dh, auth: generation.auth } }, samplePayload(testId, origin), { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY, subject: env.VAPID_SUBJECT });
+    status = code >= 200 && code < 300 ? "sample:accepted" : `sample:http-${code}`;
+  } catch { /* Ambiguous: never retried. */ }
+  const writes = [env.DB.prepare("UPDATE deliveries SET status=? WHERE event_id=? AND subscription_id=? AND status='sample:sending'").bind(status, eventId, subscriptionId)];
+  // Expire only the captured generation, never a later re-registration or settings change.
+  if (code === 404 || code === 410) writes.push(env.DB.prepare(`UPDATE subscriptions SET active=0,updated_at=? WHERE id=? AND token_hash=? AND endpoint=? AND p256dh=? AND auth=?
+      AND EXISTS(SELECT 1 FROM subscription_settings WHERE subscription_id=? AND revision=?)`)
+    .bind(Date.now(), subscriptionId, generation.token_hash, generation.endpoint, generation.p256dh, generation.auth, subscriptionId, generation.revision));
+  // On failure the row stays sample:sending (unknown); it is never resent.
+  await env.DB.batch(writes);
+}
+async function readTest(env: Env, sub: StoredSubscription, testId: string) {
+  if (!UUID.test(testId)) return { body: { error: "A UUID v4 testId is required" }, status: 400 };
+  const row = await env.DB.prepare("SELECT status,attempted_at FROM deliveries WHERE event_id=? AND subscription_id=?").bind(`test:${testId}`, sub.id).first<TestRow>();
+  // Not recorded yet is not proof of absence: a delayed POST may still arrive.
+  if (!row) return { body: { error: "No sample with this ID has been recorded yet." }, status: 404 };
+  return isSample(row) ? sampleResult(testId, row, Date.now()) : kindConflict;
+}
+async function testNotification(request: Request, env: Env, sub: StoredSubscription, origin: string, ctx?: Partial<Context>) {
   const body = await readBody(request);
-  if (typeof body.testId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(body.testId)) {
+  if (typeof body.testId !== "string" || !UUID.test(body.testId)) {
     return { body: { error: "A UUID v4 testId is required" }, status: 400 };
   }
+  const sample = Object.keys(body).includes("sample");
+  if (sample && (body.sample !== SAMPLE_KIND || Object.keys(body).length !== 2)) return { body: { error: "Unsupported sample request" }, status: 400 };
   const eventId = `test:${body.testId}`;
-  const read = () => env.DB.prepare("SELECT status,attempted_at FROM deliveries WHERE event_id=? AND subscription_id=?").bind(eventId, sub.id).first<{ status: string; attempted_at: number }>();
+  const read = () => env.DB.prepare("SELECT status,attempted_at FROM deliveries WHERE event_id=? AND subscription_id=?").bind(eventId, sub.id).first<TestRow>();
+  if (sample) return scheduleSample(env, sub, origin, body.testId, eventId, read, ctx);
   const result = (row: { status: string; attempted_at: number }, attempted: boolean) => ({
     body: {
       testId: body.testId,
@@ -98,16 +163,15 @@ async function testNotification(request: Request, env: Env, sub: StoredSubscript
     status: row.status === "claimed" ? 202 : 200,
   });
   const previous = await read();
-  if (previous) return result(previous, false);
+  if (previous) return isSample(previous) ? kindConflict : result(previous, false);
   if (!sub.active) return { body: { error: "Enable alerts on this device first" }, status: 409 };
   if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return { body: { error: "Push configuration is unavailable" }, status: 503 };
   const now = Date.now();
   // One atomic statement prevents parallel UUIDs from bypassing a per-device cooldown.
-  const claim = await env.DB.prepare("INSERT OR IGNORE INTO deliveries(event_id,subscription_id,status,attempted_at) SELECT ?,?,'claimed',? WHERE NOT EXISTS (SELECT 1 FROM deliveries WHERE subscription_id=? AND event_id LIKE 'test:%' AND attempted_at>?)")
-    .bind(eventId, sub.id, now, sub.id, now - 60000).run();
+  const claim = await claimTest(env.DB, eventId, sub.id, "claimed", now);
   if (claim.meta.changes !== 1) {
     const concurrent = await read();
-    return concurrent ? result(concurrent, false) : { body: { error: "Wait one minute before requesting another test" }, status: 429 };
+    return !concurrent ? { body: { error: "Wait one minute before requesting another test" }, status: 429 } : isSample(concurrent) ? kindConflict : result(concurrent, false);
   }
   let status = "uncertain";
   try {
@@ -128,6 +192,29 @@ async function testNotification(request: Request, env: Env, sub: StoredSubscript
       error: "An attempt was made but its result could not be saved. Do not send another test." } };
   }
   return result({ status, attempted_at: now }, true);
+}
+const claimTest = (db: Database, eventId: string, subscriptionId: string, status: string, now: number) => db.prepare("INSERT OR IGNORE INTO deliveries(event_id,subscription_id,status,attempted_at) SELECT ?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM deliveries WHERE subscription_id=? AND event_id LIKE 'test:%' AND attempted_at>?)")
+  .bind(eventId, subscriptionId, status, now, subscriptionId, now - 60000).run();
+async function scheduleSample(env: Env, sub: StoredSubscription, origin: string, testId: string, eventId: string, read: () => Promise<TestRow | null>, ctx?: Partial<Context>) {
+  const previous = await read();
+  if (previous) return isSample(previous) ? sampleResult(testId, previous, Date.now()) : kindConflict;
+  if (!sub.active) return { body: { error: "Enable alerts on this device first" }, status: 409 };
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return { body: { error: "Push configuration is unavailable" }, status: 503 };
+  if (typeof ctx?.waitUntil !== "function") return { body: { error: "Sample scheduling is unavailable" }, status: 503 };
+  // Capture the active owner generation. A missing settings row fails closed.
+  const generation = await env.DB.prepare("SELECT s.endpoint,s.p256dh,s.auth,s.token_hash,p.revision FROM subscriptions s JOIN subscription_settings p ON p.subscription_id=s.id WHERE s.id=? AND s.active=1 AND s.token_hash=?")
+    .bind(sub.id, sub.token_hash).first<Generation>();
+  if (!generation) return { body: { error: "Enable alerts on this device first" }, status: 409 };
+  const now = Date.now();
+  // The durable claim exists before any task is scheduled.
+  const claim = await claimTest(env.DB, eventId, sub.id, "sample:scheduled", now);
+  if (claim?.meta?.changes !== 1) {
+    const concurrent = await read();
+    return !concurrent ? { body: { error: "Wait one minute before requesting another test" }, status: 429 } : isSample(concurrent) ? sampleResult(testId, concurrent, Date.now()) : kindConflict;
+  }
+  ctx.waitUntil(sendSample(env, sub.id, eventId, testId, origin, generation)
+    .catch(() => { console.error(JSON.stringify({ event: "sample_task_failed" })); }));
+  return { body: { testId, sample: SAMPLE_KIND, status: "scheduled", attempted: false, attemptHistory: "none", scheduledAt: new Date(now).toISOString(), receiptConfirmed: false }, status: 202 };
 }
 export async function saveGameStates(db: Database, games: Game[], now: number, baseline = false) {
   const { results } = await db.prepare("SELECT game_id,state_json,observed_at FROM game_states WHERE game_id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(games.map(game => game.id))).all<{ game_id: string; state_json: string; observed_at: number }>();
@@ -256,7 +343,7 @@ async function changeSettings(db: Database, sub: StoredSubscription, patch: Part
   ]);
   return result[1].meta.changes === 1;
 }
-async function api(request: Request, env: Env): Promise<Response> {
+async function api(request: Request, env: Env, ctx?: Partial<Context>): Promise<Response> {
   const origin = request.headers.get("Origin"), url = new URL(request.url);
   const headers = corsHeaders(origin, env);
   const json = (body: unknown, status = 200) => Response.json(body, { status, headers });
@@ -274,7 +361,7 @@ async function api(request: Request, env: Env): Promise<Response> {
       : !state.last_good_score ? "awaiting-first-successful-poll"
       : state.last_good_score <= now - 20 * 60000 ? "stale-score-feed" : "ready";
     const preferencesReady = !!env.VAPID_PUBLIC_KEY && !!env.VAPID_PRIVATE_KEY && state.preferences_delivery_enabled === 1 && state.preferences_epoch > 0;
-    return json({ ready: readinessReason === "ready", readinessReason, preferencesReady, preferencesCutoverComplete: state.preferences_cutover_complete === 1, lastTickAt: state.last_tick ? new Date(state.last_tick).toISOString() : null, lastSuccessfulPollAt: state.last_good_score ? new Date(state.last_good_score).toISOString() : null, publicKey: env.VAPID_PUBLIC_KEY || "", version: VERSION, preferencesVersion: 1 });
+    return json({ ready: readinessReason === "ready", readinessReason, preferencesReady, preferencesCutoverComplete: state.preferences_cutover_complete === 1, lastTickAt: state.last_tick ? new Date(state.last_tick).toISOString() : null, lastSuccessfulPollAt: state.last_good_score ? new Date(state.last_good_score).toISOString() : null, publicKey: env.VAPID_PUBLIC_KEY || "", version: VERSION, preferencesVersion: 1, sampleVersion: 1 });
   }
   const token = request.headers.get("Authorization")?.replace(/^Bearer /, "") || "";
   if (request.method === "POST" && url.pathname === "/subscriptions") {
@@ -304,14 +391,21 @@ async function api(request: Request, env: Env): Promise<Response> {
     if (actual?.token_hash !== await hash(secret)) return json({ error: "Subscription already registered", code: "ownership-conflict" }, 409);
     return json({ id, token: secret });
   }
-  const match = /^\/subscriptions\/([A-Za-z0-9_-]{43})(\/test)?$/.exec(url.pathname);
+  const match = /^\/subscriptions\/([A-Za-z0-9_-]{43})(\/test(?:\/([^/]+))?)?$/.exec(url.pathname);
   if (match) {
     const sub = await env.DB.prepare("SELECT * FROM subscriptions WHERE id=?").bind(match[1]).first<StoredSubscription>();
     if (!sub || !token || await hash(token) !== sub.token_hash) return json({ error: "Subscription not found" }, 404);
+    if (match[3] !== undefined) {
+      // Read-only sample status: never claims or sends.
+      if (request.method !== "GET") return json({ error: "Not found" }, 404);
+      if (!allowedOrigin(origin, env)) return json({ error: "Origin required" }, 403);
+      const test = await readTest(env, sub, match[3]);
+      return json(test.body, test.status);
+    }
     if (match[2]) {
       if (request.method !== "POST") return json({ error: "Not found" }, 404);
       if (!allowedOrigin(origin, env)) return json({ error: "Origin required" }, 403);
-      const test = await testNotification(request, env, sub, origin);
+      const test = await testNotification(request, env, sub, origin, ctx);
       return json(test.body, test.status);
     }
     if (request.method === "GET") return json(await readStatus(env.DB, sub.id));
@@ -327,8 +421,8 @@ async function api(request: Request, env: Env): Promise<Response> {
   return json({ error: "Not found" }, 404);
 }
 export default {
-  async fetch(request: Request, env: Env) {
-    try { return await api(request, env); }
+  async fetch(request: Request, env: Env, ctx?: Partial<Context>) {
+    try { return await api(request, env, ctx); }
     catch { return Response.json({ error: "Alert service request failed" }, { status: 400, headers: corsHeaders(request.headers.get("Origin"), env) }); }
   },
   async scheduled(_controller: unknown, env: Env, context: { waitUntil(promise: Promise<unknown>): void }) {

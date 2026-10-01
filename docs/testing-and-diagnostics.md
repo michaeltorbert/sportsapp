@@ -66,3 +66,17 @@ Record separately in #9:
 5. Lost-credentials recovery (`Reset alerts` then enable), disable/re-enable, and persistence after reopening. Do not clear a real device's storage without coordinating that device step.
 
 The fixed body is: “This is a test notification, not a game alert. Tap to open Saturday Signal.” Preserve the old installation until replacement delivery and recovery are verified. Neither CI nor the release smoke checks send this test.
+
+## One delayed sample alert (#103)
+
+The same route also accepts exactly `{ "testId": "<UUID v4>", "sample": "one-score" }`. It schedules one synthetic one-score sample (`SAMPLE · One-score game · 4th quarter`, made-up teams and scores) about 10 seconds later, so the user can lock the iPhone first. The contract, ledger statuses and limits are in [the alerts README](../services/alerts/README.md#device-sample-103). This is not released by this change; it must be reviewed, merged, deployed and verified first.
+
+Procedure, after the release is verified:
+
+1. On the installed iPhone Home Screen app, open Alerts. **Send sample alert** appears only when alerts are on and confirmed for this device, the app is online, notifications are allowed, and this device's current push subscription matches its saved record. Do not use operator credentials or another device.
+2. Tap it once. The app shows *Sample scheduled*. Lock the iPhone right away and keep the paired Apple Watch unlocked on the wrist. Watch mirroring is conditional; an iPhone that is unlocked or in use may keep the notification on the phone.
+3. After about 10 seconds, note whether the notification appeared on the iPhone lock screen and on the Watch. Record what actually appeared.
+4. Reopen the app. It reads the same sample with GET only. *Accepted* means the push provider accepted it, not that it was shown. *Not sent* (late or settings changed) means this sample was not sent. *Not known* or *no result recorded* means neither sending nor not sending is established. *Could not confirm a record yet* after a failed request does not mean a sample cannot still arrive. Tap **I saw it** only if it was actually seen.
+5. Do not tap again to retry an unknown result. The button stays disabled for one minute, and a new sample is a new attempt, not a retry.
+
+Record separately in #103: the installed version, the sample's displayed status, and the user's own observation of the iPhone and Watch, with screenshots or photos where possible. The sample covers only the one-score format on this iPhone and its paired Watch. It does not validate kickoff or final appearance, tap-to-game navigation, Android or desktop, or actual Watch pixels by itself. PR #111 stays draft pending code and release review; the sample cannot reach a real device until it is merged and deployed. Issue #103 stays open pending real-device evidence from that deployment. Automated tests (`tests/sample-notification.test.mjs`, `tests/browser/alert-sample.spec.mjs`) use local fixtures and simulated push APIs and never establish delivery.
