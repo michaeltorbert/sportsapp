@@ -123,6 +123,10 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .alerts-sheet .alert-switch[data-pending="true"]::after { content: ""; pointer-events: none; position: absolute; inset: 3px -1px; border: 1px dashed #edf4ff; border-radius: 8px; }
 @media (prefers-reduced-motion: no-preference) { .alerts-sheet .alert-switch[data-pending="true"]::after { animation: alert-save-pulse 1s ease-in-out infinite alternate; } }
 @keyframes alert-save-pulse { to { opacity: .45; } }
+.alerts-sheet .alert-sample { margin-top: 18px; font-size: 14px; line-height: 1.5; color: #b9c6d9; overflow-wrap: anywhere; }
+.alerts-sheet .alert-sample-button { display: block; width: 100%; height: auto; white-space: normal; }
+.alerts-sheet .alert-sample-button:disabled { opacity: .55; cursor: default; }
+.alerts-sheet .alert-sample-button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .alerts-sheet .alert-details { font-size: 14px; line-height: 1.6; color: #b9c6d9; }
 .alerts-sheet .alert-details summary { min-height: 44px; padding: 10px 0; cursor: pointer; color: #edf4ff; font-weight: 650; }
 .alerts-sheet .alert-details summary:focus-visible { outline: 2px solid #cefb70; outline-offset: 2px; }

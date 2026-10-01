@@ -4,8 +4,10 @@ import { Bell, BellRing } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { usePushEnvironment } from "@/lib/browser-state";
 
-type Config = { ready: boolean; publicKey: string; preferencesVersion?: number };
+type Config = { ready: boolean; publicKey: string; preferencesVersion?: number; sampleVersion?: number };
 type Credentials = { id: string; token: string };
+// Nonsecret: enough to read the same sample again, never to send one.
+type SampleRecord = { testId: string; at: number; subscriptionId: string };
 type Choices = { upsetWatch: boolean; closeGame: boolean; upsetFinal: boolean; kickoff: boolean };
 type Status = Choices & { active: boolean; revision: number; preferencesVersion: number };
 const defaults: Choices = { upsetWatch: true, closeGame: false, upsetFinal: false, kickoff: false };
@@ -29,6 +31,46 @@ async function read(base: string, credentials: Credentials): Promise<Status> {
   if (!r.ok) throw Error(r.status === 404 ? "This device’s saved alert access is missing. Reset alerts below, then enable again." : "Could not read alert settings.");
   const v: Status = await r.json(); if (!valid(v)) throw Error("Alert settings need a newer service version. Try again later."); return v;
 }
+// The service ID is the base64url SHA-256 of the normalized push endpoint.
+async function endpointId(endpoint: string) {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(new URL(endpoint).href)));
+  return btoa(String.fromCharCode(...digest)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function savedSample(id: string): SampleRecord | null {
+  try { const v = JSON.parse(localStorage.getItem("ss:sample") || "null"); return typeof v?.testId === "string" && Number.isFinite(v?.at) && v?.subscriptionId === id ? { testId: v.testId, at: v.at, subscriptionId: id } : null; } catch { return null; }
+}
+function sampleStatusOf(v: unknown) {
+  const body = v && typeof v === "object" ? v as { status?: unknown; overdue?: unknown } : {};
+  const status = typeof body.status === "string" ? body.status : "";
+  if ((status === "scheduled" || status === "sending") && body.overdue === true) return "overdue";
+  return /^(scheduled|sending|accepted|uncertain|late|suppressed|http-\d{3})$/.test(status) ? status : "unreachable";
+}
+// GET only: reading a sample can never create or send one.
+async function readSample(base: string, credentials: Credentials, testId: string) {
+  const r = await fetch(`${base}/subscriptions/${credentials.id}/test/${testId}`, { headers: { Authorization: `Bearer ${credentials.token}` }, credentials: "omit", cache: "no-store", signal: AbortSignal.timeout(10000) });
+  if (r.status === 404) return "not-recorded";
+  if (!r.ok && r.status !== 202) throw Error();
+  return sampleStatusOf(await r.json());
+}
+const sampleOpen = ["", "scheduled", "sending", "overdue", "not-recorded", "unreachable"];
+const sampleCopy: Record<string, string> = {
+  posting: "Scheduling the sample…",
+  scheduled: "Sample scheduled. Lock your iPhone now; it should be sent in about 10 seconds.",
+  sending: "The sample is being sent now.",
+  accepted: "The push service accepted the sample. That does not confirm it appeared on your iPhone or Watch.",
+  uncertain: "The sample’s result is not known. It may or may not appear, and it will not be retried.",
+  overdue: "No result has been recorded yet. The sample may or may not have been sent, and it will not be retried.",
+  late: "The sample was not sent because the service started it too late.",
+  suppressed: "The sample was not sent because this device’s alert settings changed.",
+  "not-recorded": "Could not confirm a record for this sample yet. A delayed request could still deliver it; it will not be resent.",
+  unreachable: "Could not check the sample’s status. It will not be resent. Reopen Alerts to check again.",
+  seen: "You saw the sample. This confirms only this one sample on this device.",
+};
+function describeSample(status: string) {
+  if (status.startsWith("refused:")) return status.slice("refused:".length);
+  if (status.startsWith("http-")) return `The push service refused the sample (HTTP ${status.slice(5)}). It will not be retried.`;
+  return sampleCopy[status] || "";
+}
 export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
   const { ios, standalone, supported } = usePushEnvironment();
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
@@ -38,7 +80,8 @@ export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
   const [resetNeeded, setResetNeeded] = useState(false), [online, setOnline] = useState(true);
   const [localReady, setLocalReady] = useState(false);
   const [accessConfirmed, setAccessConfirmed] = useState(false);
-  const writing = useRef(false), sequence = useRef(0);
+  const [localId, setLocalId] = useState<string | null>(null), [sampleStatus, setSampleStatus] = useState(""), [cooling, setCooling] = useState(false), [sampleCheck, setSampleCheck] = useState(0);
+  const writing = useRef(false), sequence = useRef(0), sampling = useRef(false);
   const enabled = !!record?.active && localReady, choices = record || defaults;
   useEffect(() => {
     let alive = true, checking = false;
@@ -62,8 +105,10 @@ export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
           const details = await read(url.origin, credentials);
           const local = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration("/") : undefined;
           const subscription = await local?.pushManager.getSubscription();
+          const id = subscription ? await endpointId(subscription.endpoint).catch(() => null) : null;
           if (alive && !writing.current && generation === sequence.current) {
             setLocalReady("Notification" in window && Notification.permission === "granted" && !!subscription);
+            setLocalId(id);
             setRecord(previous => previous && previous.revision > details.revision ? previous : details);
             setAccessConfirmed(true); setResetNeeded(false);
             setMessage(previous => previous.includes("Could not read alert settings") || previous.includes("Reset alerts") ? "" : previous);
@@ -84,6 +129,58 @@ export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
     document.addEventListener("visibilitychange", check); window.addEventListener("online", check); window.addEventListener("offline", check);
     return () => { alive = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", check); window.removeEventListener("online", check); window.removeEventListener("offline", check); };
   }, []);
+  // Resume, poll and cool down from the saved sample record. Reads use GET only.
+  useEffect(() => {
+    const credentials = saved(); if (!service || !accessConfirmed || !credentials) return;
+    const record = savedSample(credentials.id); if (!record) return;
+    let alive = true;
+    const age = () => Date.now() - record.at;
+    const cool = () => { if (alive) setCooling(age() < 60000); };
+    const refresh = async () => {
+      if (!alive || sampling.current || document.visibilityState === "hidden" || !navigator.onLine) return;
+      let next: string; try { next = await readSample(service, credentials, record.testId); } catch { next = "unreachable"; }
+      if (alive && !sampling.current) { setSampleStatus(next); setSampleCheck(n => n + 1); }
+    };
+    const open = sampleOpen.includes(sampleStatus);
+    const timers = [window.setTimeout(cool, 0), window.setTimeout(cool, Math.max(0, 60000 - age()) + 50)];
+    // A fresh page resumes a sample from the last ten minutes; active polling stops after two.
+    if (open && age() < (sampleStatus ? 120000 : 600000)) timers.push(window.setTimeout(() => void refresh(), sampleStatus ? 5000 : 0));
+    const visible = () => { if (open && document.visibilityState === "visible") void refresh(); };
+    document.addEventListener("visibilitychange", visible);
+    return () => { alive = false; timers.forEach(timer => window.clearTimeout(timer)); document.removeEventListener("visibilitychange", visible); };
+  }, [service, accessConfirmed, sampleStatus, sampleCheck]);
+  async function sendSample() {
+    const credentials = saved();
+    if (!credentials || sampling.current || writing.current || !service) return;
+    sampling.current = true; setSampleStatus("posting");
+    try {
+      const previous = savedSample(credentials.id);
+      if (previous && Date.now() - previous.at < 60000) { setCooling(true); setSampleStatus("refused:Wait one minute after the previous sample. No sample was sent."); return; }
+      // Recheck this installed device immediately before the one POST.
+      const local = await navigator.serviceWorker.getRegistration("/");
+      const current = await local?.pushManager.getSubscription();
+      const id = current ? await endpointId(current.endpoint).catch(() => null) : null;
+      if (!navigator.onLine) { setSampleStatus("refused:You are offline. No sample was sent."); return; }
+      if (!("Notification" in window) || Notification.permission !== "granted") { setSampleStatus("refused:Notifications are not allowed on this device. No sample was sent."); return; }
+      if (id !== credentials.id) { setLocalId(id); setSampleStatus("refused:This device no longer matches its saved alert subscription. No sample was sent."); return; }
+      const sample: SampleRecord = { testId: crypto.randomUUID(), at: Date.now(), subscriptionId: credentials.id };
+      try { localStorage.setItem("ss:sample", JSON.stringify(sample)); } catch { setSampleStatus("refused:This browser cannot save the sample status. No sample was sent."); return; }
+      setCooling(true);
+      let next: string;
+      try {
+        const r = await fetch(`${service}/subscriptions/${credentials.id}/test`, { method: "POST", credentials: "omit", headers: { "Content-Type": "application/json", Authorization: `Bearer ${credentials.token}` }, body: JSON.stringify({ testId: sample.testId, sample: "one-score" }), signal: AbortSignal.timeout(10000) });
+        const v = await r.json().catch(() => ({}));
+        if (r.ok) next = sampleStatusOf(v);
+        else if (r.status === 429) next = "refused:Wait one minute after the previous test. No sample was sent.";
+        else if (r.status === 409 && !(v && typeof v === "object" && "code" in v && v.code === "test-kind-conflict")) next = "refused:Enable alerts on this device first. No sample was sent.";
+        else throw Error();
+      } catch {
+        // Never repeat the POST. Read the same sample instead.
+        try { next = await readSample(service, credentials, sample.testId); } catch { next = "unreachable"; }
+      }
+      setSampleStatus(next);
+    } finally { sampling.current = false; }
+  }
   function start(key?: keyof Choices | "active") { if (writing.current) return false; writing.current = true; sequence.current++; setPending(key ?? null); setBusy(true); setMessage("Saving…"); return true; }
   function finish() { writing.current = false; setPending(null); setBusy(false); }
   async function update(patch: Partial<Choices> & { active?: boolean }, key: keyof Choices | "active") {
@@ -120,7 +217,7 @@ export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
       }
       const stored: Credentials = await r.json();
       try { localStorage.setItem("ss:push", JSON.stringify(stored)); } catch { await sub.unsubscribe(); throw Error("This browser cannot save alert settings. Allow website storage and try again."); }
-      setRecord(await read(service, stored)); setAccessConfirmed(true); setLocalReady(true); setResetNeeded(false); setMessage("Alerts are on for this device, including when the app is closed.");
+      setRecord(await read(service, stored)); setAccessConfirmed(true); setLocalReady(true); setLocalId(await endpointId(sub.endpoint).catch(() => null)); setResetNeeded(false); setMessage("Alerts are on for this device, including when the app is closed.");
     } catch (e) {
       const text = e instanceof Error ? e.message : "Could not enable alerts."; const credentials = saved();
       if (credentials) { try { setRecord(await read(service, credentials)); } catch { /* Last confirmed state remains visible. */ } }
@@ -132,14 +229,25 @@ export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
     try {
       const credentials = saved();
       if (credentials) { const r = await fetch(`${service}/subscriptions/${credentials.id}`, { method: "DELETE", credentials: "omit", headers: { Authorization: `Bearer ${credentials.token}` }, signal: AbortSignal.timeout(10000) }); if (!r.ok && r.status !== 404) throw Error(); }
-      await (await registration?.pushManager.getSubscription())?.unsubscribe(); localStorage.removeItem("ss:push"); setRecord(null); setResetNeeded(false); setMessage("Alerts are off for this device.");
+      await (await registration?.pushManager.getSubscription())?.unsubscribe(); localStorage.removeItem("ss:push"); setRecord(null); setLocalId(null); setSampleStatus(""); setResetNeeded(false); setMessage("Alerts are off for this device.");
     } catch { setMessage("Could not reset alerts. Reconnect and try again."); } finally { finish(); }
   }
   const canEnable = supported && (!ios || standalone) && !!registration && config?.ready && config.preferencesVersion === 1 && online && (!saved() || accessConfirmed);
+  // Only this installed device: its current push endpoint must hash to the saved subscription ID.
+  const sampleReady = enabled && accessConfirmed && online && config?.sampleVersion === 1 && !!localId && localId === saved()?.id;
+  const sampleBusy = sampleStatus === "posting" || sampleStatus === "scheduled" || sampleStatus === "sending";
+  const canConfirm = ["sending", "accepted", "uncertain", "overdue", "not-recorded", "unreachable"].includes(sampleStatus);
   return <Sheet><SheetTrigger asChild><button className={iconOnly ? "icon-button alerts-trigger" : "alerts-button"} aria-label={iconOnly ? enabled ? "Alerts on" : "Alerts off" : undefined}>{enabled ? <BellRing size={16} /> : <Bell size={16} />}<span className={iconOnly ? "sr-only" : undefined}>{enabled ? "Alerts on" : iconOnly ? "Alerts off" : "Alerts"}</span></button></SheetTrigger><SheetContent side="bottom" className="help-sheet alerts-sheet"><SheetHeader><SheetTitle>Catch the game-changing moments.</SheetTitle><SheetDescription>Choose alerts for this device.</SheetDescription></SheetHeader><div className="help-body">
 <label className="alert-setting"><span><strong>Notifications</strong><small id="alert-active">Turning off stops future alerts; your choices stay saved.</small></span><AlertSwitch pending={pending === "active"} aria-label="Notifications" aria-describedby="alert-active" checked={enabled} aria-disabled={busy} aria-busy={busy} disabled={!online || (!!saved() && !accessConfirmed) || (enabled ? !service : !canEnable)} onChange={e => { if (writing.current) return; if (e.target.checked) void enable(); else void update({ active: false }, "active"); }} /></label>
     {types.map(t => <label key={t.key} className="alert-setting"><span><strong>{t.name}</strong><small id={`alert-${t.key}`}>{t.description}</small></span><AlertSwitch pending={pending === t.key} aria-label={t.name} aria-describedby={`alert-${t.key}`} checked={choices[t.key]} aria-disabled={busy} aria-busy={busy} disabled={!enabled || !online || !accessConfirmed} onChange={e => { if (!writing.current) void update({ [t.key]: e.target.checked }, t.key); }} /></label>)}
     {enabled && types.every(t => !choices[t.key]) && <p role="status">No alert types are selected. You will not receive game alerts.</p>}
+    {(sampleReady || (accessConfirmed && !!sampleStatus)) && <div className="alert-sample">
+      <p id="alert-sample-help">Sends a made-up game alert labeled SAMPLE to this device in about 10 seconds. To check Apple Watch, lock your iPhone and keep the Watch unlocked on your wrist.</p>
+      {sampleReady && <button className="solid-button alert-sample-button" aria-describedby="alert-sample-help" onClick={() => void sendSample()} disabled={busy || sampleBusy || cooling}>Send sample alert</button>}
+      {sampleReady && cooling && !sampleBusy && <p className="alert-footnote">Another sample can be sent one minute after the last one.</p>}
+      {sampleStatus && <p role="status">{describeSample(sampleStatus)}</p>}
+      {canConfirm && <button className="text-link" onClick={() => setSampleStatus("seen")}>I saw it</button>}
+    </div>}
     {ios && !standalone ? <div className="install-tip"><h3>Add to Home Screen for alerts</h3><p>In Safari, tap Share → Add to Home Screen. Keep Open as Web App enabled if offered. Open the new icon, return to Alerts, and tap Enable alerts.</p></div> : !supported ? <p>This browser does not support push alerts. Try Safari on your iPhone’s Home Screen or Chrome on Android.</p> : loading ? <p>Checking alert availability…</p> : !online ? <p>You are offline. Reconnect to save or check alert settings.</p> : !config?.ready ? <div className="install-tip"><h3>Alerts are being set up</h3><p>Live scores are available now. Background alerts will become available when setup is complete.</p></div> : config.preferencesVersion !== 1 ? <p>Alert settings need a newer service version. Try again later.</p> : !enabled && (!saved() || accessConfirmed) && !resetNeeded && <button className="solid-button alert-enable" onClick={enable} disabled={busy || !registration || !canEnable}>Enable alerts</button>}
     {message && <p role="status">{message}</p>}{resetNeeded && <button className="text-link" onClick={reset} disabled={busy}>Reset alerts</button>}
     <p className="alert-footnote">Duke alerts stay off. Scoreboard filters do not affect alerts.</p>

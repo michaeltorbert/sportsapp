@@ -24,20 +24,25 @@ function teamLine(team: Team, withScore: boolean) {
   const rank = teamRank(team);
   return `${rank === null ? "" : `#${rank} `}${team.name}${withScore ? ` ${team.score ?? "–"}` : ""}`;
 }
+// Pure title/body formatter shared by game alerts and the device sample (#103).
+export function alertText(game: Game, trigger: Trigger) {
+  const [away, home] = game.teams, kickoff = trigger === "acc-kickoff";
+  const stage = game.period > 4 ? "Overtime" : "4th quarter";
+  const title = trigger === "one-score-fourth" ? `One-score game · ${stage}` : trigger === "ranked-trailing-fourth" ? `Upset watch · ${stage}` : trigger === "upset-final" ? "Upset final" : "ACC kickoff in 10 minutes";
+  // Away line, home line, then optional lower-priority context (#103).
+  const context = kickoff ? game.broadcast : trigger === "one-score-fourth" ? (margin(game) === 0 ? "Tied" : `${margin(game)}-point game`) : "";
+  const body = [teamLine(away, !kickoff), teamLine(home, !kickoff), context].filter(Boolean).join("\n");
+  return { title, body };
+}
 export function transitions(previous: Snapshot | null, game: Game, now: number): AlertEvent[] {
   // Catch up a newly observed live game. Already-finished games and upcoming
   // kickoffs still establish a baseline, so startup cannot replay old finals.
   if (!previous && game.state !== "live") return [];
   const before = previous ? conditions(previous.game, previous.observedAt) : null, after = conditions(game, now);
   return (Object.keys(after) as Trigger[]).filter(trigger => after[trigger] && !before?.[trigger]).map(trigger => {
-    const [away, home] = game.teams, kickoff = trigger === "acc-kickoff";
-    const stage = game.period > 4 ? "Overtime" : "4th quarter";
-    const title = trigger === "one-score-fourth" ? `One-score game · ${stage}` : trigger === "ranked-trailing-fourth" ? `Upset watch · ${stage}` : trigger === "upset-final" ? "Upset final" : "ACC kickoff in 10 minutes";
     // Keep the existing trigger IDs across Q4 and overtime and across upgrades.
     const id = `${game.id}:${trigger}`, day = easternDate(new Date(game.date));
-    // Away line, home line, then optional lower-priority context (#103).
-    const context = kickoff ? game.broadcast : trigger === "one-score-fourth" ? (margin(game) === 0 ? "Tied" : `${margin(game)}-point game`) : "";
-    const body = [teamLine(away, !kickoff), teamLine(home, !kickoff), context].filter(Boolean).join("\n");
+    const { title, body } = alertText(game, trigger);
     return { id, gameId: game.id, gameDay: day, trigger, createdAt: now, payload: { title, body, eventId: id, url: `/?date=${day}#game-${game.id}` } };
   });
 }
