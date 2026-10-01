@@ -80,9 +80,12 @@ test("SIMULATED sample: one POST, GET-only readback, observed receipt and a 60-s
   await expect(button).toBeDisabled();
   await page.getByRole("button", { name: "I saw it", exact: true }).tap();
   await expect(page.getByRole("status").filter({ hasText: "You saw the sample." })).toBeVisible();
-  await page.clock.fastForward(50000);
+  // The installed clock also runs in real time, so jump relative to the saved send time.
+  const remaining = async () => saved.at + 60000 - await page.evaluate(() => Date.now());
+  await page.clock.fastForward(Math.max(0, await remaining() - 10000));
+  expect(await remaining()).toBeGreaterThan(0);
   await expect(button).toBeDisabled();
-  await page.clock.fastForward(6000);
+  await page.clock.fastForward(Math.max(0, await remaining()) + 1000);
   await expect(button).toBeEnabled();
   expect(service.posts).toHaveLength(1);
   await expectNoToken(page, service, logs);
