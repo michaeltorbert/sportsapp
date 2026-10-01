@@ -34,7 +34,7 @@ async function openSheet(page, harness, push = {}) {
 const sendButton = page => page.getByRole("button", { name: "Send sample alert", exact: true });
 async function expectNoToken(page, service, logs) {
   expect(await page.content()).not.toContain(MATCHING.token);
-  expect(await page.evaluate(() => localStorage.getItem("ss:sample"))).not.toContain(MATCHING.token);
+  expect(await page.evaluate(() => localStorage.getItem("ss:sample")) ?? "").not.toContain(MATCHING.token);
   for (const request of [...service.posts, ...service.gets]) { expect(request.path).not.toContain(MATCHING.token); expect(request.owner).toBe(true); }
   for (const line of logs) expect(line).not.toContain(MATCHING.token);
 }
