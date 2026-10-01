@@ -39,6 +39,15 @@ async function endpointId(endpoint: string) {
 function savedSample(id: string): SampleRecord | null {
   try { const v = JSON.parse(localStorage.getItem("ss:sample") || "null"); return typeof v?.testId === "string" && Number.isFinite(v?.at) && v?.subscriptionId === id ? { testId: v.testId, at: v.at, subscriptionId: id } : null; } catch { return null; }
 }
+// Forget a sample the service definitely refused, unless another tab has saved a newer one.
+// If removal fails the record stays, and a later readback stays conservative.
+function forgetSample(sample: SampleRecord) {
+  try {
+    const v = JSON.parse(localStorage.getItem("ss:sample") || "null");
+    if (v?.testId !== sample.testId || v?.subscriptionId !== sample.subscriptionId) return false;
+    localStorage.removeItem("ss:sample"); return true;
+  } catch { return false; }
+}
 function sampleStatusOf(v: unknown) {
   const body = v && typeof v === "object" ? v as { status?: unknown; overdue?: unknown } : {};
   const status = typeof body.status === "string" ? body.status : "";
@@ -166,18 +175,21 @@ export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
       const sample: SampleRecord = { testId: crypto.randomUUID(), at: Date.now(), subscriptionId: credentials.id };
       try { localStorage.setItem("ss:sample", JSON.stringify(sample)); } catch { setSampleStatus("refused:This browser cannot save the sample status. No sample was sent."); return; }
       setCooling(true);
-      let next: string;
+      let next: string, refused = false;
       try {
         const r = await fetch(`${service}/subscriptions/${credentials.id}/test`, { method: "POST", credentials: "omit", headers: { "Content-Type": "application/json", Authorization: `Bearer ${credentials.token}` }, body: JSON.stringify({ testId: sample.testId, sample: "one-score" }), signal: AbortSignal.timeout(10000) });
         const v = await r.json().catch(() => ({}));
         if (r.ok) next = sampleStatusOf(v);
-        else if (r.status === 429) next = "refused:Wait one minute after the previous test. No sample was sent.";
-        else if (r.status === 409 && !(v && typeof v === "object" && "code" in v && v.code === "test-kind-conflict")) next = "refused:Enable alerts on this device first. No sample was sent.";
+        else if (r.status === 429) { next = "refused:Wait one minute after the previous test. No sample was sent."; refused = true; }
+        else if (r.status === 409 && !(v && typeof v === "object" && "code" in v && v.code === "test-kind-conflict")) { next = "refused:Enable alerts on this device first. No sample was sent."; refused = true; }
         else throw Error();
       } catch {
         // Never repeat the POST. Read the same sample instead.
         try { next = await readSample(service, credentials, sample.testId); } catch { next = "unreachable"; }
       }
+      // These two answers recorded nothing for this UUID, so there is nothing to read back.
+      // Without the record, this attempt's one-minute lock is released here.
+      if (refused && forgetSample(sample)) window.setTimeout(() => setCooling(false), Math.max(0, sample.at + 60000 - Date.now()) + 50);
       setSampleStatus(next);
     } finally { sampling.current = false; }
   }

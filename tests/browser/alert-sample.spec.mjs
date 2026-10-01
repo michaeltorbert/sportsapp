@@ -15,6 +15,7 @@ async function sampleService(page, { post = { status: 202, body: { status: "sche
     const entry = { method: req.method(), path: url.pathname, owner: req.headers().authorization === `Bearer ${MATCHING.token}` };
     if (req.method() === "POST") {
       service.posts.push({ ...entry, body: req.postDataJSON() });
+      await service.beforeReply?.();
       if (service.post === "abort") return route.abort("failed");
       return route.fulfill({ status: service.post.status, contentType: "application/json", body: JSON.stringify({ testId: req.postDataJSON().testId, sample: "one-score", ...service.post.body }) });
     }
@@ -125,6 +126,41 @@ test("SIMULATED sample: a failed POST reads by GET only, and not-recorded copy a
   await expect(sendButton(page)).toBeEnabled();
   expect(service.posts).toHaveLength(1);
   await expectNoToken(page, service, logs);
+});
+
+for (const [label, post, text] of [
+  ["429 cooldown", { status: 429, body: { error: "Wait one minute before requesting another test" } }, "Wait one minute after the previous test. No sample was sent."],
+  ["409 inactive", { status: 409, body: { error: "Enable alerts on this device first" } }, "Enable alerts on this device first. No sample was sent."],
+]) test(`SIMULATED sample: a received ${label} forgets the refused UUID, so a reload neither re-POSTs nor reads it`, async ({ page, harness }) => {
+  const service = await sampleService(page, { post, get: { status: 404, body: { error: "No sample with this ID has been recorded yet." } } });
+  const logs = await openSheet(page, harness);
+  await sendButton(page).tap();
+  await expect(page.getByRole("status").filter({ hasText: text })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("ss:sample"))).toBeNull();
+  // The local lock still runs for one minute from this attempt.
+  await expect(sendButton(page)).toBeDisabled();
+  await page.clock.fastForward(61000);
+  await expect(sendButton(page)).toBeEnabled();
+  await page.reload();
+  await page.getByRole("button", { name: "Alerts on", exact: true }).tap();
+  await expect(sendButton(page)).toBeEnabled();
+  await page.clock.fastForward(6000);
+  await expect(page.getByText("A delayed request could still deliver it")).toHaveCount(0);
+  await expect(page.getByText("No sample was sent")).toHaveCount(0);
+  expect(service.gets).toEqual([]);
+  expect(service.posts).toHaveLength(1);
+  await expectNoToken(page, service, logs);
+});
+
+test("SIMULATED sample: a refusal never forgets a newer sample saved by another tab", async ({ page, harness }) => {
+  const service = await sampleService(page, { post: { status: 429, body: { error: "Wait one minute before requesting another test" } } });
+  const newer = { testId: "00000000-0000-4000-8000-000000000001", subscriptionId: MATCHING.id };
+  service.beforeReply = () => page.evaluate(v => localStorage.setItem("ss:sample", JSON.stringify({ ...v, at: Date.now() })), newer);
+  await openSheet(page, harness);
+  await sendButton(page).tap();
+  await expect(page.getByRole("status").filter({ hasText: "Wait one minute after the previous test. No sample was sent." })).toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("ss:sample")))).toMatchObject(newer);
+  expect(service.posts).toHaveLength(1);
 });
 
 for (const [result, text, confirm] of [
