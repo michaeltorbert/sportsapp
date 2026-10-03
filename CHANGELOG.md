@@ -1,5 +1,10 @@
 # Saturday Signal releases
 
+## 1.13.0 · 2026-10-03
+
+- Put each school, valid ranking and score on its own alert line. Keep the alert reason in the title and omit redundant margin or tie text (#103, #111).
+- Add an owner-only, delayed sample alert for the current device, using the same formatter as game alerts. Preserve subscription ownership, duplicate protection, settings revisions and existing delivery history. Provider acceptance does not establish phone or Watch display; real-device presentation remains to be checked (#103).
+
 ## 1.12.4 · 2026-09-27
 
 - Suppress every alert type for known matchups between two unranked Group-of-Six teams. Make existing pending events terminal when they become excluded, while preserving subscriptions, trigger IDs and delivery history (#101, ORD-018).
