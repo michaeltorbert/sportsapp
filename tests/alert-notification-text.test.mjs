@@ -6,7 +6,8 @@ const { transitions } = await bundle("services/alerts/rules.ts");
 const { normalizeScoreboard } = await bundle("lib/espn-data.ts");
 const fixture = JSON.parse(readFileSync(new URL("fixtures/guide-2026-09-12.json", import.meta.url)));
 
-// Issue #103: the body is the away line, the home line, then optional context.
+// Issue #103: the body is the away line, the home line, then only a kickoff
+// broadcast line when known.
 // These are payload contracts only; they do not show how a Watch renders them.
 const now = Date.parse("2026-09-06T02:40:00Z");
 const live = (edit = () => {}) => { const g = game(); edit(g); return g; };
@@ -18,7 +19,7 @@ test("every game trigger keeps its title, ID and URL and puts each team on its o
     id: `game1:${trigger}`, gameId: "game1", gameDay: "2026-09-05", trigger, createdAt: now,
     payload: {
       title: trigger === "one-score-fourth" ? "One-score game · 4th quarter" : "Upset watch · 4th quarter",
-      body: `#5 Team a 14\n#20 Team b 21${trigger === "one-score-fourth" ? "\n7-point game" : ""}`,
+      body: "#5 Team a 14\n#20 Team b 21",
       eventId: `game1:${trigger}`, url: "/?date=2026-09-05#game-game1",
     },
   })));
@@ -39,22 +40,24 @@ test("every game trigger keeps its title, ID and URL and puts each team on its o
 
 test("only a valid known rank adds a #N prefix before the team name", () => {
   for (const [rank, rankKnown, line] of [[1, true, "#1 Team a 14"], [25, true, "#25 Team a 14"], [null, true, "Team a 14"], [null, false, "Team a 14"], [5, false, "Team a 14"], [26, true, "Team a 14"], [0, true, "Team a 14"]]) {
-    assert.equal(oneScore(live(g => Object.assign(g.teams[0], { rank, rankKnown }))).body, `${line}\n#20 Team b 21\n7-point game`, `rank ${rank}, known ${rankKnown}`);
+    assert.equal(oneScore(live(g => Object.assign(g.teams[0], { rank, rankKnown }))).body, `${line}\n#20 Team b 21`, `rank ${rank}, known ${rankKnown}`);
   }
 });
 
-test("one-score context stays after the teams for margins, ties and overtime", () => {
+test("one-score bodies are only the two team lines for margins, ties and overtime", () => {
   const cases = [
-    [live(g => { g.teams[1].score = 22; }), "One-score game · 4th quarter", "Team a 14\n#20 Team b 22\n8-point game"],
-    [live(g => { g.teams[1].score = 14; }), "One-score game · 4th quarter", "Team a 14\n#20 Team b 14\nTied"],
-    [live(g => { g.period = 5; g.teams[0].score = 24; }), "One-score game · Overtime", "Team a 24\n#20 Team b 21\n3-point game"],
-    [live(g => { g.period = 6; g.teams[1].score = 14; }), "One-score game · Overtime", "Team a 14\n#20 Team b 14\nTied"],
+    [live(g => { g.teams[1].score = 22; }), "One-score game · 4th quarter", "Team a 14\n#20 Team b 22"],
+    [live(g => { g.teams[1].score = 14; }), "One-score game · 4th quarter", "Team a 14\n#20 Team b 14"],
+    [live(g => { g.period = 5; g.teams[0].score = 24; }), "One-score game · Overtime", "Team a 24\n#20 Team b 21"],
+    [live(g => { g.period = 6; g.teams[1].score = 14; }), "One-score game · Overtime", "Team a 14\n#20 Team b 14"],
+    [live(g => { g.teams[0].rank = 5; }), "One-score game · 4th quarter", "#5 Team a 14\n#20 Team b 21"],
   ];
   for (const [g, title, body] of cases) {
     assert.deepEqual([oneScore(g).title, oneScore(g).body], [title, body]);
-    // Upset watch shares the score lines but carries no margin line.
+    assert.equal(oneScore(g).body.split("\n").length, 2);
+    // Upset watch carries the same two score lines.
     const watch = transitions(null, g, now).find(e => e.trigger === "ranked-trailing-fourth");
-    if (watch) assert.equal(watch.payload.body, body.slice(0, body.lastIndexOf("\n")));
+    if (watch) assert.equal(watch.payload.body, body);
   }
 });
 
@@ -74,10 +77,10 @@ test("ESPN fixture names and long names are used in full, never replaced by abbr
   Object.assign(g, { state: "live", started: true, period: 4, clock: 120, pregameLine: undefined });
   g.teams[0].score = 24; g.teams[1].score = 27;
   assert.deepEqual(oneScore(g, Date.parse("2026-09-12T19:00:00Z")), {
-    title: "One-score game · 4th quarter", body: "#6 Oregon 24\nOklahoma St 27\n3-point game",
+    title: "One-score game · 4th quarter", body: "#6 Oregon 24\nOklahoma St 27",
     eventId: "401856782:one-score-fourth", url: "/?date=2026-09-12#game-401856782",
   });
 
   const long = "Southeastern Louisiana Lions of the Gulf South Conference";
-  assert.equal(oneScore(live(g => { g.teams[0].name = long; })).body, `${long} 14\n#20 Team b 21\n7-point game`);
+  assert.equal(oneScore(live(g => { g.teams[0].name = long; })).body, `${long} 14\n#20 Team b 21`);
 });

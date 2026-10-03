@@ -288,11 +288,11 @@ test("the actual service worker displays a labeled push and visible fallbacks fo
 test("the service worker passes a multiline game body through unchanged and its tap opens the game", async () => {
   const g = game(); g.teams[0].rank = 5;
   const { payload } = transitions(null, g, now)[0];
-  assert.equal(payload.body, "#5 Team a 14\n#20 Team b 21\n7-point game");
+  assert.equal(payload.body, "#5 Team a 14\n#20 Team b 21");
   const sw = serviceWorker();
   await sw.dispatch("push", { data: { json: () => JSON.parse(JSON.stringify(payload)) } });
   assert.deepEqual(sw.notifications, [{
-    title: "One-score game · 4th quarter", body: "#5 Team a 14\n#20 Team b 21\n7-point game",
+    title: "One-score game · 4th quarter", body: "#5 Team a 14\n#20 Team b 21",
     icon: "/icon-192.png", badge: "/icon-192.png", tag: "game1:one-score-fourth", renotify: false,
     data: { url: "/?date=2026-09-05#game-game1" },
   }]);

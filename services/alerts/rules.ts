@@ -1,7 +1,7 @@
 import { isDuke } from "../../lib/duke-visibility";
 import { rankedUpset, teamRank } from "../../lib/upset";
 import { meaningfulUpset } from "./expectation";
-import { classify, easternDate, margin, type Game, type Team } from "../../lib/football";
+import { classify, easternDate, type Game, type Team } from "../../lib/football";
 import { twoUnrankedGroupOfSix } from "../../lib/conference-evidence";
 export type Trigger = "one-score-fourth" | "ranked-trailing-fourth" | "upset-final" | "acc-kickoff";
 export type Snapshot = { game: Game; observedAt: number };
@@ -29,9 +29,8 @@ export function alertText(game: Game, trigger: Trigger) {
   const [away, home] = game.teams, kickoff = trigger === "acc-kickoff";
   const stage = game.period > 4 ? "Overtime" : "4th quarter";
   const title = trigger === "one-score-fourth" ? `One-score game · ${stage}` : trigger === "ranked-trailing-fourth" ? `Upset watch · ${stage}` : trigger === "upset-final" ? "Upset final" : "ACC kickoff in 10 minutes";
-  // Away line, home line, then optional lower-priority context (#103).
-  const context = kickoff ? game.broadcast : trigger === "one-score-fourth" ? (margin(game) === 0 ? "Tied" : `${margin(game)}-point game`) : "";
-  const body = [teamLine(away, !kickoff), teamLine(home, !kickoff), context].filter(Boolean).join("\n");
+  // Away line, home line, then the kickoff broadcast when known (#103).
+  const body = [teamLine(away, !kickoff), teamLine(home, !kickoff), kickoff ? game.broadcast : ""].filter(Boolean).join("\n");
   return { title, body };
 }
 export function transitions(previous: Snapshot | null, game: Game, now: number): AlertEvent[] {

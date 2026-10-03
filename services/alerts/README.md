@@ -44,30 +44,28 @@ The API accepts the configured `SITE_ORIGIN`. Subscription endpoints are limited
 
 ## Notification text (#103)
 
-Game alert titles are unchanged: `One-score game · 4th quarter`/`· Overtime`, `Upset watch · 4th quarter`/`· Overtime`, `Upset final`, and `ACC kickoff in 10 minutes`. The body is the away team on the first line and the home team on the second, separated by `\n`, followed by at most one lower-priority context line. It has no trailing empty line:
+Game alert titles are unchanged: `One-score game · 4th quarter`/`· Overtime`, `Upset watch · 4th quarter`/`· Overtime`, `Upset final`, and `ACC kickoff in 10 minutes`. The body is the away team on the first line and the home team on the second, separated by `\n`. Only kickoff reminders may add a third line. It has no trailing empty line:
 
 ```
 #5 Clemson 21
 #20 Virginia Tech 24
-3-point game
 ```
 
 - A valid 1–25 rank (`teamRank`) appears as `#N` before the name. Unknown, unranked or out-of-range ranks add nothing.
 - Live and final alerts end each team line with its score (`–` if missing). Kickoff reminders show no score.
-- One-score alerts add `Tied` or `N-point game`. Kickoff reminders add the broadcast line only when one is known. Upset watch and upset final alerts add no context line.
+- Kickoff reminders add the broadcast line only when one is known. One-score, upset watch and upset final alerts add no third line; the scores already show the margin or tie.
 - Names use the normalized `team.name`, which falls back from ESPN `shortDisplayName` to location, display name, then abbreviation. Names are not truncated. The system decides how a long line wraps or is cut off.
 
 Event IDs, game days, URLs, trigger conditions, delivery, and `public/sw.js` display and tap handling are unchanged. The service worker passes the body string to `showNotification` as is. The web app manifest and app identity are unchanged. The game payload never includes the literal text "from Saturday Signal". Apple documentation suggests the system attributes a web app notification to the app name. How a notification mirrored from an iPhone appears on Apple Watch has not been verified. Tests in `tests/alert-notification-text.test.mjs` and `tests/push-delivery.test.mjs` check the exact payload and service-worker pass-through only. Before issue #103 is accepted, it still needs visual evidence from a real small Apple Watch showing line breaks, long-name wrapping, ranks, scores, the title and the app attribution, plus a working tap.
 
 ### Device sample (#103)
 
-`alertText(game, trigger)` in `rules.ts` is the one pure title/body formatter; `transitions` uses it, so real payloads are byte-for-byte unchanged. `sample.ts` builds a single static sample through the same formatter from a synthetic game. The teams, ranks and scores are made up, not a live game:
+`alertText(game, trigger)` in `rules.ts` is the one pure title/body formatter; `transitions` uses it, so real payloads and the sample always share one format. `sample.ts` builds a single static sample through the same formatter from a synthetic game. The teams, ranks and scores are made up, not a live game:
 
 ```
 SAMPLE · One-score game · 4th quarter
 #21 Western Kentucky 24
 #4 Coastal Carolina 27
-3-point game
 ```
 
 Its `eventId` is `test:<UUID>` and its tap URL is the allowed Origin's root (`/`). There is no game ID, event row, game link, caller-supplied text or recipient.
