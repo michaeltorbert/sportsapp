@@ -6,6 +6,7 @@ import { bundle, cdnFeed, database, game } from "./helpers.mjs";
 
 const { poll, saveGameStates, deliver } = await bundle("services/alerts/worker.ts");
 const { encode } = await bundle("services/alerts/web-push.ts");
+const { transitions } = await bundle("services/alerts/rules.ts");
 const now = Date.parse("2026-09-06T03:00:00Z");
 const origin = "https://app.test";
 
@@ -282,6 +283,21 @@ test("the actual service worker displays a labeled push and visible fallbacks fo
       icon: "/icon-192.png", badge: "/icon-192.png", tag: "saturday-signal", renotify: false, data: { url: "/" },
     });
   }
+});
+
+test("the service worker passes a multiline game body through unchanged and its tap opens the game", async () => {
+  const g = game(); g.teams[0].rank = 5;
+  const { payload } = transitions(null, g, now)[0];
+  assert.equal(payload.body, "#5 Team a 14\n#20 Team b 21");
+  const sw = serviceWorker();
+  await sw.dispatch("push", { data: { json: () => JSON.parse(JSON.stringify(payload)) } });
+  assert.deepEqual(sw.notifications, [{
+    title: "One-score game · 4th quarter", body: "#5 Team a 14\n#20 Team b 21",
+    icon: "/icon-192.png", badge: "/icon-192.png", tag: "game1:one-score-fourth", renotify: false,
+    data: { url: "/?date=2026-09-05#game-game1" },
+  }]);
+  await sw.dispatch("notificationclick", { notification: { data: sw.notifications[0].data, close() {} } });
+  assert.deepEqual(sw.calls, [["matchAll", { type: "window", includeUncontrolled: true }], ["openWindow", `${origin}/?date=2026-09-05#game-game1`]]);
 });
 
 test("notification clicks close the notification, navigate and focus the existing same-origin window", async () => {

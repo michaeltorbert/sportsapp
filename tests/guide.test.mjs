@@ -60,7 +60,7 @@ test("optional malformed broadcasts retain game without warnings and preserve ov
   const kickoff = { ...board.games[0], state: "upcoming", timeValid: true }; kickoff.teams[0].conferenceId = "1";
   const time = Date.parse(kickoff.date), before = { game: kickoff, observedAt: time - 11 * 60_000 };
   const event = transitions(before, kickoff, time - 5 * 60_000).find(e => e.trigger === "acc-kickoff");
-  assert.ok(event); assert.ok(event.payload.body.endsWith(" · ESPN / ESPN+"));
+  assert.ok(event); assert.equal(event.payload.body, "Howard\n#5 Indiana\nESPN / ESPN+");
   assert.equal(event.id, `${kickoff.id}:acc-kickoff`);
   assert.equal(conditions({ ...kickoff, timeValid: false }, time - 5 * 60_000)["acc-kickoff"], false);
 });

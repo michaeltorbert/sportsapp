@@ -136,7 +136,10 @@ test("overtime includes ties and upsets with accurate titles and stable dedupe I
   assert.deepEqual(rules.transitions({ game: { ...g, period: 4 }, observedAt: now - 60000 }, g, now), []);
   const tied = structuredClone(g); tied.period = 6; tied.teams[0].score = tied.teams[1].score;
   assert.deepEqual(rules.transitions(null, tied, now).map(e => e.trigger), ["one-score-fourth", "ranked-trailing-fourth"]);
-  assert.match(rules.transitions(null, tied, now)[0].payload.body, /Tied/);
+  assert.deepEqual(rules.transitions(null, tied, now).map(e => [e.payload.title, e.payload.body]), [
+    ["One-score game · Overtime", "#5 Team a 21\n#20 Team b 21"],
+    ["Upset watch · Overtime", "#5 Team a 21\n#20 Team b 21"],
+  ]);
   const wide = structuredClone(g); wide.teams[1].score = wide.teams[0].score + 9;
   assert.equal(rules.conditions(wide, now)["one-score-fourth"], false);
   const { db, sqlite } = database();

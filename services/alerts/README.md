@@ -42,6 +42,46 @@ This directory is an independent Worker, outside the Sites runtime. Use Cloudfla
 
 The API accepts the configured `SITE_ORIGIN`. Subscription endpoints are limited to Apple, Google FCM, and Mozilla push services. Push requests use Workers-compatible manual redirect handling: redirects are never followed and their 3xx status is recorded as a rejected attempt. Subscription keys are stored only in the alerts database. Public callers cannot list subscribers. A random device token, stored hashed server-side, is required to edit or disable that device’s subscription. HTTP 404/410 responses deactivate expired subscriptions.
 
+## Notification text (#103)
+
+Game alert titles are unchanged: `One-score game · 4th quarter`/`· Overtime`, `Upset watch · 4th quarter`/`· Overtime`, `Upset final`, and `ACC kickoff in 10 minutes`. The body is the away team on the first line and the home team on the second, separated by `\n`. Only kickoff reminders may add a third line. It has no trailing empty line:
+
+```
+#5 Clemson 21
+#20 Virginia Tech 24
+```
+
+- A valid 1–25 rank (`teamRank`) appears as `#N` before the name. Unknown, unranked or out-of-range ranks add nothing.
+- Live and final alerts end each team line with its score (`–` if missing). Kickoff reminders show no score.
+- Kickoff reminders add the broadcast line only when one is known. One-score, upset watch and upset final alerts add no third line; the scores already show the margin or tie.
+- Names use the normalized `team.name`, which falls back from ESPN `shortDisplayName` to location, display name, then abbreviation. Names are not truncated. The system decides how a long line wraps or is cut off.
+
+Event IDs, game days, URLs, trigger conditions, delivery, and `public/sw.js` display and tap handling are unchanged. The service worker passes the body string to `showNotification` as is. The web app manifest and app identity are unchanged. The game payload never includes the literal text "from Saturday Signal". Apple documentation suggests the system attributes a web app notification to the app name. How a notification mirrored from an iPhone appears on Apple Watch has not been verified. Tests in `tests/alert-notification-text.test.mjs` and `tests/push-delivery.test.mjs` check the exact payload and service-worker pass-through only. Before issue #103 is accepted, it still needs visual evidence from a real small Apple Watch showing line breaks, long-name wrapping, ranks, scores, the title and the app attribution, plus a working tap.
+
+### Device sample (#103)
+
+`alertText(game, trigger)` in `rules.ts` is the one pure title/body formatter; `transitions` uses it, so real payloads and the sample always share one format. `sample.ts` builds a single static sample through the same formatter from a synthetic game. The teams, ranks and scores are made up, not a live game:
+
+```
+SAMPLE · One-score game · 4th quarter
+#21 Western Kentucky 24
+#4 Coastal Carolina 27
+```
+
+Its `eventId` is `test:<UUID>` and its tap URL is the allowed Origin's root (`/`). There is no game ID, event row, game link, caller-supplied text or recipient.
+
+- **Request.** `POST /subscriptions/{id}/test` with exactly `{"testId":"<UUID v4>","sample":"one-score"}`, the owner Bearer token and an exact allowed Origin. If `sample` is present, any other value or any extra key returns 400 before a claim. Without `sample`, the existing synchronous generic test is unchanged.
+- **Claim.** The sample shares the `test:<UUID>` ledger key, permanent UUID deduplication and the atomic one-minute per-device cooldown with the generic test. Its kind is stored as a `sample:*` status prefix in the existing `deliveries.status` column; there is no migration. Reusing one UUID across kinds returns 409 `test-kind-conflict` and never sends the other payload, both on the initial read and after a lost concurrent claim. A same-kind replay only reads the stored status.
+- **Scheduling.** The request requires an active subscription with its settings row (`INNER JOIN subscription_settings`; a missing row fails closed), VAPID configuration and `ExecutionContext.waitUntil`. It captures the endpoint, both keys, the owner token hash and the settings `revision`. It writes `sample:scheduled` before scheduling one `waitUntil` task, then returns 202 with `status: "scheduled"`, `attempted: false`, `attemptHistory: "none"` and `receiptConfirmed: false`. There is no queue, cron or retry.
+- **Delayed send.** The task waits about 10 seconds. If more than 15 seconds elapsed on the task's clock, it conditionally marks `sample:late` and sends nothing. Otherwise one guarded `UPDATE` changes `sample:scheduled` to `sample:sending` only while the subscription is active with the same token hash, endpoint, `p256dh`, `auth` and settings revision. Registration can rewrite keys without changing the revision, so the keys are compared directly. Only `meta.changes === 1` authorizes transport; missing, malformed or other metadata, or an error, never sends and never infers success from a reread. A failed guard conditionally marks `sample:suppressed`. `sendPush` then runs at most once with the captured endpoint and keys and records `sample:accepted`, `sample:http-N` or `sample:uncertain`. A failed result write leaves `sample:sending`, which reads as unknown; nothing is resent. A 404/410 deactivates the subscription only if the captured endpoint, keys, token hash and settings revision still match, so a later re-registration or settings change stays active.
+- **Known race.** The guard runs immediately before transport, but a settings change or opt-out committed in the short gap after the guard can still race the send. A sample is not guaranteed to be cancelled by a concurrent change.
+- **Status read.** `GET /subscriptions/{id}/test/{UUID}` requires the owner token and an exact allowed Origin. It never claims, sends or writes. A missing row is 404: *not recorded yet*, not proof that no sample will ever exist, since a delayed POST can still arrive. A generic-test UUID returns 409. Bare `GET /test` stays 404. `scheduled`/`sending` return 202 with `overdue: true` after about 30 seconds plus a warning that no result was recorded; that does not show whether the sample was or was not sent. `late` and `suppressed` mean this sample was not sent. `accepted` is provider acceptance only. `uncertain` means the result is not known. No status proves device receipt (`receiptConfirmed` is always false).
+- **Readiness.** `/config` adds `sampleVersion: 1`. The app shows the control only when the service reports it, so an older Worker can never receive a sample request it would treat as a generic test.
+
+The app's **Send sample alert** control appears only for this installed device. Alerts must be active and owner readback confirmed, the browser online, Notification permission granted, and the current local PushSubscription endpoint's base64url SHA-256 must equal the saved subscription ID. All of these are checked again immediately before the one POST. The browser keeps the owner token in its existing storage, sends with `credentials: "omit"`, and saves only the nonsecret `{testId, at, subscriptionId}` before posting. A reload, visibility change, timeout or network failure reads that same UUID with GET and never repeats the POST. The control stays disabled while unresolved and for 60 seconds after the last attempt. Its short help says the alert is made up and labeled SAMPLE, and asks the user to lock the iPhone and keep the Watch unlocked on the wrist. If the GET finds no row, the app says it could not confirm a record yet, that a delayed request could still deliver it, and that it will not be resent; the same 404 also covers failed ownership, which the app does not distinguish. A user-tapped "I saw it" is kept only in memory and is the only receipt signal.
+
+This sample targets the user's iPhone and paired Apple Watch for the one-score format only. It does not by itself validate kickoff or final appearance, tap-to-game navigation, Android or desktop, or actual Watch rendering. The sample can reach a real device only after it is reviewed, merged and deployed; issue #103 stays open until real-device visual evidence from that deployment is reviewed. Tests: `tests/sample-notification.test.mjs` (local SQLite, intercepted transport) and `tests/browser/alert-sample.spec.mjs` (simulated push APIs and service). Neither sends a real notification.
+
 ## Trigger semantics
 
 - Fourth-quarter/overtime one-score: enters `live && period >= 4 && margin <= 8`, including ties and a game already close when the fourth quarter starts.

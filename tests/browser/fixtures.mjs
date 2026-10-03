@@ -56,7 +56,8 @@ async function installPushSimulation(page, options) {
       async getRegistration() { return registration; },
     } });
     window.__pushSimulation = audit;
-    if (options.credentials && !localStorage.getItem("ss:push")) localStorage.setItem("ss:push", JSON.stringify(credentials));
+    // A test may supply its own fake credentials, e.g. an ID matching the simulated endpoint.
+    if (options.credentials && !localStorage.getItem("ss:push")) localStorage.setItem("ss:push", JSON.stringify(options.credentials === true ? credentials : options.credentials));
   }, { options, credentials: CREDENTIALS });
 }
 
@@ -80,7 +81,7 @@ export const test = base.extend({
     appendEvidence(serverDiagnosticsDir, "test-timeline.jsonl", { event: "start", utc: startedAt, title: testInfo.title, file: testInfo.file, workerIndex: testInfo.workerIndex });
     const state = {
       events: standardEvents(), failScores: false, ready: true, failConfig: false,
-      active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 0, preferencesVersion: 1, failSave: false, conflict: false, alertRequests: [], scoreRequests: [], cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], unexpectedExternal: [], errors: [],
+      active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 0, preferencesVersion: 1, sampleVersion: 1, failSave: false, conflict: false, alertRequests: [], scoreRequests: [], cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], unexpectedExternal: [], errors: [],
     };
     const lifecycle = [];
     const recordLifecycle = event => {
@@ -102,7 +103,7 @@ export const test = base.extend({
       const req = route.request(), url = new URL(req.url());
       const json = (body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
       if (url.origin === ALERT_ORIGIN) {
-        if (url.pathname === "/config") return json({ ready: state.ready, publicKey: "AA", preferencesVersion: state.preferencesVersion }, state.failConfig ? 503 : 200);
+        if (url.pathname === "/config") return json({ ready: state.ready, publicKey: "AA", preferencesVersion: state.preferencesVersion, sampleVersion: state.sampleVersion }, state.failConfig ? 503 : 200);
         state.alertRequests.push({ method: req.method(), path: url.pathname, authorization: req.headers().authorization || null, body: req.postDataJSON() });
         const status = () => ({ active: state.active, kickoff: state.kickoff, closeGame: state.closeGame, upsetWatch: state.upsetWatch, upsetFinal: state.upsetFinal, revision: state.revision, preferencesVersion: state.preferencesVersion });
         if (req.method() === "GET") return json(state.getStatus ? { error: "simulated settings read failure" } : status(), state.getStatus || 200);
@@ -179,7 +180,8 @@ export const test = base.extend({
       testErrors: testInfo.errors.map(error => ({ message: error.message, stack: error.stack })),
       runtimeErrors: state.errors,
       simulated: ["ESPN responses", "alert-service responses", "notification permission", "PushManager", "service-worker registration", "installed standalone state"],
-      alertRequests: state.alertRequests, scoreRequests: state.scoreRequests, cdnRequests: state.cdnRequests, hostedScoreRequests: state.hostedScoreRequests, unexpectedExternal: state.unexpectedExternal,
+      // Even fake owner tokens stay out of attached evidence.
+      alertRequests: state.alertRequests.map(r => ({ ...r, authorization: r.authorization ? "[redacted]" : null })), scoreRequests: state.scoreRequests, cdnRequests: state.cdnRequests, hostedScoreRequests: state.hostedScoreRequests, unexpectedExternal: state.unexpectedExternal,
     }, null, 2) });
     // Soft assertions still fail the test while allowing every crash/runtime
     // check to report its evidence instead of stopping at the first failure.
