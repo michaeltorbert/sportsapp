@@ -69,7 +69,9 @@ The fixed body is: “This is a test notification, not a game alert. Tap to open
 
 ## One delayed sample alert (#103)
 
-The same route also accepts exactly `{ "testId": "<UUID v4>", "sample": "one-score" }`. It schedules one synthetic one-score sample (`SAMPLE · One-score game · 4th quarter`, made-up teams and scores) about 10 seconds later, so the user can lock the iPhone first. The contract, ledger statuses and limits are in [the alerts README](../services/alerts/README.md#device-sample-103). This is not released by this change; it must be reviewed, merged, deployed and verified first.
+The same route also accepts exactly `{ "testId": "<UUID v4>", "sample": "one-score" }`. It schedules one synthetic one-score sample (`SAMPLE · One-score game · 4th quarter`, a made-up matchup with made-up ranks and scores) about 10 seconds later, so the user can lock the iPhone first. The contract, ledger statuses and limits are in [the alerts README](../services/alerts/README.md#device-sample-103). Version 1.13.0 released the sample with the location names `Western Kentucky` and `Coastal Carolina`. This change switches to the feed names `Western KY` and `Coastal` but does not deploy them; they reach a device only after a later authorized deployment.
+
+The sample's names match the existing ESPN feed's normalized names for those teams. They do not validate that every team's feed name is recognizable copy, and they do not change the live alert formatter; that criterion stays open in #103.
 
 Procedure, after the release is verified:
 
@@ -79,4 +81,15 @@ Procedure, after the release is verified:
 4. Reopen the app. It reads the same sample with GET only. *Accepted* means the push provider accepted it, not that it was shown. *Not sent* (late or settings changed) means this sample was not sent. *Not known* or *no result recorded* means neither sending nor not sending is established. *Could not confirm a record yet* after a failed request does not mean a sample cannot still arrive. Tap **I saw it** only if it was actually seen.
 5. Do not tap again to retry an unknown result. The button stays disabled for one minute, and a new sample is a new attempt, not a retry.
 
-Record separately in #103: the installed version, the sample's displayed status, and the user's own observation of the iPhone and Watch, with screenshots or photos where possible. The sample covers only the one-score format on this iPhone and its paired Watch. It does not validate kickoff or final appearance, tap-to-game navigation, Android or desktop, or actual Watch pixels by itself. PR #111 stays draft pending code and release review; the sample cannot reach a real device until it is merged and deployed. Issue #103 stays open pending real-device evidence from that deployment. Automated tests (`tests/sample-notification.test.mjs`, `tests/browser/alert-sample.spec.mjs`) use local fixtures and simulated push APIs and never establish delivery.
+Device checklist for each sample seen after a later authorized deployment, recorded in #103:
+
+- The exact installed app version (with its release tag or commit when known) and the sample copy actually shown: the location names in 1.13.0, or the feed short names once this change is deployed.
+- Which surface showed it (iPhone lock screen, Watch, or both), plus the Watch size and layout.
+- The title, both ranks, both scores and both team names exactly as displayed.
+- How each line wrapped or was cut off.
+- The app attribution shown with the notification.
+- Whether tapping it opened the app at its root page (`/`).
+
+So far, one 1.13.0 sample with the location names was reported received natively on the owner's Watch: the away line wrapped so its score moved to the next line, and no clipping was observed. No raw screenshots or photos were reviewed by outside reviewers, and which native platform path displayed it was not instrumented. The app source shows the sample once and adds no duplicate. Tapping it has not been tried.
+
+Record separately in #103: the installed version, the sample's displayed status, and the user's own observation of the iPhone and Watch, with screenshots or photos where possible. The sample covers only the one-score format on this iPhone and its paired Watch. It does not validate live one-score or upset-watch alerts, kickoff or final appearance, a tap that opens the actual game, smaller Watch sizes, iPhone, Android or desktop; those stay pending in #103, which stays open as the native acceptance backlog. Automated tests (`tests/sample-notification.test.mjs`, `tests/alert-notification-text.test.mjs`, `tests/browser/alert-sample.spec.mjs`) are simulations with local fixtures and simulated push APIs; they never establish device delivery.
