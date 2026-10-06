@@ -60,13 +60,15 @@ Event IDs, game days, URLs, trigger conditions, delivery, and `public/sw.js` dis
 
 ### Device sample (#103)
 
-`alertText(game, trigger)` in `rules.ts` is the one pure title/body formatter; `transitions` uses it, so real payloads and the sample always share one format. `sample.ts` builds a single static sample through the same formatter from a synthetic game. The teams, ranks and scores are made up, not a live game:
+`alertText(game, trigger)` in `rules.ts` is the one pure title/body formatter; `transitions` uses it, so real payloads and the sample always share one format. `sample.ts` builds a single static sample through the same formatter from a synthetic game. It is not a live game; the matchup, ranks and scores are made up and do not come from any fixture game:
 
 ```
 SAMPLE · One-score game · 4th quarter
-#21 Western Kentucky 24
-#4 Coastal Carolina 27
+#21 Western KY 24
+#4 Coastal 27
 ```
+
+The team names are the ones a real alert shows for these teams: the saved ESPN feed `tests/fixtures/guide-2026-09-12.json` normalizes team IDs 98 and 324 to `Western KY` and `Coastal`. `tests/alert-notification-text.test.mjs` binds the sample to those names and checks that a missing or empty short name falls back to the location, display name, then abbreviation. The sample therefore matches the existing feed. It does not show that every team's feed name is recognizable copy (team 193, for example, is `Miami OH`, or `Miami (OH)` by location), and it does not change the live formatter or the feed parser; that criterion stays open in #103. Matching the feed was chosen over the more familiar `Coastal Carolina`.
 
 Its `eventId` is `test:<UUID>` and its tap URL is the allowed Origin's root (`/`). There is no game ID, event row, game link, caller-supplied text or recipient.
 
@@ -80,7 +82,9 @@ Its `eventId` is `test:<UUID>` and its tap URL is the allowed Origin's root (`/`
 
 The app's **Send sample alert** control appears only for this installed device. Alerts must be active and owner readback confirmed, the browser online, Notification permission granted, and the current local PushSubscription endpoint's base64url SHA-256 must equal the saved subscription ID. All of these are checked again immediately before the one POST. The browser keeps the owner token in its existing storage, sends with `credentials: "omit"`, and saves only the nonsecret `{testId, at, subscriptionId}` before posting. A reload, visibility change, timeout or network failure reads that same UUID with GET and never repeats the POST. The control stays disabled while unresolved and for 60 seconds after the last attempt. Its short help says the alert is made up and labeled SAMPLE, and asks the user to lock the iPhone and keep the Watch unlocked on the wrist. If the GET finds no row, the app says it could not confirm a record yet, that a delayed request could still deliver it, and that it will not be resent; the same 404 also covers failed ownership, which the app does not distinguish. A user-tapped "I saw it" is kept only in memory and is the only receipt signal.
 
-This sample targets the user's iPhone and paired Apple Watch for the one-score format only. It does not by itself validate kickoff or final appearance, tap-to-game navigation, Android or desktop, or actual Watch rendering. The sample can reach a real device only after it is reviewed, merged and deployed; issue #103 stays open until real-device visual evidence from that deployment is reviewed. Tests: `tests/sample-notification.test.mjs` (local SQLite, intercepted transport) and `tests/browser/alert-sample.spec.mjs` (simulated push APIs and service). Neither sends a real notification.
+This sample targets the user's iPhone and paired Apple Watch for the one-score format only. It does not by itself validate kickoff or final appearance, tap-to-game navigation, Android or desktop, or Watch rendering of other alerts. Tests are simulations, not device delivery: `tests/sample-notification.test.mjs` (local SQLite, intercepted transport), `tests/alert-notification-text.test.mjs` (feed names and fallbacks) and `tests/browser/alert-sample.spec.mjs` (simulated push APIs and service). None sends a real notification.
+
+Device evidence so far: version 1.13.0 released the sample with the location names `Western Kentucky` and `Coastal Carolina`. The owner reported one native Watch receipt of it: the away line wrapped so its score moved to the next line, and no clipping was observed. That is the owner's report only; no raw screenshots or photos were reviewed by outside reviewers, and which native platform path displayed it was not instrumented. Source evidence only: neither the `alertText` formatter nor `public/sw.js` adds the literal text "from Saturday Signal", and the native layer that attributes the notification to the app was not instrumented, so the source does not show how many notifications the platform displayed. Tapping it has not been tried. This change does not deploy the shorter feed names; they can reach a device only after a later authorized deployment, which should be checked with the device checklist in [testing and diagnostics](../../docs/testing-and-diagnostics.md#one-delayed-sample-alert-103). Live one-score and upset-watch alerts, finals, kickoff reminders, a tap that opens the actual game, smaller Watch sizes, iPhone, Android and desktop remain pending in #103, which stays open as the native acceptance backlog.
 
 ## Trigger semantics
 

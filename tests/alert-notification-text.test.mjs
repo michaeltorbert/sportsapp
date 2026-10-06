@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { bundle, game } from "./helpers.mjs";
 const { transitions } = await bundle("services/alerts/rules.ts");
 const { normalizeScoreboard } = await bundle("lib/espn-data.ts");
+const { sampleText } = await bundle("services/alerts/sample.ts");
 const fixture = JSON.parse(readFileSync(new URL("fixtures/guide-2026-09-12.json", import.meta.url)));
 
 // Issue #103: the body is the away line, the home line, then only a kickoff
@@ -83,4 +84,34 @@ test("ESPN fixture names and long names are used in full, never replaced by abbr
 
   const long = "Southeastern Louisiana Lions of the Gulf South Conference";
   assert.equal(oneScore(live(g => { g.teams[0].name = long; })).body, `${long} 14\n#20 Team b 21`);
+});
+
+// A saved-feed team normalized by ESPN team ID, after an optional edit to the
+// raw team object. The parser itself is unchanged.
+function feedTeam(id, edit = () => {}) {
+  const event = structuredClone(fixture.events.find(e => e.competitions?.[0]?.competitors?.some(c => c.team?.id === id)));
+  edit(event.competitions[0].competitors.find(c => c.team.id === id).team);
+  return normalizeScoreboard({ events: [event] }, "2026-01-01", undefined, "2026-12-31").games[0].teams.find(t => t.id === id);
+}
+
+test("the sample uses the saved feed's normalized names for ESPN teams 98 and 324", () => {
+  const [away, home] = ["98", "324"].map(id => feedTeam(id).name);
+  assert.deepEqual([away, home], ["Western KY", "Coastal"]);
+  assert.equal(sampleText.body, `#21 ${away} 24\n#4 ${home} 27`);
+});
+
+test("a missing or empty short name falls back to location, display name, then abbreviation", () => {
+  const fields = ["shortDisplayName", "location", "displayName"];
+  for (const [id, names] of [
+    ["98", ["Western KY", "Western Kentucky", "Western Kentucky Hilltoppers", "WKU"]],
+    ["324", ["Coastal", "Coastal Carolina", "Coastal Carolina Chanticleers", "CCU"]],
+    // The feed's own disambiguation is kept as is; no punctuation is added or removed.
+    ["193", ["Miami OH", "Miami (OH)", "Miami (OH) RedHawks", "M-OH"]],
+  ]) {
+    for (const blank of [undefined, ""]) {
+      const got = names.map((_, n) => feedTeam(id, team => { for (const key of fields.slice(0, n)) if (blank === undefined) delete team[key]; else team[key] = blank; }).name);
+      assert.deepEqual(got, names, `team ${id}, short name ${blank === undefined ? "missing" : "empty"}`);
+      for (const name of got) assert.equal(oneScore(live(g => { g.teams[0].name = name; })).body, `${name} 14\n#20 Team b 21`);
+    }
+  }
 });

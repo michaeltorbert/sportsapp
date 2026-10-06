@@ -85,10 +85,10 @@ test("real game payloads use the shared formatter byte for byte", () => {
 });
 
 test("the sample is the fixed synthetic one-score format with a test event ID and root URL", () => {
-  assert.deepEqual({ ...sampleText }, { title: "SAMPLE · One-score game · 4th quarter", body: "#21 Western Kentucky 24\n#4 Coastal Carolina 27" });
+  assert.deepEqual({ ...sampleText }, { title: "SAMPLE · One-score game · 4th quarter", body: "#21 Western KY 24\n#4 Coastal 27" });
   assert.ok(Object.isFrozen(sampleText));
   // The same teams through a real one-score transition produce identical lines.
-  const real = game(); Object.assign(real.teams[0], { name: "Western Kentucky", rank: 21, score: 24 }); Object.assign(real.teams[1], { name: "Coastal Carolina", rank: 4, score: 27 });
+  const real = game(); Object.assign(real.teams[0], { name: "Western KY", rank: 21, score: 24 }); Object.assign(real.teams[1], { name: "Coastal", rank: 4, score: 27 });
   const event = transitions(null, real, Date.parse("2026-09-06T02:40:00Z")).find(e => e.trigger === "one-score-fourth");
   assert.equal(sampleText.title, `SAMPLE · ${event.payload.title}`);
   assert.equal(sampleText.body, event.payload.body);
@@ -139,7 +139,7 @@ test("a durable scheduled claim precedes one delayed send; game tables never cha
   await f.wake();
   assert.equal(f.calls.length, 1);
   assert.equal(f.calls[0].url, `https://web.push.apple.com/${f.id}`);
-  assert.deepEqual(await decodePayload(f, f.calls[0].init.body), { title: "SAMPLE · One-score game · 4th quarter", body: "#21 Western Kentucky 24\n#4 Coastal Carolina 27", eventId: `test:${testId}`, url: "https://app.test/" });
+  assert.deepEqual(await decodePayload(f, f.calls[0].init.body), { title: "SAMPLE · One-score game · 4th quarter", body: "#21 Western KY 24\n#4 Coastal 27", eventId: `test:${testId}`, url: "https://app.test/" });
   assert.equal(f.rows()[0].status, "sample:accepted");
   const done = await f.read(testId);
   assert.equal(done.status, 200);
