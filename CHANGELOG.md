@@ -1,5 +1,10 @@
 # Saturday Signal releases
 
+## 1.13.1 · 2026-10-05
+
+- Align the owner-only sample alert with normalized ESPN school names: Western KY and Coastal (#103, #117). Preserve the sample label, current-device restriction and duplicate protection.
+- Native phone and Watch presentation, tapping and other real alerts remain to be verified; source checks and deployment do not establish real-device delivery (#103).
+
 ## 1.13.0 · 2026-10-03
 
 - Put each school, valid ranking and score on its own alert line. Keep the alert reason in the title and omit redundant margin or tie text (#103, #111).
