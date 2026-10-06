@@ -1,5 +1,6 @@
-export const VERSION = "1.13.0";
+export const VERSION = "1.13.1";
 export const releases = [
+  { version: "1.13.1", date: "October 5, 2026", changes: "Use ESPN-aligned school names in the sample alert: Western KY and Coastal. Keep the sample labeled and limited to your current device." },
   { version: "1.13.0", date: "October 3, 2026", changes: "Read each school and score on its own notification line. Send a labeled sample alert to your current device to check notification appearance on your phone and Watch." },
   { version: "1.12.4", date: "September 27, 2026", changes: "Suppress alerts for known matchups between two unranked Group-of-Six teams. Keep fallback team labels readable with larger text, and show betting-line sources in expanded upcoming games. Improve halftime timing recovery after a summary timeout." },
   { version: "1.12.3", date: "September 26, 2026", changes: "Omit betting lines from canceled, postponed and other called-off games. Screen readers now hear the line in game details as a pregame line. Keep game details aligned and scaled with larger text, and omit malformed team records without losing the game." },
