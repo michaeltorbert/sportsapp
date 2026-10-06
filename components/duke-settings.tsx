@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import { Eye, EyeOff, Settings } from "lucide-react";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
+import { Eye, EyeOff, Settings, X } from "lucide-react";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "./ui/alert-dialog";
 import { dukeHidden, isDuke, type DukeMode } from "@/lib/duke-visibility";
 import type { DukeVisibility } from "@/lib/use-duke-visibility";
@@ -26,8 +26,9 @@ export function DukeSettings({ games, visibility }: { games: Game[]; visibility:
   const [open, setOpen] = useState(false);
   const mode = visibility.prefs?.rules.at(-1)?.mode ?? "away";
   return <Sheet open={open} onOpenChange={setOpen}><SheetTrigger asChild><button className="icon-button" aria-label="Settings"><Settings size={21} /></button></SheetTrigger>
-    <SheetContent className="settings-sheet"><SheetHeader><SheetTitle>Settings</SheetTitle><SheetDescription>Viewing preferences for this device.</SheetDescription></SheetHeader>
-      <div className="settings-body"><h3>Spoiler protection</h3><DukeGameControls games={games} visibility={visibility} />
+    {/* Close is the first tabbable control and stays pinned; only the body scrolls (#116). */}
+    <SheetContent className="settings-sheet" showCloseButton={false}><SheetHeader className="settings-header"><div className="settings-heading"><SheetTitle>Settings</SheetTitle><SheetDescription>Viewing preferences for this device.</SheetDescription></div><SheetClose className="settings-close"><X size={20} aria-hidden="true" />Close</SheetClose></SheetHeader>
+      <section className="settings-body" aria-label="Viewing preferences" tabIndex={0}><h3>Spoiler protection</h3><DukeGameControls games={games} visibility={visibility} />
       {!games.some(isDuke) && <p>No Duke game in this date range.</p>}
       <p>Hide or show one matchup without changing your default. Hidden games stay hidden after the final whistle.</p>
       <fieldset disabled={!visibility.prefs}><legend>For future Duke games</legend>{modes.map(option => <label className="duke-mode" key={option.value}><input type="radio" name="duke-default" checked={mode === option.value} onChange={() => visibility.setMode(option.value)} />{option.label}</label>)}</fieldset>
@@ -35,5 +36,5 @@ export function DukeSettings({ games, visibility }: { games: Game[]; visibility:
       <h3>Duke notifications</h3><p>Always off, even when you show a game.</p>
       <p className="settings-note">Each device has its own viewing preferences. Shown games include team records when ESPN provides them.</p>
       {visibility.storageWarning && <p role="alert">{visibility.storageWarning}</p>}
-      </div></SheetContent></Sheet>;
+      </section></SheetContent></Sheet>;
 }
