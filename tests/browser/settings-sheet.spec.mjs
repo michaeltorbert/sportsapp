@@ -396,6 +396,7 @@ for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(
     expect((await panelGeometry(page, name)).close).toEqual(start.close);
     expect(await panelBody(page, name).evaluate(el => el.scrollTop)).toBe(0);
     await testInfo.attach(`${name} ${layout.name} heading end`, { body: await page.screenshot(), contentType: 'image/png' });
+    // Close has an explicit tabindex, so plain Tab reaches it even where engines skip native buttons.
     await page.keyboard.press('Tab');
     await expect(panelClose(page, name)).toBeFocused();
   } else {
