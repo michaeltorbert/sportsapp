@@ -3,7 +3,7 @@
 ## 1.13.2 · 2026-10-06
 
 - Pin a labeled 44px Close button in Settings while its content scrolls, with layouts for narrow landscape screens and enlarged text. Opening Settings focuses Close and preserves saved preferences, from both Scores and the Guide (#116, #119).
-- Browser functional and layout checks passed in Chromium and WebKit. The originally reported inability to leave Settings was not reproduced on a native iOS device, and touch-swipe behavior remains unverified there (#116).
+- Browser functional and layout checks passed in Chromium and WebKit, where the originally reported inability to leave Settings was not reproduced. Native iOS and touch-swipe behavior remain unverified (#116).
 
 ## 1.13.1 · 2026-10-05
 
