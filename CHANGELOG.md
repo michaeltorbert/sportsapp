@@ -1,5 +1,10 @@
 # Saturday Signal releases
 
+## 1.13.3 · 2026-10-07
+
+- Add 16px of Settings header spacing below the top safe-area inset to address reported portrait clipping of Settings, X and Close (#116). Preserve the right-side landscape panel and independently scrolling content.
+- The user confirmed installed-iPhone dismissal in both orientations and landscape scrolling on 1.13.2. The new portrait spacing still needs on-device confirmation; a zero reported safe-area inset would leave the header spacing unchanged.
+
 ## 1.13.2 · 2026-10-06
 
 - Pin a labeled 44px Close button in Settings while its content scrolls, with layouts for narrow landscape screens and enlarged text. Opening Settings focuses Close and preserves saved preferences, from both Scores and the Guide (#116, #119).

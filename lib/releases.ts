@@ -1,5 +1,6 @@
-export const VERSION = "1.13.2";
+export const VERSION = "1.13.3";
 export const releases = [
+  { version: "1.13.3", date: "October 7, 2026", changes: "Give the Settings heading and Close button extra space below the iPhone status bar in portrait." },
   { version: "1.13.2", date: "October 6, 2026", changes: "Keep a labeled Close button in view while Settings scrolls, including in narrow landscape and with larger text. Settings opens with Close focused and keeps your preferences, from both Scores and the Guide." },
   { version: "1.13.1", date: "October 5, 2026", changes: "Use ESPN-aligned school names in the sample alert: Western KY and Coastal. Keep the sample labeled and limited to your current device." },
   { version: "1.13.0", date: "October 3, 2026", changes: "Read each school and score on its own notification line. Send a labeled sample alert to your current device to check notification appearance on your phone and Watch." },
