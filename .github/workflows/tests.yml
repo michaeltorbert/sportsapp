@@ -13,8 +13,9 @@ concurrency:
 env:
   # Runner apt setup only. Playwright's --with-deps runs apt-get update and install; on hosted runners
   # many package downloads stalled on the Azure HTTP mirror before coming quickly from the canonical
-  # HTTPS archive, and several jobs timed out before any test ran. Drop only the exact Azure Ubuntu
-  # archive URI from active (uncommented) apt lines. Signing, suites, components, security and other
+  # HTTPS archive, and several jobs timed out before any test ran. Only the exact Azure Ubuntu archive
+  # URI on active (uncommented) apt lines changes: replaced by the canonical archive, or removed from
+  # the mirror list when that list already has an active canonical line. Signing, suites, components, security and other
   # repositories stay unchanged. With no Azure entry the step changes nothing and the install itself
   # shows whether apt works; rerunning it is a no-op.
   PREFER_CANONICAL_UBUNTU_ARCHIVE: |
@@ -38,9 +39,9 @@ env:
         if grep -qE "^${canonical_re}${end}" "$f"; then sudo sed -i -E "\#^${azure}${end}#d" "$f"
         else sudo sed -i -E "s#^${azure}${end}#${canonical}\1#" "$f"; fi
       else
-        # deb822 .sources or one-line .list, skipping comments. A URIs line that already names the
-        # canonical archive just drops the Azure entry; otherwise the Azure URI is replaced in place.
-        sudo sed -i -E -e '/^[[:space:]]*#/b' -e "\#${canonical_re}# s#[[:space:]]+${azure}${end}#\1#g" -e "s#(^|[[:space:]])${azure}${end}#\1${canonical}\2#g" "$f"
+        # deb822 .sources or one-line .list: replace each Azure URI that comes before any "#" with the
+        # canonical archive, one per pass until none is left. Never deletes a URI; comments stay as written.
+        sudo sed -i -E -e ':a' -e "s#^([^#]*[[:space:]])?${azure}${end}#\1${canonical}\2#" -e 'ta' "$f"
       fi
       changed=1
     done
