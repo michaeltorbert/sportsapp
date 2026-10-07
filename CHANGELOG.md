@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.13.4 · 2026-10-07
+
+- Open Alerts and Help as the same full-height right-side panel as Settings (full width below 600px, 430px otherwise). Each has one pinned, labeled 44px Close that opens focused, and only the panel body scrolls, when its content needs it. Shared 300ms open and 200ms close motion; Reduce Motion still disables it. Alert settings and request handling, Help content and app-update actions, and the Settings confirmation are unchanged (#116).
+- Leave 8px below the top safe-area inset on Scores and the Guide (at least 12px without an inset); short-landscape Guide spacing is unchanged. A solid, noninteractive band covers the status-bar area so scrolled content and the sticky category row stay below it. Focused-game scroll offsets include the inset.
+- Add a collapsed, read-only Display details section to Help showing display mode, safe-area insets and viewport size, measured when opened and after rotation. Nothing is stored or sent.
+- Status-bar metadata (`black-translucent`, `viewport-fit=cover`) is unchanged; the update arrives through the usual in-app refresh, and no reinstall is requested. Browser checks use simulated insets; these are layout mitigations, not a confirmed iPhone fix. Native confirmation remains open in #116.
+
 ## 1.13.3 · 2026-10-07
 
 - Add 16px of Settings header spacing below the top safe-area inset to address reported portrait clipping of Settings, X and Close (#116). Preserve the right-side landscape panel and independently scrolling content.

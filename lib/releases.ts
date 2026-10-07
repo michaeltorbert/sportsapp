@@ -1,5 +1,6 @@
-export const VERSION = "1.13.3";
+export const VERSION = "1.13.4";
 export const releases = [
+  { version: "1.13.4", date: "October 7, 2026", changes: "Alerts and Help now open like Settings: a full-height panel with a labeled Close button that stays in place while the content scrolls. Leave consistent space below the iPhone status bar on Scores and the Guide, and keep scrolled content from showing beneath it. Help adds Display details for support. Confirmation on iPhone is still pending." },
   { version: "1.13.3", date: "October 7, 2026", changes: "Give the Settings heading and Close button extra space below the iPhone status bar in portrait." },
   { version: "1.13.2", date: "October 6, 2026", changes: "Keep a labeled Close button in view while Settings scrolls, including in narrow landscape and with larger text. Settings opens with Close focused and keeps your preferences, from both Scores and the Guide." },
   { version: "1.13.1", date: "October 5, 2026", changes: "Use ESPN-aligned school names in the sample alert: Western KY and Coastal. Keep the sample labeled and limited to your current device." },
