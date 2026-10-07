@@ -1,5 +1,6 @@
-export const VERSION = "1.13.4";
+export const VERSION = "1.13.5";
 export const releases = [
+  { version: "1.13.5", date: "October 7, 2026", changes: "Help, Alerts and Settings open again as the rounded blue sheet that slides up from the bottom, with a round Close button that stays in place while the content scrolls. Display details moves to the top of Settings. A little more space below the iPhone status bar on Scores and the Guide, and the Home Screen app now fills the screen height. Confirmation on iPhone is still pending." },
   { version: "1.13.4", date: "October 7, 2026", changes: "Alerts and Help now open like Settings: a full-height panel with a labeled Close button that stays in place while the content scrolls. Leave consistent space below the iPhone status bar on Scores and the Guide, and keep scrolled content from showing beneath it. Help adds Display details for support. Confirmation on iPhone is still pending." },
   { version: "1.13.3", date: "October 7, 2026", changes: "Give the Settings heading and Close button extra space below the iPhone status bar in portrait." },
   { version: "1.13.2", date: "October 6, 2026", changes: "Keep a labeled Close button in view while Settings scrolls, including in narrow landscape and with larger text. Settings opens with Close focused and keeps your preferences, from both Scores and the Guide." },

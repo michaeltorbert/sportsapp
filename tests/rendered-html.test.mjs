@@ -31,7 +31,7 @@ test("renders the mobile scoreboard shell and app metadata", async () => {
   const html = await response.text();
   assert.match(html, /Saturday Signal/);
   assert.match(html, /viewport-fit=cover/);
-  // Scope contract for 1.13.4 (#116): the layout fix leaves installed-app chrome metadata as it was.
+  // Scope contract through 1.13.5 (#116): the layout changes leave installed-app chrome metadata as it was.
   // This does not show whether a metadata change would reach existing Home Screen installs.
   const viewports = html.match(/<meta[^>]*name="viewport"[^>]*>/g) ?? [];
   assert.equal(viewports.length, 1, "one viewport element");
