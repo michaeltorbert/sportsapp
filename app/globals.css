@@ -205,7 +205,8 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .duke-toggle span { font-size: 11px; opacity: .8; }
 /* A bounded panel: the header (with Close) never scrolls away; only .settings-body does. */
 .settings-sheet { width: 430px; max-width: 100%; height: auto; max-height: 100vh; max-height: 100dvh; overflow: hidden; padding: 0; gap: 0; }
-.settings-header { flex: none; flex-flow: row wrap; align-items: flex-start; gap: 8px 12px; padding: max(env(safe-area-inset-top), 16px) max(env(safe-area-inset-right), 16px) 14px 24px; border-bottom: 1px solid #293345; }
+/* Keep normal header spacing below the iPhone status-bar safe area. */
+.settings-header { flex: none; flex-flow: row wrap; align-items: flex-start; gap: 8px 12px; padding: calc(env(safe-area-inset-top, 0px) + 16px) max(env(safe-area-inset-right), 16px) 14px 24px; border-bottom: 1px solid #293345; }
 .settings-heading { flex: 1 1 10rem; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding-top: 9px; overflow-wrap: anywhere; }
 .settings-heading [data-slot="sheet-title"] { font-size: 20px; line-height: 1.3; }
 .settings-close { flex: none; margin-left: auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 0 15px 0 12px; border: 1px solid #34435a; border-radius: 22px; background: #182131; color: #edf4ff; font-size: 14px; font-weight: 600; }
