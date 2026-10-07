@@ -25,7 +25,7 @@ const output = await build({
       return { contents: `
         const wrapper=({children})=>globalThis.scorePageTest.element('div',null,children);
         export const Tabs=wrapper,TabsList=wrapper,Empty=wrapper,EmptyHeader=wrapper,EmptyMedia=wrapper,EmptyTitle=wrapper,EmptyDescription=wrapper,Sheet=wrapper,SheetTrigger=wrapper,SheetHeader=wrapper,SheetTitle=wrapper,SheetDescription=wrapper;
-        export const SheetContent=({children})=>globalThis.scorePageTest.showHelp?wrapper({children}):null,Skeleton=()=>null,Alerts=()=>null,AppUpdateNotice=()=>null,AppNavigation=()=>null,DukeSettings=()=>null,DukeGameControls=()=>null;
+        export const SheetContent=({children})=>globalThis.scorePageTest.showHelp?wrapper({children}):null,AppPanelContent=({title,description,children})=>globalThis.scorePageTest.showHelp?globalThis.scorePageTest.element('div',null,title,description,children):null,DisplayDetails=()=>null,Skeleton=()=>null,Alerts=()=>null,AppUpdateNotice=()=>null,AppNavigation=()=>null,DukeSettings=()=>null,DukeGameControls=()=>null;
       ` };
     });
   } }],

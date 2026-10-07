@@ -54,7 +54,8 @@ for (const width of [320, 390]) for (const scale of [100, 150]) test(`SIMULATED 
   await expect(upset).toBeChecked(); await expect(upset).toBeDisabled();
   expect(await upset.evaluate(input => getComputedStyle(input.nextElementSibling).opacity)).toBe("1");
   await upset.scrollIntoViewIfNeeded(); await capture(page, info, `${prefix}-disabled-on`);
-  await sheet.getByRole("button", { name: "Close", exact: true }).scrollIntoViewIfNeeded();
+  // Close stays pinned while the alert choices scroll (#116); no scrolling is needed to reach it.
+  await expect(sheet.getByRole("button", { name: "Close", exact: true })).toBeInViewport({ ratio: 1 });
   await sheet.getByRole("button", { name: "Close", exact: true }).tap();
   await expect(sheet).not.toBeVisible();
 });

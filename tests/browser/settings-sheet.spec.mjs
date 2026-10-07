@@ -1,5 +1,6 @@
 // Issue #116: Settings must be dismissible without making a selection, keep one
 // reachable Close while its own body scrolls, and leave the page usable after.
+// Since 1.13.4 Alerts and Help share the same panel, and the page keeps its top safe-area spacing.
 // Touch contexts use real taps; synthesized touch *scrolling* is not exercised here.
 import { devices } from '@playwright/test';
 import { test, expect, event, category } from './fixtures.mjs';
@@ -311,4 +312,219 @@ test.describe('desktop keyboard and mouse', () => {
       await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(0);
     }
   });
+});
+
+// 1.13.4: Settings, Alerts and Help share one full-height trailing panel.
+const panels = {
+  Settings: { trigger: 'Settings', title: 'Settings', region: 'Viewing preferences' },
+  Alerts: { trigger: 'Alerts off', title: 'Catch the game-changing moments.', region: 'Alert choices' },
+  Help: { trigger: 'How this scoreboard works', title: 'How your watchlist works', region: 'How it works' },
+};
+const panelTrigger = (page, name) => page.getByRole('button', { name: panels[name].trigger, exact: true });
+const panel = (page, name) => page.getByRole('dialog', { name: panels[name].title, exact: true });
+const panelBody = (page, name) => panel(page, name).getByRole('region', { name: panels[name].region, exact: true });
+const panelClose = (page, name) => panel(page, name).getByRole('button', { name: 'Close', exact: true });
+const nonGetAlertRequests = harness => harness.state.alertRequests.filter(r => r.method !== 'GET');
+
+async function openPanel(page, name) {
+  await panelTrigger(page, name).tap();
+  await expect(panel(page, name)).toBeVisible();
+  await panel(page, name).evaluate(el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {}))));
+}
+async function expectPanelClosed(page, name) {
+  await expect(panel(page, name)).toHaveCount(0);
+  await expect(panelTrigger(page, name)).toBeFocused();
+  await expect.poll(() => page.evaluate(() => ({ scrollLocked: document.body.hasAttribute('data-scroll-locked'), pointerEvents: getComputedStyle(document.body).pointerEvents })))
+    .toEqual({ scrollLocked: false, pointerEvents: 'auto' });
+}
+const panelGeometry = (page, name) => panel(page, name).evaluate(dialog => {
+  const d = dialog.getBoundingClientRect(), close = dialog.querySelector('.app-panel-close'), c = close.getBoundingClientRect();
+  const body = dialog.querySelector('.app-panel-body'), b = body.getBoundingClientRect();
+  const hit = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
+  return {
+    top: d.top, right: d.right, bottom: d.bottom, width: d.width, viewport: { width: innerWidth, height: innerHeight },
+    panelScrolls: dialog.scrollHeight > dialog.clientHeight + 1,
+    close: { top: c.top, left: c.left, width: c.width, height: c.height, hit: !!hit && close.contains(hit), inViewport: c.top >= 0 && c.left >= 0 && c.bottom <= innerHeight + .5 && c.right <= innerWidth + .5 },
+    body: { height: b.height, overflows: body.scrollHeight > body.clientHeight + 1, overflowY: getComputedStyle(body).overflowY, horizontal: Math.max(body.scrollWidth - body.clientWidth, dialog.scrollWidth - dialog.clientWidth) },
+  };
+});
+
+const panelLayouts = [
+  { name: '320px phone', width: 320, height: 568 },
+  { name: 'notched portrait phone', width: 393, height: 852 },
+  { name: 'short landscape phone', width: 844, height: 390 },
+  { name: 'short landscape phone with doubled text', width: 844, height: 390, textScale: 2 },
+];
+for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(`${layout.name}: ${name} is a full-height trailing panel with one pinned Close`, async ({ page, harness }, testInfo) => {
+  harness.state.events = [...harness.state.events, ...manyDuke()];
+  await page.setViewportSize({ width: layout.width, height: layout.height });
+  await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  await openPanel(page, name);
+  if (layout.textScale) await panel(page, name).evaluate((root, scale) => {
+    const nodes = [root, ...root.querySelectorAll('*')], sizes = nodes.map(node => parseFloat(getComputedStyle(node).fontSize));
+    nodes.forEach((node, i) => { node.style.fontSize = `${sizes[i] * scale}px`; });
+  }, layout.textScale);
+  await expect(panelClose(page, name)).toHaveCount(1);
+  await expect(panelClose(page, name)).toBeFocused();
+  const start = await panelGeometry(page, name);
+  expect(start.top).toBeCloseTo(0, 0);
+  expect(start.bottom).toBeCloseTo(start.viewport.height, 0);
+  expect(start.right).toBeCloseTo(start.viewport.width, 0);
+  expect(start.width).toBeCloseTo(layout.width <= 600 ? layout.width : 430, 0);
+  expect(start.panelScrolls).toBe(false);
+  expect(start.close).toMatchObject({ hit: true, inViewport: true });
+  expect(start.close.width).toBeGreaterThanOrEqual(44);
+  expect(start.close.height).toBeGreaterThanOrEqual(44);
+  expect(start.body.overflowY).toBe('auto');
+  expect(start.body.horizontal).toBeLessThanOrEqual(0);
+  // Even a heading enlarged this much leaves the body most of a short landscape screen.
+  if (layout.textScale) expect(start.body.height).toBeGreaterThanOrEqual(layout.height * .4);
+  await testInfo.attach(`${name} ${layout.name} top`, { body: await page.screenshot(), contentType: 'image/png' });
+  const heading = panel(page, name).getByRole('region', { name: 'Title and description', exact: true });
+  if (layout.textScale) {
+    // Enlarged text overflows the capped heading after the panel opened: it becomes a named region
+    // the keyboard can enter and scroll, while Close stays put and the body keeps its own scrolling.
+    expect(start.body.overflows).toBe(true);
+    await expect(heading).toHaveAttribute('tabindex', '0');
+    await page.keyboard.press('Shift+Tab');
+    await expect(heading).toBeFocused();
+    expect(await heading.evaluate(el => getComputedStyle(el).outlineStyle)).toBe('solid');
+    await page.keyboard.press('End');
+    await expect.poll(() => heading.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThanOrEqual(1);
+    expect(await heading.evaluate(el => el.lastElementChild.getBoundingClientRect().bottom <= el.getBoundingClientRect().bottom + .5)).toBe(true);
+    expect((await panelGeometry(page, name)).close).toEqual(start.close);
+    expect(await panelBody(page, name).evaluate(el => el.scrollTop)).toBe(0);
+    await testInfo.attach(`${name} ${layout.name} heading end`, { body: await page.screenshot(), contentType: 'image/png' });
+    // Close has an explicit tabindex, so plain Tab reaches it even where engines skip native buttons.
+    await page.keyboard.press('Tab');
+    await expect(panelClose(page, name)).toBeFocused();
+  } else {
+    // An ordinary heading adds no tab stop: Close leads straight to the body.
+    await expect(heading).toHaveCount(0);
+    expect(await panel(page, name).locator('.app-panel-heading').getAttribute('tabindex')).toBeNull();
+  }
+  await page.keyboard.press('Tab');
+  await expect(panelBody(page, name)).toBeFocused();
+  if (start.body.overflows) {
+    await page.keyboard.press('End');
+    await expect.poll(() => panelBody(page, name).evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThanOrEqual(1);
+    const end = await panelGeometry(page, name);
+    expect(end.close).toEqual(start.close);
+    expect(end.panelScrolls).toBe(false);
+    await testInfo.attach(`${name} ${layout.name} bottom`, { body: await page.screenshot(), contentType: 'image/png' });
+  }
+  await panelClose(page, name).tap();
+  await expectPanelClosed(page, name);
+  expect(nonGetAlertRequests(harness)).toEqual([]);
+  expect(await storedPrefs(page)).toBe(before);
+});
+
+for (const name of ['Alerts', 'Help']) test(`${name}: Escape and the backdrop dismiss repeatedly without changing anything`, async ({ page, harness }) => {
+  // Wide enough that the backdrop shows beside the 430px panel.
+  await page.setViewportSize({ width: 844, height: 600 });
+  await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  for (const dismiss of ['Escape', 'backdrop', 'Escape']) {
+    await openPanel(page, name);
+    await expect(panelClose(page, name)).toBeFocused();
+    if (dismiss === 'Escape') await page.keyboard.press('Escape');
+    else await page.mouse.click(5, 300);
+    await expectPanelClosed(page, name);
+  }
+  expect(nonGetAlertRequests(harness)).toEqual([]);
+  expect(await storedPrefs(page)).toBe(before);
+  await category(page, 'ACC').tap();
+  await expect(category(page, 'ACC')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('panels open over 300ms and close over 200ms; reduced motion removes the slide', async ({ page, harness }) => {
+  await openRoute(page, harness, 'Scores');
+  for (const name of Object.keys(panels)) {
+    await panelTrigger(page, name).tap();
+    await expect(panel(page, name)).toBeVisible();
+    expect(await panel(page, name).evaluate(el => getComputedStyle(el).animationDuration)).toBe('0.3s');
+    await panel(page, name).evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished.catch(() => {}))));
+    // Read the closing state the moment Radix marks it, before the exit animation ends.
+    const closing = await panel(page, name).evaluate(dialog => new Promise(resolve => {
+      new MutationObserver((_, observer) => {
+        if (dialog.dataset.state === 'closed') { observer.disconnect(); resolve(getComputedStyle(dialog).animationDuration); }
+      }).observe(dialog, { attributes: true, attributeFilter: ['data-state'] });
+      document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    }));
+    expect(closing, name).toBe('0.2s');
+    await expectPanelClosed(page, name);
+  }
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const name of Object.keys(panels)) {
+    await panelTrigger(page, name).tap();
+    await expect(panel(page, name)).toBeVisible();
+    expect(await panel(page, name).evaluate(el => ({ name: getComputedStyle(el).animationName, running: el.getAnimations().length }))).toEqual({ name: 'none', running: 0 });
+    await page.keyboard.press('Escape');
+    await expectPanelClosed(page, name);
+  }
+});
+
+// Overriding --safe-top checks layout arithmetic only; it is not evidence of native iOS insets.
+for (const inset of [0, 59]) test(`SIMULATED ${inset}px top inset: page spacing, status-bar band, sticky row and panel header`, async ({ page, harness }, testInfo) => {
+  harness.state.events = [...harness.state.events, ...fillers()];
+  await page.setViewportSize({ width: 393, height: 852 });
+  await openRoute(page, harness, 'Scores');
+  await page.addStyleTag({ content: `:root { --safe-top: ${inset}px; }` });
+  const gap = Math.max(inset + 8, 12);
+  expect((await page.locator('.app-header').boundingBox()).y).toBeCloseTo(gap, 0);
+  // The band's bounds and stacking: fixed at the top, as tall as the inset, under dialogs (z-50).
+  expect(await page.evaluate(() => {
+    const s = getComputedStyle(document.body, '::before');
+    return { position: s.position, top: s.top, height: s.height, zIndex: s.zIndex, pointerEvents: s.pointerEvents, background: s.backgroundColor };
+  })).toEqual({ position: 'fixed', top: '0px', height: `${inset}px`, zIndex: '20', pointerEvents: 'none', background: 'rgb(10, 14, 22)' });
+  await page.evaluate(() => scrollTo(0, 400));
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(200);
+  expect((await page.locator('.filter-tabs').boundingBox()).y).toBeCloseTo(inset, 0);
+  await testInfo.attach(`scrolled top, ${inset}px inset`, { body: await page.screenshot({ clip: { x: 0, y: 0, width: 393, height: 160 } }), contentType: 'image/png' });
+  if (inset) {
+    // Pointer input inside the band still reaches the scrolled page beneath it.
+    await page.evaluate(() => { window.__bandTarget = null; addEventListener('mousemove', event => { window.__bandTarget ??= event.target.closest('main') ? 'main' : event.target.nodeName; }); });
+    await page.mouse.move(196, inset / 2);
+    await expect.poll(() => page.evaluate(() => window.__bandTarget)).toBe('main');
+  }
+  await openPanel(page, 'Settings');
+  const settingsPanel = await panelGeometry(page, 'Settings');
+  expect(settingsPanel.close.top).toBeGreaterThanOrEqual(inset + 16);
+  expect(settingsPanel.close).toMatchObject({ hit: true, inViewport: true });
+  expect(await panel(page, 'Settings').evaluate(el => Number(getComputedStyle(el).zIndex))).toBeGreaterThan(20);
+  await testInfo.attach(`Settings, ${inset}px inset`, { body: await page.screenshot({ clip: { x: 0, y: 0, width: 393, height: 160 } }), contentType: 'image/png' });
+  await panelClose(page, 'Settings').tap();
+  await expectPanelClosed(page, 'Settings');
+});
+
+test('Help Display details stays collapsed until opened, reads the raw insets, and remeasures after rotation', async ({ page, harness }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await openRoute(page, harness, 'Scores');
+  // The app's spacing variable must not leak into the reported device inset.
+  await page.addStyleTag({ content: ':root { --safe-top: 59px; }' });
+  await openPanel(page, 'Help');
+  const details = panel(page, 'Help').locator('details.display-details');
+  await expect(details).not.toHaveAttribute('open');
+  await details.locator('summary').tap();
+  const value = label => details.locator('dt', { hasText: label }).locator('xpath=following-sibling::dd');
+  await expect(value('Window size')).toHaveText('320 × 568');
+  await expect(value('Safe-area insets')).toHaveText('Top 0px, right 0px, bottom 0px, left 0px');
+  // The harness simulates navigator.standalone === true (a Home Screen app).
+  await expect(value('Display mode')).toHaveText(/^\S+ \(Home Screen app\)$/);
+  await expect(value('Visible area')).toHaveText(/^320 × 568/);
+  // false names no particular browser; an unreported value adds nothing. Reopening remeasures.
+  for (const [standalone, expected] of [[false, /^\S+ \(browser tab, not a Home Screen app\)$/], [undefined, /^\S+$/]]) {
+    await page.evaluate(reported => Object.defineProperty(navigator, 'standalone', { configurable: true, value: reported }), standalone);
+    await details.locator('summary').tap();
+    await expect(details).not.toHaveAttribute('open');
+    await details.locator('summary').tap();
+    await expect(value('Display mode')).toHaveText(expected);
+  }
+  expect(await details.locator('dd').evaluateAll(nodes => nodes.every(node => node.scrollWidth <= node.clientWidth + 1))).toBe(true);
+  await page.setViewportSize({ width: 568, height: 320 });
+  await expect(value('Window size')).toHaveText('568 × 320');
+  expect((await panelGeometry(page, 'Help')).body.horizontal).toBeLessThanOrEqual(0);
+  await page.keyboard.press('Escape');
+  await expectPanelClosed(page, 'Help');
 });

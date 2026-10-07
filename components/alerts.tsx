@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState, type InputHTMLAttributes } from "react";
 import { Bell, BellRing } from "lucide-react";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetTrigger } from "@/components/ui/sheet";
+import { AppPanelContent } from "@/components/app-panel";
 import { usePushEnvironment } from "@/lib/browser-state";
 
 type Config = { ready: boolean; publicKey: string; preferencesVersion?: number; sampleVersion?: number };
@@ -249,7 +250,7 @@ export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
   const sampleReady = enabled && accessConfirmed && online && config?.sampleVersion === 1 && !!localId && localId === saved()?.id;
   const sampleBusy = sampleStatus === "posting" || sampleStatus === "scheduled" || sampleStatus === "sending";
   const canConfirm = ["sending", "accepted", "uncertain", "overdue", "not-recorded", "unreachable"].includes(sampleStatus);
-  return <Sheet><SheetTrigger asChild><button className={iconOnly ? "icon-button alerts-trigger" : "alerts-button"} aria-label={iconOnly ? enabled ? "Alerts on" : "Alerts off" : undefined}>{enabled ? <BellRing size={16} /> : <Bell size={16} />}<span className={iconOnly ? "sr-only" : undefined}>{enabled ? "Alerts on" : iconOnly ? "Alerts off" : "Alerts"}</span></button></SheetTrigger><SheetContent side="bottom" className="help-sheet alerts-sheet"><SheetHeader><SheetTitle>Catch the game-changing moments.</SheetTitle><SheetDescription>Choose alerts for this device.</SheetDescription></SheetHeader><div className="help-body">
+  return <Sheet><SheetTrigger asChild><button className={iconOnly ? "icon-button alerts-trigger" : "alerts-button"} aria-label={iconOnly ? enabled ? "Alerts on" : "Alerts off" : undefined}>{enabled ? <BellRing size={16} /> : <Bell size={16} />}<span className={iconOnly ? "sr-only" : undefined}>{enabled ? "Alerts on" : iconOnly ? "Alerts off" : "Alerts"}</span></button></SheetTrigger><AppPanelContent className="help-sheet alerts-sheet" bodyClassName="help-body" title="Catch the game-changing moments." description="Choose alerts for this device." bodyLabel="Alert choices">
 <label className="alert-setting"><span><strong>Notifications</strong><small id="alert-active">Turning off stops future alerts; your choices stay saved.</small></span><AlertSwitch pending={pending === "active"} aria-label="Notifications" aria-describedby="alert-active" checked={enabled} aria-disabled={busy} aria-busy={busy} disabled={!online || (!!saved() && !accessConfirmed) || (enabled ? !service : !canEnable)} onChange={e => { if (writing.current) return; if (e.target.checked) void enable(); else void update({ active: false }, "active"); }} /></label>
     {types.map(t => <label key={t.key} className="alert-setting"><span><strong>{t.name}</strong><small id={`alert-${t.key}`}>{t.description}</small></span><AlertSwitch pending={pending === t.key} aria-label={t.name} aria-describedby={`alert-${t.key}`} checked={choices[t.key]} aria-disabled={busy} aria-busy={busy} disabled={!enabled || !online || !accessConfirmed} onChange={e => { if (!writing.current) void update({ [t.key]: e.target.checked }, t.key); }} /></label>)}
     {enabled && types.every(t => !choices[t.key]) && <p role="status">No alert types are selected. You will not receive game alerts.</p>}
@@ -271,5 +272,5 @@ export function Alerts({ iconOnly = false }: { iconOnly?: boolean }) {
       <p>Upset watch looks for a meaningful threat to a ranked favorite in Q4 or overtime, including ties and an underdog within 8 points.</p>
       <p>Scoreboard categories do not filter notifications. Alerts depend on ESPN’s feed and the device’s settings.</p>
     </details>
-  </div></SheetContent></Sheet>;
+  </AppPanelContent></Sheet>;
 }
