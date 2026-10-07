@@ -381,6 +381,28 @@ for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(
   // Even a heading enlarged this much leaves the body most of a short landscape screen.
   if (layout.textScale) expect(start.body.height).toBeGreaterThanOrEqual(layout.height * .4);
   await testInfo.attach(`${name} ${layout.name} top`, { body: await page.screenshot(), contentType: 'image/png' });
+  const heading = panel(page, name).getByRole('region', { name: 'Title and description', exact: true });
+  if (layout.textScale) {
+    // Enlarged text overflows the capped heading after the panel opened: it becomes a named region
+    // the keyboard can enter and scroll, while Close stays put and the body keeps its own scrolling.
+    expect(start.body.overflows).toBe(true);
+    await expect(heading).toHaveAttribute('tabindex', '0');
+    await page.keyboard.press('Shift+Tab');
+    await expect(heading).toBeFocused();
+    expect(await heading.evaluate(el => getComputedStyle(el).outlineStyle)).toBe('solid');
+    await page.keyboard.press('End');
+    await expect.poll(() => heading.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThanOrEqual(1);
+    expect(await heading.evaluate(el => el.lastElementChild.getBoundingClientRect().bottom <= el.getBoundingClientRect().bottom + .5)).toBe(true);
+    expect((await panelGeometry(page, name)).close).toEqual(start.close);
+    expect(await panelBody(page, name).evaluate(el => el.scrollTop)).toBe(0);
+    await testInfo.attach(`${name} ${layout.name} heading end`, { body: await page.screenshot(), contentType: 'image/png' });
+    await page.keyboard.press('Tab');
+    await expect(panelClose(page, name)).toBeFocused();
+  } else {
+    // An ordinary heading adds no tab stop: Close leads straight to the body.
+    await expect(heading).toHaveCount(0);
+    expect(await panel(page, name).locator('.app-panel-heading').getAttribute('tabindex')).toBeNull();
+  }
   await page.keyboard.press('Tab');
   await expect(panelBody(page, name)).toBeFocused();
   if (start.body.overflows) {
@@ -487,8 +509,17 @@ test('Help Display details stays collapsed until opened, reads the raw insets, a
   const value = label => details.locator('dt', { hasText: label }).locator('xpath=following-sibling::dd');
   await expect(value('Window size')).toHaveText('320 × 568');
   await expect(value('Safe-area insets')).toHaveText('Top 0px, right 0px, bottom 0px, left 0px');
-  await expect(value('Display mode')).toHaveText(/^browser/);
+  // The harness simulates navigator.standalone === true (a Home Screen app).
+  await expect(value('Display mode')).toHaveText(/^\S+ \(Home Screen app\)$/);
   await expect(value('Visible area')).toHaveText(/^320 × 568/);
+  // false names no particular browser; an unreported value adds nothing. Reopening remeasures.
+  for (const [standalone, expected] of [[false, /^\S+ \(browser tab, not a Home Screen app\)$/], [undefined, /^\S+$/]]) {
+    await page.evaluate(reported => Object.defineProperty(navigator, 'standalone', { configurable: true, value: reported }), standalone);
+    await details.locator('summary').tap();
+    await expect(details).not.toHaveAttribute('open');
+    await details.locator('summary').tap();
+    await expect(value('Display mode')).toHaveText(expected);
+  }
   expect(await details.locator('dd').evaluateAll(nodes => nodes.every(node => node.scrollWidth <= node.clientWidth + 1))).toBe(true);
   await page.setViewportSize({ width: 568, height: 320 });
   await expect(value('Window size')).toHaveText('568 × 320');

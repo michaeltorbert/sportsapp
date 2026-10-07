@@ -8,10 +8,11 @@ function measure(probe: HTMLElement): Snapshot {
   // The probe's margins are the raw env() insets as this browser resolves them, not the app's --safe-top.
   const style = getComputedStyle(probe), px = (value: string) => Math.round(parseFloat(value) || 0);
   const mode = modes.find(value => matchMedia(`(display-mode: ${value})`).matches) ?? "unknown";
+  // iOS reports true for a Home Screen app and false otherwise; false names no particular browser.
   const homeScreen = (navigator as Navigator & { standalone?: boolean }).standalone;
   const viewport = window.visualViewport;
   return {
-    mode: `${mode}${homeScreen === true ? " (Home Screen app)" : homeScreen === false ? " (Safari)" : ""}`,
+    mode: `${mode}${homeScreen === true ? " (Home Screen app)" : homeScreen === false ? " (browser tab, not a Home Screen app)" : ""}`,
     insets: { top: px(style.marginTop), right: px(style.marginRight), bottom: px(style.marginBottom), left: px(style.marginLeft) },
     window: `${innerWidth} × ${innerHeight}`,
     visual: viewport ? `${Math.round(viewport.width)} × ${Math.round(viewport.height)}, offset ${Math.round(viewport.offsetTop)}` : "Not available",
