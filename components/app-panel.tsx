@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type ComponentProps, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { X } from "lucide-react";
 import { SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./ui/sheet";
 import { cn } from "@/lib/utils";
@@ -16,7 +17,7 @@ type AppPanelProps = Omit<ComponentProps<typeof SheetContent>, "side" | "showClo
 export function AppPanelContent({ title, description, bodyLabel, bodyClassName, className, children, onOpenAutoFocus, onCloseAutoFocus, ...props }: AppPanelProps) {
   const close = useRef<HTMLButtonElement>(null);
   const opener = useRef<HTMLElement | null>(null);
-  const panel = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement | null>(null);
   const body = useRef<HTMLElement>(null);
   const drag = useRef<{ id: number; x: number; y: number; offset: number; height: number; viewportWidth: number; viewportHeight: number } | null>(null);
   const [offset, setOffset] = useState(0);
@@ -28,6 +29,24 @@ export function AppPanelContent({ title, description, bodyLabel, bodyClassName, 
     addEventListener("resize", cancelActiveDrag); visualViewport?.addEventListener("resize", cancelActiveDrag);
     return () => { removeEventListener("resize", cancelActiveDrag); visualViewport?.removeEventListener("resize", cancelActiveDrag); };
   }, [resetDrag]);
+  // Every opening starts with both scroll regions at their tops and Close focused.
+  const focusFromTop = useCallback(() => {
+    body.current?.scrollTo(0, 0); panel.current?.querySelector(".app-panel-heading")?.scrollTo(0, 0); close.current?.focus();
+  }, []);
+  // Reopened before its closing slide ends, Radix keeps this same node and its focus scope does not
+  // mount again, so onOpenAutoFocus never runs. A closed-to-open data-state change on the node marks
+  // that opening. The observer's microtask runs after Radix's commit and before the next paint, and
+  // flushSync commits the reset then. Closing is left alone, so a committed pull slides out from where
+  // it was let go; an ordinary mount starts open, records nothing, and keeps onOpenAutoFocus's path.
+  const panelRef = useCallback((node: HTMLDivElement | null) => {
+    panel.current = node; if (!node) return;
+    const observer = new MutationObserver(records => {
+      if (node.dataset.state !== "open" || !records.some(record => record.oldValue === "closed")) return;
+      flushSync(resetDrag); focusFromTop();
+    });
+    observer.observe(node, { attributes: true, attributeFilter: ["data-state"], attributeOldValue: true });
+    return () => { observer.disconnect(); panel.current = null; };
+  }, [resetDrag, focusFromTop]);
   function startDrag(event: PointerEvent<HTMLDivElement>) {
     if (!event.isPrimary) { resetDrag(); return; }
     if (event.button !== 0 || drag.current) return;
@@ -65,14 +84,14 @@ export function AppPanelContent({ title, description, bodyLabel, bodyClassName, 
     observer.observe(node); for (const child of node.children) observer.observe(child);
     return () => observer.disconnect();
   }, []);
-  return <SheetContent {...props} ref={panel} data-dragging={dragging || undefined} style={{ ...props.style, translate: `0 ${offset}px` }} side="bottom" showCloseButton={false} className={cn("app-panel", className)} onOpenAutoFocus={event => {
+  return <SheetContent {...props} ref={panelRef} data-dragging={dragging || undefined} style={{ ...props.style, translate: `0 ${offset}px` }} side="bottom" showCloseButton={false} className={cn("app-panel", className)} onOpenAutoFocus={event => {
     // Record this opening's trigger: the one control whose aria-controls names this dialog, which
     // Radix sets only while open. Never the active element, which a tap can leave on another control.
     const id = close.current?.closest('[role="dialog"]')?.id;
     const triggers = id ? [...document.querySelectorAll<HTMLElement>(`[aria-controls="${CSS.escape(id)}"]`)] : [];
     opener.current = triggers.length === 1 ? triggers[0] : null;
     onOpenAutoFocus?.(event); if (event.defaultPrevented) return;
-    event.preventDefault(); resetDrag(); body.current?.scrollTo(0, 0); panel.current?.querySelector(".app-panel-heading")?.scrollTo(0, 0); close.current?.focus();
+    event.preventDefault(); resetDrag(); focusFromTop();
   }} onCloseAutoFocus={event => {
     onCloseAutoFocus?.(event);
     const target = opener.current; opener.current = null;

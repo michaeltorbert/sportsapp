@@ -74,6 +74,22 @@ const closeState = page => closeButton(page).evaluate(el => {
   };
 });
 
+// The heading's region role, tab stop, header flag and taller grip all follow its overflow through a
+// ResizeObserver, some time after a text-size change. Take a baseline only once every one of them
+// agrees with the heading's actual overflow; otherwise a later grip change moves the pinned Close.
+async function expectHeadingSettled(dialog) {
+  await expect.poll(() => dialog.evaluate(root => {
+    const heading = root.querySelector('.app-panel-heading'), overflows = heading.scrollHeight > heading.clientHeight + 1;
+    const expected = { role: overflows ? 'region' : null, tabindex: overflows ? '0' : null, headerFlag: overflows, grip: overflows ? '44px' : '12px' };
+    const actual = {
+      role: heading.getAttribute('role'), tabindex: heading.getAttribute('tabindex'),
+      headerFlag: root.querySelector('.app-panel-header').hasAttribute('data-heading-scrolls'),
+      grip: getComputedStyle(root.querySelector('.app-panel-grip')).height,
+    };
+    return Object.keys(expected).filter(key => actual[key] !== expected[key]).map(key => `${key} is ${actual[key]} with overflow ${overflows}`);
+  }), { message: 'heading role, tab stop, header flag and grip agree with its actual overflow' }).toEqual([]);
+}
+
 const bodyState = page => body(page).evaluate(el => {
   const r = el.getBoundingClientRect(), dialog = el.closest('[role="dialog"]'), d = dialog.getBoundingClientRect();
   const note = el.querySelector('.settings-note').getBoundingClientRect();
@@ -254,6 +270,7 @@ for (const layout of layouts) test(`${layout.name}: Close stays pinned while the
     }, layout.textScale);
     expect(await settings(page).locator('.settings-note').evaluate(el => getComputedStyle(el).fontSize)).toBe('26px');
   }
+  await expectHeadingSettled(settings(page));
   const top = await closeState(page);
   expect(top).toMatchObject({ inViewport: true, hit: true, clearOfTitle: true });
   expect(top.width).toBeGreaterThanOrEqual(44);
@@ -400,6 +417,7 @@ for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(
     const nodes = [root, ...root.querySelectorAll('*')], sizes = nodes.map(node => parseFloat(getComputedStyle(node).fontSize));
     nodes.forEach((node, i) => { node.style.fontSize = `${sizes[i] * scale}px`; });
   }, layout.textScale);
+  await expectHeadingSettled(panel(page, name));
   await expect(panelClose(page, name)).toHaveCount(1);
   await expect(panelClose(page, name)).toBeFocused();
   const start = await panelGeometry(page, name);
@@ -429,8 +447,11 @@ for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(
     await expect(heading).toBeFocused();
     expect(await heading.evaluate(el => getComputedStyle(el).outlineStyle)).toBe('solid');
     await page.keyboard.press('End');
-    await expect.poll(() => heading.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThanOrEqual(1);
-    expect(await heading.evaluate(el => el.lastElementChild.getBoundingClientRect().bottom <= el.getBoundingClientRect().bottom + .5)).toBe(true);
+    // Read both end conditions together: scrolling may still be moving when one is first met.
+    await expect.poll(() => heading.evaluate(el => ({
+      atEnd: el.scrollHeight - el.clientHeight - el.scrollTop <= 1,
+      lastLineInView: el.lastElementChild.getBoundingClientRect().bottom <= el.getBoundingClientRect().bottom + .5,
+    })), { message: 'heading reaches its end with its last line in view' }).toEqual({ atEnd: true, lastLineInView: true });
     expect((await panelGeometry(page, name)).close).toEqual(start.close);
     expect(await panelBody(page, name).evaluate(el => el.scrollTop)).toBe(0);
     await testInfo.attach(`${name} ${layout.name} heading end`, { body: await page.screenshot(), contentType: 'image/png' });
@@ -924,4 +945,45 @@ test('resize during the closing slide does not reset its committed drag position
   await page.mouse.move(grip.x + 40, grip.y + 4); await page.mouse.down(); await page.mouse.move(grip.x + 40, grip.y + 149); await page.mouse.up();
   await expect.poll(() => page.evaluate(() => window.__closingPosition)).toEqual({ before: '0px 145px', after: '0px 145px' });
   await expectPanelClosed(page, 'Help');
+});
+
+// A script click() on the dialog's own trigger while the closing slide still runs, not a physical tap:
+// the closing backdrop still covers the trigger then. Radix keeps the same dialog node for that
+// reopening; this checks the component's lifecycle in a desktop engine, not native iPhone behavior.
+for (const name of Object.keys(panels)) test(`${name}: reopening before the closing slide ends reuses the sheet and starts it fresh`, async ({ page, harness }) => {
+  await page.setViewportSize({ width: 393, height: 852 }); await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  await openPanel(page, name); const root = panel(page, name), region = panelBody(page, name);
+  // Layout fixture only: give the body scroll extent, then leave it scrolled and focused.
+  await region.evaluate(el => { const p = document.createElement('p'); p.style.height = '2000px'; el.append(p); el.scrollTop = 100; });
+  await region.focus(); await expect(region).toBeFocused();
+  await root.evaluate(el => {
+    // Find the trigger while open, the same way the component records it.
+    const triggers = document.querySelectorAll(`[aria-controls="${CSS.escape(el.id)}"]`);
+    window.__reopen = { node: el, triggers: triggers.length, closing: null };
+    new MutationObserver((_, observer) => {
+      if (el.dataset.state !== 'closed') return;
+      observer.disconnect();
+      const translate = el.style.translate;
+      // Two frames into the exit slide, while it is still running.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        window.__reopen.closing = { translate, exitRunning: el.getAnimations().some(a => a.playState === 'running'), connected: el.isConnected };
+        triggers[0].click();
+      }));
+    }).observe(el, { attributes: true, attributeFilter: ['data-state'] });
+  });
+  expect(await page.evaluate(() => window.__reopen.triggers)).toBe(1);
+  const grip = await root.locator('.app-panel-grip').boundingBox();
+  await page.mouse.move(grip.x + 40, grip.y + 4); await page.mouse.down(); await page.mouse.move(grip.x + 40, grip.y + 149); await page.mouse.up();
+  // The deliberate pull closed from 145px and kept it while closing; the reopen came mid-exit.
+  await expect.poll(() => page.evaluate(() => window.__reopen.closing)).toEqual({ translate: '0px 145px', exitRunning: true, connected: true });
+  await expectSheetOpen(root);
+  expect(await root.evaluate(el => ({ sameNode: el === window.__reopen.node, state: el.dataset.state, translateY: parseFloat(el.style.translate.split(' ')[1] ?? '0') })))
+    .toEqual({ sameNode: true, state: 'open', translateY: 0 });
+  expect(Math.round((await root.boundingBox()).y)).toBe(24);
+  await expect(panelClose(page, name)).toBeFocused();
+  expect(await region.evaluate(el => el.scrollTop)).toBe(0);
+  await panelClose(page, name).tap(); await expectPanelClosed(page, name);
+  expect(await storedPrefs(page)).toBe(before);
+  expect(nonGetAlertRequests(harness)).toEqual([]);
 });
