@@ -223,6 +223,7 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 /* The sheet starts below the status bar, so its header needs no top inset. */
 .app-panel-header { touch-action: pinch-zoom; flex: none; flex-flow: row wrap; align-items: flex-start; gap: 8px 12px; padding: 16px max(16px, calc(var(--safe-right) - var(--app-panel-offset))) 14px max(24px, calc(var(--safe-left) - var(--app-panel-offset))); border-bottom: 1px solid #293345; }
 .app-panel-header[data-heading-scrolls] { touch-action: auto; }
+.app-panel-header[data-heading-scrolls] .app-panel-grip { height: 44px; }
 /* Only an unusually tall heading (very large text) scrolls, beside the fixed Close, so the body keeps its room. */
 .app-panel-heading { flex: 1 1 10rem; display: flex; flex-direction: column; gap: 4px; min-width: 0; max-height: 30vh; max-height: 30dvh; overflow-y: auto; overscroll-behavior-y: none; touch-action: pinch-zoom; padding-top: 9px; overflow-wrap: anywhere; }
 .app-panel-header[data-heading-scrolls] .app-panel-heading { touch-action: pan-y pinch-zoom; }

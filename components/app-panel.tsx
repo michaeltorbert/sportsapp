@@ -18,14 +18,15 @@ export function AppPanelContent({ title, description, bodyLabel, bodyClassName, 
   const opener = useRef<HTMLElement | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLElement>(null);
-  const drag = useRef<{ id: number; x: number; y: number; lastY: number; time: number; velocity: number; offset: number; height: number; viewportWidth: number; viewportHeight: number } | null>(null);
+  const drag = useRef<{ id: number; x: number; y: number; offset: number; height: number; viewportWidth: number; viewportHeight: number } | null>(null);
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const resetDrag = useCallback(() => { drag.current = null; setDragging(false); setOffset(0); }, []);
   useEffect(() => {
     // Rotation or a changing visible viewport cancels a gesture, never dismisses the panel.
-    addEventListener("resize", resetDrag); visualViewport?.addEventListener("resize", resetDrag);
-    return () => { removeEventListener("resize", resetDrag); visualViewport?.removeEventListener("resize", resetDrag); };
+    const cancelActiveDrag = () => { if (drag.current) resetDrag(); };
+    addEventListener("resize", cancelActiveDrag); visualViewport?.addEventListener("resize", cancelActiveDrag);
+    return () => { removeEventListener("resize", cancelActiveDrag); visualViewport?.removeEventListener("resize", cancelActiveDrag); };
   }, [resetDrag]);
   function startDrag(event: PointerEvent<HTMLDivElement>) {
     if (!event.isPrimary) { resetDrag(); return; }
@@ -34,7 +35,7 @@ export function AppPanelContent({ title, description, bodyLabel, bodyClassName, 
     if ((event.target as Element).closest('button, a, input, select, textarea, [role="region"]')) return;
     if (panel.current?.getAnimations().some(a => a.playState === "running")) return;
     event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, lastY: event.clientY, time: event.timeStamp, velocity: 0, offset: 0, height: panel.current?.clientHeight ?? 0, viewportWidth: innerWidth, viewportHeight: innerHeight };
+    drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, offset: 0, height: panel.current?.clientHeight ?? 0, viewportWidth: innerWidth, viewportHeight: innerHeight };
     setDragging(true); event.preventDefault();
   }
   function moveDrag(event: PointerEvent<HTMLDivElement>) {
@@ -42,20 +43,16 @@ export function AppPanelContent({ title, description, bodyLabel, bodyClassName, 
     if (current.viewportWidth !== innerWidth || current.viewportHeight !== innerHeight) { resetDrag(); return; }
     const dy = event.clientY - current.y;
     if (Math.abs(event.clientX - current.x) > Math.abs(dy) + 8) { resetDrag(); return; }
-    const elapsed = event.timeStamp - current.time;
-    if (elapsed > 0) current.velocity = (event.clientY - current.lastY) / elapsed;
-    current.lastY = event.clientY; current.time = event.timeStamp;
     current.offset = Math.max(0, Math.min(dy, current.height));
     setOffset(current.offset); event.preventDefault();
   }
   function endDrag(event: PointerEvent<HTMLDivElement>) {
     const current = drag.current; if (!current || current.id !== event.pointerId) return;
     if (current.viewportWidth !== innerWidth || current.viewportHeight !== innerHeight) { resetDrag(); return; }
-    // A deliberate distance or a recent downward flick closes through Radix's normal path.
+    // Short pulls always return; deliberate distance closes through Radix's normal path.
     const threshold = Math.min(120, Math.max(64, current.height * .18));
-    const flick = current.offset >= 32 && current.velocity > .65 && event.timeStamp - current.time < 100;
     drag.current = null; setDragging(false);
-    if (current.offset >= threshold || flick) close.current?.click();
+    if (current.offset >= threshold) close.current?.click();
     else setOffset(0);
   }
   const [headingScrolls, setHeadingScrolls] = useState(false);

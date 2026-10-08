@@ -808,6 +808,9 @@ for (const name of Object.keys(panels)) test(`${name}: header pull snaps back or
   await page.mouse.up();
   await expect.poll(async () => Math.round((await root.boundingBox()).y)).toBe(24);
   await expect(root).toBeVisible();
+  // Even a quick short pull is not a dismissal: speed cannot turn it into a flick close.
+  await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x, y + 40); await page.mouse.up();
+  await expect.poll(async () => Math.round((await root.boundingBox()).y)).toBe(24);
   // Upward pulls do not move or close the panel.
   await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x, y - 16); await page.mouse.up();
   await expect.poll(async () => Math.round((await root.boundingBox()).y)).toBe(24);
@@ -882,6 +885,8 @@ for (const name of Object.keys(panels)) test(`${name}: Chromium touch heading dr
   // Force a long heading: text scrolls independently; the grip still owns panel dragging.
   await root.locator('[data-slot="sheet-title"]').evaluate(el => { el.textContent = 'Long accessible heading '.repeat(30); });
   await expect(root.locator('.app-panel-header')).toHaveAttribute('data-heading-scrolls', 'true');
+  expect((await root.locator('.app-panel-grip').boundingBox()).height).toBeGreaterThanOrEqual(44);
+  await testInfoCapture(page, info, `${name}-overflowing-heading-grip`);
   const heading = root.locator('.app-panel-heading'), h = await heading.boundingBox();
   await send('touchStart', h.x + 20, h.y + h.height - 20);
   for (let d = 15; d <= 75; d += 15) { await page.waitForTimeout(20); await send('touchMove', h.x + 20, h.y + h.height - 20 - d); }
@@ -899,4 +904,24 @@ for (const name of Object.keys(panels)) test(`${name}: Chromium touch heading dr
   for (let d = 15; d <= 150; d += 15) { await page.waitForTimeout(20); await send('touchMove', grip.x + 40, grip.y + 4 + d); }
   await send('touchEnd'); await expect(root).toHaveCount(0); await expectPanelClosed(page, name); await cdp.detach();
   await info.attach('touch-scope', { body: 'Chromium CDP native input; desktop engine mobile emulation, not iPhone', contentType: 'text/plain' });
+});
+
+test('resize during the closing slide does not reset its committed drag position', async ({ page, harness }) => {
+  await page.setViewportSize({ width: 393, height: 852 }); await openRoute(page, harness, 'Scores');
+  await openPanel(page, 'Help'); const root = panel(page, 'Help');
+  await root.evaluate(el => {
+    window.__closingPosition = null;
+    new MutationObserver((_, observer) => {
+      if (el.dataset.state !== 'closed') return;
+      observer.disconnect();
+      const before = el.style.translate;
+      // Synthetic resize notification verifies the closing-offset lifecycle, not native rotation.
+      dispatchEvent(new Event('resize'));
+      requestAnimationFrame(() => requestAnimationFrame(() => { window.__closingPosition = { before, after: el.style.translate }; }));
+    }).observe(el, { attributes: true, attributeFilter: ['data-state'] });
+  });
+  const grip = await root.locator('.app-panel-grip').boundingBox();
+  await page.mouse.move(grip.x + 40, grip.y + 4); await page.mouse.down(); await page.mouse.move(grip.x + 40, grip.y + 149); await page.mouse.up();
+  await expect.poll(() => page.evaluate(() => window.__closingPosition)).toEqual({ before: '0px 145px', after: '0px 145px' });
+  await expectPanelClosed(page, 'Help');
 });
