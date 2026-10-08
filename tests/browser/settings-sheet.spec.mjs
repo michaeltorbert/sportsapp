@@ -38,11 +38,20 @@ async function settledPrefs(page) {
   return previous;
 }
 
+// Measure the final position, not the slide-in: the sheet's own animations have ended and it rests on
+// the bottom edge. A bounded poll replaces an open-ended wait on animation.finished, so a stall fails
+// within the expect timeout and reports the animations still running and the sheet's offset.
+async function expectSheetOpen(dialog) {
+  await expect.poll(() => dialog.evaluate(el => ({
+    running: el.getAnimations().filter(a => a.playState !== 'finished').map(a => `${a.animationName ?? a.constructor.name} ${a.playState} at ${Math.round(a.currentTime ?? -1)}ms`),
+    bottomOffset: Math.round(el.getBoundingClientRect().bottom - innerHeight),
+  })), { message: 'sheet slide-in ends at its open position' }).toEqual({ running: [], bottomOffset: 0 });
+}
+
 async function openSettings(page, how) {
   await settingsButton(page)[how]();
   await expect(settings(page)).toBeVisible();
-  // Measure the final position, not the slide-in animation.
-  await settings(page).evaluate(el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {}))));
+  await expectSheetOpen(settings(page));
   await expect(settings(page).getByRole('radio').first()).toBeEnabled();
 }
 
@@ -271,8 +280,9 @@ for (const layout of layouts) test(`${layout.name}: Close stays pinned while the
 
 test.describe('desktop keyboard and mouse', () => {
   // A true desktop context, not a resized phone: no touch, no mobile viewport, desktop agent.
+  // screen: undefined keeps the 1.63 behavior; Playwright 1.64 forwards descriptor screen sizes.
   test.use({
-    viewport: { width: 1280, height: 560 }, isMobile: false, hasTouch: false, deviceScaleFactor: 1,
+    viewport: { width: 1280, height: 560 }, isMobile: false, hasTouch: false, deviceScaleFactor: 1, screen: undefined,
     userAgent: async ({ browserName }, provideUserAgent) => provideUserAgent(devices[browserName === 'webkit' ? 'Desktop Safari' : 'Desktop Chrome'].userAgent),
   });
   for (const route of Object.keys(routes)) test(`${route}: on a short desktop the wheel scrolls only Settings, then backdrop and page recover`, async ({ page, harness, hasTouch, isMobile, deviceScaleFactor, userAgent, viewport }, testInfo) => {
@@ -337,7 +347,7 @@ const nonGetAlertRequests = harness => harness.state.alertRequests.filter(r => r
 async function openPanel(page, name) {
   await panelTrigger(page, name).tap();
   await expect(panel(page, name)).toBeVisible();
-  await panel(page, name).evaluate(el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {}))));
+  await expectSheetOpen(panel(page, name));
 }
 async function expectPanelClosed(page, name) {
   await expect(panel(page, name)).toHaveCount(0);
@@ -608,7 +618,7 @@ test('closing each sheet from a scrolled page keeps the scroll position and retu
     await panelTrigger(page, name).evaluate(el => el.focus({ preventScroll: true }));
     await page.keyboard.press('Enter');
     await expect(panel(page, name)).toBeVisible();
-    await panel(page, name).evaluate(el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {}))));
+    await expectSheetOpen(panel(page, name));
     await expect(panelClose(page, name)).toBeFocused();
     if (name === 'Settings' && dismiss === 'Close') {
       const confirm = page.getByRole('alertdialog', { name: 'Show this game only?', exact: true });
