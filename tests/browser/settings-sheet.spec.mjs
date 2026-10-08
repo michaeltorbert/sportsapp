@@ -866,7 +866,8 @@ test('header drag cancels on viewport resize and preserves body reading position
 for (const name of Object.keys(panels)) test(`${name}: Chromium touch heading drag, cancellation and body scrolling`, async ({ page, harness, browserName }, info) => {
   test.skip(browserName !== 'chromium', 'Touch dispatch requires Chromium CDP; native iPhone remains unverified');
   await page.setViewportSize({ width: 393, height: 600 }); await openRoute(page, harness, 'Scores');
-  await openPanel(page, name); const root = panel(page, name);
+  await openPanel(page, name); const root = page.getByRole('dialog');
+  const region = root.locator('.app-panel-body');
   const cdp = await page.context().newCDPSession(page);
   const send = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' || type === 'touchCancel' ? [] : [{ x, y, radiusX: 2, radiusY: 2 }] });
   const title = await root.locator('[data-slot="sheet-title"]').boundingBox();
@@ -886,16 +887,16 @@ for (const name of Object.keys(panels)) test(`${name}: Chromium touch heading dr
   for (let d = 15; d <= 75; d += 15) { await page.waitForTimeout(20); await send('touchMove', h.x + 20, h.y + h.height - 20 - d); }
   await send('touchEnd'); await expect.poll(() => heading.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
   expect((await root.boundingBox()).y).toBeCloseTo(24, 0);
-  const b = await panelBody(page, name).boundingBox();
+  const b = await region.boundingBox();
   // Inject scroll extent only in this layout fixture, then use real touch routing to scroll it.
-  await panelBody(page, name).evaluate(el => { const p = document.createElement('p'); p.style.height = '1500px'; el.append(p); });
+  await region.evaluate(el => { const p = document.createElement('p'); p.style.height = '1500px'; el.append(p); });
   await send('touchStart', b.x + 30, b.y + b.height - 30);
   for (let d = 15; d <= 90; d += 15) { await page.waitForTimeout(20); await send('touchMove', b.x + 30, b.y + b.height - 30 - d); }
-  await send('touchEnd'); await expect.poll(() => panelBody(page, name).evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+  await send('touchEnd'); await expect.poll(() => region.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
   expect((await root.boundingBox()).y).toBeCloseTo(24, 0);
   const grip = await root.locator('.app-panel-grip').boundingBox();
   await send('touchStart', grip.x + 40, grip.y + 4);
   for (let d = 15; d <= 150; d += 15) { await page.waitForTimeout(20); await send('touchMove', grip.x + 40, grip.y + 4 + d); }
-  await send('touchEnd'); await expectPanelClosed(page, name); await cdp.detach();
+  await send('touchEnd'); await expect(root).toHaveCount(0); await expectPanelClosed(page, name); await cdp.detach();
   await info.attach('touch-scope', { body: 'Chromium CDP native input; desktop engine mobile emulation, not iPhone', contentType: 'text/plain' });
 });
