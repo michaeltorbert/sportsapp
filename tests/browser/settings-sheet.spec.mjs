@@ -280,8 +280,9 @@ for (const layout of layouts) test(`${layout.name}: Close stays pinned while the
 
 test.describe('desktop keyboard and mouse', () => {
   // A true desktop context, not a resized phone: no touch, no mobile viewport, desktop agent.
+  // screen: undefined keeps the 1.63 behavior; Playwright 1.64 forwards descriptor screen sizes.
   test.use({
-    viewport: { width: 1280, height: 560 }, isMobile: false, hasTouch: false, deviceScaleFactor: 1,
+    viewport: { width: 1280, height: 560 }, isMobile: false, hasTouch: false, deviceScaleFactor: 1, screen: undefined,
     userAgent: async ({ browserName }, provideUserAgent) => provideUserAgent(devices[browserName === 'webkit' ? 'Desktop Safari' : 'Desktop Chrome'].userAgent),
   });
   for (const route of Object.keys(routes)) test(`${route}: on a short desktop the wheel scrolls only Settings, then backdrop and page recover`, async ({ page, harness, hasTouch, isMobile, deviceScaleFactor, userAgent, viewport }, testInfo) => {

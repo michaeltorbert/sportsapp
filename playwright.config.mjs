@@ -52,9 +52,11 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
+  // Playwright 1.64 forwards a device descriptor's screen size to the browser. screen: undefined,
+  // set after the spread, keeps the 1.63 behavior these tests were written against.
   projects: [
-    { name: "chromium-mobile", use: { ...devices["iPhone 13"], defaultBrowserType: "chromium", browserName: "chromium" } },
-    { name: "webkit-mobile", use: { ...devices["iPhone 13"], browserName: "webkit" } },
+    { name: "chromium-mobile", use: { ...devices["iPhone 13"], screen: undefined, defaultBrowserType: "chromium", browserName: "chromium" } },
+    { name: "webkit-mobile", use: { ...devices["iPhone 13"], screen: undefined, browserName: "webkit" } },
   ],
   webServer: {
     command: `node scripts/browser-test-server.mjs -- node node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --ip 127.0.0.1 --port ${port} --inspector-port 0`,

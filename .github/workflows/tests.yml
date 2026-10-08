@@ -148,6 +148,10 @@ jobs:
       - name: Install ${{ matrix.engine }}
         run: npx playwright install --with-deps ${{ matrix.engine }}
       - name: Test ${{ matrix.project }} regressions (simulated scores and push)
+        # Diagnostics only: print the browser process's own output so a page crash leaves its native
+        # message in the log. Does not change any test or how a crash fails it.
+        env:
+          DEBUG: pw:browser
         run: npm run test:browser -- --project=${{ matrix.project }} --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
       - name: Record browser runner state
         if: always()
