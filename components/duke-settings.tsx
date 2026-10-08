@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Eye, EyeOff, Settings } from "lucide-react";
 import { Sheet, SheetTrigger } from "./ui/sheet";
 import { AppPanelContent } from "./app-panel";
+import { DisplayDetails } from "./display-details";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "./ui/alert-dialog";
 import { dukeHidden, isDuke, type DukeMode } from "@/lib/duke-visibility";
 import type { DukeVisibility } from "@/lib/use-duke-visibility";
@@ -27,7 +28,7 @@ export function DukeSettings({ games, visibility }: { games: Game[]; visibility:
   const [open, setOpen] = useState(false);
   const mode = visibility.prefs?.rules.at(-1)?.mode ?? "away";
   return <Sheet open={open} onOpenChange={setOpen}><SheetTrigger asChild><button className="icon-button" aria-label="Settings"><Settings size={21} /></button></SheetTrigger>
-    <AppPanelContent className="settings-sheet" bodyClassName="settings-body" title="Settings" description="Viewing preferences for this device." bodyLabel="Viewing preferences"><h3>Spoiler protection</h3><DukeGameControls games={games} visibility={visibility} />
+    <AppPanelContent className="settings-sheet" bodyClassName="settings-body" title="Settings" description="Viewing preferences for this device." bodyLabel="Viewing preferences"><h3 className="settings-support">Support</h3><DisplayDetails /><h3>Spoiler protection</h3><DukeGameControls games={games} visibility={visibility} />
       {!games.some(isDuke) && <p>No Duke game in this date range.</p>}
       <p>Hide or show one matchup without changing your default. Hidden games stay hidden after the final whistle.</p>
       <fieldset disabled={!visibility.prefs}><legend>For future Duke games</legend>{modes.map(option => <label className="duke-mode" key={option.value}><input type="radio" name="duke-default" checked={mode === option.value} onChange={() => visibility.setMode(option.value)} />{option.label}</label>)}</fieldset>

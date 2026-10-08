@@ -10,6 +10,46 @@ permissions:
 concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
+env:
+  # Runner apt setup only. Playwright's --with-deps runs apt-get update and install; on hosted runners
+  # many package downloads stalled on the Azure HTTP mirror before coming quickly from the canonical
+  # HTTPS archive, and several jobs timed out before any test ran. Only the exact Azure Ubuntu archive
+  # URI on active (uncommented) apt lines changes: replaced by the canonical archive, or removed from
+  # the mirror list when that list already has an active canonical line. Signing, suites, components, security and other
+  # repositories stay unchanged. With no Azure entry the step changes nothing and the install itself
+  # shows whether apt works; rerunning it is a no-op.
+  PREFER_CANONICAL_UBUNTU_ARCHIVE: |
+    set -euo pipefail
+    . /etc/os-release
+    if [ "${ID:-}" != ubuntu ]; then echo "::error::Expected an Ubuntu runner, found ${ID:-unknown}"; exit 1; fi
+    azure='http://azure\.archive\.ubuntu\.com/ubuntu/?'
+    canonical_re='https://archive\.ubuntu\.com/ubuntu/?'
+    canonical='https://archive.ubuntu.com/ubuntu/'
+    end='([[:space:]]|$)'
+    list=/etc/apt/apt-mirrors.txt
+    files=()
+    for f in "$list" /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do [ -f "$f" ] && files+=("$f"); done
+    # True when a file names the Azure archive outside a comment (no "#" before the URI on its line).
+    names_azure() { grep -qE "^([^#]*[[:space:]])?${azure}${end}" "$1"; }
+    changed=0
+    for f in "${files[@]}"; do
+      names_azure "$f" || continue
+      if [ "$f" = "$list" ]; then
+        # Mirror list read by "mirror+file:" sources: one URI per line, tried in order.
+        if grep -qE "^${canonical_re}${end}" "$f"; then sudo sed -i -E "\#^${azure}${end}#d" "$f"
+        else sudo sed -i -E "s#^${azure}${end}#${canonical}\1#" "$f"; fi
+      else
+        # deb822 .sources or one-line .list: replace each Azure URI that comes before any "#" with the
+        # canonical archive, one per pass until none is left. Never deletes a URI; comments stay as written.
+        sudo sed -i -E -e ':a' -e "s#^([^#]*[[:space:]])?${azure}${end}#\1${canonical}\2#" -e 'ta' "$f"
+      fi
+      changed=1
+    done
+    if [ "$changed" -eq 0 ]; then echo "::notice::No active apt source names the Azure Ubuntu archive; apt configuration left unchanged"; exit 0; fi
+    for f in "${files[@]}"; do
+      if names_azure "$f"; then echo "::error::The Azure Ubuntu archive is still configured in $f"; exit 1; fi
+    done
+    grep -HsE 'archive\.ubuntu\.com|security\.ubuntu\.com|mirror\+file' "${files[@]}" || true
 jobs:
   core:
     runs-on: ubuntu-latest
@@ -103,6 +143,8 @@ jobs:
         run: echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Build exact browser-test source
         run: npm run build
+      - name: Prefer the canonical Ubuntu archive for browser dependencies
+        run: bash -c "$PREFER_CANONICAL_UBUNTU_ARCHIVE"
       - name: Install ${{ matrix.engine }}
         run: npx playwright install --with-deps ${{ matrix.engine }}
       - name: Test ${{ matrix.project }} regressions (simulated scores and push)
@@ -154,6 +196,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Record source commit
         run: echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Prefer the canonical Ubuntu archive for browser dependencies
+        run: bash -c "$PREFER_CANONICAL_UBUNTU_ARCHIVE"
       - name: Install updater browser engines
         run: npx playwright install --with-deps chromium webkit
       - name: Test explicit app updates across two local builds

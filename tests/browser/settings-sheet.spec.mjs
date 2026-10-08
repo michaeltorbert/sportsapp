@@ -1,6 +1,7 @@
 // Issue #116: Settings must be dismissible without making a selection, keep one
 // reachable Close while its own body scrolls, and leave the page usable after.
-// Since 1.13.4 Alerts and Help share the same panel, and the page keeps its top safe-area spacing.
+// Alerts and Help share the same panel, now a content-sized bottom sheet, and the page keeps its
+// top safe-area spacing.
 // Touch contexts use real taps; synthesized touch *scrolling* is not exercised here.
 import { devices } from '@playwright/test';
 import { test, expect, event, category } from './fixtures.mjs';
@@ -83,6 +84,10 @@ for (const route of Object.keys(routes)) test(`${route}: Settings closes without
   await openSettings(page, 'tap');
   await expect(settings(page).getByRole('button', { name: 'Close', exact: true })).toHaveCount(1);
   await expect(closeButton(page)).toBeFocused();
+  // Icon-only: the name comes from aria-label, and the icon itself is hidden.
+  await expect(closeButton(page)).toHaveAttribute('aria-label', 'Close');
+  await expect(closeButton(page)).toHaveText('');
+  await expect(closeButton(page).locator('svg')).toHaveAttribute('aria-hidden', 'true');
   const close = await closeState(page);
   expect(close.width).toBeGreaterThanOrEqual(44);
   expect(close.height).toBeGreaterThanOrEqual(44);
@@ -301,9 +306,12 @@ test.describe('desktop keyboard and mouse', () => {
     await closeButton(page).click();
     await expectClosed(page);
     expect(await storedPrefs(page)).toBe(before);
-    // The backdrop beside the desktop panel also dismisses.
+    // The backdrop above the desktop sheet also dismisses.
     await openSettings(page, 'click');
-    await page.mouse.click(40, 280);
+    const sheet = await panelGeometry(page, 'Settings');
+    expectBottomSheet(sheet);
+    expect(sheet.top).toBeGreaterThan(20);
+    await page.mouse.click(640, sheet.top / 2);
     await expectClosed(page);
     expect(await storedPrefs(page)).toBe(before);
     if (route === 'Scores') {
@@ -314,7 +322,7 @@ test.describe('desktop keyboard and mouse', () => {
   });
 });
 
-// 1.13.4: Settings, Alerts and Help share one full-height trailing panel.
+// Settings, Alerts and Help share one content-sized bottom sheet.
 const panels = {
   Settings: { trigger: 'Settings', title: 'Settings', region: 'Viewing preferences' },
   Alerts: { trigger: 'Alerts off', title: 'Catch the game-changing moments.', region: 'Alert choices' },
@@ -337,17 +345,34 @@ async function expectPanelClosed(page, name) {
   await expect.poll(() => page.evaluate(() => ({ scrollLocked: document.body.hasAttribute('data-scroll-locked'), pointerEvents: getComputedStyle(document.body).pointerEvents })))
     .toEqual({ scrollLocked: false, pointerEvents: 'auto' });
 }
-const panelGeometry = (page, name) => panel(page, name).evaluate(dialog => {
+// safeTop is the simulated --safe-top in px; the sheet's height cap keeps 12px clear of it.
+const panelGeometry = (page, name, safeTop = 0) => panel(page, name).evaluate((dialog, safeTop) => {
   const d = dialog.getBoundingClientRect(), close = dialog.querySelector('.app-panel-close'), c = close.getBoundingClientRect();
-  const body = dialog.querySelector('.app-panel-body'), b = body.getBoundingClientRect();
+  const body = dialog.querySelector('.app-panel-body'), b = body.getBoundingClientRect(), s = getComputedStyle(dialog);
   const hit = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
   return {
-    top: d.top, right: d.right, bottom: d.bottom, width: d.width, viewport: { width: innerWidth, height: innerHeight },
+    top: d.top, left: d.left, right: d.right, bottom: d.bottom, width: d.width, height: d.height, viewport: { width: innerWidth, height: innerHeight },
+    cap: Math.min(innerHeight * .9, innerHeight - safeTop - 12),
+    // The height the sheet would take with no cap: its header plus all of its body.
+    natural: parseFloat(s.borderTopWidth) + dialog.querySelector('.app-panel-header').getBoundingClientRect().height + body.scrollHeight,
+    style: { background: s.backgroundColor, border: s.borderTopColor, borderTop: s.borderTopWidth, borderBottom: s.borderBottomWidth, radius: [s.borderTopLeftRadius, s.borderTopRightRadius, s.borderBottomLeftRadius, s.borderBottomRightRadius] },
     panelScrolls: dialog.scrollHeight > dialog.clientHeight + 1,
     close: { top: c.top, left: c.left, width: c.width, height: c.height, hit: !!hit && close.contains(hit), inViewport: c.top >= 0 && c.left >= 0 && c.bottom <= innerHeight + .5 && c.right <= innerWidth + .5 },
     body: { height: b.height, overflows: body.scrollHeight > body.clientHeight + 1, overflowY: getComputedStyle(body).overflowY, horizontal: Math.max(body.scrollWidth - body.clientWidth, dialog.scrollWidth - dialog.clientWidth) },
   };
-});
+}, safeTop);
+// Bottom-sheet placement shared by every layout: centered, at most 640px wide, resting on the bottom
+// edge, and as tall as its content up to the cap, so never full height.
+function expectBottomSheet(geometry) {
+  const { viewport } = geometry;
+  expect(geometry.bottom).toBeCloseTo(viewport.height, 0);
+  expect(geometry.width).toBeCloseTo(Math.min(viewport.width, 640), 0);
+  expect((geometry.left + geometry.right) / 2).toBeCloseTo(viewport.width / 2, 0);
+  expect(geometry.height).toBeLessThanOrEqual(geometry.cap + .5);
+  expect(Math.abs(geometry.height - Math.min(geometry.natural, geometry.cap))).toBeLessThanOrEqual(1);
+  expect(geometry.top).toBeGreaterThanOrEqual(viewport.height - geometry.cap - .5);
+  expect(geometry.style).toEqual({ background: 'rgb(18, 28, 42)', border: 'rgb(52, 66, 87)', borderTop: '1px', borderBottom: '0px', radius: ['24px', '24px', '0px', '0px'] });
+}
 
 const panelLayouts = [
   { name: '320px phone', width: 320, height: 568 },
@@ -355,7 +380,7 @@ const panelLayouts = [
   { name: 'short landscape phone', width: 844, height: 390 },
   { name: 'short landscape phone with doubled text', width: 844, height: 390, textScale: 2 },
 ];
-for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(`${layout.name}: ${name} is a full-height trailing panel with one pinned Close`, async ({ page, harness }, testInfo) => {
+for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(`${layout.name}: ${name} is a content-sized bottom sheet with one pinned Close`, async ({ page, harness }, testInfo) => {
   harness.state.events = [...harness.state.events, ...manyDuke()];
   await page.setViewportSize({ width: layout.width, height: layout.height });
   await openRoute(page, harness, 'Scores');
@@ -368,11 +393,9 @@ for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(
   await expect(panelClose(page, name)).toHaveCount(1);
   await expect(panelClose(page, name)).toBeFocused();
   const start = await panelGeometry(page, name);
-  expect(start.top).toBeCloseTo(0, 0);
-  expect(start.bottom).toBeCloseTo(start.viewport.height, 0);
-  expect(start.right).toBeCloseTo(start.viewport.width, 0);
-  expect(start.width).toBeCloseTo(layout.width <= 600 ? layout.width : 430, 0);
+  expectBottomSheet(start);
   expect(start.panelScrolls).toBe(false);
+  if (!layout.textScale) expect(await panel(page, name).locator('[data-slot="sheet-title"]').evaluate(el => [getComputedStyle(el).fontSize, getComputedStyle(el).fontWeight])).toEqual(['23px', '720']);
   expect(start.close).toMatchObject({ hit: true, inViewport: true });
   expect(start.close.width).toBeGreaterThanOrEqual(44);
   expect(start.close.height).toBeGreaterThanOrEqual(44);
@@ -382,8 +405,13 @@ for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(
   if (layout.textScale) expect(start.body.height).toBeGreaterThanOrEqual(layout.height * .4);
   await testInfo.attach(`${name} ${layout.name} top`, { body: await page.screenshot(), contentType: 'image/png' });
   const heading = panel(page, name).getByRole('region', { name: 'Title and description', exact: true });
-  if (layout.textScale) {
-    // Enlarged text overflows the capped heading after the panel opened: it becomes a named region
+  // Branch on whether the heading actually overflows its cap, not on the text scale: a short
+  // enlarged title beside the icon-only Close can still fit.
+  const headingOverflows = await panel(page, name).locator('.app-panel-heading').evaluate(el => el.scrollHeight > el.clientHeight + 1);
+  // Keep genuine overflow covered: the longer Alerts and Help headings overflow at doubled text.
+  if (layout.textScale && name !== 'Settings') expect(headingOverflows).toBe(true);
+  if (headingOverflows) {
+    // Enlarged text overflows the capped heading after the sheet opened: it becomes a named region
     // the keyboard can enter and scroll, while Close stays put and the body keeps its own scrolling.
     expect(start.body.overflows).toBe(true);
     await expect(heading).toHaveAttribute('tabindex', '0');
@@ -400,7 +428,7 @@ for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(
     await page.keyboard.press('Tab');
     await expect(panelClose(page, name)).toBeFocused();
   } else {
-    // An ordinary heading adds no tab stop: Close leads straight to the body.
+    // A heading that fits, even enlarged, adds no region or tab stop: Close leads straight to the body.
     await expect(heading).toHaveCount(0);
     expect(await panel(page, name).locator('.app-panel-heading').getAttribute('tabindex')).toBeNull();
   }
@@ -411,8 +439,27 @@ for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(
     await expect.poll(() => panelBody(page, name).evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThanOrEqual(1);
     const end = await panelGeometry(page, name);
     expect(end.close).toEqual(start.close);
+    expect(end.top).toBeCloseTo(start.top, 0);
     expect(end.panelScrolls).toBe(false);
     await testInfo.attach(`${name} ${layout.name} bottom`, { body: await page.screenshot(), contentType: 'image/png' });
+  }
+  if (headingOverflows && layout.textScale) {
+    // Back to normal text, the heading fits again: its region and tab stop go away,
+    // Close is the stop before the body again, and the body keeps its own scrolling.
+    await panel(page, name).evaluate(root => { for (const node of [root, ...root.querySelectorAll('*')]) node.style.fontSize = ''; });
+    expect(await panel(page, name).locator('.app-panel-heading').evaluate(el => el.scrollHeight > el.clientHeight + 1)).toBe(false);
+    await expect(heading).toHaveCount(0);
+    expect(await panel(page, name).locator('.app-panel-heading').getAttribute('tabindex')).toBeNull();
+    await expect(panelBody(page, name)).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(panelClose(page, name)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(panelBody(page, name)).toBeFocused();
+    const restored = await panelGeometry(page, name);
+    expectBottomSheet(restored);
+    expect(restored.panelScrolls).toBe(false);
+    expect(restored.body.overflowY).toBe('auto');
+    expect(restored.close).toMatchObject({ hit: true, inViewport: true });
   }
   await panelClose(page, name).tap();
   await expectPanelClosed(page, name);
@@ -421,7 +468,6 @@ for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(
 });
 
 for (const name of ['Alerts', 'Help']) test(`${name}: Escape and the backdrop dismiss repeatedly without changing anything`, async ({ page, harness }) => {
-  // Wide enough that the backdrop shows beside the 430px panel.
   await page.setViewportSize({ width: 844, height: 600 });
   await openRoute(page, harness, 'Scores');
   const before = await settledPrefs(page);
@@ -429,7 +475,12 @@ for (const name of ['Alerts', 'Help']) test(`${name}: Escape and the backdrop di
     await openPanel(page, name);
     await expect(panelClose(page, name)).toBeFocused();
     if (dismiss === 'Escape') await page.keyboard.press('Escape');
-    else await page.mouse.click(5, 300);
+    else {
+      // The backdrop shows above the sheet, which is never full height.
+      const { top } = await panelGeometry(page, name);
+      expect(top).toBeGreaterThan(20);
+      await page.mouse.click(422, top / 2);
+    }
     await expectPanelClosed(page, name);
   }
   expect(nonGetAlertRequests(harness)).toEqual([]);
@@ -438,12 +489,12 @@ for (const name of ['Alerts', 'Help']) test(`${name}: Escape and the backdrop di
   await expect(category(page, 'ACC')).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('panels open over 300ms and close over 200ms; reduced motion removes the slide', async ({ page, harness }) => {
+test('panels keep the sheet\'s 500ms open and 300ms close; reduced motion removes the slide', async ({ page, harness }) => {
   await openRoute(page, harness, 'Scores');
   for (const name of Object.keys(panels)) {
     await panelTrigger(page, name).tap();
     await expect(panel(page, name)).toBeVisible();
-    expect(await panel(page, name).evaluate(el => getComputedStyle(el).animationDuration)).toBe('0.3s');
+    expect(await panel(page, name).evaluate(el => getComputedStyle(el).animationDuration)).toBe('0.5s');
     await panel(page, name).evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished.catch(() => {}))));
     // Read the closing state the moment Radix marks it, before the exit animation ends.
     const closing = await panel(page, name).evaluate(dialog => new Promise(resolve => {
@@ -452,7 +503,7 @@ test('panels open over 300ms and close over 200ms; reduced motion removes the sl
       }).observe(dialog, { attributes: true, attributeFilter: ['data-state'] });
       document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     }));
-    expect(closing, name).toBe('0.2s');
+    expect(closing, name).toBe('0.3s');
     await expectPanelClosed(page, name);
   }
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -465,14 +516,179 @@ test('panels open over 300ms and close over 200ms; reduced motion removes the sl
   }
 });
 
+// SIMULATED side insets: overriding --safe-left/--safe-right checks layout arithmetic only, not native
+// insets. The centered sheet pads only the part of each inset it does not already clear, and never
+// less than its normal 24px body and header-left, 16px header-right.
+const sideInsets = [
+  { width: 956, height: 440, left: 62, right: 62, header: [24, 16], body: [24, 24] },
+  { width: 700, height: 440, left: 62, right: 62, header: [32, 32], body: [32, 32] },
+  { width: 700, height: 440, left: 62, right: 0, header: [32, 16], body: [32, 24] },
+  { width: 640, height: 440, left: 44, right: 44, header: [44, 44], body: [44, 44] },
+  { width: 393, height: 852, left: 0, right: 47, header: [24, 47], body: [24, 47] },
+];
+for (const c of sideInsets) test(`SIMULATED ${c.left}/${c.right}px side insets at ${c.width}px: sheet padding clears only the uncovered inset`, async ({ page, harness }) => {
+  harness.state.events = [...harness.state.events, ...manyDuke()];
+  await page.setViewportSize({ width: c.width, height: c.height });
+  await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  await page.addStyleTag({ content: `:root { --safe-left: ${c.left}px; --safe-right: ${c.right}px; }` });
+  for (const name of ['Settings', 'Help']) {
+    await openPanel(page, name);
+    const geometry = await panelGeometry(page, name);
+    expectBottomSheet(geometry);
+    expect(geometry.close).toMatchObject({ hit: true, inViewport: true });
+    const m = await panel(page, name).evaluate(dialog => {
+      const pad = (el, side) => parseFloat(getComputedStyle(el)[`padding${side}`]), rect = selector => dialog.querySelector(selector).getBoundingClientRect();
+      const header = dialog.querySelector('.app-panel-header'), body = dialog.querySelector('.app-panel-body'), d = dialog.getBoundingClientRect();
+      const title = rect('[data-slot="sheet-title"]'), close = rect('.app-panel-close'), first = body.firstElementChild.getBoundingClientRect();
+      return {
+        offset: { left: d.left, right: innerWidth - d.right },
+        header: [pad(header, 'Left'), pad(header, 'Right')], body: [pad(body, 'Left'), pad(body, 'Right')],
+        clear: { title: title.left, close: innerWidth - close.right, contentLeft: first.left, contentRight: innerWidth - first.right },
+      };
+    });
+    expect(m.header, name).toEqual(c.header);
+    expect(m.body, name).toEqual(c.body);
+    // The same values follow from the sheet's actual position, so max-width and the offset stay coupled.
+    expect(m.header[0]).toBeCloseTo(Math.max(24, c.left - m.offset.left), 0);
+    expect(m.header[1]).toBeCloseTo(Math.max(16, c.right - m.offset.right), 0);
+    expect(m.body[0]).toBeCloseTo(Math.max(24, c.left - m.offset.left), 0);
+    expect(m.body[1]).toBeCloseTo(Math.max(24, c.right - m.offset.right), 0);
+    // Title, Close and body content all stay outside the simulated insets.
+    expect(m.clear.title).toBeGreaterThanOrEqual(c.left - .5);
+    expect(m.clear.close).toBeGreaterThanOrEqual(c.right - .5);
+    expect(m.clear.contentLeft).toBeGreaterThanOrEqual(c.left - .5);
+    expect(m.clear.contentRight).toBeGreaterThanOrEqual(c.right - .5);
+    expect(geometry.body.horizontal).toBeLessThanOrEqual(0);
+    await page.keyboard.press('Escape');
+    await expectPanelClosed(page, name);
+  }
+  expect(nonGetAlertRequests(harness)).toEqual([]);
+  expect(await storedPrefs(page)).toBe(before);
+});
+
+// The body is at least the viewport height. That adds no scrolling beyond the content, no sideways
+// overflow, and leaves the Guide timeline sizing (100dvh-based) as it was, in portrait and short landscape.
+for (const route of Object.keys(routes)) test(`${route}: the page fills the viewport height without adding scroll`, async ({ page, harness }) => {
+  if (route === 'Guide') harness.state.events = [...harness.state.events, ...fillers()];
+  await page.setViewportSize({ width: 393, height: 852 });
+  await openRoute(page, harness, route);
+  for (const size of [{ width: 393, height: 852 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(size);
+    await expect.poll(() => page.evaluate(() => innerHeight)).toBe(size.height);
+    const extent = await page.evaluate(() => {
+      const body = document.body.getBoundingClientRect(), main = document.querySelector('main').getBoundingClientRect(), root = document.scrollingElement;
+      return { standalone: matchMedia('(display-mode: standalone)').matches, minHeight: getComputedStyle(document.body).minHeight, body: body.height, content: main.bottom + scrollY, scrollHeight: root.scrollHeight, horizontal: root.scrollWidth - innerWidth };
+    });
+    // Playwright runs in browser display mode, so this covers the browser (dvh) rule only. It cannot model
+    // Safari's toolbar or the Home Screen rule; native captures cover those.
+    expect(extent.standalone).toBe(false);
+    expect(extent.minHeight).toBe(`${size.height}px`);
+    expect(extent.body).toBeGreaterThanOrEqual(size.height - .5);
+    expect(extent.scrollHeight).toBeLessThanOrEqual(Math.max(size.height, extent.content) + 1);
+    expect(extent.horizontal).toBeLessThanOrEqual(0);
+    if (route === 'Guide') {
+      const timeline = size.height <= 450 ? Math.max(150, size.height - 196) : Math.min(Math.max(176, size.height - 305), 700);
+      expect((await page.locator('.guide-viewport').boundingBox()).height).toBeCloseTo(timeline, 0);
+    }
+  }
+});
+
+// Opening and closing each sheet, and the nested Duke confirmation, leave a scrolled page where it was.
+test('closing each sheet from a scrolled page keeps the scroll position and returns focus', async ({ page, harness }) => {
+  harness.state.events = [...harness.state.events, ...fillers(), duke('duke-away')];
+  await page.setViewportSize({ width: 393, height: 852 });
+  await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  await page.evaluate(() => scrollTo(0, 400));
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(200);
+  const scrolled = await page.evaluate(() => scrollY);
+  for (const name of Object.keys(panels)) for (const dismiss of ['Close', 'Escape', 'backdrop']) {
+    // Keyboard-open the off-screen trigger without scrolling to it.
+    await panelTrigger(page, name).evaluate(el => el.focus({ preventScroll: true }));
+    await page.keyboard.press('Enter');
+    await expect(panel(page, name)).toBeVisible();
+    await panel(page, name).evaluate(el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {}))));
+    await expect(panelClose(page, name)).toBeFocused();
+    if (name === 'Settings' && dismiss === 'Close') {
+      const confirm = page.getByRole('alertdialog', { name: 'Show this game only?', exact: true });
+      await panel(page, name).getByRole('button', { name: 'Show Duke game on Sep 5', exact: true }).tap();
+      await confirm.getByRole('button', { name: 'Keep hidden', exact: true }).tap();
+      await expect(confirm).toHaveCount(0);
+      await expect(panel(page, name)).toBeVisible();
+    }
+    // The page has not moved before the sheet closes, so any jump below comes from closing it.
+    expect(await page.evaluate(() => scrollY), `${name} ${dismiss} before close`).toBeCloseTo(scrolled, 0);
+    if (dismiss === 'Escape') await page.keyboard.press('Escape');
+    else if (dismiss === 'backdrop') {
+      const { top } = await panelGeometry(page, name);
+      expect(top).toBeGreaterThan(20);
+      await page.mouse.click(196, top / 2);
+    } else await panelClose(page, name).tap();
+    await expectPanelClosed(page, name);
+    expect(await page.evaluate(() => scrollY), `${name} ${dismiss}`).toBeCloseTo(scrolled, 0);
+  }
+  expect(nonGetAlertRequests(harness)).toEqual([]);
+  expect(await storedPrefs(page)).toBe(before);
+});
+
+// A tap may not move focus off a previously focused control (as with Safari and a link). Closing still
+// returns focus to the sheet's own trigger, never to that earlier control, and leaves the page in place.
+test('after a tap open from another focused control, closing returns focus to the sheet trigger', async ({ page, harness }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  const home = page.getByRole('link', { name: 'Saturday Signal home', exact: true });
+  for (const name of Object.keys(panels)) for (const dismiss of ['Close', 'Escape', 'backdrop']) {
+    await home.focus();
+    await expect(home).toBeFocused();
+    const start = await page.evaluate(() => scrollY);
+    await openPanel(page, name);
+    await expect(panelClose(page, name)).toBeFocused();
+    if (dismiss === 'Escape') await page.keyboard.press('Escape');
+    else if (dismiss === 'backdrop') await page.mouse.click(196, (await panelGeometry(page, name)).top / 2);
+    else await panelClose(page, name).tap();
+    await expectPanelClosed(page, name);
+    await expect(home).not.toBeFocused();
+    expect(await page.evaluate(() => scrollY), `${name} ${dismiss}`).toBeCloseTo(start, 0);
+  }
+  expect(nonGetAlertRequests(harness)).toEqual([]);
+  expect(await storedPrefs(page)).toBe(before);
+});
+
+// When the recorded trigger cannot take focus, the sheet leaves focus to Radix's own return instead of
+// claiming it. The next opening records its trigger afresh, so normal focus return resumes.
+test('a trigger that cannot take focus at close falls back without stranding the page', async ({ page, harness }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await openRoute(page, harness, 'Scores');
+  await openPanel(page, 'Help');
+  // While the modal is open the page behind it is aria-hidden, so the role query must include hidden
+  // elements. Confirm it is this dialog's own trigger before changing it.
+  const helpTrigger = page.getByRole('button', { name: panels.Help.trigger, exact: true, includeHidden: true });
+  await expect(helpTrigger).toHaveCount(1);
+  await expect(helpTrigger).toHaveAttribute('aria-controls', await panel(page, 'Help').getAttribute('id'));
+  await helpTrigger.evaluate(el => { el.disabled = true; });
+  await page.keyboard.press('Escape');
+  await expect(panel(page, 'Help')).toHaveCount(0);
+  await expect(helpTrigger).not.toBeFocused();
+  await expect.poll(() => page.evaluate(() => ({ scrollLocked: document.body.hasAttribute('data-scroll-locked'), pointerEvents: getComputedStyle(document.body).pointerEvents, inDialog: !!document.activeElement?.closest('[role="dialog"]') })))
+    .toEqual({ scrollLocked: false, pointerEvents: 'auto', inDialog: false });
+  await helpTrigger.evaluate(el => { el.disabled = false; });
+  await openPanel(page, 'Help');
+  await panelClose(page, 'Help').tap();
+  await expectPanelClosed(page, 'Help');
+  expect(nonGetAlertRequests(harness)).toEqual([]);
+});
+
 // Overriding --safe-top checks layout arithmetic only; it is not evidence of native iOS insets.
+// Scores and portrait Guide add up to 18px below an inset and keep 12px without one.
+const topGap = { 0: 12, 59: 77 };
 for (const inset of [0, 59]) test(`SIMULATED ${inset}px top inset: page spacing, status-bar band, sticky row and panel header`, async ({ page, harness }, testInfo) => {
   harness.state.events = [...harness.state.events, ...fillers()];
   await page.setViewportSize({ width: 393, height: 852 });
   await openRoute(page, harness, 'Scores');
   await page.addStyleTag({ content: `:root { --safe-top: ${inset}px; }` });
-  const gap = Math.max(inset + 8, 12);
-  expect((await page.locator('.app-header').boundingBox()).y).toBeCloseTo(gap, 0);
+  expect((await page.locator('.app-header').boundingBox()).y).toBeCloseTo(topGap[inset], 0);
   // The band's bounds and stacking: fixed at the top, as tall as the inset, under dialogs (z-50).
   expect(await page.evaluate(() => {
     const s = getComputedStyle(document.body, '::before');
@@ -489,23 +705,54 @@ for (const inset of [0, 59]) test(`SIMULATED ${inset}px top inset: page spacing,
     await expect.poll(() => page.evaluate(() => window.__bandTarget)).toBe('main');
   }
   await openPanel(page, 'Settings');
-  const settingsPanel = await panelGeometry(page, 'Settings');
-  expect(settingsPanel.close.top).toBeGreaterThanOrEqual(inset + 16);
+  const settingsPanel = await panelGeometry(page, 'Settings', inset);
+  expectBottomSheet(settingsPanel);
+  // The sheet stays 12px clear of the inset, and its header adds no inset of its own.
+  expect(settingsPanel.top).toBeGreaterThanOrEqual(inset + 12 - .5);
+  expect(settingsPanel.close.top).toBeCloseTo(settingsPanel.top + 1 + 16, 0);
   expect(settingsPanel.close).toMatchObject({ hit: true, inViewport: true });
   expect(await panel(page, 'Settings').evaluate(el => Number(getComputedStyle(el).zIndex))).toBeGreaterThan(20);
   await testInfo.attach(`Settings, ${inset}px inset`, { body: await page.screenshot({ clip: { x: 0, y: 0, width: 393, height: 160 } }), contentType: 'image/png' });
+  if (inset) {
+    // On a short screen the inset, not 90% of the height, sets the cap.
+    await page.setViewportSize({ width: 393, height: 400 });
+    await expect.poll(async () => Math.round((await panelGeometry(page, 'Settings', inset)).top)).toBe(inset + 12);
+    expectBottomSheet(await panelGeometry(page, 'Settings', inset));
+    expect((await panelGeometry(page, 'Settings', inset)).close).toMatchObject({ hit: true, inViewport: true });
+  }
   await panelClose(page, 'Settings').tap();
   await expectPanelClosed(page, 'Settings');
 });
 
-test('Help Display details stays collapsed until opened, reads the raw insets, and remeasures after rotation', async ({ page, harness }) => {
+// Simulated, like the test above. Short landscape keeps Guide's own tighter rule so its timeline keeps room.
+for (const inset of [0, 59]) test(`SIMULATED ${inset}px top inset: Guide top spacing in portrait and short landscape`, async ({ page, harness }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await openRoute(page, harness, 'Guide');
+  await page.addStyleTag({ content: `:root { --safe-top: ${inset}px; }` });
+  const shell = page.locator('main.guide-shell');
+  expect(await shell.evaluate(el => getComputedStyle(el).paddingTop)).toBe(`${topGap[inset]}px`);
+  expect((await page.locator('.app-header').boundingBox()).y).toBeCloseTo(topGap[inset], 0);
+  await page.setViewportSize({ width: 844, height: 390 });
+  const landscape = Math.max(inset, 4);
+  await expect.poll(() => shell.evaluate(el => getComputedStyle(el).paddingTop)).toBe(`${landscape}px`);
+  expect((await page.locator('.app-header').boundingBox()).y).toBeCloseTo(landscape, 0);
+});
+
+test('Settings Display details is the visible first row, stays collapsed until opened, reads the raw insets, and remeasures after rotation', async ({ page, harness }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await openRoute(page, harness, 'Scores');
   // The app's spacing variable must not leak into the reported device inset.
   await page.addStyleTag({ content: ':root { --safe-top: 59px; }' });
-  await openPanel(page, 'Help');
-  const details = panel(page, 'Help').locator('details.display-details');
+  await openPanel(page, 'Settings');
+  const details = panel(page, 'Settings').locator('details.display-details');
+  await expect(page.locator('details.display-details')).toHaveCount(1);
   await expect(details).not.toHaveAttribute('open');
+  // Opening Settings shows it without scrolling, ahead of the spoiler controls.
+  expect(await panelBody(page, 'Settings').evaluate(body => {
+    const b = body.getBoundingClientRect(), s = body.querySelector('details.display-details > summary').getBoundingClientRect();
+    const spoiler = [...body.querySelectorAll('h3')].find(h => h.textContent === 'Spoiler protection');
+    return { scrollTop: body.scrollTop, visible: s.top >= b.top - .5 && s.bottom <= b.bottom + .5, first: !!(spoiler.compareDocumentPosition(body.querySelector('details.display-details')) & Node.DOCUMENT_POSITION_PRECEDING) };
+  })).toEqual({ scrollTop: 0, visible: true, first: true });
   await details.locator('summary').tap();
   const value = label => details.locator('dt', { hasText: label }).locator('xpath=following-sibling::dd');
   await expect(value('Window size')).toHaveText('320 × 568');
@@ -524,7 +771,13 @@ test('Help Display details stays collapsed until opened, reads the raw insets, a
   expect(await details.locator('dd').evaluateAll(nodes => nodes.every(node => node.scrollWidth <= node.clientWidth + 1))).toBe(true);
   await page.setViewportSize({ width: 568, height: 320 });
   await expect(value('Window size')).toHaveText('568 × 320');
-  expect((await panelGeometry(page, 'Help')).body.horizontal).toBeLessThanOrEqual(0);
+  expect((await panelGeometry(page, 'Settings', 59)).body.horizontal).toBeLessThanOrEqual(0);
+  await page.keyboard.press('Escape');
+  await expectPanelClosed(page, 'Settings');
+  // Help no longer carries it.
+
+  await openPanel(page, 'Help');
+  await expect(page.locator('details.display-details')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expectPanelClosed(page, 'Help');
 });

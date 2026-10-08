@@ -1,5 +1,15 @@
 # Saturday Signal releases
 
+## 1.13.5 · 2026-10-07
+
+- Restore the preferred original Help and Alerts presentation, replacing the 1.13.4 right-side panel: a content-sized bottom sheet in #121c2a with a #344257 border and 24px rounded top, centered at up to 640px wide, sliding up over 500ms and down over 300ms (Reduce Motion still disables it). Its height is capped at 90% of the viewport and 12px below the top safe-area inset. Settings follows the same sheet. Each sheet keeps one pinned, icon-only Close (44px, labeled "Close") that opens focused, a 23px title, and a body that scrolls on its own. A heading becomes a named, focusable scroll region only when enlarged text really overflows it (#116).
+- Closing a sheet returns focus to the button that opened it without scrolling the page, including from a scrolled page and when a tap left focus on another control. If that button can't take focus, the standard dialog focus return still applies.
+- Side safe-area padding inside the sheet applies only the part of the inset the centered sheet does not already clear, keeping the normal 24px body and header-left and 16px header-right spacing.
+- Move the collapsed, read-only Display details to the first row of Settings under Support, and remove it from Help.
+- Scores and portrait Guide add up to 18px below a top safe-area inset (80px at a 62px inset, 12px without one); short-landscape Guide spacing is unchanged.
+- In the Home Screen app (`display-mode: standalone`), the page body is at least the viewport height (`100vh`, then `100lvh`). In simulator captures of the existing installation, this filled the full portrait window and the sheets reached the bottom of the screen; the mechanism is unknown, and it is not confirmed on a physical iPhone. In browser tabs the minimum is the dynamic viewport height (`100dvh`), with no fallback, so a short page doesn't gain scroll under Safari's toolbar.
+- Status-bar metadata (`black-translucent`, `viewport-fit=cover`) is unchanged, and no reinstall is requested. Browser checks use simulated insets. These are candidate mitigations, not a confirmed iPhone fix; native and physical-iPhone confirmation remain open in #116 (see `docs/ui-recovery.md`).
+
 ## 1.13.4 · 2026-10-07
 
 - Open Alerts and Help as the same full-height right-side panel as Settings (full width below 600px, 430px otherwise). Each has one pinned, labeled 44px Close that opens focused, and only the panel body scrolls, when its content needs it. Shared 300ms open and 200ms close motion; Reduce Motion still disables it. Alert settings and request handling, Help content and app-update actions, and the Settings confirmation are unchanged (#116).
