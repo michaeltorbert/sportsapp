@@ -62,6 +62,16 @@ async function installPushSimulation(page, options) {
 }
 
 export const test = base.extend({
+  muteMedia: [async ({ page }, provide) => {
+    // Layout/behavior cases are silent without stubbing playback or changing saved preferences.
+    // The app currently has no Web Audio source; future sound cases must opt out explicitly.
+    await page.addInitScript(() => {
+      for (const type of ['loadstart', 'play']) addEventListener(type, event => {
+        if (event.target instanceof HTMLMediaElement) event.target.muted = true;
+      }, true);
+    });
+    await provide();
+  }, { auto: true }],
   serverGuard: [async ({}, provide, testInfo) => {
     const { browserRunId, serverDiagnosticsDir } = testInfo.config.metadata;
     const state = readServerState(serverDiagnosticsDir, browserRunId);

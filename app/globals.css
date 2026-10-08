@@ -210,21 +210,27 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .duke-toggle { display: inline-flex; gap: 8px; align-items: center; min-height: 44px; padding: 8px 13px; border: 1px solid #34435a; border-radius: 24px; background: #182131; color: #c7d3e5; font-size: 13px; }
 .duke-toggle.is-hidden { background: #1c281d; color: #d6eca9; border-color: #445338; }
 .duke-toggle span { font-size: 11px; opacity: .8; }
-/* Settings, Alerts and Help: one rounded bottom sheet, as tall as its content up to a cap that stays
+/* Settings, Alerts and Help: one rounded bottom sheet with a shared fixed height that stays
    clear of the status-bar safe area. The header (with Close) never scrolls away; only the body does,
    and only when its content overflows (#116). */
 /* --app-panel-offset is how far the centered sheet already sits from each screen edge; it must use the
    same --app-panel-max as max-width. Side padding adds only the part of a safe-area inset beyond it. */
-.app-panel { --app-panel-max: 640px; --app-panel-offset: max(0px, (100vw - var(--app-panel-max)) / 2); left: 0; right: 0; width: 100%; max-width: var(--app-panel-max); margin: 0 auto; height: auto; max-height: 90vh; max-height: min(90vh, calc(100vh - var(--safe-top) - 12px)); max-height: min(90dvh, calc(100dvh - var(--safe-top) - 12px)); overflow: hidden; padding: 0; gap: 0; background: #121c2a; border: 1px solid #344257; border-bottom: 0; border-radius: 24px 24px 0 0; }
+.app-panel { --app-panel-max: 640px; --app-panel-offset: max(0px, (100vw - var(--app-panel-max)) / 2); left: 0; right: 0; width: 100%; max-width: var(--app-panel-max); margin: 0 auto; height: calc(100vh - max(calc(var(--safe-top) + 12px), 24px)); height: calc(100dvh - max(calc(var(--safe-top) + 12px), 24px)); max-height: none; transition: translate 180ms ease-out; overflow: hidden; padding: 0; gap: 0; background: #121c2a; border: 1px solid #344257; border-bottom: 0; border-radius: 24px 24px 0 0; }
+.app-panel[data-dragging] { transition: none; user-select: none; }
+.app-panel-grip { flex: 0 0 100%; display: flex; justify-content: center; height: 12px; touch-action: pinch-zoom; }
+.app-panel-grip span { width: 36px; height: 4px; border-radius: 4px; background: #65758b; }
+@media (prefers-reduced-motion: reduce) { .app-panel { transition: none; } }
 /* The sheet starts below the status bar, so its header needs no top inset. */
-.app-panel-header { flex: none; flex-flow: row wrap; align-items: flex-start; gap: 8px 12px; padding: 16px max(16px, calc(var(--safe-right) - var(--app-panel-offset))) 14px max(24px, calc(var(--safe-left) - var(--app-panel-offset))); border-bottom: 1px solid #293345; }
+.app-panel-header { touch-action: pinch-zoom; flex: none; flex-flow: row wrap; align-items: flex-start; gap: 8px 12px; padding: 16px max(16px, calc(var(--safe-right) - var(--app-panel-offset))) 14px max(24px, calc(var(--safe-left) - var(--app-panel-offset))); border-bottom: 1px solid #293345; }
+.app-panel-header[data-heading-scrolls] { touch-action: auto; }
 /* Only an unusually tall heading (very large text) scrolls, beside the fixed Close, so the body keeps its room. */
-.app-panel-heading { flex: 1 1 10rem; display: flex; flex-direction: column; gap: 4px; min-width: 0; max-height: 30vh; max-height: 30dvh; overflow-y: auto; overscroll-behavior: contain; padding-top: 9px; overflow-wrap: anywhere; }
+.app-panel-heading { flex: 1 1 10rem; display: flex; flex-direction: column; gap: 4px; min-width: 0; max-height: 30vh; max-height: 30dvh; overflow-y: auto; overscroll-behavior-y: none; touch-action: pinch-zoom; padding-top: 9px; overflow-wrap: anywhere; }
+.app-panel-header[data-heading-scrolls] .app-panel-heading { touch-action: pan-y pinch-zoom; }
 .app-panel-heading:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
 .app-panel-heading [data-slot="sheet-title"] { font-size: 23px; font-weight: 720; line-height: 1.3; }
 .app-panel-close { flex: none; margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; border: 1px solid #34435a; border-radius: 50%; background: #182131; color: #edf4ff; }
 .app-panel-close:hover { background: #1f2b3e; }
-.app-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; overflow-wrap: anywhere; padding: 0 max(24px, calc(var(--safe-right) - var(--app-panel-offset))) max(calc(env(safe-area-inset-bottom) + 24px), 32px) max(24px, calc(var(--safe-left) - var(--app-panel-offset))); }
+.app-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior-y: none; touch-action: pan-y pinch-zoom; overflow-wrap: anywhere; padding: 0 max(24px, calc(var(--safe-right) - var(--app-panel-offset))) max(calc(env(safe-area-inset-bottom) + 24px), 32px) max(24px, calc(var(--safe-left) - var(--app-panel-offset))); }
 .app-panel-body:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 .display-details { position: relative; margin: 8px 0; font-size: 14px; }
 .display-details summary { min-height: 44px; padding: 10px 0; cursor: pointer; color: #edf4ff; font-weight: 650; }
