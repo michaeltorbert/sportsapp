@@ -38,6 +38,11 @@ export function AppPanelContent({ title, description, bodyLabel, bodyClassName, 
   // that opening. The observer's microtask runs after Radix's commit and before the next paint, and
   // flushSync commits the reset then. Closing is left alone, so a committed pull slides out from where
   // it was let go; an ordinary mount starts open, records nothing, and keeps onOpenAutoFocus's path.
+  // Once the closing slide ends, Radix removes the node while this component stays mounted, so a
+  // pull's offset is cleared then; left for the next mount, it would paint and transition back to 0.
+  // React runs this cleanup before removing the node, and also when it re-attaches the same node
+  // (StrictMode, or a changed composed ref), so the reset waits until the node has actually left and
+  // never touches a sheet that is still open or still sliding out.
   const panelRef = useCallback((node: HTMLDivElement | null) => {
     panel.current = node; if (!node) return;
     const observer = new MutationObserver(records => {
@@ -45,7 +50,7 @@ export function AppPanelContent({ title, description, bodyLabel, bodyClassName, 
       flushSync(resetDrag); focusFromTop();
     });
     observer.observe(node, { attributes: true, attributeFilter: ["data-state"], attributeOldValue: true });
-    return () => { observer.disconnect(); panel.current = null; };
+    return () => { observer.disconnect(); panel.current = null; queueMicrotask(() => { if (!node.isConnected) resetDrag(); }); };
   }, [resetDrag, focusFromTop]);
   function startDrag(event: PointerEvent<HTMLDivElement>) {
     if (!event.isPrimary) { resetDrag(); return; }

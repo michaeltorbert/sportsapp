@@ -987,3 +987,60 @@ for (const name of Object.keys(panels)) test(`${name}: reopening before the clos
   expect(await storedPrefs(page)).toBe(before);
   expect(nonGetAlertRequests(harness)).toEqual([]);
 });
+
+// After a deliberate pull closes a sheet all the way, Radix removes its node while this component stays
+// mounted. The next opening is a new node that must enter on the sheet's own slide alone: no leftover
+// drag offset and no translate transition at any frame of the entry, not only once it settles.
+// Frames are sampled from requestAnimationFrame only, so the test forces no style at insertion.
+for (const name of Object.keys(panels)) test(`${name}: a fresh opening after a pull-to-close enters with no leftover drag offset`, async ({ page, harness }) => {
+  await page.setViewportSize({ width: 393, height: 852 }); await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  await openPanel(page, name); const root = panel(page, name);
+  await root.evaluate(el => { window.__pulled = el; });
+  const grip = await root.locator('.app-panel-grip').boundingBox();
+  await page.mouse.move(grip.x + 40, grip.y + 4); await page.mouse.down(); await page.mouse.move(grip.x + 40, grip.y + 149); await page.mouse.up();
+  await expectPanelClosed(page, name);
+  expect(await page.evaluate(() => window.__pulled.isConnected)).toBe(false);
+  expect(await storedPrefs(page)).toBe(before);
+  await page.evaluate(() => {
+    const transition = a => typeof CSSTransition !== 'undefined' && a instanceof CSSTransition;
+    const entry = window.__entry = { samples: [], stop: false };
+    const frame = () => {
+      if (entry.stop) return;
+      const el = document.querySelector('[role="dialog"][data-state="open"]');
+      if (el) {
+        const translate = getComputedStyle(el).translate, animations = el.getAnimations();
+        entry.samples.push({
+          node: el, fresh: el !== window.__pulled,
+          offset: translate === 'none' ? 0 : Math.max(...translate.split(' ').map(v => Math.abs(parseFloat(v)))),
+          translateTransitions: animations.filter(a => transition(a) && a.transitionProperty === 'translate').length,
+          entering: animations.some(a => !transition(a) && a.playState === 'running'),
+        });
+      }
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  });
+  await panelTrigger(page, name).tap();
+  await expect(panel(page, name)).toBeVisible();
+  await expectSheetOpen(panel(page, name));
+  const { samples, current } = await page.evaluate(() => {
+    const entry = window.__entry; entry.stop = true;
+    const node = entry.samples[0]?.node;
+    return {
+      current: !!node && document.querySelector('[role="dialog"][data-state="open"]') === node,
+      samples: entry.samples.map(({ node: sampled, ...sample }) => ({ ...sample, sameNode: sampled === node })),
+    };
+  });
+  expect(samples.length).toBeGreaterThan(1);
+  // The very first frame is already the new node in its entering slide, with no translate of its own.
+  expect(samples[0]).toEqual({ fresh: true, offset: 0, translateTransitions: 0, entering: true, sameNode: true });
+  expect(current).toBe(true);
+  expect(samples.filter(s => !s.fresh || !s.sameNode || s.offset !== 0 || s.translateTransitions > 0), 'entry frames with a stale node, offset or translate transition').toEqual([]);
+  await expect(panelClose(page, name)).toBeFocused();
+  expect(await panelBody(page, name).evaluate(el => el.scrollTop)).toBe(0);
+  expect(Math.round((await panel(page, name).boundingBox()).y)).toBe(24);
+  await panelClose(page, name).tap(); await expectPanelClosed(page, name);
+  expect(await storedPrefs(page)).toBe(before);
+  expect(nonGetAlertRequests(harness)).toEqual([]);
+});
