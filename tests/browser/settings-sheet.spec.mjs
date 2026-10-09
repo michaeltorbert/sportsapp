@@ -1,6 +1,6 @@
 // Issue #116: Settings must be dismissible without making a selection, keep one
 // reachable Close while its own body scrolls, and leave the page usable after.
-// Alerts and Help share the same panel, now a content-sized bottom sheet, and the page keeps its
+// Alerts and Help share the same panel, now a fixed-height bottom sheet, and the page keeps its
 // top safe-area spacing.
 // Touch contexts use real taps; synthesized touch *scrolling* is not exercised here.
 import { devices } from '@playwright/test';
@@ -73,6 +73,22 @@ const closeState = page => closeButton(page).evaluate(el => {
     clearOfTitle: title.right <= r.left || title.bottom <= r.top || title.top >= r.bottom,
   };
 });
+
+// The heading's region role, tab stop, header flag and taller grip all follow its overflow through a
+// ResizeObserver, some time after a text-size change. Take a baseline only once every one of them
+// agrees with the heading's actual overflow; otherwise a later grip change moves the pinned Close.
+async function expectHeadingSettled(dialog) {
+  await expect.poll(() => dialog.evaluate(root => {
+    const heading = root.querySelector('.app-panel-heading'), overflows = heading.scrollHeight > heading.clientHeight + 1;
+    const expected = { role: overflows ? 'region' : null, tabindex: overflows ? '0' : null, headerFlag: overflows, grip: overflows ? '44px' : '12px' };
+    const actual = {
+      role: heading.getAttribute('role'), tabindex: heading.getAttribute('tabindex'),
+      headerFlag: root.querySelector('.app-panel-header').hasAttribute('data-heading-scrolls'),
+      grip: getComputedStyle(root.querySelector('.app-panel-grip')).height,
+    };
+    return Object.keys(expected).filter(key => actual[key] !== expected[key]).map(key => `${key} is ${actual[key]} with overflow ${overflows}`);
+  }), { message: 'heading role, tab stop, header flag and grip agree with its actual overflow' }).toEqual([]);
+}
 
 const bodyState = page => body(page).evaluate(el => {
   const r = el.getBoundingClientRect(), dialog = el.closest('[role="dialog"]'), d = dialog.getBoundingClientRect();
@@ -254,6 +270,7 @@ for (const layout of layouts) test(`${layout.name}: Close stays pinned while the
     }, layout.textScale);
     expect(await settings(page).locator('.settings-note').evaluate(el => getComputedStyle(el).fontSize)).toBe('26px');
   }
+  await expectHeadingSettled(settings(page));
   const top = await closeState(page);
   expect(top).toMatchObject({ inViewport: true, hit: true, clearOfTitle: true });
   expect(top.width).toBeGreaterThanOrEqual(44);
@@ -332,7 +349,7 @@ test.describe('desktop keyboard and mouse', () => {
   });
 });
 
-// Settings, Alerts and Help share one content-sized bottom sheet.
+// Settings, Alerts and Help share one fixed-height bottom sheet.
 const panels = {
   Settings: { trigger: 'Settings', title: 'Settings', region: 'Viewing preferences' },
   Alerts: { trigger: 'Alerts off', title: 'Catch the game-changing moments.', region: 'Alert choices' },
@@ -362,7 +379,7 @@ const panelGeometry = (page, name, safeTop = 0) => panel(page, name).evaluate((d
   const hit = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
   return {
     top: d.top, left: d.left, right: d.right, bottom: d.bottom, width: d.width, height: d.height, viewport: { width: innerWidth, height: innerHeight },
-    cap: Math.min(innerHeight * .9, innerHeight - safeTop - 12),
+    cap: innerHeight - Math.max(safeTop + 12, 24),
     // The height the sheet would take with no cap: its header plus all of its body.
     natural: parseFloat(s.borderTopWidth) + dialog.querySelector('.app-panel-header').getBoundingClientRect().height + body.scrollHeight,
     style: { background: s.backgroundColor, border: s.borderTopColor, borderTop: s.borderTopWidth, borderBottom: s.borderBottomWidth, radius: [s.borderTopLeftRadius, s.borderTopRightRadius, s.borderBottomLeftRadius, s.borderBottomRightRadius] },
@@ -372,14 +389,14 @@ const panelGeometry = (page, name, safeTop = 0) => panel(page, name).evaluate((d
   };
 }, safeTop);
 // Bottom-sheet placement shared by every layout: centered, at most 640px wide, resting on the bottom
-// edge, and as tall as its content up to the cap, so never full height.
+// edge, and the same fixed safe-area height regardless of content.
 function expectBottomSheet(geometry) {
   const { viewport } = geometry;
   expect(geometry.bottom).toBeCloseTo(viewport.height, 0);
   expect(geometry.width).toBeCloseTo(Math.min(viewport.width, 640), 0);
   expect((geometry.left + geometry.right) / 2).toBeCloseTo(viewport.width / 2, 0);
   expect(geometry.height).toBeLessThanOrEqual(geometry.cap + .5);
-  expect(Math.abs(geometry.height - Math.min(geometry.natural, geometry.cap))).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.height - geometry.cap)).toBeLessThanOrEqual(1);
   expect(geometry.top).toBeGreaterThanOrEqual(viewport.height - geometry.cap - .5);
   expect(geometry.style).toEqual({ background: 'rgb(18, 28, 42)', border: 'rgb(52, 66, 87)', borderTop: '1px', borderBottom: '0px', radius: ['24px', '24px', '0px', '0px'] });
 }
@@ -390,7 +407,7 @@ const panelLayouts = [
   { name: 'short landscape phone', width: 844, height: 390 },
   { name: 'short landscape phone with doubled text', width: 844, height: 390, textScale: 2 },
 ];
-for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(`${layout.name}: ${name} is a content-sized bottom sheet with one pinned Close`, async ({ page, harness }, testInfo) => {
+for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(`${layout.name}: ${name} is a fixed-height bottom sheet with one pinned Close`, async ({ page, harness }, testInfo) => {
   harness.state.events = [...harness.state.events, ...manyDuke()];
   await page.setViewportSize({ width: layout.width, height: layout.height });
   await openRoute(page, harness, 'Scores');
@@ -400,6 +417,7 @@ for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(
     const nodes = [root, ...root.querySelectorAll('*')], sizes = nodes.map(node => parseFloat(getComputedStyle(node).fontSize));
     nodes.forEach((node, i) => { node.style.fontSize = `${sizes[i] * scale}px`; });
   }, layout.textScale);
+  await expectHeadingSettled(panel(page, name));
   await expect(panelClose(page, name)).toHaveCount(1);
   await expect(panelClose(page, name)).toBeFocused();
   const start = await panelGeometry(page, name);
@@ -429,8 +447,11 @@ for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(
     await expect(heading).toBeFocused();
     expect(await heading.evaluate(el => getComputedStyle(el).outlineStyle)).toBe('solid');
     await page.keyboard.press('End');
-    await expect.poll(() => heading.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThanOrEqual(1);
-    expect(await heading.evaluate(el => el.lastElementChild.getBoundingClientRect().bottom <= el.getBoundingClientRect().bottom + .5)).toBe(true);
+    // Read both end conditions together: scrolling may still be moving when one is first met.
+    await expect.poll(() => heading.evaluate(el => ({
+      atEnd: el.scrollHeight - el.clientHeight - el.scrollTop <= 1,
+      lastLineInView: el.lastElementChild.getBoundingClientRect().bottom <= el.getBoundingClientRect().bottom + .5,
+    })), { message: 'heading reaches its end with its last line in view' }).toEqual({ atEnd: true, lastLineInView: true });
     expect((await panelGeometry(page, name)).close).toEqual(start.close);
     expect(await panelBody(page, name).evaluate(el => el.scrollTop)).toBe(0);
     await testInfo.attach(`${name} ${layout.name} heading end`, { body: await page.screenshot(), contentType: 'image/png' });
@@ -719,7 +740,7 @@ for (const inset of [0, 59]) test(`SIMULATED ${inset}px top inset: page spacing,
   expectBottomSheet(settingsPanel);
   // The sheet stays 12px clear of the inset, and its header adds no inset of its own.
   expect(settingsPanel.top).toBeGreaterThanOrEqual(inset + 12 - .5);
-  expect(settingsPanel.close.top).toBeCloseTo(settingsPanel.top + 1 + 16, 0);
+  expect(settingsPanel.close.top).toBeCloseTo(settingsPanel.top + 1 + 16 + 12 + 8, 0);
   expect(settingsPanel.close).toMatchObject({ hit: true, inViewport: true });
   expect(await panel(page, 'Settings').evaluate(el => Number(getComputedStyle(el).zIndex))).toBeGreaterThan(20);
   await testInfo.attach(`Settings, ${inset}px inset`, { body: await page.screenshot({ clip: { x: 0, y: 0, width: 393, height: 160 } }), contentType: 'image/png' });
@@ -790,4 +811,368 @@ test('Settings Display details is the visible first row, stays collapsed until o
   await expect(page.locator('details.display-details')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expectPanelClosed(page, 'Help');
+});
+
+// Real browser pointer routing; these are desktop-engine gestures, not native iPhone proof.
+for (const name of Object.keys(panels)) test(`${name}: header pull snaps back or dismisses; body and Close stay independent`, async ({ page, harness }, info) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  await openPanel(page, name);
+  const root = panel(page, name), grip = root.locator('.app-panel-grip');
+  const initial = await root.boundingBox();
+  expect(initial.y).toBeCloseTo(24, 0);
+  const start = await grip.boundingBox(), x = start.x + start.width / 2, y = start.y + start.height / 2;
+  await page.mouse.move(x, y); await page.mouse.down();
+  await page.mouse.move(x, y + 24, { steps: 5 });
+  expect((await root.boundingBox()).y).toBeCloseTo(initial.y + 24, 0);
+  await page.mouse.up();
+  await expect.poll(async () => Math.round((await root.boundingBox()).y)).toBe(24);
+  await expect(root).toBeVisible();
+  // Even a quick short pull is not a dismissal: speed cannot turn it into a flick close.
+  await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x, y + 40); await page.mouse.up();
+  await expect.poll(async () => Math.round((await root.boundingBox()).y)).toBe(24);
+  // Upward pulls do not move or close the panel.
+  await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x, y - 16); await page.mouse.up();
+  await expect.poll(async () => Math.round((await root.boundingBox()).y)).toBe(24);
+  // Text remains a scroll region; a pull starting there never drives the panel.
+  const bodyBox = await panelBody(page, name).boundingBox();
+  await page.mouse.move(bodyBox.x + 20, bodyBox.y + 40); await page.mouse.down();
+  await page.mouse.move(bodyBox.x + 20, bodyBox.y + 160, { steps: 5 }); await page.mouse.up();
+  expect((await root.boundingBox()).y).toBeCloseTo(24, 0);
+  await testInfoCapture(page, info, `${name}-higher-open`);
+  // A deliberate header pull closes and returns focus without changing preferences/alerts.
+  await page.mouse.move(x, y); await page.mouse.down();
+  await page.mouse.move(x, y + 145, { steps: 12 }); await page.mouse.up();
+  await expectPanelClosed(page, name);
+  expect(await storedPrefs(page)).toBe(before);
+  expect(nonGetAlertRequests(harness)).toEqual([]);
+  await openPanel(page, name);
+  expect(await panelBody(page, name).evaluate(el => el.scrollTop)).toBe(0);
+  await panelClose(page, name).tap(); await expectPanelClosed(page, name);
+});
+async function testInfoCapture(page, info, name) {
+  await info.attach(name, { body: await page.screenshot(), contentType: 'image/png' });
+}
+
+for (const size of [{ width: 393, height: 852 }, { width: 852, height: 393 }]) test(`equal height with short and changing content at ${size.width}px`, async ({ page, harness }) => {
+  await page.setViewportSize(size); await openRoute(page, harness, 'Scores');
+  const tops = [];
+  for (const name of Object.keys(panels)) {
+    await openPanel(page, name);
+    const root = panel(page, name); tops.push((await root.boundingBox()).y);
+    // Empty content exercises the previous shrink-to-content defect without changing app state.
+    await panelBody(page, name).evaluate(el => el.replaceChildren());
+    expect((await root.boundingBox()).y).toBeCloseTo(24, 0);
+    await panelBody(page, name).evaluate(el => { const p = document.createElement('p'); p.style.height = '2000px'; p.textContent = 'Layout test content'; el.append(p); });
+    expect((await root.boundingBox()).y).toBeCloseTo(24, 0);
+    await panelClose(page, name).tap(); await expectPanelClosed(page, name);
+  }
+  expect(tops.map(Math.round)).toEqual([24, 24, 24]);
+});
+
+test('header drag cancels on viewport resize and preserves body reading position', async ({ page, harness }) => {
+  await page.setViewportSize({ width: 393, height: 600 }); await openRoute(page, harness, 'Scores');
+  await openPanel(page, 'Help'); const root = panel(page, 'Help'), region = panelBody(page, 'Help');
+  await region.evaluate(el => { el.scrollTop = 100; });
+  const grip = await root.locator('.app-panel-grip').boundingBox();
+  await page.mouse.move(grip.x + 40, grip.y + 4); await page.mouse.down(); await page.mouse.move(grip.x + 40, grip.y + 44);
+  await page.setViewportSize({ width: 600, height: 393 }); await page.mouse.up();
+  await expect(root).toBeVisible(); await expect.poll(async () => Math.round((await root.boundingBox()).y)).toBe(24);
+  expect(await region.evaluate(el => el.scrollTop)).toBe(100);
+  await page.keyboard.press('Escape'); await expectPanelClosed(page, 'Help');
+  await openPanel(page, 'Help'); expect(await panelBody(page, 'Help').evaluate(el => el.scrollTop)).toBe(0);
+  await panelClose(page, 'Help').tap(); await expectPanelClosed(page, 'Help');
+});
+
+// Chromium's native input dispatch exercises actual touch-action/capture routing in that engine.
+// WebKit has no equivalent dispatch API here; neither lane establishes physical iPhone behavior.
+for (const name of Object.keys(panels)) test(`${name}: Chromium touch heading drag, cancellation and body scrolling`, async ({ page, harness, browserName }, info) => {
+  test.skip(browserName !== 'chromium', 'Touch dispatch requires Chromium CDP; native iPhone remains unverified');
+  await page.setViewportSize({ width: 393, height: 600 }); await openRoute(page, harness, 'Scores');
+  await openPanel(page, name); const root = page.getByRole('dialog');
+  const region = root.locator('.app-panel-body');
+  const cdp = await page.context().newCDPSession(page);
+  const send = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' || type === 'touchCancel' ? [] : [{ x, y, radiusX: 2, radiusY: 2 }] });
+  const title = await root.locator('[data-slot="sheet-title"]').boundingBox();
+  const x = title.x + 30, y = title.y + 8;
+  await send('touchStart', x, y);
+  for (let d = 6; d <= 24; d += 6) { await page.waitForTimeout(20); await send('touchMove', x, y + d); }
+  await expect.poll(async () => Math.round((await root.boundingBox()).y)).toBe(48);
+  await send('touchEnd'); await expect.poll(async () => Math.round((await root.boundingBox()).y)).toBe(24);
+  // Cancellation after crossing the distance threshold must still snap back, never close.
+  await send('touchStart', x, y); await send('touchMove', x, y + 145); await send('touchCancel');
+  await expect(root).toBeVisible(); await expect.poll(async () => Math.round((await root.boundingBox()).y)).toBe(24);
+  // Force a long heading: text scrolls independently; the grip still owns panel dragging.
+  await root.locator('[data-slot="sheet-title"]').evaluate(el => { el.textContent = 'Long accessible heading '.repeat(30); });
+  await expect(root.locator('.app-panel-header')).toHaveAttribute('data-heading-scrolls', 'true');
+  expect((await root.locator('.app-panel-grip').boundingBox()).height).toBeGreaterThanOrEqual(44);
+  await testInfoCapture(page, info, `${name}-overflowing-heading-grip`);
+  const heading = root.locator('.app-panel-heading'), h = await heading.boundingBox();
+  await send('touchStart', h.x + 20, h.y + h.height - 20);
+  for (let d = 15; d <= 75; d += 15) { await page.waitForTimeout(20); await send('touchMove', h.x + 20, h.y + h.height - 20 - d); }
+  await send('touchEnd'); await expect.poll(() => heading.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+  expect((await root.boundingBox()).y).toBeCloseTo(24, 0);
+  const b = await region.boundingBox();
+  // Inject scroll extent only in this layout fixture, then use real touch routing to scroll it.
+  await region.evaluate(el => { const p = document.createElement('p'); p.style.height = '1500px'; el.append(p); });
+  await send('touchStart', b.x + 30, b.y + b.height - 30);
+  for (let d = 15; d <= 90; d += 15) { await page.waitForTimeout(20); await send('touchMove', b.x + 30, b.y + b.height - 30 - d); }
+  await send('touchEnd'); await expect.poll(() => region.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+  expect((await root.boundingBox()).y).toBeCloseTo(24, 0);
+  const grip = await root.locator('.app-panel-grip').boundingBox();
+  await send('touchStart', grip.x + 40, grip.y + 4);
+  for (let d = 15; d <= 150; d += 15) { await page.waitForTimeout(20); await send('touchMove', grip.x + 40, grip.y + 4 + d); }
+  await send('touchEnd'); await expect(root).toHaveCount(0); await expectPanelClosed(page, name); await cdp.detach();
+  await info.attach('touch-scope', { body: 'Chromium CDP native input; desktop engine mobile emulation, not iPhone', contentType: 'text/plain' });
+});
+
+test('resize during the closing slide does not reset its committed drag position', async ({ page, harness }) => {
+  await page.setViewportSize({ width: 393, height: 852 }); await openRoute(page, harness, 'Scores');
+  await openPanel(page, 'Help'); const root = panel(page, 'Help');
+  await root.evaluate(el => {
+    window.__closingPosition = null;
+    new MutationObserver((_, observer) => {
+      if (el.dataset.state !== 'closed') return;
+      observer.disconnect();
+      const before = el.style.translate;
+      // Synthetic resize notification verifies the closing-offset lifecycle, not native rotation.
+      dispatchEvent(new Event('resize'));
+      requestAnimationFrame(() => requestAnimationFrame(() => { window.__closingPosition = { before, after: el.style.translate }; }));
+    }).observe(el, { attributes: true, attributeFilter: ['data-state'] });
+  });
+  const grip = await root.locator('.app-panel-grip').boundingBox();
+  await page.mouse.move(grip.x + 40, grip.y + 4); await page.mouse.down(); await page.mouse.move(grip.x + 40, grip.y + 149); await page.mouse.up();
+  await expect.poll(() => page.evaluate(() => window.__closingPosition)).toEqual({ before: '0px 145px', after: '0px 145px' });
+  await expectPanelClosed(page, 'Help');
+});
+
+// A script click() on the dialog's own trigger while the closing slide still runs, not a physical tap:
+// the closing backdrop still covers the trigger then. Radix keeps the same dialog node for that
+// reopening; this checks the component's lifecycle in a desktop engine, not native iPhone behavior.
+for (const name of Object.keys(panels)) test(`${name}: reopening before the closing slide ends reuses the sheet and starts it fresh`, async ({ page, harness }) => {
+  await page.setViewportSize({ width: 393, height: 852 }); await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  await openPanel(page, name); const root = panel(page, name), region = panelBody(page, name);
+  // Layout fixture only: give the body scroll extent, then leave it scrolled and focused.
+  await region.evaluate(el => { const p = document.createElement('p'); p.style.height = '2000px'; el.append(p); el.scrollTop = 100; });
+  await region.focus(); await expect(region).toBeFocused();
+  await root.evaluate(el => {
+    // Find the trigger while open, the same way the component records it.
+    const triggers = document.querySelectorAll(`[aria-controls="${CSS.escape(el.id)}"]`);
+    window.__reopen = { node: el, triggers: triggers.length, closing: null };
+    new MutationObserver((_, observer) => {
+      if (el.dataset.state !== 'closed') return;
+      observer.disconnect();
+      const translate = el.style.translate;
+      // Two frames into the exit slide, while it is still running.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        window.__reopen.closing = { translate, exitRunning: el.getAnimations().some(a => a.playState === 'running'), connected: el.isConnected };
+        triggers[0].click();
+      }));
+    }).observe(el, { attributes: true, attributeFilter: ['data-state'] });
+  });
+  expect(await page.evaluate(() => window.__reopen.triggers)).toBe(1);
+  const grip = await root.locator('.app-panel-grip').boundingBox();
+  await page.mouse.move(grip.x + 40, grip.y + 4); await page.mouse.down(); await page.mouse.move(grip.x + 40, grip.y + 149); await page.mouse.up();
+  // The deliberate pull closed from 145px and kept it while closing; the reopen came mid-exit.
+  await expect.poll(() => page.evaluate(() => window.__reopen.closing)).toEqual({ translate: '0px 145px', exitRunning: true, connected: true });
+  await expectSheetOpen(root);
+  expect(await root.evaluate(el => ({ sameNode: el === window.__reopen.node, state: el.dataset.state, translateY: parseFloat(el.style.translate.split(' ')[1] ?? '0') })))
+    .toEqual({ sameNode: true, state: 'open', translateY: 0 });
+  expect(Math.round((await root.boundingBox()).y)).toBe(24);
+  await expect(panelClose(page, name)).toBeFocused();
+  expect(await region.evaluate(el => el.scrollTop)).toBe(0);
+  await panelClose(page, name).tap(); await expectPanelClosed(page, name);
+  expect(await storedPrefs(page)).toBe(before);
+  expect(nonGetAlertRequests(harness)).toEqual([]);
+});
+
+// After a deliberate pull closes a sheet all the way, Radix removes its node while this component stays
+// mounted. The next opening is a new node that must enter on the sheet's own slide alone: no leftover
+// drag offset and no translate transition at any frame of the entry, not only once it settles.
+// Frames are sampled from requestAnimationFrame only, so the test forces no style at insertion.
+for (const name of Object.keys(panels)) test(`${name}: a fresh opening after a pull-to-close enters with no leftover drag offset`, async ({ page, harness }) => {
+  await page.setViewportSize({ width: 393, height: 852 }); await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  await openPanel(page, name); const root = panel(page, name);
+  await root.evaluate(el => { window.__pulled = el; });
+  const grip = await root.locator('.app-panel-grip').boundingBox();
+  await page.mouse.move(grip.x + 40, grip.y + 4); await page.mouse.down(); await page.mouse.move(grip.x + 40, grip.y + 149); await page.mouse.up();
+  await expectPanelClosed(page, name);
+  expect(await page.evaluate(() => window.__pulled.isConnected)).toBe(false);
+  expect(await storedPrefs(page)).toBe(before);
+  await page.evaluate(() => {
+    const transition = a => typeof CSSTransition !== 'undefined' && a instanceof CSSTransition;
+    const entry = window.__entry = { samples: [], stop: false };
+    const frame = () => {
+      if (entry.stop) return;
+      const el = document.querySelector('[role="dialog"][data-state="open"]');
+      if (el) {
+        const translate = getComputedStyle(el).translate, animations = el.getAnimations();
+        entry.samples.push({
+          node: el, fresh: el !== window.__pulled,
+          offset: translate === 'none' ? 0 : Math.max(...translate.split(' ').map(v => Math.abs(parseFloat(v)))),
+          translateTransitions: animations.filter(a => transition(a) && a.transitionProperty === 'translate').length,
+          entering: animations.some(a => !transition(a) && a.playState === 'running'),
+        });
+      }
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  });
+  await panelTrigger(page, name).tap();
+  await expect(panel(page, name)).toBeVisible();
+  await expectSheetOpen(panel(page, name));
+  const { samples, current } = await page.evaluate(() => {
+    const entry = window.__entry; entry.stop = true;
+    const node = entry.samples[0]?.node;
+    return {
+      current: !!node && document.querySelector('[role="dialog"][data-state="open"]') === node,
+      samples: entry.samples.map(({ node: sampled, ...sample }) => ({ ...sample, sameNode: sampled === node })),
+    };
+  });
+  expect(samples.length).toBeGreaterThan(1);
+  // The very first frame is already the new node in its entering slide, with no translate of its own.
+  expect(samples[0]).toEqual({ fresh: true, offset: 0, translateTransitions: 0, entering: true, sameNode: true });
+  expect(current).toBe(true);
+  expect(samples.filter(s => !s.fresh || !s.sameNode || s.offset !== 0 || s.translateTransitions > 0), 'entry frames with a stale node, offset or translate transition').toEqual([]);
+  await expect(panelClose(page, name)).toBeFocused();
+  expect(await panelBody(page, name).evaluate(el => el.scrollTop)).toBe(0);
+  expect(Math.round((await panel(page, name).boundingBox()).y)).toBe(24);
+  await panelClose(page, name).tap(); await expectPanelClosed(page, name);
+  expect(await storedPrefs(page)).toBe(before);
+  expect(nonGetAlertRequests(harness)).toEqual([]);
+});
+
+// Native scroll policy (2026-10-09): an overflowing body or heading leaves edge touch moves to the browser.
+// Synthetic, cancelable touch events reach the same listeners in both engines: each region's adapter and
+// Radix's document scroll lock. They check routing only; native bounce and the scroll indicator need an
+// actual iPhone.
+async function syntheticMovePrevented(target, { edge = 'top', dy = edge === 'top' ? 30 : -30, fingers = 1 } = {}) {
+  return target.evaluate((el, { edge, dy, fingers }) => {
+    el.scrollTop = edge === 'top' ? 0 : el.scrollHeight;
+    const r = el.getBoundingClientRect(), x = r.left + 20, y = r.top + r.height / 2;
+    const fire = (type, clientY) => {
+      const points = Array.from({ length: fingers }, (_, i) => ({ identifier: i, target: el, clientX: x + i * 40, clientY, pageX: x + i * 40, pageY: clientY, screenX: x + i * 40, screenY: clientY }));
+      const touch = new Event(type, { bubbles: true, cancelable: true, composed: true });
+      for (const key of ['touches', 'targetTouches', 'changedTouches']) Object.defineProperty(touch, key, { value: points });
+      el.dispatchEvent(touch); return touch.defaultPrevented;
+    };
+    fire('touchstart', y); return fire('touchmove', y + dy);
+  }, { edge, dy, fingers });
+}
+const injectOverflow = region => region.evaluate(el => { const p = document.createElement('p'); p.style.height = '1500px'; el.append(p); });
+
+for (const name of Object.keys(panels)) test(`${name}: overflowing scroll regions contain overscroll and leave edge moves to the browser`, async ({ page, harness }) => {
+  await page.setViewportSize({ width: 393, height: 600 }); await openRoute(page, harness, 'Scores');
+  const prefs = await settledPrefs(page);
+  await openPanel(page, name); const root = page.getByRole('dialog');
+  const region = root.locator('.app-panel-body'), heading = root.locator('.app-panel-heading');
+  const scrolling = el => { const s = getComputedStyle(el); return { overscroll: [s.overscrollBehaviorX, s.overscrollBehaviorY], overflowY: s.overflowY, scrollbarWidth: CSS.supports('scrollbar-width', 'auto') ? s.scrollbarWidth : 'auto' }; };
+  const native = { overscroll: ['contain', 'contain'], overflowY: 'auto', scrollbarWidth: 'auto' };
+  expect(await region.evaluate(scrolling)).toEqual(native);
+  expect(await heading.evaluate(scrolling)).toEqual(native);
+  // Short content stays with the lock.
+  const short = await page.addStyleTag({ content: '.app-panel-body > * { display: none !important; }' });
+  expect(await syntheticMovePrevented(region)).toBe(true);
+  await short.evaluate(el => el.remove());
+  await injectOverflow(region);
+  expect(await syntheticMovePrevented(region)).toBe(false);
+  expect(await syntheticMovePrevented(region, { edge: 'bottom' })).toBe(false);
+  expect(await syntheticMovePrevented(region, { fingers: 2 })).toBe(false);
+  expect(await syntheticMovePrevented(page.locator('[data-slot="sheet-overlay"]'))).toBe(true);
+  expect(await syntheticMovePrevented(heading)).toBe(true);
+  await root.locator('[data-slot="sheet-title"]').evaluate(el => { el.textContent = 'Long accessible heading '.repeat(30); });
+  await expect(root.locator('.app-panel-header')).toHaveAttribute('data-heading-scrolls', 'true');
+  expect(await syntheticMovePrevented(heading)).toBe(false);
+  expect(await syntheticMovePrevented(heading, { edge: 'bottom' })).toBe(false);
+  await expect(root).toBeVisible(); expect((await root.boundingBox()).y).toBeCloseTo(24, 0);
+  expect(JSON.parse(await storedPrefs(page))).toEqual(JSON.parse(prefs)); expect(nonGetAlertRequests(harness)).toEqual([]);
+});
+
+// Baseline: Radix cancelled every cancelable outward move at a region's edge. Chromium's native touch input
+// now reaches both body edges and the heading's, reverses, and scrolls back with nothing prevented, while
+// the panel and the page behind it stay put. Event routing only; not bounce, indicator or iPhone proof.
+for (const name of Object.keys(panels)) test(`${name}: Chromium touch at body and heading edges is never cancelled`, async ({ page, harness, browserName }, info) => {
+  test.skip(browserName !== 'chromium', 'Touch dispatch requires Chromium CDP; native iPhone remains unverified');
+  await page.setViewportSize({ width: 393, height: 600 }); await openRoute(page, harness, 'Scores');
+  const prefs = await settledPrefs(page);
+  await openPanel(page, name); const root = page.getByRole('dialog');
+  const region = root.locator('.app-panel-body'), heading = root.locator('.app-panel-heading');
+  const cdp = await page.context().newCDPSession(page);
+  const send = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, radiusX: 2, radiusY: 2 }] });
+  // Document capture sees each move before a region's adapter stops it; a task later, once bubbling and
+  // Radix's lock are done with that same event, its final defaultPrevented is recorded.
+  await page.evaluate(() => { window.__moves = []; document.addEventListener('touchmove', e => { setTimeout(() => window.__moves.push({ cancelable: e.cancelable, prevented: e.defaultPrevented })); }, { capture: true, passive: true }); });
+  async function gesture(x, y, waypoints) {
+    await page.evaluate(() => { window.__moves.length = 0; });
+    await send('touchStart', x, y);
+    for (const [dx, dy] of waypoints) { await page.waitForTimeout(20); await send('touchMove', x + dx, y + dy); }
+    await send('touchEnd');
+    await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 50)));
+    const moves = await page.evaluate(() => window.__moves.slice());
+    return { cancelableAllowed: moves.some(m => m.cancelable && !m.prevented), prevented: moves.filter(m => m.prevented).length };
+  }
+  const unprevented = { cancelableAllowed: true, prevented: 0 };
+  // Outward past the edge, then reversed into the content.
+  const path = sign => [15, 30, 45, 60, 30, 0, -30, -60].map(d => [0, sign * d]);
+  async function settledScroll(locator) {
+    let last = -1;
+    await expect.poll(async () => { const now = await locator.evaluate(el => el.scrollTop); const same = now === last; last = now; return same; }).toBe(true);
+    return last;
+  }
+  const background = () => page.evaluate(() => [scrollX, scrollY]);
+  const behind = await background();
+  await injectOverflow(region); await region.evaluate(el => { el.scrollTop = 0; });
+  const b = await region.boundingBox(), x = b.x + 30, y = b.y + b.height / 2;
+  expect(await gesture(x, y, path(1))).toEqual(unprevented);
+  expect(await settledScroll(region)).toBeGreaterThan(0);
+  const bottom = await region.evaluate(el => { el.scrollTop = el.scrollHeight; return el.scrollTop; });
+  expect(await gesture(x, y, path(-1))).toEqual(unprevented);
+  expect(await settledScroll(region)).toBeLessThan(bottom);
+  // A sideways swipe on the body neither moves the panel nor reaches the page behind it.
+  const sideways = await gesture(b.x + b.width - 40, y, [[-30, 0], [-60, 2], [-90, 2], [-120, 4]]);
+  expect(sideways.prevented).toBe(0);
+  expect(await region.evaluate(el => el.scrollLeft)).toBe(0);
+  await root.locator('[data-slot="sheet-title"]').evaluate(el => { el.textContent = 'Long accessible heading '.repeat(30); });
+  await expect(root.locator('.app-panel-header')).toHaveAttribute('data-heading-scrolls', 'true');
+  await heading.evaluate(el => { el.scrollTop = 0; });
+  const h = await heading.boundingBox();
+  expect(await gesture(h.x + 20, h.y + h.height / 2, path(1))).toEqual(unprevented);
+  expect(await settledScroll(heading)).toBeGreaterThan(0);
+  expect(await background()).toEqual(behind);
+  await expect(root).toBeVisible(); expect((await root.boundingBox()).y).toBeCloseTo(24, 0);
+  expect(JSON.parse(await storedPrefs(page))).toEqual(JSON.parse(prefs)); expect(nonGetAlertRequests(harness)).toEqual([]);
+  await cdp.detach();
+  await info.attach('touch-scope', { body: 'Chromium CDP native input routing only; native bounce and scroll indicator unverified, not iPhone', contentType: 'text/plain' });
+});
+
+// A nested confirmation hides the Settings panel; its overflowing body then stays under the scroll lock,
+// and the adapter resumes once the confirmation closes and again on a fresh opening.
+test('a nested confirmation keeps the Settings body under the scroll lock until it closes', async ({ page, harness }) => {
+  harness.state.events = [...harness.state.events, duke('duke-away')];
+  await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  await openSettings(page, 'tap');
+  const region = page.locator('.app-panel-body');
+  const hidden = () => region.evaluate(el => !!el.closest('[aria-hidden="true"], [inert]'));
+  await injectOverflow(region);
+  expect(await syntheticMovePrevented(region)).toBe(false);
+  const confirm = page.getByRole('alertdialog', { name: 'Show this game only?', exact: true });
+  const keep = confirm.getByRole('button', { name: 'Keep hidden', exact: true });
+  await settings(page).getByRole('button', { name: 'Show Duke game on Sep 5', exact: true }).tap();
+  await expect(keep).toBeFocused();
+  await expect.poll(hidden).toBe(true);
+  expect(await syntheticMovePrevented(region)).toBe(true);
+  await page.evaluate(() => Promise.all([...document.querySelectorAll('[data-slot="alert-dialog-overlay"], [data-slot="alert-dialog-content"]')]
+    .flatMap(el => el.getAnimations({ subtree: true })).map(animation => animation.finished.catch(() => {}))));
+  await keep.tap();
+  await expect(confirm).toHaveCount(0);
+  await expect.poll(hidden).toBe(false);
+  expect(await syntheticMovePrevented(region)).toBe(false);
+  await closeButton(page).tap(); await expectClosed(page);
+  await openSettings(page, 'tap'); await injectOverflow(region);
+  expect(await syntheticMovePrevented(region)).toBe(false);
+  expect(JSON.parse(await storedPrefs(page))).toEqual(JSON.parse(before));
 });

@@ -1,5 +1,15 @@
 # Saturday Signal releases
 
+## 1.13.6 · 2026-10-09
+
+- Settings, Alerts and Help share one fixed sheet height that reaches 12px below the top safe-area inset (at least 24px from the top), replacing the 1.13.5 content-sized sheet capped at 90% of the viewport, so all three match whatever their content. The sheet stays anchored at the bottom; the pinned header, icon-only Close and independently scrolling body are unchanged (#116).
+- Add a small grab handle to the sheet header. Dragging the header down moves the sheet with the finger: a short pull returns, and a deliberate pull closes through the normal Close path, sliding out from where it was released. Sideways movement, a second pointer, rotation or a viewport resize cancels the pull without closing. Buttons and an overflowing heading keep their normal tap and scroll behavior, and scrolling the body never closes the sheet. Reduce Motion removes the return animation.
+- Reopening a sheet, including while it is still sliding closed, starts with no leftover pull offset, the heading and body scrolled to the top, and Close focused.
+- When the body or an overflowing heading has more content than fits, one-finger touch scrolling at its edges is left to the browser's own overscroll, contained within the sheet, instead of being stopped by the dialog's scroll lock. Short content, multi-finger touches, a sheet beneath another dialog and browsers without overscroll containment keep the previous behavior.
+- The user confirmed on their phone, in Safari and in a separate Home Screen preview of the pre-release `3a02fe0` build, the native scroll indicator and edge bounce, the consistent height of all three sheets, and that scrolling the body never closes them. No device model or OS version is recorded, and other devices and browsers are not confirmed.
+- Sheet colors, rounding, Close button, Display details placement in Settings, saved preferences, alert behavior, subscriptions and data are unchanged from 1.13.5.
+- Tests and documentation only, with no app behavior change: update the browser-test fixtures and Settings sheet tests, and document the panel interactions in `docs/panel-interactions.md`.
+
 ## 1.13.5 · 2026-10-07
 
 - Restore the preferred original Help and Alerts presentation, replacing the 1.13.4 right-side panel: a content-sized bottom sheet in #121c2a with a #344257 border and 24px rounded top, centered at up to 640px wide, sliding up over 500ms and down over 300ms (Reduce Motion still disables it). Its height is capped at 90% of the viewport and 12px below the top safe-area inset. Settings follows the same sheet. Each sheet keeps one pinned, icon-only Close (44px, labeled "Close") that opens focused, a 23px title, and a body that scrolls on its own. A heading becomes a named, focusable scroll region only when enlarged text really overflows it (#116).
