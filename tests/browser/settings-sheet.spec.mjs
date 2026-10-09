@@ -1044,3 +1044,135 @@ for (const name of Object.keys(panels)) test(`${name}: a fresh opening after a p
   expect(await storedPrefs(page)).toBe(before);
   expect(nonGetAlertRequests(harness)).toEqual([]);
 });
+
+// Native scroll policy (2026-10-09): an overflowing body or heading leaves edge touch moves to the browser.
+// Synthetic, cancelable touch events reach the same listeners in both engines: each region's adapter and
+// Radix's document scroll lock. They check routing only; native bounce and the scroll indicator need an
+// actual iPhone.
+async function syntheticMovePrevented(target, { edge = 'top', dy = edge === 'top' ? 30 : -30, fingers = 1 } = {}) {
+  return target.evaluate((el, { edge, dy, fingers }) => {
+    el.scrollTop = edge === 'top' ? 0 : el.scrollHeight;
+    const r = el.getBoundingClientRect(), x = r.left + 20, y = r.top + r.height / 2;
+    const fire = (type, clientY) => {
+      const points = Array.from({ length: fingers }, (_, i) => ({ identifier: i, target: el, clientX: x + i * 40, clientY, pageX: x + i * 40, pageY: clientY, screenX: x + i * 40, screenY: clientY }));
+      const touch = new Event(type, { bubbles: true, cancelable: true, composed: true });
+      for (const key of ['touches', 'targetTouches', 'changedTouches']) Object.defineProperty(touch, key, { value: points });
+      el.dispatchEvent(touch); return touch.defaultPrevented;
+    };
+    fire('touchstart', y); return fire('touchmove', y + dy);
+  }, { edge, dy, fingers });
+}
+const injectOverflow = region => region.evaluate(el => { const p = document.createElement('p'); p.style.height = '1500px'; el.append(p); });
+
+for (const name of Object.keys(panels)) test(`${name}: overflowing scroll regions contain overscroll and leave edge moves to the browser`, async ({ page, harness }) => {
+  await page.setViewportSize({ width: 393, height: 600 }); await openRoute(page, harness, 'Scores');
+  const prefs = await settledPrefs(page);
+  await openPanel(page, name); const root = page.getByRole('dialog');
+  const region = root.locator('.app-panel-body'), heading = root.locator('.app-panel-heading');
+  const scrolling = el => { const s = getComputedStyle(el); return { overscroll: [s.overscrollBehaviorX, s.overscrollBehaviorY], overflowY: s.overflowY, scrollbarWidth: CSS.supports('scrollbar-width', 'auto') ? s.scrollbarWidth : 'auto' }; };
+  const native = { overscroll: ['contain', 'contain'], overflowY: 'auto', scrollbarWidth: 'auto' };
+  expect(await region.evaluate(scrolling)).toEqual(native);
+  expect(await heading.evaluate(scrolling)).toEqual(native);
+  // Short content stays with the lock.
+  const short = await page.addStyleTag({ content: '.app-panel-body > * { display: none !important; }' });
+  expect(await syntheticMovePrevented(region)).toBe(true);
+  await short.evaluate(el => el.remove());
+  await injectOverflow(region);
+  expect(await syntheticMovePrevented(region)).toBe(false);
+  expect(await syntheticMovePrevented(region, { edge: 'bottom' })).toBe(false);
+  expect(await syntheticMovePrevented(region, { fingers: 2 })).toBe(false);
+  expect(await syntheticMovePrevented(page.locator('[data-slot="sheet-overlay"]'))).toBe(true);
+  expect(await syntheticMovePrevented(heading)).toBe(true);
+  await root.locator('[data-slot="sheet-title"]').evaluate(el => { el.textContent = 'Long accessible heading '.repeat(30); });
+  await expect(root.locator('.app-panel-header')).toHaveAttribute('data-heading-scrolls', 'true');
+  expect(await syntheticMovePrevented(heading)).toBe(false);
+  expect(await syntheticMovePrevented(heading, { edge: 'bottom' })).toBe(false);
+  await expect(root).toBeVisible(); expect((await root.boundingBox()).y).toBeCloseTo(24, 0);
+  expect(JSON.parse(await storedPrefs(page))).toEqual(JSON.parse(prefs)); expect(nonGetAlertRequests(harness)).toEqual([]);
+});
+
+// Baseline: Radix cancelled every cancelable outward move at a region's edge. Chromium's native touch input
+// now reaches both body edges and the heading's, reverses, and scrolls back with nothing prevented, while
+// the panel and the page behind it stay put. Event routing only; not bounce, indicator or iPhone proof.
+for (const name of Object.keys(panels)) test(`${name}: Chromium touch at body and heading edges is never cancelled`, async ({ page, harness, browserName }, info) => {
+  test.skip(browserName !== 'chromium', 'Touch dispatch requires Chromium CDP; native iPhone remains unverified');
+  await page.setViewportSize({ width: 393, height: 600 }); await openRoute(page, harness, 'Scores');
+  const prefs = await settledPrefs(page);
+  await openPanel(page, name); const root = page.getByRole('dialog');
+  const region = root.locator('.app-panel-body'), heading = root.locator('.app-panel-heading');
+  const cdp = await page.context().newCDPSession(page);
+  const send = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, radiusX: 2, radiusY: 2 }] });
+  // Document capture sees each move before a region's adapter stops it; a task later, once bubbling and
+  // Radix's lock are done with that same event, its final defaultPrevented is recorded.
+  await page.evaluate(() => { window.__moves = []; document.addEventListener('touchmove', e => { setTimeout(() => window.__moves.push({ cancelable: e.cancelable, prevented: e.defaultPrevented })); }, { capture: true, passive: true }); });
+  async function gesture(x, y, waypoints) {
+    await page.evaluate(() => { window.__moves.length = 0; });
+    await send('touchStart', x, y);
+    for (const [dx, dy] of waypoints) { await page.waitForTimeout(20); await send('touchMove', x + dx, y + dy); }
+    await send('touchEnd');
+    await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 50)));
+    const moves = await page.evaluate(() => window.__moves.slice());
+    return { cancelableAllowed: moves.some(m => m.cancelable && !m.prevented), prevented: moves.filter(m => m.prevented).length };
+  }
+  const unprevented = { cancelableAllowed: true, prevented: 0 };
+  // Outward past the edge, then reversed into the content.
+  const path = sign => [15, 30, 45, 60, 30, 0, -30, -60].map(d => [0, sign * d]);
+  async function settledScroll(locator) {
+    let last = -1;
+    await expect.poll(async () => { const now = await locator.evaluate(el => el.scrollTop); const same = now === last; last = now; return same; }).toBe(true);
+    return last;
+  }
+  const background = () => page.evaluate(() => [scrollX, scrollY]);
+  const behind = await background();
+  await injectOverflow(region); await region.evaluate(el => { el.scrollTop = 0; });
+  const b = await region.boundingBox(), x = b.x + 30, y = b.y + b.height / 2;
+  expect(await gesture(x, y, path(1))).toEqual(unprevented);
+  expect(await settledScroll(region)).toBeGreaterThan(0);
+  const bottom = await region.evaluate(el => { el.scrollTop = el.scrollHeight; return el.scrollTop; });
+  expect(await gesture(x, y, path(-1))).toEqual(unprevented);
+  expect(await settledScroll(region)).toBeLessThan(bottom);
+  // A sideways swipe on the body neither moves the panel nor reaches the page behind it.
+  const sideways = await gesture(b.x + b.width - 40, y, [[-30, 0], [-60, 2], [-90, 2], [-120, 4]]);
+  expect(sideways.prevented).toBe(0);
+  expect(await region.evaluate(el => el.scrollLeft)).toBe(0);
+  await root.locator('[data-slot="sheet-title"]').evaluate(el => { el.textContent = 'Long accessible heading '.repeat(30); });
+  await expect(root.locator('.app-panel-header')).toHaveAttribute('data-heading-scrolls', 'true');
+  await heading.evaluate(el => { el.scrollTop = 0; });
+  const h = await heading.boundingBox();
+  expect(await gesture(h.x + 20, h.y + h.height / 2, path(1))).toEqual(unprevented);
+  expect(await settledScroll(heading)).toBeGreaterThan(0);
+  expect(await background()).toEqual(behind);
+  await expect(root).toBeVisible(); expect((await root.boundingBox()).y).toBeCloseTo(24, 0);
+  expect(JSON.parse(await storedPrefs(page))).toEqual(JSON.parse(prefs)); expect(nonGetAlertRequests(harness)).toEqual([]);
+  await cdp.detach();
+  await info.attach('touch-scope', { body: 'Chromium CDP native input routing only; native bounce and scroll indicator unverified, not iPhone', contentType: 'text/plain' });
+});
+
+// A nested confirmation hides the Settings panel; its overflowing body then stays under the scroll lock,
+// and the adapter resumes once the confirmation closes and again on a fresh opening.
+test('a nested confirmation keeps the Settings body under the scroll lock until it closes', async ({ page, harness }) => {
+  harness.state.events = [...harness.state.events, duke('duke-away')];
+  await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  await openSettings(page, 'tap');
+  const region = page.locator('.app-panel-body');
+  const hidden = () => region.evaluate(el => !!el.closest('[aria-hidden="true"], [inert]'));
+  await injectOverflow(region);
+  expect(await syntheticMovePrevented(region)).toBe(false);
+  const confirm = page.getByRole('alertdialog', { name: 'Show this game only?', exact: true });
+  const keep = confirm.getByRole('button', { name: 'Keep hidden', exact: true });
+  await settings(page).getByRole('button', { name: 'Show Duke game on Sep 5', exact: true }).tap();
+  await expect(keep).toBeFocused();
+  await expect.poll(hidden).toBe(true);
+  expect(await syntheticMovePrevented(region)).toBe(true);
+  await page.evaluate(() => Promise.all([...document.querySelectorAll('[data-slot="alert-dialog-overlay"], [data-slot="alert-dialog-content"]')]
+    .flatMap(el => el.getAnimations({ subtree: true })).map(animation => animation.finished.catch(() => {}))));
+  await keep.tap();
+  await expect(confirm).toHaveCount(0);
+  await expect.poll(hidden).toBe(false);
+  expect(await syntheticMovePrevented(region)).toBe(false);
+  await closeButton(page).tap(); await expectClosed(page);
+  await openSettings(page, 'tap'); await injectOverflow(region);
+  expect(await syntheticMovePrevented(region)).toBe(false);
+  expect(JSON.parse(await storedPrefs(page))).toEqual(JSON.parse(before));
+});

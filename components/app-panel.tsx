@@ -8,6 +8,21 @@ import { cn } from "@/lib/utils";
 type AppPanelProps = Omit<ComponentProps<typeof SheetContent>, "side" | "showCloseButton" | "title"> & {
   title: ReactNode; description: ReactNode; bodyLabel: string; bodyClassName?: string;
 };
+// Radix's modal scroll lock cancels a touchmove that bubbles to its document listener at a scroll
+// region's edge, so the browser's own edge overscroll never starts there. While this panel is the open,
+// visible layer and the region actually overflows, a passive listener keeps a one-finger move from
+// reaching that listener; overscroll-behavior: contain keeps it from chaining to the page. It never
+// cancels, scrolls or moves anything. Short content, two fingers, a panel under a nested modal and
+// browsers without containment stay with the lock; touchstart and wheel are untouched.
+function leaveEdgeTouchToBrowser(node: HTMLElement) {
+  const onTouchMove = (event: TouchEvent) => {
+    if (event.touches.length !== 1 || node.scrollHeight <= node.clientHeight + 1 || !CSS.supports("overscroll-behavior", "contain")) return;
+    if (node.closest('[role="dialog"]')?.getAttribute("data-state") !== "open" || node.closest('[aria-hidden="true"], [inert]')) return;
+    event.stopPropagation();
+  };
+  node.addEventListener("touchmove", onTouchMove, { passive: true });
+  return () => node.removeEventListener("touchmove", onTouchMove);
+}
 // Settings, Alerts and Help share one fixed-height bottom sheet (#116): a pinned header whose one
 // labeled Close opens focused, and a named body that scrolls on its own only when content overflows.
 // Opt-in, so the generic Sheet and the Guide's contextual bottom sheet are unchanged.
@@ -52,6 +67,12 @@ export function AppPanelContent({ title, description, bodyLabel, bodyClassName, 
     observer.observe(node, { attributes: true, attributeFilter: ["data-state"], attributeOldValue: true });
     return () => { observer.disconnect(); panel.current = null; queueMicrotask(() => { if (!node.isConnected) resetDrag(); }); };
   }, [resetDrag, focusFromTop]);
+  // The body keeps its ref for focusFromTop; cleanup clears it only while it still names this node.
+  const bodyRef = useCallback((node: HTMLElement | null) => {
+    body.current = node; if (!node) return;
+    const release = leaveEdgeTouchToBrowser(node);
+    return () => { release(); if (body.current === node) body.current = null; };
+  }, []);
   function startDrag(event: PointerEvent<HTMLDivElement>) {
     if (!event.isPrimary) { resetDrag(); return; }
     if (event.button !== 0 || drag.current) return;
@@ -87,7 +108,8 @@ export function AppPanelContent({ title, description, bodyLabel, bodyClassName, 
     if (!node) return;
     const observer = new ResizeObserver(() => setHeadingScrolls(node.scrollHeight > node.clientHeight + 1));
     observer.observe(node); for (const child of node.children) observer.observe(child);
-    return () => observer.disconnect();
+    const release = leaveEdgeTouchToBrowser(node);
+    return () => { observer.disconnect(); release(); };
   }, []);
   return <SheetContent {...props} ref={panelRef} data-dragging={dragging || undefined} style={{ ...props.style, translate: `0 ${offset}px` }} side="bottom" showCloseButton={false} className={cn("app-panel", className)} onOpenAutoFocus={event => {
     // Record this opening's trigger: the one control whose aria-controls names this dialog, which
@@ -106,6 +128,6 @@ export function AppPanelContent({ title, description, bodyLabel, bodyClassName, 
     if (document.activeElement === target) event.preventDefault();
   }}>
     <SheetHeader className="app-panel-header" data-heading-scrolls={headingScrolls || undefined} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={resetDrag} onLostPointerCapture={() => { if (drag.current) resetDrag(); }}><div className="app-panel-grip" aria-hidden="true"><span /></div><div ref={heading} className="app-panel-heading" {...headingScrolls ? { role: "region", "aria-label": "Title and description", tabIndex: 0 } : {}}><SheetTitle>{title}</SheetTitle><SheetDescription>{description}</SheetDescription></div><SheetClose ref={close} tabIndex={0} className="app-panel-close" aria-label="Close"><X size={20} aria-hidden="true" /></SheetClose></SheetHeader>
-    <section ref={body} className={cn("app-panel-body", bodyClassName)} aria-label={bodyLabel} tabIndex={0}>{children}</section>
+    <section ref={bodyRef} className={cn("app-panel-body", bodyClassName)} aria-label={bodyLabel} tabIndex={0}>{children}</section>
   </SheetContent>;
 }

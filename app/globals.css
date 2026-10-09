@@ -225,13 +225,13 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .app-panel-header[data-heading-scrolls] { touch-action: auto; }
 .app-panel-header[data-heading-scrolls] .app-panel-grip { height: 44px; }
 /* Only an unusually tall heading (very large text) scrolls, beside the fixed Close, so the body keeps its room. */
-.app-panel-heading { flex: 1 1 10rem; display: flex; flex-direction: column; gap: 4px; min-width: 0; max-height: 30vh; max-height: 30dvh; overflow-y: auto; overscroll-behavior-y: none; touch-action: pinch-zoom; padding-top: 9px; overflow-wrap: anywhere; }
+.app-panel-heading { flex: 1 1 10rem; display: flex; flex-direction: column; gap: 4px; min-width: 0; max-height: 30vh; max-height: 30dvh; overflow-y: auto; overscroll-behavior: contain; touch-action: pinch-zoom; padding-top: 9px; overflow-wrap: anywhere; }
 .app-panel-header[data-heading-scrolls] .app-panel-heading { touch-action: pan-y pinch-zoom; }
 .app-panel-heading:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
 .app-panel-heading [data-slot="sheet-title"] { font-size: 23px; font-weight: 720; line-height: 1.3; }
 .app-panel-close { flex: none; margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; border: 1px solid #34435a; border-radius: 50%; background: #182131; color: #edf4ff; }
 .app-panel-close:hover { background: #1f2b3e; }
-.app-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior-y: none; touch-action: pan-y pinch-zoom; overflow-wrap: anywhere; padding: 0 max(24px, calc(var(--safe-right) - var(--app-panel-offset))) max(calc(env(safe-area-inset-bottom) + 24px), 32px) max(24px, calc(var(--safe-left) - var(--app-panel-offset))); }
+.app-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y pinch-zoom; overflow-wrap: anywhere; padding: 0 max(24px, calc(var(--safe-right) - var(--app-panel-offset))) max(calc(env(safe-area-inset-bottom) + 24px), 32px) max(24px, calc(var(--safe-left) - var(--app-panel-offset))); }
 .app-panel-body:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 .display-details { position: relative; margin: 8px 0; font-size: 14px; }
 .display-details summary { min-height: 44px; padding: 10px 0; cursor: pointer; color: #edf4ff; font-weight: 650; }
