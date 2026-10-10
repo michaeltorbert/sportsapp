@@ -2,13 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import ServerExitReporter from "./browser/server-exit-reporter.mjs";
 import { anomalyText, readServerState, recordUnavailable, serverFailureMessage } from "../scripts/browser-server-diagnostics.mjs";
 
 const supervisor = resolve("scripts/browser-test-server.mjs");
+// Playwright runs webServer.command through a POSIX shell; quote each argv token.
+const shellQuote = arg => "'" + arg.replaceAll("'", "'\\''") + "'";
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(check, timeoutMs = 5000) {
   const end = Date.now() + timeoutMs;
@@ -154,17 +156,26 @@ test("reporter signals once on confirmed exit and reports failure, not on normal
 test("Playwright stops after the first supervised server exit", async t => {
   const root = resolve("output/playwright");
   mkdirSync(root, { recursive: true });
-  const dir = mkdtempSync(join(root, "fault-"));
+  const dir = mkdtempSync(join(root, "fault with space and 'quote-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
+  // Force both command paths to contain spaces and an apostrophe even in CI.
+  const scripts = join(dir, "scripts with space");
+  symlinkSync(resolve("scripts"), scripts, "dir");
+  const spacedSupervisor = join(scripts, "browser-test-server.mjs");
   const runId = "fault-injection";
   const evidence = join(dir, "server");
   const marker = join(dir, "second-test-ran");
   const fake = join(dir, "fake-server.mjs");
+  for (const path of [spacedSupervisor, fake]) {
+    assert.match(path, / /);
+    assert.match(path, /'/);
+  }
   writeFileSync(fake, `console.log('READY'); setTimeout(() => process.exit(3), 1500);\n`);
   const spec = join(dir, "fault.spec.mjs");
   writeFileSync(spec, `import { test } from '@playwright/test';\nimport { writeFileSync } from 'node:fs';\ntest('waits while server crashes', async () => { await new Promise(resolve => setTimeout(resolve, 10000)); });\ntest('must not run after crash', async () => { writeFileSync(${JSON.stringify(marker)}, 'ran'); });\n`);
+  const command = [process.execPath, spacedSupervisor, "--", process.execPath, fake].map(shellQuote).join(" ");
   const config = join(dir, "playwright.config.mjs");
-  writeFileSync(config, `import { defineConfig } from '@playwright/test';\nexport default defineConfig({ testDir: ${JSON.stringify(dir)}, testMatch: 'fault.spec.mjs', outputDir: ${JSON.stringify(join(dir, "results"))}, workers: 1, retries: 0, timeout: 15000, reporter: [['list'], [${JSON.stringify(resolve("tests/browser/server-exit-reporter.mjs"))}]], metadata: { browserRunId: ${JSON.stringify(runId)}, serverDiagnosticsDir: ${JSON.stringify(evidence)} }, webServer: { command: ${JSON.stringify(`node ${supervisor} -- node ${fake}`)}, wait: { stdout: /READY/ }, timeout: 10000, reuseExistingServer: false, gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 }, env: { BROWSER_TEST_RUN_ID: ${JSON.stringify(runId)}, BROWSER_TEST_STATE_DIR: ${JSON.stringify(evidence)} } } });\n`);
+  writeFileSync(config, `import { defineConfig } from '@playwright/test';\nexport default defineConfig({ testDir: ${JSON.stringify(dir)}, testMatch: 'fault.spec.mjs', outputDir: ${JSON.stringify(join(dir, "results"))}, workers: 1, retries: 0, timeout: 15000, reporter: [['list'], [${JSON.stringify(resolve("tests/browser/server-exit-reporter.mjs"))}]], metadata: { browserRunId: ${JSON.stringify(runId)}, serverDiagnosticsDir: ${JSON.stringify(evidence)} }, webServer: { command: ${JSON.stringify(command)}, wait: { stdout: /READY/ }, timeout: 10000, reuseExistingServer: false, gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 }, env: { BROWSER_TEST_RUN_ID: ${JSON.stringify(runId)}, BROWSER_TEST_STATE_DIR: ${JSON.stringify(evidence)} } } });\n`);
   const runner = spawn(process.execPath, [resolve("node_modules/playwright/cli.js"), "test", "--config", config], {
     cwd: resolve("."),
     env: { ...process.env, BROWSER_TEST_STOP_ON_SERVER_EXIT: "1" },
