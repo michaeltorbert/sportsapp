@@ -253,6 +253,50 @@ test('revealing from Settings uses a nested confirmation that Cancel and Escape 
   await expect(page.locator('#game-duke-away')).toBeVisible();
 });
 
+// Issue #123 copy as actual pixels. A fixture v1 save with per-game values produces the one-time
+// migration notice; each new block is scrolled fully into the Settings body and captured full-screen.
+const LEGACY_KEY = 'ss:duke-visibility:v1';
+const MIGRATION_NOTICE = 'Spoiler protection now hides away games only once they start. Your earlier hide and show choices for individual Duke games were cleared; your default was kept.';
+const SPOILER_HELP = 'Hiding away games once they start keeps home and neutral-site games visible. An away game stays visible until play begins, even if kickoff is delayed, then stays hidden through the final until you show it.';
+const SPOILER_SCOPE = 'Applies to games that haven’t started. Once its kickoff time passes, a delayed game picks up the change only if the app has loaded it when you choose. Games already under way or finished, or individually hidden or shown, keep their setting.';
+const seedLegacyPrefs = page => page.addInitScript(([key, value]) => localStorage.setItem(key, value), [LEGACY_KEY, JSON.stringify({ version: 1, rules: [{ from: 0, mode: 'away' }], overrides: { 'duke-away': false, 'older-game': true } })]);
+async function captureSpoilerCopy(page, testInfo, label) {
+  await expect(settings(page).getByRole('radio', { name: 'Hide away games once they start', exact: true })).toBeChecked();
+  const blocks = [
+    ['migration notice', settings(page).getByRole('status').filter({ hasText: MIGRATION_NOTICE })],
+    ['default choices', settings(page).getByRole('group', { name: 'For future Duke games', exact: true })],
+    ['default help', settings(page).getByText(SPOILER_HELP, { exact: true })],
+    ['default scope', settings(page).getByText(SPOILER_SCOPE, { exact: true })],
+  ];
+  for (const [name, block] of blocks) {
+    await expect(block).toHaveCount(1);
+    // Scroll only the Settings body, leaving the block 8px below its top edge where content allows.
+    await block.evaluate(el => { const body = el.closest('.app-panel-body'); body.scrollTop += el.getBoundingClientRect().top - body.getBoundingClientRect().top - 8; });
+    await expect.poll(() => block.evaluate(el => {
+      const b = el.closest('.app-panel-body').getBoundingClientRect(), r = el.getBoundingClientRect();
+      return r.top >= b.top - .5 && r.bottom <= b.bottom + .5 && r.left >= b.left - .5 && r.right <= b.right + .5;
+    }), { message: `${name} lies fully inside the Settings body` }).toBe(true);
+    expect((await bodyState(page)).horizontal).toBeLessThanOrEqual(0);
+    await testInfo.attach(`${label}: ${name}`, { body: await page.screenshot(), contentType: 'image/png' });
+  }
+  expectBottomSheet(await panelGeometry(page, 'Settings'));
+  expect(await closeState(page)).toMatchObject({ inViewport: true, hit: true, clearOfTitle: true });
+}
+
+test('320px phone: migration notice, default choices and spoiler copy are captured fully in view', async ({ page, harness }, testInfo) => {
+  harness.state.events = [...harness.state.events, duke('duke-away')];
+  await seedLegacyPrefs(page);
+  await page.setViewportSize({ width: 320, height: 568 });
+  await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  expect(JSON.parse(before)).toMatchObject({ manual: {}, remembered: { 'duke-away': true } });
+  await openSettings(page, 'tap');
+  await captureSpoilerCopy(page, testInfo, '320px phone');
+  await closeButton(page).tap();
+  await expectClosed(page);
+  expect(await storedPrefs(page)).toBe(before);
+});
+
 const layouts = [
   { name: '320px phone', width: 320, height: 568 },
   { name: 'short landscape phone', width: 844, height: 390 },
@@ -348,6 +392,18 @@ test.describe('desktop keyboard and mouse', () => {
       await page.mouse.wheel(0, 600);
       await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(0);
     }
+  });
+  test('desktop: migration notice, default choices and spoiler copy are captured fully in view', async ({ page, harness }, testInfo) => {
+    harness.state.events = [...harness.state.events, duke('duke-away')];
+    await seedLegacyPrefs(page);
+    await openRoute(page, harness, 'Scores');
+    expect(await page.evaluate(() => ({ maxTouchPoints: navigator.maxTouchPoints, viewport: [innerWidth, innerHeight] }))).toEqual({ maxTouchPoints: 0, viewport: [1280, 560] });
+    const before = await settledPrefs(page);
+    await openSettings(page, 'click');
+    await captureSpoilerCopy(page, testInfo, 'desktop 1280px');
+    await closeButton(page).click();
+    await expectClosed(page);
+    expect(await storedPrefs(page)).toBe(before);
   });
 });
 

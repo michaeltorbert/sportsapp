@@ -44,7 +44,8 @@ export function useDukeVisibility(games: Game[]) {
   };
   const setMode = (mode: DukeMode) => {
     setReadWarning(""); setMigrationNotice("");
-    if (current.current) commit(changeDukeDefault(rememberDukeGames(current.current, games), mode, Date.now()));
+    // Freeze started games under the old default, then record the new one for games still waiting.
+    if (current.current) commit(rememberDukeGames(changeDukeDefault(rememberDukeGames(current.current, games), mode, Date.now()), games));
   };
   return { prefs, setHidden, setMode, migrationNotice, storageWarning: [readWarning, storageWarning].filter(Boolean).join(" ") };
 }

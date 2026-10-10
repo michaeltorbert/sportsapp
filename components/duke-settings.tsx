@@ -33,7 +33,7 @@ export function DukeSettings({ games, visibility }: { games: Game[]; visibility:
       <p>Hide or show one matchup without changing your default. Hidden games stay hidden after the final whistle.</p>
       <fieldset disabled={!visibility.prefs}><legend>For future Duke games</legend>{modes.map(option => <label className="duke-mode" key={option.value}><input type="radio" name="duke-default" checked={mode === option.value} onChange={() => visibility.setMode(option.value)} />{option.label}</label>)}</fieldset>
       <p>Hiding away games once they start keeps home and neutral-site games visible. An away game stays visible until play begins, even if kickoff is delayed, then stays hidden through the final until you show it.</p>
-      <p>Applies to games that haven’t started. Games already under way or finished, or individually hidden or shown, keep their setting.</p>
+      <p>Applies to games that haven’t started. Once its kickoff time passes, a delayed game picks up the change only if the app has loaded it when you choose. Games already under way or finished, or individually hidden or shown, keep their setting.</p>
       <h3>Duke notifications</h3><p>Always off, even when you show a game.</p>
       <p className="settings-note">Each device has its own viewing preferences. Shown games include team records when ESPN provides them.</p>
       {visibility.storageWarning && <p role="alert">{visibility.storageWarning}</p>}
