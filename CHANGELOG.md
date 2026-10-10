@@ -1,5 +1,14 @@
 # Saturday Signal releases
 
+## 1.13.7 · 2026-10-10
+
+- Under the automatic default, now labeled "Hide away games once they start," a Duke game is hidden only when ESPN lists Duke as the away team, the venue is confirmed not neutral, and play has actually started (start evidence, or a live or final status). A passed kickoff time alone is not enough. Home and neutral-site games, games with unknown venue metadata, and upcoming or delayed games that have not started stay visible. This replaces the 1.7.0 default, which hid away and neutral-site games and games with unknown venue (#123, ORD-019).
+- A started away game stays hidden through the final, reloads and later status corrections until you show it. Always hide, Always show and per-game hide or show choices keep their existing behavior and take precedence over the automatic decision. A default you choose while a loaded game is still waiting to start, including through a delay, holds once play begins. A game this device never saw waiting keeps the default in effect at its scheduled kickoff; a default changed while a game was not loaded and already past kickoff does not reach it.
+- Duke preferences move to new device storage that keeps per-game choices separate from automatic decisions. The previous storage could not tell the two apart, so saved per-game hide and show values, including choices you made yourself, are cleared once, as the user approved. Your default and its history (automatic, Always hide or Always show) carry over unchanged. Settings shows a notice when values were cleared. Damaged saved preferences still hide Duke until you choose a new setting.
+- Daily and weekly lists, category counts, focused game links, Duke pinning and the Guide all follow the same visibility. Duke notifications stay off. Alerts, subscriptions, server data and configuration are unchanged, and no reinstall is needed.
+- Unit tests and Chromium and WebKit browser tests cover the venue, game-state, manual-choice, delay and migration cases with synthetic game data. Behavior is not confirmed on a physical device.
+- Tests and documentation: update the Duke visibility, Settings, Guide and compact scoreboard tests, and record ORD-019 and its accepted migration exception in `docs/ordering-decisions.md`.
+
 ## 1.13.6 · 2026-10-09
 
 - Settings, Alerts and Help share one fixed sheet height that reaches 12px below the top safe-area inset (at least 24px from the top), replacing the 1.13.5 content-sized sheet capped at 90% of the viewport, so all three match whatever their content. The sheet stays anchored at the bottom; the pinned header, icon-only Close and independently scrolling body are unchanged (#116).
