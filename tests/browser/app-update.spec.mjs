@@ -7,6 +7,37 @@ async function mockHealth(page, initial = B) {
   await page.route("**/api/health", route => { state.count++; return route.fulfill({ status: state.fail ? 503 : 200, json: { version: "1", commit: state.commit } }); });
   return state;
 }
+// Regression gate (#141): the app receives a health response only after the
+// test reads the consumed-body counter, i.e. once it waits for consumption. A
+// test that advances fake time first meets the slow-renderer case: the response
+// is still pending and the updater's 10 s abort discards it. Playwright leaves
+// init-script order undefined, so the gate holds fetch, not the observer's
+// Response.json, and the counter accessor works whichever script runs first.
+// Bodies are counted only after the app parses a released response. Results and
+// rejections are unchanged; an aborted request's response is released at once.
+async function holdHealthBodiesUntilAwaited(page) {
+  await page.addInitScript(() => {
+    const isHealth = url => new URL(url, location.href).pathname === "/api/health";
+    const held = [];
+    const fetchOriginal = window.fetch;
+    window.fetch = (input, options) => {
+      const pending = fetchOriginal.call(window, input, options);
+      if (!isHealth(input instanceof Request ? input.url : String(input))) return pending;
+      pending.catch(() => {});
+      return new Promise((resolve, reject) => {
+        let released = false;
+        const release = () => { if (!released) { released = true; pending.then(resolve, reject); } };
+        const signal = options?.signal;
+        if (signal?.aborted) release(); else { held.push(release); signal?.addEventListener("abort", release, { once: true }); }
+      });
+    };
+    let consumed = window.__healthBodiesConsumed;
+    Object.defineProperty(window, "__healthBodiesConsumed", { configurable: true, set(value) { consumed = value; }, get() {
+      for (const release of held.splice(0)) release();
+      return consumed;
+    } });
+  });
+}
 async function detect(page, state) {
   expect(state.fail, "Update detection requires a successful health response").toBe(false);
   await consumeHealthAfter(page, () => page.clock.fastForward(3100));
@@ -15,9 +46,9 @@ async function detect(page, state) {
 }
 test("confirms twice, dismisses per target, manual override shares Help owner and failure is truthful", async ({ page, harness }, testInfo) => {
   const state = await mockHealth(page); await harness.open();
-  await page.clock.fastForward(3100); await expect.poll(() => state.count).toBe(1);
+  await consumeHealthAfter(page, () => page.clock.fastForward(3100)); expect(state.count).toBe(1);
   await expect(page.getByRole("button", { name: "Refresh app", exact: true })).toHaveCount(0);
-  await page.clock.fastForward(10100); await expect(page.locator(".app-update")).toContainText("An app update is available.");
+  await consumeHealthAfter(page, () => page.clock.fastForward(10100)); await expect(page.locator(".app-update")).toContainText("An app update is available.");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: `output/playwright/updater-${testInfo.project.name}.png`, fullPage: true });
   await page.getByRole("button", { name: "Later", exact: true }).click();
@@ -86,16 +117,23 @@ test("failed explicit verification stays open; returning loaded identity clears 
   state.fail = false; state.commit = loaded;
   await page.clock.fastForward(300_000); await expect(page.locator(".app-update")).toHaveCount(0);
 });
-test("suspends while hidden and coalesces resume events; new target gets its own confirmation", async ({ page, harness }) => {
-  const state = await mockHealth(page); await harness.open();
-  await page.evaluate(() => Object.defineProperty(document, "hidden", { configurable: true, value: true }));
-  await page.clock.fastForward(310_000); expect(state.count).toBe(0);
-  await page.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, value: false }); window.dispatchEvent(new Event("focus")); window.dispatchEvent(new Event("online")); window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })); document.dispatchEvent(new Event("visibilitychange")); });
-  await expect.poll(() => state.count).toBe(1);
-  state.commit = C; await page.clock.fastForward(10100); await expect.poll(() => state.count).toBeGreaterThanOrEqual(2);
-  await expect(page.locator(".app-update")).toHaveCount(0);
-  await page.clock.fastForward(10100); await expect(page.locator(".app-update")).toBeVisible();
-});
+// A request count proves only that the route ran. Each fake-time jump waits for
+// the app to consume the previous health body; otherwise the request's 10 s
+// abort can fire inside the jump and discard the candidate (#141).
+for (const held of [false, true]) {
+  test(`suspends while hidden and coalesces resume events; new target gets its own confirmation${held ? " (health bodies held until awaited)" : ""}`, async ({ page, harness }) => {
+    if (held) await holdHealthBodiesUntilAwaited(page);
+    const state = await mockHealth(page); await harness.open();
+    await page.evaluate(() => Object.defineProperty(document, "hidden", { configurable: true, value: true }));
+    await page.clock.fastForward(310_000); expect(state.count).toBe(0);
+    await consumeHealthAfter(page, () => page.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, value: false }); window.dispatchEvent(new Event("focus")); window.dispatchEvent(new Event("online")); window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })); document.dispatchEvent(new Event("visibilitychange")); }));
+    expect(state.count).toBe(1);
+    state.commit = C; await consumeHealthAfter(page, () => page.clock.fastForward(10100)); expect(state.count).toBe(2);
+    await expect(page.locator(".app-update")).toHaveCount(0);
+    await consumeHealthAfter(page, () => page.clock.fastForward(10100)); expect(state.count).toBe(3);
+    await expect(page.locator(".app-update")).toBeVisible();
+  });
+}
 test("update keeps notification-only Watchlist membership, never rescrolls, and tolerates denied storage", async ({ page, harness }) => {
   const { event } = await import("./fixtures.mjs");
   harness.state.events = [event("notification-only", { scores: [0, 28] })];
@@ -330,19 +368,22 @@ for (const mode of ["hidden", "offline"]) {
   }
 }
 
-test("persisted pageshow alone resumes updater checks (simulated lifecycle, not real BFCache)", async ({ page, harness }) => {
-  const state = await mockHealth(page); await harness.open();
-  await page.evaluate(() => Object.defineProperty(document, "hidden", { configurable: true, value: true }));
-  await page.clock.fastForward(310_000);
-  expect(state.count).toBe(0);
-  await page.evaluate(() => {
-    Object.defineProperty(document, "hidden", { configurable: true, value: false });
-    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+for (const held of [false, true]) {
+  test(`persisted pageshow alone resumes updater checks (simulated lifecycle, not real BFCache)${held ? " (health bodies held until awaited)" : ""}`, async ({ page, harness }) => {
+    if (held) await holdHealthBodiesUntilAwaited(page);
+    const state = await mockHealth(page); await harness.open();
+    await page.evaluate(() => Object.defineProperty(document, "hidden", { configurable: true, value: true }));
+    await page.clock.fastForward(310_000);
+    expect(state.count).toBe(0);
+    await consumeHealthAfter(page, () => page.evaluate(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, value: false });
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    }));
+    expect(state.count).toBe(1);
+    await expectStable(() => expect(state.count).toBe(1));
+    await expect(page.locator(".app-update")).toHaveCount(0);
+    await consumeHealthAfter(page, () => page.clock.fastForward(10100)); expect(state.count).toBe(2);
+    await expect(page.locator(".app-update")).toBeVisible();
+    expect(harness.state.alertRequests.filter(request => request.method !== "GET")).toEqual([]);
   });
-  await expect.poll(() => state.count).toBe(1);
-  await expectStable(() => expect(state.count).toBe(1));
-  await expect(page.locator(".app-update")).toHaveCount(0);
-  await page.clock.fastForward(10100);
-  await expect(page.locator(".app-update")).toBeVisible();
-  expect(harness.state.alertRequests.filter(request => request.method !== "GET")).toEqual([]);
-});
+}
