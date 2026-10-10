@@ -8,7 +8,7 @@
 import { devices } from '@playwright/test';
 import { test, expect, event, category } from './fixtures.mjs';
 
-const KEY = 'ss:duke-visibility:v1';
+const KEY = 'ss:duke-visibility:v2';
 function duke(id, { home = false, neutral = false, date = '2026-09-05T23:30:00Z' } = {}) {
   const game = event(id, { acc: true, date }); game.competitions[0].neutralSite = neutral;
   const team = game.competitions[0].competitors[home ? 1 : 0].team; team.id = '150'; team.shortDisplayName = 'Duke'; team.abbreviation = 'DUKE';
@@ -151,7 +151,7 @@ test('without a Duke game, Close takes initial focus and keyboard scrolling chan
   await expect(body(page)).toBeFocused();
   await page.keyboard.press('PageDown');
   await page.keyboard.press('ArrowDown');
-  await expect(settings(page).getByRole('radio', { name: 'Hide away and neutral-site games', exact: true })).toBeChecked();
+  await expect(settings(page).getByRole('radio', { name: 'Hide away games once they start', exact: true })).toBeChecked();
   await page.keyboard.press('Escape');
   await expectClosed(page);
   expect(await storedPrefs(page)).toBe(before);
@@ -182,7 +182,7 @@ test('with a visible Duke game, opening Settings never hides it; a deliberate Sp
   await page.keyboard.press('Escape');
   await expectClosed(page);
   await expect(page.locator('#game-duke-home')).toHaveCount(0);
-  expect(JSON.parse(await storedPrefs(page)).overrides['duke-home']).toBe(true);
+  expect(JSON.parse(await storedPrefs(page)).manual['duke-home']).toBe(true);
 });
 
 test('deliberate default choices save immediately and survive close, reopen and reload', async ({ page, harness }) => {
@@ -225,7 +225,7 @@ test('revealing from Settings uses a nested confirmation that Cancel and Escape 
   // nested layer is fully mounted before any key or tap reaches it.
   async function openConfirm() {
     await reveal.tap();
-    await expect(confirm).toContainText('Your default stays “Hide away and neutral-site games.” Duke notifications stay off.');
+    await expect(confirm).toContainText('Your default stays “Hide away games once they start.” Duke notifications stay off.');
     await expect(confirm.getByRole('button', { name: 'Keep hidden', exact: true })).toBeFocused();
     await page.evaluate(() => Promise.all([...document.querySelectorAll('[data-slot="alert-dialog-overlay"], [data-slot="alert-dialog-content"]')]
       .flatMap(el => el.getAnimations({ subtree: true })).map(animation => animation.finished.catch(() => {}))));
@@ -245,9 +245,9 @@ test('revealing from Settings uses a nested confirmation that Cancel and Escape 
   await expect(confirm).toHaveCount(0);
   await expect(settings(page).getByRole('button', { name: 'Hide Duke game on Sep 5', exact: true })).toBeFocused();
   await expect(settings(page).getByText('Shown for this game only', { exact: true })).toBeVisible();
-  await expect(settings(page).getByRole('radio', { name: 'Hide away and neutral-site games', exact: true })).toBeChecked();
+  await expect(settings(page).getByRole('radio', { name: 'Hide away games once they start', exact: true })).toBeChecked();
   await expect(settings(page)).toContainText('Always off, even when you show a game.');
-  expect(JSON.parse(await storedPrefs(page))).toEqual({ ...before, overrides: { ...before.overrides, 'duke-away': false } });
+  expect(JSON.parse(await storedPrefs(page))).toEqual({ ...before, manual: { ...before.manual, 'duke-away': false } });
   await closeButton(page).tap();
   await expectClosed(page);
   await expect(page.locator('#game-duke-away')).toBeVisible();
