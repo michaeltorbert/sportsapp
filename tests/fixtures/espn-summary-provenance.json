@@ -1,0 +1,43 @@
+{
+ "generatedBy": "Minimized from genuine public ESPN summary captures taken 2026-10-10 (issue #115 evidence). Hashes identify the original capture bytes.",
+ "fixtures": {
+  "espn-summary-live.json": {
+   "capture": "espn-live-401856717.json",
+   "eventId": "401856717",
+   "status": "STATUS_IN_PROGRESS",
+   "captureSha256": "7f8d5a6eb253cf119f366e8676880b94d200c9787be87f656a6f5f48a758155a",
+   "captureBytes": 385391,
+   "fixtureSha256": "b286a966e4703f6e6edddc754915695cfa8fc7e47c97505432f20d1a5f2d1a82",
+   "fixtureBytes": 13741
+  },
+  "espn-summary-final.json": {
+   "capture": "espn-final-401858481.json",
+   "eventId": "401858481",
+   "status": "STATUS_FINAL",
+   "captureSha256": "58d2267880acae78a212b0659c39b6a713523f8a60510619930b51e0e1824722",
+   "captureBytes": 438479,
+   "fixtureSha256": "7b2092975d6d4dc3e2f83694f0eb6e53304b8757a983d14ab180fec772c3265a",
+   "fixtureBytes": 12902
+  },
+  "espn-summary-pregame.json": {
+   "capture": "espn-pregame-401856715.json",
+   "eventId": "401856715",
+   "status": "STATUS_SCHEDULED",
+   "captureSha256": "633ed353a9f2c5e89c1167c95ba79f2e612dfd51635c4cbe403fd70b1ab9ff25",
+   "captureBytes": 116964,
+   "fixtureSha256": "cdbb438f8ca4636b0e74e706339e6b81e7655e1a4b4fe28583f58d0e3c6cbfdd",
+   "fixtureBytes": 2875
+  }
+ },
+ "minimization": [
+  "Kept header identity, competition date/status and competitor team IDs/abbreviations only.",
+  "Kept boxscore team statistics (name, displayValue, value, label) and passing/rushing/receiving player categories with keys, labels, descriptions, totals and row stats unchanged.",
+  "Athlete names and IDs replaced with sequential synthetic values; negative team-attributed IDs and their source names are kept.",
+  "Dropped odds, pickcenter, againstTheSpread, predictor, winprobability, news, videos, drives, leaders, standings, logos and all other person metadata."
+ ],
+ "notes": [
+  "Live capture is a genuine IN_PROGRESS 3rd-quarter observation: passing has 6 keys (trailing adjQBR) with 5 labels/descriptions/values.",
+  "Final capture has 6 passing keys, labels and values.",
+  "No genuine halftime capture exists; halftime, overtime, delay, suspension, correction and malformed cases in tests are synthetic and labeled there."
+ ]
+}

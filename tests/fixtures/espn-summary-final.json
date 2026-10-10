@@ -1,0 +1,731 @@
+{
+ "header": {
+  "id": "401858481",
+  "competitions": [
+   {
+    "id": "401858481",
+    "date": "2026-10-10T16:00Z",
+    "status": {
+     "type": {
+      "id": "3",
+      "name": "STATUS_FINAL",
+      "state": "post",
+      "completed": true,
+      "description": "Final",
+      "detail": "Final",
+      "shortDetail": "Final"
+     }
+    },
+    "competitors": [
+     {
+      "id": "158",
+      "homeAway": "home",
+      "score": "17",
+      "team": {
+       "id": "158",
+       "abbreviation": "NEB"
+      }
+     },
+     {
+      "id": "84",
+      "homeAway": "away",
+      "score": "20",
+      "team": {
+       "id": "84",
+       "abbreviation": "IU"
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "boxscore": {
+  "teams": [
+   {
+    "team": {
+     "id": "84",
+     "abbreviation": "IU"
+    },
+    "homeAway": "away",
+    "statistics": [
+     {
+      "name": "firstDowns",
+      "displayValue": "13",
+      "value": 13.0,
+      "label": "1st Downs"
+     },
+     {
+      "name": "thirdDownEff",
+      "displayValue": "1-10",
+      "value": 0.1,
+      "label": "3rd down efficiency"
+     },
+     {
+      "name": "fourthDownEff",
+      "displayValue": "1-1",
+      "value": 1,
+      "label": "4th down efficiency"
+     },
+     {
+      "name": "totalYards",
+      "displayValue": "328",
+      "value": "-",
+      "label": "Total Yards"
+     },
+     {
+      "name": "netPassingYards",
+      "displayValue": "263",
+      "value": 263.0,
+      "label": "Passing"
+     },
+     {
+      "name": "completionAttempts",
+      "displayValue": "12/22",
+      "value": "-",
+      "label": "Comp/Att"
+     },
+     {
+      "name": "yardsPerPass",
+      "displayValue": "12.0",
+      "value": 11.955,
+      "label": "Yards per pass"
+     },
+     {
+      "name": "rushingYards",
+      "displayValue": "65",
+      "value": 65.0,
+      "label": "Rushing"
+     },
+     {
+      "name": "rushingAttempts",
+      "displayValue": "22",
+      "value": 22.0,
+      "label": "Rushing Attempts"
+     },
+     {
+      "name": "yardsPerRushAttempt",
+      "displayValue": "3.0",
+      "value": 2.955,
+      "label": "Yards per rush"
+     },
+     {
+      "name": "totalPenaltiesYards",
+      "displayValue": "3-35",
+      "value": "-",
+      "label": "Penalties"
+     },
+     {
+      "name": "turnovers",
+      "displayValue": "0",
+      "value": "-",
+      "label": "Turnovers"
+     },
+     {
+      "name": "fumblesLost",
+      "displayValue": "0",
+      "value": 0.0,
+      "label": "Fumbles lost"
+     },
+     {
+      "name": "interceptions",
+      "displayValue": "0",
+      "value": 0.0,
+      "label": "Interceptions thrown"
+     },
+     {
+      "name": "possessionTime",
+      "displayValue": "20:27",
+      "value": 1227,
+      "label": "Possession"
+     }
+    ]
+   },
+   {
+    "team": {
+     "id": "158",
+     "abbreviation": "NEB"
+    },
+    "homeAway": "home",
+    "statistics": [
+     {
+      "name": "firstDowns",
+      "displayValue": "25",
+      "value": 25.0,
+      "label": "1st Downs"
+     },
+     {
+      "name": "thirdDownEff",
+      "displayValue": "10-19",
+      "value": 0.5263157895,
+      "label": "3rd down efficiency"
+     },
+     {
+      "name": "fourthDownEff",
+      "displayValue": "1-3",
+      "value": 0.3333333333,
+      "label": "4th down efficiency"
+     },
+     {
+      "name": "totalYards",
+      "displayValue": "391",
+      "value": "-",
+      "label": "Total Yards"
+     },
+     {
+      "name": "netPassingYards",
+      "displayValue": "263",
+      "value": 263.0,
+      "label": "Passing"
+     },
+     {
+      "name": "completionAttempts",
+      "displayValue": "25/44",
+      "value": "-",
+      "label": "Comp/Att"
+     },
+     {
+      "name": "yardsPerPass",
+      "displayValue": "6.0",
+      "value": 5.977,
+      "label": "Yards per pass"
+     },
+     {
+      "name": "rushingYards",
+      "displayValue": "128",
+      "value": 128.0,
+      "label": "Rushing"
+     },
+     {
+      "name": "rushingAttempts",
+      "displayValue": "39",
+      "value": 39.0,
+      "label": "Rushing Attempts"
+     },
+     {
+      "name": "yardsPerRushAttempt",
+      "displayValue": "3.3",
+      "value": 3.282,
+      "label": "Yards per rush"
+     },
+     {
+      "name": "totalPenaltiesYards",
+      "displayValue": "7-59",
+      "value": "-",
+      "label": "Penalties"
+     },
+     {
+      "name": "turnovers",
+      "displayValue": "1",
+      "value": "-",
+      "label": "Turnovers"
+     },
+     {
+      "name": "fumblesLost",
+      "displayValue": "0",
+      "value": 0.0,
+      "label": "Fumbles lost"
+     },
+     {
+      "name": "interceptions",
+      "displayValue": "1",
+      "value": 1.0,
+      "label": "Interceptions thrown"
+     },
+     {
+      "name": "possessionTime",
+      "displayValue": "39:33",
+      "value": 2373,
+      "label": "Possession"
+     }
+    ]
+   }
+  ],
+  "players": [
+   {
+    "team": {
+     "id": "84",
+     "abbreviation": "IU"
+    },
+    "statistics": [
+     {
+      "name": "passing",
+      "keys": [
+       "completions/passingAttempts",
+       "passingYards",
+       "yardsPerPassAttempt",
+       "passingTouchdowns",
+       "interceptions",
+       "adjQBR"
+      ],
+      "labels": [
+       "C/ATT",
+       "YDS",
+       "AVG",
+       "TD",
+       "INT",
+       "QBR"
+      ],
+      "descriptions": [
+       "Completions/Attempts",
+       "Yards",
+       "Yards Per Pass Attempt",
+       "Touchdowns",
+       "Interceptions",
+       "Adjusted QBR"
+      ],
+      "totals": [
+       "12/22",
+       "263",
+       "12.0",
+       "2",
+       "0",
+       "--"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "9000001",
+         "displayName": "Player A1"
+        },
+        "stats": [
+         "12/22",
+         "263",
+         "12.0",
+         "2",
+         "0",
+         "94.3"
+        ]
+       }
+      ]
+     },
+     {
+      "name": "rushing",
+      "keys": [
+       "rushingAttempts",
+       "rushingYards",
+       "yardsPerRushAttempt",
+       "rushingTouchdowns",
+       "longRushing"
+      ],
+      "labels": [
+       "CAR",
+       "YDS",
+       "AVG",
+       "TD",
+       "LONG"
+      ],
+      "descriptions": [
+       "Rushing Attempts",
+       "Yards",
+       "Yards Per Rushing Attempt",
+       "Touchdowns",
+       "Longest Run"
+      ],
+      "totals": [
+       "22",
+       "65",
+       "3.0",
+       "0",
+       "16"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "9000002",
+         "displayName": "Player A2"
+        },
+        "stats": [
+         "9",
+         "31",
+         "3.4",
+         "0",
+         "12"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "9000001",
+         "displayName": "Player A1"
+        },
+        "stats": [
+         "5",
+         "24",
+         "4.8",
+         "0",
+         "16"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "9000003",
+         "displayName": "Player A3"
+        },
+        "stats": [
+         "8",
+         "10",
+         "1.3",
+         "0",
+         "4"
+        ]
+       }
+      ]
+     },
+     {
+      "name": "receiving",
+      "keys": [
+       "receptions",
+       "receivingYards",
+       "yardsPerReception",
+       "receivingTouchdowns",
+       "longReception"
+      ],
+      "labels": [
+       "REC",
+       "YDS",
+       "AVG",
+       "TD",
+       "LONG"
+      ],
+      "descriptions": [
+       "Receptions",
+       "Yards",
+       "Yards Per Reception",
+       "Touchdowns",
+       "Longest Reception"
+      ],
+      "totals": [
+       "12",
+       "263",
+       "21.9",
+       "2",
+       "75"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "9000004",
+         "displayName": "Player A4"
+        },
+        "stats": [
+         "6",
+         "187",
+         "31.2",
+         "2",
+         "75"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "9000005",
+         "displayName": "Player A5"
+        },
+        "stats": [
+         "3",
+         "52",
+         "17.3",
+         "0",
+         "43"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "9000006",
+         "displayName": "Player A6"
+        },
+        "stats": [
+         "2",
+         "21",
+         "10.5",
+         "0",
+         "13"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "9000007",
+         "displayName": "Player A7"
+        },
+        "stats": [
+         "1",
+         "3",
+         "3.0",
+         "0",
+         "3"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "team": {
+     "id": "158",
+     "abbreviation": "NEB"
+    },
+    "statistics": [
+     {
+      "name": "passing",
+      "keys": [
+       "completions/passingAttempts",
+       "passingYards",
+       "yardsPerPassAttempt",
+       "passingTouchdowns",
+       "interceptions",
+       "adjQBR"
+      ],
+      "labels": [
+       "C/ATT",
+       "YDS",
+       "AVG",
+       "TD",
+       "INT",
+       "QBR"
+      ],
+      "descriptions": [
+       "Completions/Attempts",
+       "Yards",
+       "Yards Per Pass Attempt",
+       "Touchdowns",
+       "Interceptions",
+       "Adjusted QBR"
+      ],
+      "totals": [
+       "25/44",
+       "263",
+       "6.0",
+       "0",
+       "1",
+       "--"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "9000008",
+         "displayName": "Player H8"
+        },
+        "stats": [
+         "25/43",
+         "263",
+         "6.1",
+         "0",
+         "1",
+         "73.8"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "-6842",
+         "displayName": " Team"
+        },
+        "stats": [
+         "0/1",
+         "0",
+         "0.0",
+         "0",
+         "0",
+         "--"
+        ]
+       }
+      ]
+     },
+     {
+      "name": "rushing",
+      "keys": [
+       "rushingAttempts",
+       "rushingYards",
+       "yardsPerRushAttempt",
+       "rushingTouchdowns",
+       "longRushing"
+      ],
+      "labels": [
+       "CAR",
+       "YDS",
+       "AVG",
+       "TD",
+       "LONG"
+      ],
+      "descriptions": [
+       "Rushing Attempts",
+       "Yards",
+       "Yards Per Rushing Attempt",
+       "Touchdowns",
+       "Longest Run"
+      ],
+      "totals": [
+       "39",
+       "128",
+       "3.3",
+       "2",
+       "39"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "9000009",
+         "displayName": "Player H9"
+        },
+        "stats": [
+         "15",
+         "53",
+         "3.5",
+         "0",
+         "13"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "9000008",
+         "displayName": "Player H8"
+        },
+        "stats": [
+         "17",
+         "47",
+         "2.8",
+         "1",
+         "39"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "9000010",
+         "displayName": "Player H10"
+        },
+        "stats": [
+         "4",
+         "18",
+         "4.5",
+         "0",
+         "10"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "9000011",
+         "displayName": "Player H11"
+        },
+        "stats": [
+         "2",
+         "10",
+         "5.0",
+         "1",
+         "10"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "9000012",
+         "displayName": "Player H12"
+        },
+        "stats": [
+         "1",
+         "0",
+         "0.0",
+         "0",
+         "0"
+        ]
+       }
+      ]
+     },
+     {
+      "name": "receiving",
+      "keys": [
+       "receptions",
+       "receivingYards",
+       "yardsPerReception",
+       "receivingTouchdowns",
+       "longReception"
+      ],
+      "labels": [
+       "REC",
+       "YDS",
+       "AVG",
+       "TD",
+       "LONG"
+      ],
+      "descriptions": [
+       "Receptions",
+       "Yards",
+       "Yards Per Reception",
+       "Touchdowns",
+       "Longest Reception"
+      ],
+      "totals": [
+       "25",
+       "263",
+       "10.5",
+       "0",
+       "28"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "9000013",
+         "displayName": "Player H13"
+        },
+        "stats": [
+         "9",
+         "108",
+         "12.0",
+         "0",
+         "23"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "9000014",
+         "displayName": "Player H14"
+        },
+        "stats": [
+         "7",
+         "45",
+         "6.4",
+         "0",
+         "12"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "9000011",
+         "displayName": "Player H11"
+        },
+        "stats": [
+         "5",
+         "43",
+         "8.6",
+         "0",
+         "24"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "9000010",
+         "displayName": "Player H10"
+        },
+        "stats": [
+         "1",
+         "36",
+         "36.0",
+         "0",
+         "28"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "9000015",
+         "displayName": "Player H15"
+        },
+        "stats": [
+         "3",
+         "31",
+         "10.3",
+         "0",
+         "14"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

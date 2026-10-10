@@ -51,6 +51,7 @@ try {
   assert.equal(guideRsc.status, 200);
   assert.match(guideRsc.headers.get("content-type") ?? "", /text\/x-component/);
   assert.equal((await fetch(origin + "/api/scores?date=invalid")).status, 400);
+  assert.equal((await fetch(origin + "/api/stats?event=invalid&phase=final")).status, 400);
   assert.equal((await fetch(origin + "/not-a-route")).status, 404);
   const rsc = await fetch(origin + "/.rsc", { headers: { RSC: "1", Accept: "text/x-component" } });
   assert.equal(rsc.status, 200);

@@ -22,6 +22,8 @@ import { useDukeVisibility } from "@/lib/use-duke-visibility";
 import { protectDukeBoard } from "@/lib/duke-visibility";
 import { AppNavigation } from "@/components/app-navigation";
 import { AppUpdateNotice } from "@/components/app-update";
+// Relative so page tests bundle the real panel (it renders nothing while collapsed).
+import { GameStatsPanel } from "../components/game-stats";
 
 const labels: Record<Category, string> = { acc: "ACC", top25: "Top 25", close: "One score", upset: "Upsets" };
 const names: Record<Category, string> = { acc: "ACC", top25: "Top 25", close: "One-score", upset: "Upset watch" };
@@ -55,7 +57,38 @@ function TeamRow({ team, game, opponent }: { team: Team; game: Game; opponent: T
     <span className={`score ${team.changed ? "score-changed" : ""}`} aria-label={`${team.name}${team.record ? `, ${team.record}` : ""}: ${game.started && team.score !== null ? team.score : "no score yet"}`}>{game.started && team.score !== null ? team.score : "–"}</span>
   </span>;
 }
+// A state change can move a card to another section, remounting it. Keyboard
+// focus returns to the same control only when it was inside this event's card
+// and was lost with the removed card; a deliberate blur or other focus is kept.
+let cardFocus: { gameId: string; key: string; element: Element } | null = null, trackingFocus = false;
+function trackCardFocus() {
+  if (trackingFocus) return;
+  trackingFocus = true;
+  document.addEventListener("focusin", event => {
+    const target = event.target instanceof Element ? event.target : null;
+    const control = target?.closest("[data-focus-key]"), card = target?.closest("article.game-card");
+    cardFocus = control && card ? { gameId: card.id.slice("game-".length), key: control.getAttribute("data-focus-key")!, element: control } : null;
+  });
+  // After focus settles: a control still connected was blurred deliberately and is not restorable.
+  document.addEventListener("focusout", () => {
+    const left = cardFocus?.element;
+    queueMicrotask(() => { if (left && cardFocus?.element === left && left.isConnected && document.activeElement !== left) cardFocus = null; });
+  });
+}
+function restoreCardFocus(card: HTMLElement | null, gameId: string) {
+  trackCardFocus();
+  const saved = cardFocus, active = document.activeElement;
+  if (!card || saved?.gameId !== gameId || saved.element.isConnected || (active && active !== document.body)) return;
+  const target = [...card.querySelectorAll<HTMLElement>("[data-focus-key]")].find(element => element.dataset.focusKey === saved.key);
+  if (!target) return;
+  target.focus({ preventScroll: true });
+  const box = target.getBoundingClientRect();
+  // Scroll only as far as needed to keep the restored control visible.
+  if (box.top < 0 || box.bottom > innerHeight) target.scrollIntoView({ block: "nearest" });
+}
 function GameCard({ game, board, scopeError, showDate = false, expanded, onExpanded }: { game: Game; board: Scoreboard; scopeError: boolean; showDate?: boolean; expanded: boolean; onExpanded: (open: boolean) => void }) {
+  const cardRef = useRef<HTMLElement>(null);
+  useEffect(() => restoreCardFocus(cardRef.current, game.id), [game.id]);
   const tags = classify(game), result = classify({ ...game, retainedCategories: undefined }), [away, home] = game.teams;
   const margin = away.score !== null && home.score !== null ? Math.abs(away.score - home.score) : null;
   const explanation = upsetExplanation(game), watch = upsetWatch(game);
@@ -64,9 +97,9 @@ function GameCard({ game, board, scopeError, showDate = false, expanded, onExpan
   const favorite = line?.favoriteId === away.id ? away : line?.favoriteId === home.id ? home : null;
   const lineLocation = linePlacement(game);
   const detailLine = lineLocation !== null && line && ((line.favoriteId === null && line.spread === 0) || (favorite && line.spread > 0));
-  return <article id={`game-${game.id}`} className={`game-card ${tags.upset ? "upset-card" : ""} ${game.state === "final" ? "final-card" : ""}`}>
+  return <article ref={cardRef} id={`game-${game.id}`} className={`game-card ${tags.upset ? "upset-card" : ""} ${game.state === "final" ? "final-card" : ""}`}>
     <details open={expanded} onToggle={event => { if (event.currentTarget.open !== expanded) onExpanded(event.currentTarget.open); }}>
-      <summary className="game-summary">
+      <summary className="game-summary" data-focus-key="summary">
         <span className="sr-only">Game details: </span>
         <span className="game-overview"><span className="teams"><TeamRow team={away} opponent={home} game={game} /><TeamRow team={home} opponent={away} game={game} /></span>
         <span className="game-meta">{showDate && <span className="game-day-label">{new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" }).format(new Date(game.date))}</span>}<span className={`game-status status-${game.state}`}>{game.state === "live" && <span className="live-dot" />}{game.state === "delayed" && <TriangleAlert size={14} />}{game.state === "upcoming" && game.timeValid ? localTime(game.date) : game.halftime && game.state === "live" ? <HalftimeStatus game={game} board={board} scopeError={scopeError} /> : game.status}</span>{lineLocation === "summary" && game.pregameLine?.favoriteId === null && game.pregameLine.spread === 0 && <span className="pickem-line" title={`Pregame line · ${game.pregameLine.source}`}><span className="sr-only">Pregame pick’em line, {game.pregameLine.source}</span><span aria-hidden="true">PK</span></span>}<span className="broadcast">{game.broadcast && <><Tv size={13} /><span>{game.broadcast}</span></>}</span>{tags.upset && <span className="compact-upset">{upsetLabel}</span>}{game.state === "live" && game.redZone && <span className="compact-red-zone">RED ZONE</span>}</span>
@@ -78,7 +111,8 @@ function GameCard({ game, board, scopeError, showDate = false, expanded, onExpan
     {result.upset && <div className="upset-reason"><Zap size={14} fill="currentColor" /><span>{explanation}</span></div>}
     {game.state === "live" && game.downDistance && <div className={`drive ${game.redZone ? "red-zone" : ""}`}>{game.redZone && <span>RED ZONE</span>}{game.downDistance}</div>}
     {game.state === "delayed" && <div className="delay-note">{game.started ? "Play paused. Watching for an update." : "Kickoff delayed. Watching for an update."}</div>}
-    <div className="card-bottom"><div className="badges">{tags.acc && <span className="badge acc-badge">ACC</span>}{tags.top25 && <span className="badge top25-badge">Top 25</span>}{tags.close && <span className="badge close-badge">{margin === 0 ? "Tied" : margin !== null && margin <= 8 ? `${margin}-point game` : "One-score watch"}</span>}{tags.upset && <span className="badge upset-badge">{upsetLabel}</span>}</div><a href={game.url} target="_blank" rel="noopener noreferrer" className="gamecast" aria-label={`Open ${away.name} vs ${home.name} on ESPN`}>Gamecast<ArrowUpRight size={14} /></a></div>
+    <GameStatsPanel game={game} expanded={expanded} />
+    <div className="card-bottom"><div className="badges">{tags.acc && <span className="badge acc-badge">ACC</span>}{tags.top25 && <span className="badge top25-badge">Top 25</span>}{tags.close && <span className="badge close-badge">{margin === 0 ? "Tied" : margin !== null && margin <= 8 ? `${margin}-point game` : "One-score watch"}</span>}{tags.upset && <span className="badge upset-badge">{upsetLabel}</span>}</div><a href={game.url} target="_blank" rel="noopener noreferrer" className="gamecast" data-focus-key="gamecast" aria-label={`Open ${away.name} vs ${home.name} on ESPN`}>Gamecast<ArrowUpRight size={14} /></a></div>
       </div>
     </details>
   </article>;
