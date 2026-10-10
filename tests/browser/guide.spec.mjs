@@ -535,7 +535,7 @@ test("Guide details keep Close and the title visible while long content scrolls"
     await dialog.evaluate(async el => {
       await Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})));
     });
-    expect(await region(page).evaluate(el => el.scrollLeft)).toBe(180);
+    expect(await page.locator(".guide-viewport").evaluate(el => el.scrollLeft)).toBe(180);
 
     const before = await page.evaluate(() => {
       const sheet = document.querySelector(".guide-details"), heading = sheet.querySelector('[data-slot="sheet-header"]');
