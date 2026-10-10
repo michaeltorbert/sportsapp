@@ -1,8 +1,17 @@
 import { readFileSync } from "node:fs";
 import { test, expect, event } from "./fixtures.mjs";
 import { observeHealthBodies, consumeHealthAfter } from "./health-sync.mjs";
-// ORD-010: the 80-event archive contains one hidden Duke away game; visible counts are 79.
 const archive = JSON.parse(readFileSync(new URL("../fixtures/guide-2026-09-12.json", import.meta.url)));
+// ORD-019: the 80-event archive's only Duke game, Duke at Illinois, is still scheduled and reports no
+// neutral-site value. Before play it stays listed under the automatic default, so all 80 are visible.
+// (ORD-010 hid it, and these counts were 79.) The archive Duke test after openGuide checks this
+// evidence and that the same game leaves the Guide once it has started with a confirmed away venue.
+const ARCHIVE_DUKE = "401858217";
+const ARCHIVE_COUNT = "80 games listed";
+async function expectArchiveListed(page) {
+  await expect(page.getByTestId("guide-count")).toContainText(ARCHIVE_COUNT);
+  await expect(page.locator(`.guide-game[data-game="${ARCHIVE_DUKE}"]`)).toBeVisible();
+}
 const region = page => page.getByRole("region", { name: "Network and time schedule" });
 const dateInput = page => page.getByLabel("Guide date, Eastern time");
 
@@ -98,6 +107,33 @@ async function openGuide(page, harness, options = {}) {
   await expect(page.getByRole("button", { name: "Refresh guide", exact: true })).toBeEnabled();
   await expect(page.getByTestId("guide-count")).toContainText("games listed");
 }
+
+test("ORD-019 archive Duke away game is listed before play and leaves the Guide once a confirmed away game starts", async ({ page, harness }) => {
+  const source = archive.events.filter(e => e.competitions[0].competitors.some(c => c.team.id === "150"));
+  expect(source.map(e => e.id)).toEqual([ARCHIVE_DUKE]);
+  expect(archive.events).toHaveLength(80);
+  const sourceCompetition = source[0].competitions[0];
+  expect(sourceCompetition.status.type.name).toBe("STATUS_SCHEDULED");
+  expect(sourceCompetition.competitors.find(c => c.team.id === "150").homeAway).toBe("away");
+  expect(sourceCompetition.neutralSite).toBeUndefined();
+  await openGuide(page, harness);
+  await expectArchiveListed(page);
+  const duke = harness.state.events.find(e => e.id === ARCHIVE_DUKE), competition = duke.competitions[0];
+  const start = () => {
+    duke.status = competition.status = { clock: 840, period: 1, type: { name: "STATUS_IN_PROGRESS", state: "in", completed: false, shortDetail: "14:00 - 1st" } };
+    for (const c of competition.competitors) c.score = c.team.id === "150" ? "7" : "0";
+  };
+  const refresh = page.getByRole("button", { name: "Refresh guide", exact: true });
+  // Started, but the archive has no venue value: unknown venue is outside the away-only rule (ORD-019 limitation).
+  start(); await refresh.click();
+  await expect(page.locator(`.guide-game[data-game="${ARCHIVE_DUKE}"]`)).toHaveAccessibleName(/Duke at Illinois.*14:00 - 1st/);
+  await expect(page.getByTestId("guide-count")).toContainText(ARCHIVE_COUNT);
+  // Synthetic confirmation of a non-neutral venue: the started away game is now hidden from bars and counts.
+  competition.neutralSite = false; await refresh.click();
+  await expect(page.locator(`.guide-game[data-game="${ARCHIVE_DUKE}"]`)).toHaveCount(0);
+  await expect(page.getByTestId("guide-count")).toContainText("79 games listed");
+  await expect(page.getByRole("button", { name: "Show Duke game on Sep 12", exact: true })).toBeVisible();
+});
 
 test("Guide URL owner preserves date/mode across reload, Back/Forward and app navigation without mode refetch", async ({ page, harness, baseURL }, testInfo) => {
   const guideRequests = [];
@@ -492,7 +528,7 @@ test("Back from Scores restores Guide date and pushed mode", async ({ page, harn
   const scoreRequests = harness.state.scoreRequests.length;
   await page.goBack();
   await expect(page.getByRole("button", { name: "All games", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByTestId("guide-count")).toContainText("79 games listed");
+  await expectArchiveListed(page);
   await page.goForward();
   await expect(page.getByRole("button", { name: "Watchlist only", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.waitForLoadState("networkidle");
@@ -531,7 +567,7 @@ test("offline Today reports one connection warning after both fetch scopes fail"
   await expect(page.getByRole("alert")).toHaveCount(1);
   await expect(page.getByRole("alert").locator("p")).toHaveText(["You're offline. Reconnect to refresh schedule."]);
   await expect(page.locator(".guide-overnight")).toHaveCount(0);
-  await expect(page.getByTestId("guide-count")).toContainText("79 games listed");
+  await expectArchiveListed(page);
 });
 
 
@@ -543,7 +579,7 @@ test("Guide date Back and Forward load the selected feed", async ({ page, harnes
   const requests = harness.state.scoreRequests.length;
   await page.goBack();
   await expect(dateInput(page)).toHaveValue("2026-09-12");
-  await expect(page.getByTestId("guide-count")).toContainText("79 games listed");
+  await expectArchiveListed(page);
   expect(harness.state.scoreRequests.length).toBeGreaterThan(requests);
   await page.goForward();
   await expect(dateInput(page)).toHaveValue("2026-09-13");
@@ -569,7 +605,7 @@ test("a failed retained day keeps its warning after another date also fails", as
   try {
     await page.goBack();
     await expect(dateInput(page)).toHaveValue("2026-09-12");
-    await expect(page.getByTestId("guide-count")).toContainText("79 games listed");
+    await expectArchiveListed(page);
     await expect(page.getByRole("alert")).toContainText("Could not refresh schedule");
     await expect(page.locator(".guide-feed")).toContainText("Last update");
   } finally { release(); }

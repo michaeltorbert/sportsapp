@@ -330,7 +330,10 @@ test.describe('device time distinct from Eastern date', () => {
 
 
 test('update restoration opens details while hidden Duke focus stays protected', async ({ page, harness }) => {
+  // ORD-019 hides only a started game with Duke as the confirmed away team. event() is live and
+  // started but omits neutralSite (unknown venue, which stays visible), so confirm the venue here.
   const duke = event('duke-hidden', { acc: true });
+  duke.competitions[0].neutralSite = false;
   duke.competitions[0].competitors[0].team.id = '150';
   duke.competitions[0].competitors[0].team.shortDisplayName = 'Duke';
   harness.state.events.push(duke);
@@ -340,6 +343,8 @@ test('update restoration opens details while hidden Duke focus stays protected',
   await expect(page.getByRole('button', { name: 'Refresh scores' })).toBeEnabled();
   await expect(page.locator('#game-duke-hidden')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Show Duke game on Sep 5', exact: true })).toBeVisible();
+  // The hash focus never opened it: protection comes from the automatic started-away decision.
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ss:duke-visibility:v2'))?.remembered)).toEqual({ 'duke-hidden': true });
 });
 
 test('delayed state remains visible and full explanation is disclosed', async ({ page, harness }) => {
