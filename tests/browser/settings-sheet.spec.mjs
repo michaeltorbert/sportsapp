@@ -2,7 +2,9 @@
 // reachable Close while its own body scrolls, and leave the page usable after.
 // Alerts and Help share the same panel, now a fixed-height bottom sheet, and the page keeps its
 // top safe-area spacing.
-// Touch contexts use real taps; synthesized touch *scrolling* is not exercised here.
+// Touch contexts use real taps; Chromium CDP input exercises heading/body scrolling.
+// Synthetic touch events check listener routing in both engines; these desktop tests
+// do not establish native iPhone scrolling, bounce or scroll-indicator behavior.
 import { devices } from '@playwright/test';
 import { test, expect, event, category } from './fixtures.mjs';
 
@@ -380,8 +382,6 @@ const panelGeometry = (page, name, safeTop = 0) => panel(page, name).evaluate((d
   return {
     top: d.top, left: d.left, right: d.right, bottom: d.bottom, width: d.width, height: d.height, viewport: { width: innerWidth, height: innerHeight },
     cap: innerHeight - Math.max(safeTop + 12, 24),
-    // The height the sheet would take with no cap: its header plus all of its body.
-    natural: parseFloat(s.borderTopWidth) + dialog.querySelector('.app-panel-header').getBoundingClientRect().height + body.scrollHeight,
     style: { background: s.backgroundColor, border: s.borderTopColor, borderTop: s.borderTopWidth, borderBottom: s.borderBottomWidth, radius: [s.borderTopLeftRadius, s.borderTopRightRadius, s.borderBottomLeftRadius, s.borderBottomRightRadius] },
     panelScrolls: dialog.scrollHeight > dialog.clientHeight + 1,
     close: { top: c.top, left: c.left, width: c.width, height: c.height, hit: !!hit && close.contains(hit), inViewport: c.top >= 0 && c.left >= 0 && c.bottom <= innerHeight + .5 && c.right <= innerWidth + .5 },
