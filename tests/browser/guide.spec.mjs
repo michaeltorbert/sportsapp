@@ -496,6 +496,9 @@ test("Guide Close has no touch ring and keeps its keyboard focus indicator and t
 
   const dialog = page.getByRole("dialog");
   const close = dialog.getByRole("button", { name: "Close", exact: true });
+  const settleDialog = () => dialog.evaluate(async el => {
+    await Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})));
+  });
   await expect(dialog).toBeVisible();
   await expect(close).toBeFocused();
   const touchFocus = await close.evaluate(el => ({
@@ -506,6 +509,7 @@ test("Guide Close has no touch ring and keeps its keyboard focus indicator and t
   expect(touchFocus.visible).toBe(false);
   expect(touchFocus.outlineStyle).toBe("none");
   expect(touchFocus.boxShadow).toBe("none");
+  await settleDialog();
   await testInfo.attach("guide-close-portrait-touch", { body: await page.screenshot(), contentType: "image/png" });
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
@@ -528,6 +532,7 @@ test("Guide Close has no touch ring and keeps its keyboard focus indicator and t
     const style = getComputedStyle(el);
     return (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0) || style.boxShadow !== "none";
   })).toBe(true);
+  await settleDialog();
   await testInfo.attach("guide-close-portrait-keyboard", { body: await page.screenshot(), contentType: "image/png" });
 
   await page.keyboard.press(shiftTab);
