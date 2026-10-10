@@ -2,7 +2,7 @@
 
 ## 1.13.8 · 2026-10-10
 
-- Keep the Guide details title and Close button pinned while the body scrolls. Touching the X no longer leaves a green outline, while keyboard focus indicators remain available. Add browser regressions for these interactions.
+- Keep the Guide details title and Close button pinned while the body scrolls. Opening game details by touch no longer outlines the X; keyboard focus indicators remain available. Browser regressions cover these interactions.
 
 ## 1.13.7 · 2026-10-10
 
