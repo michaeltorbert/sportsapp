@@ -124,15 +124,22 @@ test("a stats failure stays in the card; Retry waits for backoff, then one attem
 });
 
 const ZOOM = "html { zoom: 2; }";
-for (const [width, height, zoom] of [[393, 852, false], [440, 956, false], [820, 1180, false], [1180, 820, false], [1440, 1000, false], [393, 852, true]]) {
-  test(`no page-wide overflow with stats and players open at ${width}×${height}${zoom ? " with actual 200% CSS zoom" : ""}`, async ({ page, harness }, info) => {
+// Linux CI WebKit falls back to wider fonts than macOS; "wide" forces comparable metrics
+// (Verdana, else DejaVu Sans) so that layout risk is exercised on every platform.
+const WIDE_FONT = "*, *::before, *::after { font-family: Verdana, 'DejaVu Sans', sans-serif !important; }";
+for (const [width, height, zoom, wide] of [[393, 852, false], [440, 956, false], [820, 1180, false], [1180, 820, false], [1440, 1000, false], [393, 852, true], [393, 852, true, true]]) {
+  test(`no page-wide overflow with stats and players open at ${width}×${height}${zoom ? " with actual 200% CSS zoom" : ""}${wide ? " and wide fallback fonts" : ""}`, async ({ page, harness }, info) => {
     serve(harness);
     harness.state.events = [matchup(FINAL, { state: "final", scores: [20, 17] }), matchup(PREGAME, { state: "upcoming", rank: 9, date: "2026-09-06T01:00:00Z" })];
     await page.setViewportSize({ width, height });
     await harness.open();
     if (zoom) {
-      await page.addStyleTag({ content: ZOOM });
+      await page.addStyleTag({ content: ZOOM + (wide ? WIDE_FONT : "") });
       expect(await page.evaluate(() => getComputedStyle(document.documentElement).zoom)).toBe("2");
+      // The existing header navigation stays inside its row, with 44px targets, before any card opens.
+      expect(await noOverflow(page)).toBe(true);
+      const nav = await page.locator(".destination-nav").evaluate(el => { const box = el.getBoundingClientRect(), style = getComputedStyle(el); return { right: box.right - parseFloat(style.paddingRight), links: [...el.querySelectorAll("a")].map(a => { const b = a.getBoundingClientRect(); return { right: b.right, height: b.height }; }) }; });
+      for (const link of nav.links) { expect(link.right).toBeLessThanOrEqual(nav.right + 0.5); expect(link.height).toBeGreaterThanOrEqual(44); }
     }
     for (const id of [FINAL.id, PREGAME.id]) await page.locator(`#game-${id} summary`).tap();
     const card = page.locator(`#game-${FINAL.id}`);
@@ -146,7 +153,7 @@ for (const [width, height, zoom] of [[393, 852, false], [440, 956, false], [820,
       expect(await region.evaluate(el => getComputedStyle(el).overflowX)).toBe("auto");
       expect(await region.getAttribute("tabindex")).toBe("0");
     }
-    await page.screenshot({ path: info.outputPath(`stats-${width}x${height}${zoom ? "-zoom200" : ""}.png`), fullPage: true, animations: "disabled" });
+    await page.screenshot({ path: info.outputPath(`stats-${width}x${height}${zoom ? "-zoom200" : ""}${wide ? "-wide" : ""}.png`), fullPage: true, animations: "disabled" });
   });
 }
 
@@ -154,13 +161,13 @@ for (const [width, height, zoom] of [[393, 852, false], [440, 956, false], [820,
 // Mobile-emulated WebKit does not arrow-key scroll overflow regions; touch is its input there.
 test.describe("desktop hardware keyboard", () => {
   test.use({ isMobile: false, hasTouch: false, deviceScaleFactor: 1, userAgent: async ({ browserName }, provide) => provide(devices[browserName === "webkit" ? "Desktop Safari" : "Desktop Chrome"].userAgent) });
-  for (const [width, height, zoom] of [[320, 800, false], [393, 852, true]]) {
-    test(`Tab reaches the player-table region and arrow keys scroll only it at ${width}×${height}${zoom ? " with 200% CSS zoom" : ""}`, async ({ page, harness, browserName }, info) => {
+  for (const [width, height, zoom, wide] of [[320, 800, false], [393, 852, true], [393, 852, true, true]]) {
+    test(`Tab reaches the player-table region and arrow keys scroll only it at ${width}×${height}${zoom ? " with 200% CSS zoom" : ""}${wide ? " and wide fallback fonts" : ""}`, async ({ page, harness, browserName }, info) => {
       serve(harness);
       harness.state.events = [matchup(FINAL, { state: "final", scores: [20, 17] })];
       await page.setViewportSize({ width, height });
       await harness.open();
-      if (zoom) await page.addStyleTag({ content: ZOOM });
+      if (zoom) await page.addStyleTag({ content: ZOOM + (wide ? WIDE_FONT : "") });
       const card = page.locator(`#game-${FINAL.id}`);
       await card.locator("summary").focus(); await page.keyboard.press("Enter");
       const players = card.getByRole("button", { name: /Players/ });

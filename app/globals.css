@@ -149,6 +149,8 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 /* Guide: one spatial surface; only its viewport pans horizontally. */
 .destination-nav { display: flex; gap: 4px; padding: 8px 0; border-bottom: 1px solid #253044; }
 .destination-nav a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 19px; border-radius: 8px; color: #aebdd2; font-size: 14px; font-weight: 650; }
+/* At 200% zoom with wider fallback fonts (Linux WebKit), the links may give up side padding instead of overflowing the page. Without overflow this changes nothing. */
+.destination-nav a { min-width: 0; }
 .destination-nav a[aria-current="page"] { background: #253147; color: #fff; }
 .guide-shell { max-width: 1500px; padding-top: max(12px, calc(var(--safe-top) + min(var(--safe-top), 18px))); padding-left: max(env(safe-area-inset-left), 12px); padding-right: max(env(safe-area-inset-right), 12px); }
 .guide-shell .app-header { padding: 0 0 4px; }
