@@ -487,6 +487,89 @@ test("pointer tap and details return preserve horizontal pan while keyboard navi
   expect(bounds.x).toBeGreaterThanOrEqual(view.x + 79);
 });
 
+test("Guide details keep Close and the title visible while long content scrolls", async ({ page, harness }, testInfo) => {
+  const cases = [
+    { name: "short-landscape", width: 844, height: 390, largeText: false },
+    { name: "large-text-landscape", width: 844, height: 390, largeText: true },
+    { name: "very-short-landscape", width: 844, height: 330, largeText: false },
+    { name: "portrait", width: 390, height: 844, largeText: false },
+  ];
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const [index, size] of cases.entries()) {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    await openGuide(page, harness);
+    if (index === 0) {
+      const muted = await page.evaluate(() => {
+        const audio = document.createElement("audio");
+        document.body.append(audio);
+        audio.dispatchEvent(new Event("loadstart"));
+        const result = audio.muted;
+        audio.remove();
+        return result;
+      });
+      expect(muted, "the browser fixture mutes media before this non-audio case").toBe(true);
+    }
+    await region(page).evaluate(el => { el.scrollLeft = 180; el.scrollTop = 0; });
+    const opener = page.locator(".guide-game").first();
+    const view = await region(page).boundingBox(), openerBounds = await opener.boundingBox();
+    expect(openerBounds.x).toBeLessThan(view.x + 80);
+    await page.mouse.click(view.x + 105, openerBounds.y + openerBounds.height / 2);
+    const dialog = page.getByRole("dialog"), close = dialog.getByRole("button", { name: "Close", exact: true });
+    const title = dialog.locator('[data-slot="sheet-header"]'), body = dialog.locator(".guide-details-body");
+
+    if (size.largeText) {
+      const baseline = await dialog.evaluate(el => {
+        const selectors = ["[data-slot='sheet-title']", "[data-slot='sheet-description']", ".guide-details-body", ".guide-details-body a"];
+        return selectors.map(selector => ({ selector, size: parseFloat(getComputedStyle(el.querySelector(selector)).fontSize) }));
+      });
+      const css = baseline.map(({ selector, size: fontSize }) => `.guide-details ${selector} { font-size: ${fontSize * 2}px !important; }`).join("\n");
+      await page.addStyleTag({ content: css });
+      const enlarged = await dialog.evaluate(el => {
+        const selectors = ["[data-slot='sheet-title']", "[data-slot='sheet-description']", ".guide-details-body", ".guide-details-body a"];
+        return selectors.map(selector => parseFloat(getComputedStyle(el.querySelector(selector)).fontSize));
+      });
+      enlarged.forEach((fontSize, index) => expect(fontSize).toBeCloseTo(baseline[index].size * 2, 2));
+    }
+
+    await expect(dialog).toHaveAttribute("data-state", "open");
+    await dialog.evaluate(async el => {
+      await Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})));
+    });
+    expect(await region(page).evaluate(el => el.scrollLeft)).toBe(180);
+
+    const before = await page.evaluate(() => {
+      const sheet = document.querySelector(".guide-details"), heading = sheet.querySelector('[data-slot="sheet-header"]');
+      return { sheetTop: sheet.getBoundingClientRect().top, headingTop: heading.getBoundingClientRect().top };
+    });
+    const canScroll = await body.evaluate(el => el.scrollHeight > el.clientHeight);
+    if (size.name !== "portrait") expect(canScroll, `${size.name} content should have its own scroll range`).toBe(true);
+    if (canScroll) {
+      await body.evaluate(el => { el.scrollTop = el.scrollHeight; });
+      await expect.poll(() => body.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+      expect(await page.locator(".guide-details").evaluate(el => el.scrollTop)).toBe(0);
+    }
+    await expect(dialog.locator('[data-slot="sheet-title"]')).toBeVisible();
+    await expect(close).toBeVisible();
+    const after = await page.evaluate(() => {
+      const sheet = document.querySelector(".guide-details"), heading = sheet.querySelector('[data-slot="sheet-header"]');
+      return { sheetTop: sheet.getBoundingClientRect().top, headingTop: heading.getBoundingClientRect().top, close: sheet.querySelector("button").getBoundingClientRect().toJSON(), viewport: { width: innerWidth, height: innerHeight } };
+    });
+    expect(after.sheetTop).toBeCloseTo(before.sheetTop, 0);
+    expect(after.headingTop).toBeCloseTo(before.headingTop, 0);
+    expect(after.close.x).toBeGreaterThanOrEqual(0);
+    expect(after.close.y).toBeGreaterThanOrEqual(0);
+    expect(after.close.right).toBeLessThanOrEqual(after.viewport.width);
+    expect(after.close.bottom).toBeLessThanOrEqual(after.viewport.height);
+    await expect(dialog.getByRole("link", { name: /^Open Gamecast/ })).toBeVisible();
+    await testInfo.attach(`guide-details-${size.name}-bottom`, { body: await page.screenshot(), contentType: "image/png" });
+
+    await close.click();
+    await expect(dialog).toHaveCount(0);
+    await expect(opener).toBeFocused();
+    expect(await region(page).evaluate(el => el.scrollLeft)).toBe(180);
+  }
+});
+
 test("timeline allows vertical chaining to the text schedule while containing horizontal overscroll", async ({ page, harness, browserName }) => {
   await openGuide(page, harness);
   const styles = await region(page).evaluate(el => ({ x: getComputedStyle(el).overscrollBehaviorX, y: getComputedStyle(el).overscrollBehaviorY }));
