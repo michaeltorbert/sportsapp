@@ -487,6 +487,66 @@ test("pointer tap and details return preserve horizontal pan while keyboard navi
   expect(bounds.x).toBeGreaterThanOrEqual(view.x + 79);
 });
 
+test("Guide Close has no touch ring and keeps its keyboard focus indicator and trap", async ({ page, harness, browserName }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openGuide(page, harness);
+  const opener = page.locator(".guide-game").first();
+  const bounds = await opener.boundingBox();
+  await page.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+
+  const dialog = page.getByRole("dialog");
+  const close = dialog.getByRole("button", { name: "Close", exact: true });
+  const settleDialog = () => dialog.evaluate(async el => {
+    await Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})));
+  });
+  await expect(dialog).toBeVisible();
+  await expect(close).toBeFocused();
+  const touchFocus = await close.evaluate(el => ({
+    visible: el.matches(":focus-visible"),
+    outlineStyle: getComputedStyle(el).outlineStyle,
+    boxShadow: getComputedStyle(el).boxShadow,
+  }));
+  expect(touchFocus.visible).toBe(false);
+  expect(touchFocus.outlineStyle).toBe("none");
+  expect(touchFocus.boxShadow).toBe("none");
+  await settleDialog();
+  await testInfo.attach("guide-close-portrait-touch", { body: await page.screenshot(), contentType: "image/png" });
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+
+  await opener.focus();
+  // WebKit follows macOS's default preference to skip links and other controls
+  // on Tab; Option+Tab includes them and is the browser's native control path.
+  const tab = browserName === "webkit" ? "Alt+Tab" : "Tab";
+  const shiftTab = browserName === "webkit" ? "Alt+Shift+Tab" : "Shift+Tab";
+  await page.keyboard.press(tab);
+  await page.keyboard.press(shiftTab);
+  await expect(opener).toBeFocused();
+  await expect.poll(() => opener.evaluate(el => el.matches(":focus-visible"))).toBe(true);
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeVisible();
+  await expect(close).toBeFocused();
+  await expect.poll(() => close.evaluate(el => el.matches(":focus-visible"))).toBe(true);
+  await expect.poll(() => close.evaluate(el => {
+    const style = getComputedStyle(el);
+    return (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0) || style.boxShadow !== "none";
+  })).toBe(true);
+  await settleDialog();
+  await testInfo.attach("guide-close-portrait-keyboard", { body: await page.screenshot(), contentType: "image/png" });
+
+  await page.keyboard.press(shiftTab);
+  const lastAction = dialog.getByRole("link", { name: /^Open Gamecast/ });
+  await expect(lastAction).toBeFocused();
+  await expect.poll(() => lastAction.evaluate(el => el.matches(":focus-visible"))).toBe(true);
+  await page.keyboard.press(tab);
+  await expect(close).toBeFocused();
+  await expect.poll(() => close.evaluate(el => el.matches(":focus-visible"))).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
 test("Guide details keep Close and the title visible while long content scrolls", async ({ page, harness }, testInfo) => {
   const cases = [
     { name: "short-landscape", width: 844, height: 390, largeText: false },
