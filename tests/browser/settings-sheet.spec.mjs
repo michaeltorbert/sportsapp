@@ -8,7 +8,7 @@
 import { devices } from '@playwright/test';
 import { test, expect, event, category } from './fixtures.mjs';
 
-const KEY = 'ss:duke-visibility:v1';
+const KEY = 'ss:duke-visibility:v2';
 function duke(id, { home = false, neutral = false, date = '2026-09-05T23:30:00Z' } = {}) {
   const game = event(id, { acc: true, date }); game.competitions[0].neutralSite = neutral;
   const team = game.competitions[0].competitors[home ? 1 : 0].team; team.id = '150'; team.shortDisplayName = 'Duke'; team.abbreviation = 'DUKE';
@@ -151,7 +151,7 @@ test('without a Duke game, Close takes initial focus and keyboard scrolling chan
   await expect(body(page)).toBeFocused();
   await page.keyboard.press('PageDown');
   await page.keyboard.press('ArrowDown');
-  await expect(settings(page).getByRole('radio', { name: 'Hide away and neutral-site games', exact: true })).toBeChecked();
+  await expect(settings(page).getByRole('radio', { name: 'Hide away games once they start', exact: true })).toBeChecked();
   await page.keyboard.press('Escape');
   await expectClosed(page);
   expect(await storedPrefs(page)).toBe(before);
@@ -182,7 +182,7 @@ test('with a visible Duke game, opening Settings never hides it; a deliberate Sp
   await page.keyboard.press('Escape');
   await expectClosed(page);
   await expect(page.locator('#game-duke-home')).toHaveCount(0);
-  expect(JSON.parse(await storedPrefs(page)).overrides['duke-home']).toBe(true);
+  expect(JSON.parse(await storedPrefs(page)).manual['duke-home']).toBe(true);
 });
 
 test('deliberate default choices save immediately and survive close, reopen and reload', async ({ page, harness }) => {
@@ -225,7 +225,7 @@ test('revealing from Settings uses a nested confirmation that Cancel and Escape 
   // nested layer is fully mounted before any key or tap reaches it.
   async function openConfirm() {
     await reveal.tap();
-    await expect(confirm).toContainText('Your default stays “Hide away and neutral-site games.” Duke notifications stay off.');
+    await expect(confirm).toContainText('Your default stays “Hide away games once they start.” Duke notifications stay off.');
     await expect(confirm.getByRole('button', { name: 'Keep hidden', exact: true })).toBeFocused();
     await page.evaluate(() => Promise.all([...document.querySelectorAll('[data-slot="alert-dialog-overlay"], [data-slot="alert-dialog-content"]')]
       .flatMap(el => el.getAnimations({ subtree: true })).map(animation => animation.finished.catch(() => {}))));
@@ -245,12 +245,56 @@ test('revealing from Settings uses a nested confirmation that Cancel and Escape 
   await expect(confirm).toHaveCount(0);
   await expect(settings(page).getByRole('button', { name: 'Hide Duke game on Sep 5', exact: true })).toBeFocused();
   await expect(settings(page).getByText('Shown for this game only', { exact: true })).toBeVisible();
-  await expect(settings(page).getByRole('radio', { name: 'Hide away and neutral-site games', exact: true })).toBeChecked();
+  await expect(settings(page).getByRole('radio', { name: 'Hide away games once they start', exact: true })).toBeChecked();
   await expect(settings(page)).toContainText('Always off, even when you show a game.');
-  expect(JSON.parse(await storedPrefs(page))).toEqual({ ...before, overrides: { ...before.overrides, 'duke-away': false } });
+  expect(JSON.parse(await storedPrefs(page))).toEqual({ ...before, manual: { ...before.manual, 'duke-away': false } });
   await closeButton(page).tap();
   await expectClosed(page);
   await expect(page.locator('#game-duke-away')).toBeVisible();
+});
+
+// Issue #123 copy as actual pixels. A fixture v1 save with per-game values produces the one-time
+// migration notice; each new block is scrolled fully into the Settings body and captured full-screen.
+const LEGACY_KEY = 'ss:duke-visibility:v1';
+const MIGRATION_NOTICE = 'Spoiler protection now hides away games only once they start. Your earlier hide and show choices for individual Duke games were cleared; your default was kept.';
+const SPOILER_HELP = 'Hiding away games once they start keeps home and neutral-site games visible. An away game stays visible until play begins, even if kickoff is delayed, then stays hidden through the final until you show it.';
+const SPOILER_SCOPE = 'Applies to games that haven’t started. Once its kickoff time passes, a delayed game picks up the change only if the app has loaded it when you choose. Games already under way or finished, or individually hidden or shown, keep their setting.';
+const seedLegacyPrefs = page => page.addInitScript(([key, value]) => localStorage.setItem(key, value), [LEGACY_KEY, JSON.stringify({ version: 1, rules: [{ from: 0, mode: 'away' }], overrides: { 'duke-away': false, 'older-game': true } })]);
+async function captureSpoilerCopy(page, testInfo, label) {
+  await expect(settings(page).getByRole('radio', { name: 'Hide away games once they start', exact: true })).toBeChecked();
+  const blocks = [
+    ['migration notice', settings(page).getByRole('status').filter({ hasText: MIGRATION_NOTICE })],
+    ['default choices', settings(page).getByRole('group', { name: 'For future Duke games', exact: true })],
+    ['default help', settings(page).getByText(SPOILER_HELP, { exact: true })],
+    ['default scope', settings(page).getByText(SPOILER_SCOPE, { exact: true })],
+  ];
+  for (const [name, block] of blocks) {
+    await expect(block).toHaveCount(1);
+    // Scroll only the Settings body, leaving the block 8px below its top edge where content allows.
+    await block.evaluate(el => { const body = el.closest('.app-panel-body'); body.scrollTop += el.getBoundingClientRect().top - body.getBoundingClientRect().top - 8; });
+    await expect.poll(() => block.evaluate(el => {
+      const b = el.closest('.app-panel-body').getBoundingClientRect(), r = el.getBoundingClientRect();
+      return r.top >= b.top - .5 && r.bottom <= b.bottom + .5 && r.left >= b.left - .5 && r.right <= b.right + .5;
+    }), { message: `${name} lies fully inside the Settings body` }).toBe(true);
+    expect((await bodyState(page)).horizontal).toBeLessThanOrEqual(0);
+    await testInfo.attach(`${label}: ${name}`, { body: await page.screenshot(), contentType: 'image/png' });
+  }
+  expectBottomSheet(await panelGeometry(page, 'Settings'));
+  expect(await closeState(page)).toMatchObject({ inViewport: true, hit: true, clearOfTitle: true });
+}
+
+test('320px phone: migration notice, default choices and spoiler copy are captured fully in view', async ({ page, harness }, testInfo) => {
+  harness.state.events = [...harness.state.events, duke('duke-away')];
+  await seedLegacyPrefs(page);
+  await page.setViewportSize({ width: 320, height: 568 });
+  await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  expect(JSON.parse(before)).toMatchObject({ manual: {}, remembered: { 'duke-away': true } });
+  await openSettings(page, 'tap');
+  await captureSpoilerCopy(page, testInfo, '320px phone');
+  await closeButton(page).tap();
+  await expectClosed(page);
+  expect(await storedPrefs(page)).toBe(before);
 });
 
 const layouts = [
@@ -348,6 +392,18 @@ test.describe('desktop keyboard and mouse', () => {
       await page.mouse.wheel(0, 600);
       await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(0);
     }
+  });
+  test('desktop: migration notice, default choices and spoiler copy are captured fully in view', async ({ page, harness }, testInfo) => {
+    harness.state.events = [...harness.state.events, duke('duke-away')];
+    await seedLegacyPrefs(page);
+    await openRoute(page, harness, 'Scores');
+    expect(await page.evaluate(() => ({ maxTouchPoints: navigator.maxTouchPoints, viewport: [innerWidth, innerHeight] }))).toEqual({ maxTouchPoints: 0, viewport: [1280, 560] });
+    const before = await settledPrefs(page);
+    await openSettings(page, 'click');
+    await captureSpoilerCopy(page, testInfo, 'desktop 1280px');
+    await closeButton(page).click();
+    await expectClosed(page);
+    expect(await storedPrefs(page)).toBe(before);
   });
 });
 
