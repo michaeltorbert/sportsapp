@@ -1,5 +1,9 @@
 # Saturday Signal releases
 
+## 1.13.8 · 2026-10-10
+
+- Keep the Guide details title and Close button pinned while the body scrolls. Opening game details by touch no longer outlines the X; keyboard focus indicators remain available. Browser regressions cover these interactions.
+
 ## 1.13.7 · 2026-10-10
 
 - Under the automatic default, now labeled "Hide away games once they start," a Duke game is hidden only when ESPN lists Duke as the away team, the venue is confirmed not neutral, and play has actually started (start evidence, or a live or final status). A passed kickoff time alone is not enough. Home and neutral-site games, games with unknown venue metadata, and upcoming or delayed games that have not started stay visible. This replaces the 1.7.0 default, which hid away and neutral-site games and games with unknown venue (#123, ORD-019).
