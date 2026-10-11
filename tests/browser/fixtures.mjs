@@ -91,7 +91,7 @@ export const test = base.extend({
     appendEvidence(serverDiagnosticsDir, "test-timeline.jsonl", { event: "start", utc: startedAt, title: testInfo.title, file: testInfo.file, workerIndex: testInfo.workerIndex });
     const state = {
       events: standardEvents(), failScores: false, ready: true, failConfig: false,
-      active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 0, preferencesVersion: 1, sampleVersion: 1, failSave: false, conflict: false, alertRequests: [], scoreRequests: [], cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], unexpectedExternal: [], errors: [],
+      active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 0, preferencesVersion: 1, sampleVersion: 1, failSave: false, conflict: false, alertRequests: [], scoreRequests: [], cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], statsRequests: [], unexpectedExternal: [], errors: [],
     };
     const lifecycle = [];
     const recordLifecycle = event => {
@@ -150,6 +150,12 @@ export const test = base.extend({
           state.hostedScoreRequests.push(url.search);
           return json({ error: "simulated feed unavailable" }, 503);
         }
+        // Stats are intercepted too, so the local Worker never queries real ESPN.
+        // Tests opt in with state.stats(url, route); the default is a simulated outage.
+        if (url.pathname === "/api/stats") {
+          state.statsRequests.push(url.search);
+          return state.stats ? state.stats(url, route) : route.fulfill({ status: 503, contentType: "application/json", headers: { "Cache-Control": "no-store", "Retry-After": "300" }, body: JSON.stringify({ error: "simulated stats unavailable" }) });
+        }
         return route.continue();
       }
       state.unexpectedExternal.push(req.url());
@@ -191,7 +197,7 @@ export const test = base.extend({
       runtimeErrors: state.errors,
       simulated: ["ESPN responses", "alert-service responses", "notification permission", "PushManager", "service-worker registration", "installed standalone state"],
       // Even fake owner tokens stay out of attached evidence.
-      alertRequests: state.alertRequests.map(r => ({ ...r, authorization: r.authorization ? "[redacted]" : null })), scoreRequests: state.scoreRequests, cdnRequests: state.cdnRequests, hostedScoreRequests: state.hostedScoreRequests, unexpectedExternal: state.unexpectedExternal,
+      alertRequests: state.alertRequests.map(r => ({ ...r, authorization: r.authorization ? "[redacted]" : null })), scoreRequests: state.scoreRequests, cdnRequests: state.cdnRequests, hostedScoreRequests: state.hostedScoreRequests, statsRequests: state.statsRequests, unexpectedExternal: state.unexpectedExternal,
     }, null, 2) });
     // Soft assertions still fail the test while allowing every crash/runtime
     // check to report its evidence instead of stopping at the first failure.

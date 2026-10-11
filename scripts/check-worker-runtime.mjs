@@ -47,7 +47,11 @@ try {
   assert.equal(icon.status, 200);
   assert.equal(icon.headers.get("content-type"), "image/png");
   assert.equal((await fetchLocal("/api/scores?date=invalid")).status, 400);
-  console.log(JSON.stringify({ ...metadata, runtime: "workerd", checks: ["health", "home", "manifest", "service-worker", "icon", "score-route"], externalRequests: 0 }));
+  // Invalid stats input is rejected before any upstream request.
+  const stats = await fetchLocal("/api/stats?event=invalid&phase=final");
+  assert.equal(stats.status, 400);
+  assert.equal(stats.headers.get("cache-control"), "no-store");
+  console.log(JSON.stringify({ ...metadata, runtime: "workerd", checks: ["health", "home", "manifest", "service-worker", "icon", "score-route", "stats-route"], externalRequests: 0 }));
 } finally {
   const kill = signal => { try { process.kill(-child.pid, signal); } catch (error) { if (error.code !== "ESRCH") throw error; } };
   kill("SIGTERM");

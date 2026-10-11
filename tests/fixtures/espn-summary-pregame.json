@@ -1,0 +1,143 @@
+{
+ "header": {
+  "id": "401856715",
+  "competitions": [
+   {
+    "id": "401856715",
+    "date": "2026-10-10T23:00Z",
+    "status": {
+     "type": {
+      "id": "1",
+      "name": "STATUS_SCHEDULED",
+      "state": "pre",
+      "completed": false,
+      "description": "Scheduled",
+      "detail": "Sat, October 10th at 7:00 PM EDT",
+      "shortDetail": "10/10 - 7:00 PM EDT"
+     }
+    },
+    "competitors": [
+     {
+      "id": "96",
+      "homeAway": "home",
+      "team": {
+       "id": "96",
+       "abbreviation": "UK"
+      }
+     },
+     {
+      "id": "99",
+      "homeAway": "away",
+      "team": {
+       "id": "99",
+       "abbreviation": "LSU"
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "boxscore": {
+  "teams": [
+   {
+    "team": {
+     "id": "99",
+     "abbreviation": "LSU"
+    },
+    "homeAway": "away",
+    "statistics": [
+     {
+      "name": "totalPointsPerGame",
+      "displayValue": "43.6",
+      "label": "Points Per Game"
+     },
+     {
+      "name": "yardsPerGame",
+      "displayValue": "547.8",
+      "label": "Total Yards"
+     },
+     {
+      "name": "passingYardsPerGame",
+      "displayValue": "310.2",
+      "label": "Yards Passing"
+     },
+     {
+      "name": "rushingYardsPerGame",
+      "displayValue": "237.6",
+      "label": "Yards Rushing"
+     },
+     {
+      "name": "totalPointsPerGameAllowed",
+      "displayValue": "15.2",
+      "label": "Points Allowed Per Game"
+     },
+     {
+      "name": "yardsPerGameAllowed",
+      "displayValue": "220.6",
+      "label": "Yards Allowed"
+     },
+     {
+      "name": "passingYardsPerGameAllowed",
+      "displayValue": "162.2",
+      "label": "Pass Yards Allowed"
+     },
+     {
+      "name": "rushingYardsPerGameAllowed",
+      "displayValue": "58.4",
+      "label": "Rush Yards Allowed"
+     }
+    ]
+   },
+   {
+    "team": {
+     "id": "96",
+     "abbreviation": "UK"
+    },
+    "homeAway": "home",
+    "statistics": [
+     {
+      "name": "totalPointsPerGame",
+      "displayValue": "34.6",
+      "label": "Points Per Game"
+     },
+     {
+      "name": "yardsPerGame",
+      "displayValue": "416.8",
+      "label": "Total Yards"
+     },
+     {
+      "name": "passingYardsPerGame",
+      "displayValue": "229.6",
+      "label": "Yards Passing"
+     },
+     {
+      "name": "rushingYardsPerGame",
+      "displayValue": "187.2",
+      "label": "Yards Rushing"
+     },
+     {
+      "name": "totalPointsPerGameAllowed",
+      "displayValue": "26.8",
+      "label": "Points Allowed Per Game"
+     },
+     {
+      "name": "yardsPerGameAllowed",
+      "displayValue": "376.6",
+      "label": "Yards Allowed"
+     },
+     {
+      "name": "passingYardsPerGameAllowed",
+      "displayValue": "232.4",
+      "label": "Pass Yards Allowed"
+     },
+     {
+      "name": "rushingYardsPerGameAllowed",
+      "displayValue": "144.2",
+      "label": "Rush Yards Allowed"
+     }
+    ]
+   }
+  ],
+  "players": []
+ }
+}
