@@ -91,18 +91,26 @@ test('text logo fallbacks stay inside their boxes at 200 percent text', async ({
   }
 });
 
-// The game screen's score area and line row stay inside the page at every width.
+// The game screen's score area and line row stay inside the page at every width. The score header
+// refits itself after a text-size or zoom change on the next frame, so the same bounds are polled.
 async function screenFits(page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  expect(await page.locator('.game-screen').evaluate(screen => {
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect.poll(() => page.locator('.game-screen').evaluate(screen => {
     const problems = [], edge = screen.getBoundingClientRect();
     for (const el of screen.querySelectorAll('.mh-name, .mh-meta, .mh-score, .mh-status, .detail-line, .detail-line > [aria-hidden], .drive, .game-context')) {
       const box = el.getBoundingClientRect();
       if (el.scrollWidth > el.clientWidth + 1) problems.push(`${el.className || el.tagName} overflows`);
       if (box.left < edge.left - 1 || box.right > edge.right + 1) problems.push(`${el.className || el.tagName} leaves the screen`);
     }
+    // A name or record never runs under a score or the other team.
+    for (const el of screen.querySelectorAll('.mh-name, .mh-meta')) {
+      const box = el.getBoundingClientRect(), column = el.closest('.mh-team').getBoundingClientRect();
+      if (box.left < column.left - 1 || box.right > column.right + 1) problems.push(`${el.className} leaves its team column`);
+    }
     return problems;
   })).toEqual([]);
+  // Full names stay whole text, never truncated.
+  for (const el of await page.locator('.game-screen .mh-name').all()) expect(await el.evaluate(node => getComputedStyle(node).textOverflow)).not.toBe('ellipsis');
 }
 const openScreen = async (page, id) => { await page.locator(`#game-${id} a.game-summary`).tap(); await expect(page.locator('.game-screen')).toBeVisible(); };
 const closeScreen = async page => { await page.locator('.game-screen').getByRole('button', { name: /^Back to scores/ }).tap(); await expect(page.locator('.game-screen')).toHaveCount(0); };

@@ -73,7 +73,9 @@ test("refresh preserves actual notification view without rescroll or alert mutat
   await page.getByRole("button", { name: "Next day" }).click();
   await page.getByRole("button", { name: /^Upsets/ }).click();
   await detect(page, state);
-  await page.getByRole("button", { name: "Refresh app", exact: true }).click();
+  // The notification hash was already consumed, so wait for the update's own document load.
+  const navigation = page.waitForEvent("load");
+  await page.getByRole("button", { name: "Refresh app", exact: true }).click(); await navigation;
   await expect.poll(() => new URL(page.url()).hash).toBe("");
   await expect(page.getByRole("button", { name: /^Upsets/ })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "false");
@@ -167,7 +169,9 @@ test("update keeps notification-only Watchlist membership, never rescrolls, and 
   await page.getByRole("button", { name: "Check for app update", exact: true }).click();
   await page.clock.fastForward(2100);
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("button", { name: "Refresh app", exact: true }).click();
+  // The notification hash was already consumed, so wait for the update's own document load.
+  const navigation = page.waitForEvent("load");
+  await page.getByRole("button", { name: "Refresh app", exact: true }).click(); await navigation;
   await expect.poll(() => new URL(page.url()).hash).toBe("");
   await expect(page.locator("#game-notification-only")).toBeVisible();
   await expect(page.getByLabel("Hide finals")).toBeChecked();

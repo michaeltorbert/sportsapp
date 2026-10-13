@@ -104,21 +104,40 @@ export function ownedTraversal(pathname: string, source: RouteEntry | null, targ
 
 type HistoryLike = { readonly state: unknown; pushState(data: unknown, unused: string, url?: string | null): void; replaceState(data: unknown, unused: string, url?: string | null): void };
 type Target = { addEventListener(type: string, listener: (event: Event) => void, options?: boolean | AddEventListenerOptions): void; removeEventListener(type: string, listener: (event: Event) => void, options?: boolean | EventListenerOptions): void };
-export type RouteWindow = Target & { location: { pathname: string; href: string }; history: HistoryLike; navigation?: Target };
+type Listener = (event: Event) => void;
+export type RouteWindow = Target & { location: { pathname: string; href: string }; history: HistoryLike; navigation?: Target; __ssPopstate?: unknown; __ssPopstateHandler?: Listener | null };
 export type Traversal = { target: RouteEntry | null; source: RouteEntry | null; owned: boolean };
 
 /**
+ * Registered from the root layout's HTML on every route, before the framework's
+ * entry script runs. Why: in browser runs, owned Back traversals reached the
+ * framework's popstate handler in Chromium but not WebKit, although our listener
+ * was a capture listener added after hydration. That is consistent with Chromium
+ * running window-targeted listeners in registration order, but it was inferred
+ * from outcomes, not observed in a listener timeline, and is not claimed as
+ * general browser behavior. Registering first does not depend on that ordering
+ * rule either way; the browser tests prove this mitigation, not the cause.
+ * It is still a capture listener and inert by itself: it forwards only to the
+ * handler the mounted Scores page installs, which acts only when both entries
+ * are its own validated root entries. History is not patched.
+ */
+export const EARLY_POPSTATE_SCRIPT = "(()=>{const w=window;if(w.__ssPopstate)return;w.__ssPopstate=e=>{const h=w.__ssPopstateHandler;if(typeof h===\"function\")h(e)};w.addEventListener(\"popstate\",w.__ssPopstate,true)})();";
+
+/**
  * Root-owned history for the scoreboard and game screen. One capture-phase
- * `popstate` listener on window runs before the framework's bubble listeners
- * (capture listeners fire first at the target). It handles a traversal only
- * when both the entry being left and the target are validated entries of ours
- * on `/`; it then stops the event so no RSC navigation or document load runs,
- * and re-commits the URL through the public `history.replaceState`, which the
- * framework patches to keep its own URL consumers current. Every other
- * traversal, including the Guide and framework entries, is left untouched.
- * Nothing about `history` is patched.
+ * `popstate` listener on window runs before the framework's listeners: the
+ * early one from the root layout's HTML (any first route), else one added on
+ * mount as a fallback for a document without it. It
+ * handles a traversal only when both the entry being left and the target are
+ * validated entries of ours on `/`; it then stops the event so no RSC
+ * navigation or document load runs, and re-commits the URL through the public
+ * `history.replaceState`, which the framework patches to keep its own URL
+ * consumers current. Every other traversal, including the Guide and framework
+ * entries, is left untouched. Nothing about `history` is patched.
  */
 export function createRouteHistory(win: RouteWindow, onTraverse: (traversal: Traversal) => void) {
+  // The early hook is in every server-rendered document; the late listener is only a fallback.
+  const early = typeof win.__ssPopstate === "function";
   let current = readEntry(win.history.state);
   const resync = () => { current = readEntry(win.history.state); };
   const popstate = (event: Event) => {
@@ -136,12 +155,13 @@ export function createRouteHistory(win: RouteWindow, onTraverse: (traversal: Tra
   const entryChange = (event: Event) => { if ((event as Event & { navigationType?: string }).navigationType !== "traverse") resync(); };
   return {
     install() {
-      win.addEventListener("popstate", popstate, { capture: true });
+      if (early) win.__ssPopstateHandler = popstate; else win.addEventListener("popstate", popstate, { capture: true });
       win.addEventListener("hashchange", resync);
       win.navigation?.addEventListener("currententrychange", entryChange);
     },
     dispose() {
-      win.removeEventListener("popstate", popstate, { capture: true });
+      if (early) { if (win.__ssPopstateHandler === popstate) win.__ssPopstateHandler = null; }
+      else win.removeEventListener("popstate", popstate, { capture: true });
       win.removeEventListener("hashchange", resync);
       win.navigation?.removeEventListener("currententrychange", entryChange);
     },

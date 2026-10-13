@@ -385,6 +385,7 @@ body:has(.game-screen)::before { background: #0d1626; }
 .game-screen .mh-status { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 6px 14px; font-size: .875rem; }
 .game-screen .mh-state { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; letter-spacing: .01em; }
 .game-screen .mh-state.delayed { color: var(--amber); }
+.game-screen .mh-date { color: var(--muted); font-size: .8125rem; font-weight: 600; }
 .game-screen .live-dot { width: 7px; height: 7px; background: var(--lime); box-shadow: 0 0 0 3px rgba(214, 245, 127, .16); }
 .game-screen .mh-broadcast { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: .8125rem; }
 .game-screen .mh-grid { display: grid; align-items: center; gap: 8px 12px; margin-top: 16px; grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr); grid-template-areas: "away ascore dash hscore home"; }
@@ -516,14 +517,18 @@ body:has(.game-screen)::before { background: #0d1626; }
 .game-screen.is-compact .back-button { padding-right: 8px; }
 .game-screen.is-compact .game-bar { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; }
 .game-screen.is-compact .game-title { flex: 1 0 auto; max-width: 100%; text-align: left; }
-.game-screen.is-compact .masthead, .game-screen.is-compact .detail-line, .game-screen.is-compact .upset-reason { text-align: left; justify-content: flex-start; }
-.game-screen.is-compact .mh-status, .game-screen.is-compact .mh-situation { justify-content: flex-start; }
-.game-screen.is-compact .mh-grid, .game-screen.is-compact .mh-grid.unstarted { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "away ascore" "home hscore"; gap: 12px; }
-.game-screen.is-compact .mh-team { flex-direction: row; align-items: center; gap: 10px; }
-.game-screen.is-compact .mh-logo { width: 38px; height: 38px; border-radius: 10px; font-size: .6875rem; }
-.game-screen.is-compact .mh-logo img { width: 28px; height: 28px; }
-.game-screen.is-compact .mh-score { font-size: 2.25rem; }
-.game-screen.is-compact .mh-dash, .game-screen.is-compact .mh-vs { display: none; }
+/* Stacked score header: compact screens, and any width where a full name, record or score would not
+   fit side by side (set by measurement in game-screen.tsx). Names wrap at words, and only break inside
+   a word when even one word cannot fit the row. */
+.game-screen .masthead[data-stacked], .game-screen .masthead[data-stacked] .detail-line, .game-screen .masthead[data-stacked] .upset-reason { text-align: left; justify-content: flex-start; }
+.game-screen .masthead[data-stacked] .mh-status, .game-screen .masthead[data-stacked] .mh-situation { justify-content: flex-start; }
+.game-screen .masthead[data-stacked] .mh-grid, .game-screen .masthead[data-stacked] .mh-grid.unstarted { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "away ascore" "home hscore"; gap: 12px; }
+.game-screen .masthead[data-stacked] .mh-team { flex-direction: row; align-items: center; gap: 10px; }
+.game-screen .masthead[data-stacked] .mh-logo { width: 38px; height: 38px; border-radius: 10px; font-size: .6875rem; }
+.game-screen .masthead[data-stacked] .mh-logo img { width: 28px; height: 28px; }
+.game-screen .masthead[data-stacked] .mh-name, .game-screen .masthead[data-stacked] .mh-meta { overflow-wrap: anywhere; }
+.game-screen .masthead[data-stacked] .mh-score { font-size: 2.25rem; }
+.game-screen .masthead[data-stacked] .mh-dash, .game-screen .masthead[data-stacked] .mh-vs { display: none; }
 .game-screen.is-compact .compare-table .c-away, .game-screen.is-compact .compare-table .c-home { width: 30%; }
 .game-screen.is-compact .compare-table tbody td { font-size: 1rem; }
 .game-screen.is-compact .player-table thead th, .game-screen.is-compact .player-table tbody th, .game-screen.is-compact .player-table tbody td { padding-left: 8px; padding-right: 8px; }

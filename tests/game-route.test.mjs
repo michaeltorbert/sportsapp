@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bundle } from "./helpers.mjs";
-const { parseGameRoute, gameUrl, gameHref, sectionUrl, boardUrl, readEntry, withEntry, ownedTraversal, createRouteHistory } = await bundle("lib/game-route.ts");
+const { parseGameRoute, gameUrl, gameHref, sectionUrl, boardUrl, readEntry, withEntry, ownedTraversal, createRouteHistory, EARLY_POPSTATE_SCRIPT } = await bundle("lib/game-route.ts");
 const { initialView } = await bundle("lib/app-update.ts");
 
 const view = (changes = {}) => ({ date: "2026-09-05", followToday: false, selection: ["acc", "upset"], period: "day", ...changes });
@@ -115,6 +115,33 @@ test("an owned traversal stops the framework listener and re-commits the URL thr
   routes.dispose();
   win.location.pathname = "/";
   assert.equal(pop(win, withEntry(null, game, 0)), 1, "disposed: nothing is intercepted");
+});
+
+test("the early hook registered before the framework forwards to the mounted handler, and only while mounted", () => {
+  const { win, calls } = fakeWindow(), seen = [];
+  // A framework listener registered before the app mounts, as in the real page load order.
+  let framework = 0; const before = () => { framework++; };
+  new Function("window", EARLY_POPSTATE_SCRIPT)(win);
+  win.addEventListener("popstate", before);
+  assert.equal(typeof win.__ssPopstate, "function");
+  new Function("window", EARLY_POPSTATE_SCRIPT)(win); // Idempotent.
+  const routes = createRouteHistory(win, traversal => seen.push(traversal));
+  routes.install();
+  assert.equal(typeof win.__ssPopstateHandler, "function", "uses the early hook instead of a late listener");
+  const board = { v: 1, kind: "board", key: "a" }, game = { v: 1, kind: "game", key: "b", id: "g", section: "team", from: true };
+  routes.replace(board, "https://example.test/"); routes.push(game, "https://example.test/?event=g");
+  const dispatch = state => { const event = new Event("popstate"); Object.defineProperty(event, "state", { value: state }); win.history.state = state; win.dispatchEvent(event); };
+  calls.length = 0;
+  dispatch(withEntry(null, board, 0));
+  assert.equal(framework, 0, "the owned traversal never reaches the earlier-registered framework listener");
+  assert.equal(seen.at(-1).owned, true);
+  assert.deepEqual(calls, [["replace", "https://example.test/"]]);
+  dispatch({ __vinext_scrollY: 0 });
+  assert.equal(framework, 1, "foreign traversals still reach it");
+  routes.dispose();
+  assert.equal(win.__ssPopstateHandler, null);
+  dispatch(withEntry(null, game, 0));
+  assert.equal(framework, 2, "unmounted: the hook is inert");
 });
 
 test("framework pushes and fragments invalidate ownership; traversals are judged by popstate alone", () => {

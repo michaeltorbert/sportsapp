@@ -110,8 +110,17 @@ function Help({ update }: { update: AppUpdate }) { return <Sheet><SheetTrigger a
 // History entries carry the same scoreboard snapshot for cross-document returns.
 const boardSnapshots = new Map<string, BoardSnapshot>(), gameScroll = new Map<string, number>();
 let documentMounted = false;
+// The history entry each document showed when it was left. Arriving on a different entry is a history
+// traversal; arriving on the same one is a reload, which keeps the URL and saved-preference behavior.
+// The navigation timing type is the fallback when session storage is unavailable.
+const LEFT_ENTRY_KEY = "ss:left-entry";
+function leftEntry() { try { return sessionStorage.getItem(LEFT_ENTRY_KEY); } catch { return null; } }
 function navigationType() {
   try { return (performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined)?.type; } catch { return undefined; }
+}
+function returnedByHistory(key: string) {
+  const left = leftEntry();
+  return left !== null ? left !== key : navigationType() === "back_forward";
 }
 type Restore = { kind: "game"; id: string; scrollY: number } | { kind: "board"; scrollY: number; origin: string; fallback?: boolean; waitForData?: boolean };
 const sameSelection = (a: Selection, b: Selection) => a.length === b.length && a.every((c, i) => c === b[i]);
@@ -236,7 +245,7 @@ export default function Home() {
       const board = entry?.kind === "board" ? entry : null, snapshot = board?.snapshot;
       // A cross-document return, such as Back after reloading a game, restores the scoreboard as it was left.
       // A reload keeps the URL and saved-preference behavior; a return from the Guide is the framework's.
-      if (snapshot && !documentMounted && navigationType() === "back_forward") {
+      if (board && snapshot && !documentMounted && returnedByHistory(board.key)) {
         applyView(snapshot);
         restoreJob.current = { kind: "board", scrollY: snapshot.scrollY, origin: snapshot.origin, waitForData: true };
       }
@@ -247,8 +256,11 @@ export default function Home() {
     const cancel = () => { if (restoreJob.current?.kind === "board" && restoreJob.current.waitForData) restoreJob.current = null; };
     const inputs = ["pointerdown", "touchstart", "wheel", "keydown"];
     for (const type of inputs) addEventListener(type, cancel, { capture: true, passive: true });
+    const leave = () => { try { sessionStorage.setItem(LEFT_ENTRY_KEY, readEntry(history.state)?.key ?? ""); } catch { /* Optional. */ } };
+    addEventListener("pagehide", leave);
     return () => {
       for (const type of inputs) removeEventListener(type, cancel, { capture: true });
+      removeEventListener("pagehide", leave);
       controller.dispose();
       if (routeHistory.current === controller) routeHistory.current = null;
     };
@@ -309,7 +321,8 @@ export default function Home() {
   // while open (or never visible) shows only the generic unavailable screen, with no stats work.
   const screen = route ? [protectedBoards[scope], protectedBoards.daily, protectedBoards.week].map(b => ({ board: b, game: b?.games.find(g => g.id === route.id) })).find(found => found.game) : undefined;
   const screenLoading = !!route && !screen && !error && (duke.prefs === null || !data);
-  return <main className="app-shell compact-scoreboard" data-app-commit={LOADED_COMMIT}>
+  return <>
+  <main className="app-shell compact-scoreboard" data-app-commit={LOADED_COMMIT}>
     <div className="scores-view" hidden={!!route}>
     <header className="app-header"><Link className="wordmark" href="/" onClick={() => { setDate(null); setSelection([]); setPeriod("day"); setFocusedGame(""); }} aria-label="Saturday Signal home"><span className="brand-icon"><Signal size={22} strokeWidth={3} /></span><span>saturday<span className="brand-light">signal</span><span className="sport-label">COLLEGE FOOTBALL</span></span></Link><div className="header-actions"><Alerts iconOnly /><button className={`icon-button ${refreshing ? "refreshing" : ""}`} aria-label="Refresh scores" onClick={refresh} disabled={refreshing || !date}><RefreshCw size={20} /></button><Help update={update} /><DukeSettings games={data?.games || []} visibility={duke} /></div></header>
     <AppNavigation active="scores" date={date} followToday={followToday} />
@@ -335,5 +348,5 @@ export default function Home() {
     <footer className="app-footer"><div><span className="footer-brand">SS<span> / </span></span><a href="https://www.espn.com/college-football/scoreboard" target="_blank" rel="noopener noreferrer">Scores via ESPN <ArrowUpRight size={12} /></a></div><p className="version-label">v{VERSION}</p></footer>
     </div>
     {route && <GameScreen game={screen?.game ?? null} board={screen?.board ?? null} loading={screenLoading} scopeError={!!scopeError} backLabel={weekly ? "This week" : dateText} section={route.section} onSection={changeSection} onBack={goBack} warning={warning || undefined} onRetryScores={refresh} refreshing={refreshing} notice={<AppUpdateNotice update={update} />} />}
-  </main>;
+  </main></>;
 }

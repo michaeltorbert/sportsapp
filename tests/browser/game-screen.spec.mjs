@@ -7,6 +7,18 @@ import { bundle } from "../helpers.mjs";
 const { normalizeGameStats } = await bundle("lib/game-stats.ts");
 const fixture = name => JSON.parse(readFileSync(new URL(`../fixtures/espn-summary-${name}.json`, import.meta.url), "utf8"));
 const FINAL = { id: "401858481", teams: ["84", "158"] }, LIVE = { id: "401856717", teams: ["251", "201"] };
+// SYNTHETIC: the genuine live capture re-identified as a Duke home game (event 401999150, home team
+// 201 → Duke 150). Only the event and home-team identities change, so the normalizer's identity checks
+// bind it to this test's scoreboard event; every stat value is the captured one.
+const DUKE = { id: "401999150", teams: ["251", "150"] };
+function dukeSummary() {
+  const raw = fixture("live"), swap = team => { if (String(team?.id) === "201") team.id = "150"; };
+  raw.header.id = DUKE.id;
+  for (const c of raw.header.competitions[0].competitors) swap(c.team);
+  for (const t of raw.boxscore.teams) swap(t.team);
+  for (const t of raw.boxscore.players) swap(t.team);
+  return raw;
+}
 function matchup({ id, teams }, options) {
   const e = event(id, options);
   e.competitions[0].competitors.forEach((c, i) => { c.id = teams[i]; c.team.id = teams[i]; });
@@ -16,7 +28,8 @@ function serve(harness, { gate } = {}) {
   harness.state.stats = async (url, route) => {
     const id = url.searchParams.get("event");
     if (gate && id === gate.id) await gate.promise;
-    return route.fulfill({ status: 200, contentType: "application/json", headers: { "Cache-Control": "no-store" }, body: JSON.stringify(normalizeGameStats(fixture(id === FINAL.id ? "final" : "live"), id, new Date(Date.parse(NOW) - 5000).toISOString())) });
+    const raw = id === FINAL.id ? fixture("final") : id === DUKE.id ? dukeSummary() : fixture("live");
+    return route.fulfill({ status: 200, contentType: "application/json", headers: { "Cache-Control": "no-store" }, body: JSON.stringify(normalizeGameStats(raw, id, new Date(Date.parse(NOW) - 5000).toISOString())) });
   };
 }
 // A tall Saturday board: ranked live games sorted by priority, so a state change moves a card.
@@ -25,8 +38,20 @@ const filler = (count = 16) => Array.from({ length: count }, (_, i) => event(`g$
 const screen = page => page.locator(".game-screen");
 const board = page => page.locator(".scores-view");
 const cardLink = (page, id) => page.locator(`#game-${id} a.game-summary`);
-const back = page => screen(page).getByRole("button", { name: /^Back to scores/ });
+// The bar's Back control (the unavailable screen also offers a second "Back to scores" button).
+const back = page => screen(page).locator(".game-bar").getByRole("button", { name: /^Back to scores/ });
 const scrollY = page => page.evaluate(() => Math.round(scrollY));
+// The scroll position at the moment the card is activated, recorded before the app's own click handler.
+// A touch tap may first scroll a partly covered card into view, so the pre-tap position is not the departure.
+async function recordDeparture(page) {
+  await page.evaluate(() => { window.__departure = null; document.addEventListener("click", () => { window.__departure = Math.round(scrollY); }, { capture: true, once: true }); });
+}
+async function departure(page, info, before) {
+  const y = await page.evaluate(() => window.__departure);
+  expect(y, "the departure position was recorded at activation").not.toBeNull();
+  await info.attach("departure-scroll", { body: JSON.stringify({ beforeTap: before, atActivation: y }), contentType: "application/json" });
+  return y;
+}
 const maxScroll = page => page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
 async function expectScroll(page, y) { await expect.poll(async () => Math.abs((await scrollY(page)) - Math.min(y, await maxScroll(page)))).toBeLessThanOrEqual(2); }
 // Proof that no framework navigation ran: every RSC fetch and document load is recorded, the
@@ -63,14 +88,17 @@ test("a card opens its screen; on-screen Back, browser Back and Forward restore 
   const target = "g9";
   await cardLink(page, target).scrollIntoViewIfNeeded();
   await page.evaluate(() => scrollBy(0, 120));
-  const saved = await scrollY(page);
-  expect(saved).toBeGreaterThan(0);
+  const before = await scrollY(page);
+  expect(before).toBeGreaterThan(0);
   await markDocument(page);
+  await recordDeparture(page);
   const navigation = recordNavigation(page);
   const polls = harness.state.scoreRequests.length;
   expect(await page.evaluate(() => getComputedStyle(document.body, "::before").backgroundColor)).toBe("rgb(10, 14, 22)");
   await cardLink(page, target).tap();
   await expect(screen(page)).toBeVisible(); await expect(board(page)).toBeHidden();
+  const saved = await departure(page, info, before);
+  expect(saved).toBeGreaterThan(0);
   const url = new URL(page.url());
   expect(Object.fromEntries(url.searchParams)).toEqual({ event: target, cats: "acc,top25", period: "week" });
   await expect(screen(page).locator("h1.game-title")).toBeFocused();
@@ -107,17 +135,20 @@ test("a card opens its screen; on-screen Back, browser Back and Forward restore 
   expect(harness.state.scoreRequests.length, "the one scoreboard poller kept running without restarting").toBe(polls);
 });
 
-test("absolute scroll survives a group and order change while the screen is open, and a later poll", async ({ page, harness }) => {
+test("absolute scroll survives a group and order change while the screen is open, and a later poll", async ({ page, harness }, info) => {
   harness.state.events = filler(18);
   await page.setViewportSize({ width: 393, height: 640 });
   await harness.open();
   const target = "g8";
   await cardLink(page, target).scrollIntoViewIfNeeded();
   await page.evaluate(() => scrollBy(0, 80));
-  const saved = await scrollY(page);
+  const beforeTap = await scrollY(page);
   const before = await page.locator("article.game-card").evaluateAll(cards => cards.map(card => card.id));
+  await recordDeparture(page);
   await cardLink(page, target).tap();
   await expect(screen(page)).toBeVisible();
+  const saved = await departure(page, info, beforeTap);
+  expect(saved).toBeGreaterThan(0);
   // While the game is open it finishes: its card moves to Final, and the order changes.
   const moved = harness.state.events.find(e => e.id === target);
   moved.status = { period: 4, clock: 0, type: { name: "STATUS_FINAL", state: "post", completed: true, shortDetail: "Final" } };
@@ -132,8 +163,9 @@ test("absolute scroll survives a group and order change while the screen is open
   await expectScroll(page, saved);
   // Focus returns to the moved card without re-anchoring the position to it.
   await expect(cardLink(page, target)).toBeFocused();
+  const polls = harness.state.scoreRequests.length;
   await page.clock.fastForward(30_000);
-  await expect.poll(() => harness.state.scoreRequests.length).toBeGreaterThan(0);
+  await expect.poll(() => harness.state.scoreRequests.length).toBeGreaterThan(polls);
   await expectScroll(page, saved);
 });
 
@@ -149,7 +181,7 @@ test("a missing origin card falls back to the stable Scores heading", async ({ p
   await expect(page.locator("#scoreboard-heading")).toBeFocused();
 });
 
-test("reload on the screen keeps it; Back then restores the scoreboard as it was left", async ({ page, harness }) => {
+test("reload on the screen keeps it; Back then restores the scoreboard as it was left", async ({ page, harness }, info) => {
   await page.setViewportSize({ width: 393, height: 640 });
   harness.state.events = [...harness.state.events, ...filler(12).map(e => { e.date = "2026-09-06T20:00:00Z"; e.status.type = { name: "STATUS_SCHEDULED", state: "pre", completed: false, shortDetail: "Scheduled" }; e.competitions[0].competitors.forEach(c => { c.score = "0"; }); return e; })];
   await harness.open();
@@ -157,9 +189,11 @@ test("reload on the screen keeps it; Back then restores the scoreboard as it was
   await expect(dateInput(page)).toHaveValue("2026-09-06");
   await category(page, "Top 25").tap();
   await cardLink(page, "g6").scrollIntoViewIfNeeded();
-  const saved = await scrollY(page);
+  const beforeTap = await scrollY(page);
+  await recordDeparture(page);
   await cardLink(page, "g6").tap();
   await expect(screen(page)).toBeVisible();
+  const saved = await departure(page, info, beforeTap);
   expect(new URL(page.url()).searchParams.get("date")).toBe("2026-09-06");
   await page.reload();
   await expect(screen(page).locator("h1.game-title")).toContainText("g6");
@@ -232,38 +266,44 @@ test("switching from game A to game B never shows A's stats on B's screen", asyn
 
 test("hiding a Duke game while its screen is open leaves only the generic screen and stops its stats work", async ({ page, harness }) => {
   serve(harness);
-  const duke = event("duke-home", { acc: true });
+  // A Duke home game: visible under the default, so its screen and stats load first.
+  const duke = matchup(DUKE, { acc: true });
   duke.competitions[0].neutralSite = false;
-  const team = duke.competitions[0].competitors[1].team; team.id = "150"; team.shortDisplayName = "Duke"; team.abbreviation = "DUKE";
+  const team = duke.competitions[0].competitors[1].team; team.shortDisplayName = "Duke"; team.abbreviation = "DUKE";
   harness.state.events = [duke];
   await harness.open({ path: "/?date=2026-09-05" });
-  await cardLink(page, "duke-home").tap();
+  await cardLink(page, DUKE.id).tap();
   await expect(screen(page).locator("h1.game-title")).toContainText("Duke");
+  // The retained snapshot is on screen before the hide.
+  await expect(screen(page).getByRole("row", { name: /Total yards/ })).toContainText("235");
+  expect(harness.state.statsRequests).toEqual([`?event=${DUKE.id}&phase=started&refresh=0`]);
   const requests = harness.state.statsRequests.length;
   // Another tab hides it (the Settings sheet is on the scoreboard).
-  await page.evaluate(() => {
-    const key = "ss:duke-visibility:v2", stored = JSON.parse(localStorage.getItem(key));
-    const value = JSON.stringify({ ...stored, manual: { "duke-home": true } });
+  await page.evaluate(id => {
+    const key = "ss:duke-visibility:v2", stored = JSON.parse(localStorage.getItem(key)) ?? { version: 2, rules: [{ from: 0, mode: "away" }], manual: {}, remembered: {}, waiting: {} };
+    const value = JSON.stringify({ ...stored, manual: { [id]: true } });
     localStorage.setItem(key, value); dispatchEvent(new StorageEvent("storage", { key, newValue: value }));
-  });
+  }, DUKE.id);
   await expect(screen(page).getByRole("heading", { name: "This game isn’t available" })).toBeVisible();
   await expect(screen(page)).not.toContainText(/Duke|DUKE/);
   await expect(screen(page).locator(".masthead, .view-nav, table")).toHaveCount(0);
   await page.clock.fastForward(61_000);
   expect(harness.state.statsRequests).toHaveLength(requests);
   // A direct link to it is the same generic screen.
-  await page.goto("/?event=duke-home&date=2026-09-05");
+  await page.goto(`/?event=${DUKE.id}&date=2026-09-05`);
   await expect(screen(page).getByRole("heading", { name: "This game isn’t available" })).toBeVisible();
   await expect(screen(page)).not.toContainText(/Duke|DUKE/);
 });
 
 for (const mode of ["offline", "rsc-503"]) {
-  test(`owned Back and Forward work ${mode === "offline" ? "offline" : "with RSC responses failing (503)"} with zero framework requests`, async ({ page, harness, context }) => {
+  test(`owned Back and Forward work ${mode === "offline" ? "offline" : "with RSC responses failing (503)"} with zero framework requests`, async ({ page, harness, context }, info) => {
     await harness.open();
     await cardLink(page, "close-live").scrollIntoViewIfNeeded();
-    const saved = await scrollY(page);
+    const beforeTap = await scrollY(page);
+    await recordDeparture(page);
     await cardLink(page, "close-live").tap();
     await expect(screen(page)).toBeVisible();
+    const saved = await departure(page, info, beforeTap);
     await markDocument(page);
     const navigation = recordNavigation(page);
     if (mode === "offline") await context.setOffline(true);
@@ -305,6 +345,73 @@ test("a foreign Guide traversal still reaches the framework, and Guide links wor
   await expect(screen(page)).toBeVisible();
   await back(page).tap();
   await expect(board(page)).toBeVisible();
+});
+
+test("the built HTML registers the early history listener before the framework entry script on Scores and the Guide", async ({ page, harness }) => {
+  await harness.open({ waitForScores: false });
+  for (const path of ["/", "/guide", "/?event=401858481&section=players"]) {
+    const html = await (await page.request.get(path)).text();
+    const early = html.indexOf("w.__ssPopstate=e=>"), entry = html.search(/<script[^>]*id="_R_"|<script[^>]*type="module"/);
+    expect(early, `${path}: early listener present`).toBeGreaterThan(-1);
+    expect(entry, `${path}: framework entry script present`).toBeGreaterThan(-1);
+    // The first occurrence is the parsed body script; serialized framework payload copies follow the entry script.
+    expect(early, `${path}: early listener parses first`).toBeLessThan(entry);
+    expect(html.lastIndexOf("<body", early), `${path}: inside the body`).toBeGreaterThan(-1);
+  }
+  // At runtime it registers once, even though the layout re-renders on client navigations.
+  expect(await page.evaluate(() => typeof window.__ssPopstate)).toBe("function");
+});
+
+test("a document first opened on the Guide: Scores, a game, then owned Back and Forward offline with zero framework navigation; Guide traversals stay the framework's", async ({ page, harness, context }, info) => {
+  await harness.open({ path: "/guide", waitForScores: false });
+  await expect(page.locator(".guide-shell")).toBeVisible();
+  // The layout's early listener exists on a Guide-first document and is inert there.
+  expect(await page.evaluate(() => typeof window.__ssPopstate)).toBe("function");
+  expect(await page.evaluate(() => window.__ssPopstateHandler ?? null)).toBeNull();
+  await page.getByRole("link", { name: "Scores", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Refresh scores" })).toBeEnabled();
+  await markDocument(page);
+  await cardLink(page, "close-live").scrollIntoViewIfNeeded();
+  const beforeTap = await scrollY(page);
+  await recordDeparture(page);
+  await cardLink(page, "close-live").tap();
+  await expect(screen(page)).toBeVisible();
+  const saved = await departure(page, info, beforeTap);
+  const navigation = recordNavigation(page);
+  await context.setOffline(true);
+  for (let round = 0; round < 2; round++) {
+    await page.goBack();
+    await expect(board(page)).toBeVisible();
+    await expect(cardLink(page, "close-live")).toBeFocused();
+    await expectScroll(page, saved);
+    await page.goForward();
+    await expect(screen(page)).toBeVisible();
+    await expect(screen(page).locator("h1.game-title")).toBeFocused();
+  }
+  await back(page).tap();
+  await expect(board(page)).toBeVisible();
+  expect(navigation, "owned traversals make no RSC or document request").toEqual([]);
+  await expectSameDocument(page);
+  await context.setOffline(false);
+  // Back past the scoreboard to the Guide is the framework's, as before.
+  await page.goBack();
+  await expect(page.locator(".guide-shell")).toBeVisible();
+  expect(await page.evaluate(() => window.__frameworkTraversals), "the framework handled the Guide traversal").toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.__ssPopstateHandler ?? null), "inert again once Scores unmounts").toBeNull();
+});
+
+test("in Week, the game screen shows the selected game's own Eastern date while Back keeps the week context", async ({ page, harness }) => {
+  await harness.open();
+  await period(page, "Week").tap();
+  for (const id of ["sunday-acc", "monday-ranked"]) {
+    const day = (await page.locator(`#game-${id} .game-day-label`).textContent()).trim();
+    expect(day).toMatch(/^(Sun|Mon), Sep [67]$/);
+    await cardLink(page, id).tap();
+    await expect(screen(page).locator(".mh-date")).toHaveText(day);
+    await expect(back(page)).toHaveAttribute("aria-label", "Back to scores, This week");
+    await back(page).tap();
+    await expect(board(page)).toBeVisible();
+  }
 });
 
 test("sticky bars, condensed title, category jumps and keyboard path; nothing sticks at 200% zoom", async ({ page, harness }, info) => {

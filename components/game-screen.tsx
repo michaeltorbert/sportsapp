@@ -15,6 +15,13 @@ export function linePlacement(game: Game) { return game.state === "other" ? null
 export function points(spread: number) { return `${spread} ${spread === 1 ? "point" : "points"}`; }
 function localTime(date: string) { return Number.isFinite(Date.parse(date)) ? new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(date)) : "Time TBD"; }
 const label = (team: Team) => team.abbreviation || team.name;
+// The game's own Eastern calendar day, in the scoreboard's game-day-label format. Omitted, never guessed, when invalid.
+let dayFormat: Intl.DateTimeFormat | undefined;
+export function gameDay(date: string) {
+  if (!Number.isFinite(Date.parse(date))) return null;
+  dayFormat ??= new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" });
+  return dayFormat.format(new Date(date));
+}
 
 function MastLogo({ team }: { team: Team }) {
   const [failed, setFailed] = useState(false);
@@ -40,7 +47,7 @@ function Masthead({ game, board, scopeError }: { game: Game; board: Scoreboard |
   const validLine = placement !== null && line && ((line.favoriteId === null && line.spread === 0) || (favorite && line.spread > 0));
   const result = classify({ ...game, retainedCategories: undefined });
   return <section className={`masthead state-${game.state}`} id="masthead" aria-label="Score">
-    <div className="mh-status">{status}{game.broadcast && <span className="mh-broadcast"><Tv size={14} aria-hidden="true" />{game.broadcast}</span>}</div>
+    <div className="mh-status">{gameDay(game.date) && <span className="mh-date">{gameDay(game.date)}</span>}{status}{game.broadcast && <span className="mh-broadcast"><Tv size={14} aria-hidden="true" />{game.broadcast}</span>}</div>
     <p className="sr-only">{spoken}</p>
     <div className={`mh-grid ${started ? "" : "unstarted"}`} aria-hidden="true">
       {team(away, "away")}
@@ -68,6 +75,24 @@ function Context({ game }: { game: Game }) {
 }
 
 type Layout = { compact: boolean; wide: boolean; stick: boolean };
+// The approved side-by-side score header is used whenever every full name, record and score fits
+// inside it; otherwise the header stacks into rows. Measured rather than a breakpoint, because
+// name length, text size and zoom all decide it. The attribute is set only here, never by React.
+function fitMasthead(root: HTMLElement | null, compact: boolean) {
+  const mast = root?.querySelector<HTMLElement>(".masthead");
+  if (!mast) return;
+  mast.removeAttribute("data-stacked");
+  let stack = compact;
+  if (!stack) {
+    const edge = mast.getBoundingClientRect();
+    stack = [...mast.querySelectorAll<HTMLElement>(".mh-grid > *, .mh-name, .mh-meta")].some(el => {
+      // A name or record must stay within its own team column (never under a score) and the header.
+      const box = el.getBoundingClientRect(), column = (el.closest(".mh-team") ?? mast).getBoundingClientRect();
+      return el.scrollWidth > el.clientWidth + 1 || box.left < Math.max(edge.left, column.left) - 1 || box.right > Math.min(edge.right, column.right) + 1;
+    });
+  }
+  if (stack) mast.setAttribute("data-stacked", "");
+}
 function zoomOf(element: Element | null) { const z = element ? parseFloat(getComputedStyle(element).zoom) : 1; return z > 0 ? z : 1; }
 // Layout follows the space actually available: CSS zoom shrinks the room for content without
 // changing what width/height media queries see, so these use the viewport divided by the zoom.
@@ -85,14 +110,21 @@ function useLayout(root: RefObject<HTMLDivElement | null>, id: string | undefine
       const used = (bar?.getBoundingClientRect().height || 0) + (nav?.getBoundingClientRect().height || 0);
       const next = { compact: width < 360, wide: width >= 880, stick: height >= 600 && used <= innerHeight / 3 };
       setLayout(previous => previous.compact === next.compact && previous.wide === next.wide && previous.stick === next.stick ? previous : next);
+      return next;
     };
-    measure();
-    addEventListener("resize", measure);
-    // A CSS zoom change fires no resize event but does resize these boxes.
-    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+    let frame = 0;
+    const resized = () => fitMasthead(element, measure().compact);
+    // A CSS zoom or text-size change fires no resize event but does resize these boxes. The header is
+    // refit on the next frame, outside observer delivery, so its own change cannot loop the observer.
+    const observed = () => { const { compact } = measure(); cancelAnimationFrame(frame); frame = requestAnimationFrame(() => fitMasthead(element, compact)); };
+    resized();
+    addEventListener("resize", resized);
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(observed) : null;
     for (const target of [document.documentElement, element.querySelector(".game-bar"), element.querySelector(".view-nav")]) if (target) observer?.observe(target);
-    return () => { removeEventListener("resize", measure); observer?.disconnect(); };
+    return () => { removeEventListener("resize", resized); observer?.disconnect(); cancelAnimationFrame(frame); };
   }, [root, id]);
+  // Every render (a score or name change) refits synchronously, before paint.
+  useLayoutEffect(() => fitMasthead(root.current, layout.compact));
   return layout;
 }
 

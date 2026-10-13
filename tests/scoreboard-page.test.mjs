@@ -426,6 +426,25 @@ test("the open game screen keeps the scoreboard mounted but hidden and shows sco
   assert.match(screen, /class="gamecast" data-focus-key="gamecast" aria-label="Open Team a vs Team b on ESPN">Gamecast/);
   assert.match(screen, /aria-pressed="true">Team stats/);
   for (const forbidden of [/spread|moneyline|odds|win probability/i, /<details/]) assert.doesNotMatch(screen, forbidden);
+  // The game's own Eastern calendar day leads the status line (02:30 UTC Sunday is Saturday evening in ET).
+  assert.match(screen, /<div class="mh-status"><span class="mh-date">Sat, Sep 5<\/span><span class="mh-state live">/);
+});
+
+test("the game screen shows the selected game's own date in Week, and omits an invalid date rather than inventing one", () => {
+  const sunday = game({ id: "sunday-game", state: "upcoming", started: false, date: "2026-09-07T00:00:00Z" });
+  const monday = game({ id: "monday-game", state: "upcoming", started: false, date: "2026-09-07T23:00:00Z" });
+  const boards = fixtures(); boards.week = scoreboard([sunday, monday, ...boards.week.games], "2026-09-03", { endDate: "2026-09-07" });
+  for (const [id, day] of [["sunday-game", "Sun, Sep 6"], ["monday-game", "Mon, Sep 7"]]) {
+    const { html } = render([], { period: "week", boards, route: { id, section: "team" } });
+    const screen = html.match(/<div class="game-screen[\s\S]*<\/div><\/main>$/)?.[0];
+    assert.match(screen, /aria-label="Back to scores, This week"/, "the Back context stays the generic week");
+    assert.match(screen, new RegExp(`<span class="mh-date">${day}</span>`), id);
+    // The same Eastern day the week card shows.
+    assert.match(html.match(new RegExp(`<article id="game-${id}"[\\s\\S]*?</article>`))[0], new RegExp(`class="game-day-label">${day}<`));
+  }
+  const unknown = game({ id: "no-date", state: "upcoming", started: false, date: "TBD", timeValid: false });
+  boards.daily = scoreboard([unknown]);
+  assert.doesNotMatch(screenOf("no-date", { boards }), /mh-date|Invalid Date|NaN/);
 });
 
 test("unknown and Duke-protected games share one generic screen with no teams, score or stats", () => {
