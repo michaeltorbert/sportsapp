@@ -135,6 +135,27 @@ test("a card opens its screen; on-screen Back, browser Back and Forward restore 
   expect(harness.state.scoreRequests.length, "the one scoreboard poller kept running without restarting").toBe(polls);
 });
 
+// DIAGNOSTIC (r4): what the reader actually sees around the later poll. Reading anchors are wholly visible
+// existing cards other than the moved origin, chosen once before the poll and re-measured by identity.
+async function readingState(page, anchorIds, exclude) {
+  return page.evaluate(({ anchorIds, exclude }) => {
+    const box = el => { if (!el) return null; const r = el.getBoundingClientRect(); return { top: Math.round(r.top * 100) / 100, bottom: Math.round(r.bottom * 100) / 100, height: Math.round(r.height * 100) / 100 }; };
+    // Below the sticky category row, which covers the top of the page while scrolled.
+    const covered = Math.max(0, document.querySelector(".score-tabs .filter-tabs")?.getBoundingClientRect().bottom ?? 0);
+    const whollyVisible = el => { const r = el.getBoundingClientRect(); return r.top >= covered && r.bottom <= innerHeight; };
+    const ids = anchorIds ?? [...document.querySelectorAll("article.game-card")].filter(el => el.id !== `game-${exclude}` && whollyVisible(el)).slice(0, 2).map(el => el.id);
+    const note = document.querySelector(".overnight-note"), noteStyle = note && getComputedStyle(note), active = document.activeElement;
+    return {
+      now: Date.now(), eastern: new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "medium", timeZone: "America/New_York" }).format(Date.now()),
+      scrollY: window.scrollY, scrollHeight: document.documentElement.scrollHeight, innerHeight, coveredTop: covered,
+      overflowAnchor: getComputedStyle(document.documentElement).overflowAnchor,
+      anchors: ids.map(id => { const el = document.getElementById(id); return { id, ...box(el), whollyVisible: !!el && whollyVisible(el) }; }),
+      overnightNote: note ? { ...box(note), marginTop: noteStyle.marginTop, marginBottom: noteStyle.marginBottom, text: note.textContent } : null,
+      activeElement: active ? { tag: active.tagName, card: active.closest("article.game-card")?.id ?? null, focusKey: active.getAttribute("data-focus-key") } : null,
+    };
+  }, { anchorIds: anchorIds ?? null, exclude });
+}
+
 test("absolute scroll survives a group and order change while the screen is open, and a later poll", async ({ page, harness }, info) => {
   harness.state.events = filler(18);
   await page.setViewportSize({ width: 393, height: 640 });
@@ -163,9 +184,22 @@ test("absolute scroll survives a group and order change while the screen is open
   await expectScroll(page, saved);
   // Focus returns to the moved card without re-anchoring the position to it.
   await expect(cardLink(page, target)).toBeFocused();
+  // DIAGNOSTIC (r4): measurements and viewport screenshots before and after the later poll, which crosses
+  // Eastern midnight. They decide nothing; the assertions below are unchanged.
+  const beforePoll = await readingState(page, null, target);
+  await page.screenshot({ path: info.outputPath("reading-before-later-poll.png"), animations: "disabled" });
   const polls = harness.state.scoreRequests.length;
   await page.clock.fastForward(30_000);
   await expect.poll(() => harness.state.scoreRequests.length).toBeGreaterThan(polls);
+  // Give a midnight notice (if any) its render before measuring; absence is recorded, not asserted.
+  const noteAppeared = await page.locator(".overnight-note").waitFor({ timeout: 2000 }).then(() => true, () => false);
+  const afterPoll = await readingState(page, beforePoll.anchors.map(anchor => anchor.id), target);
+  await page.screenshot({ path: info.outputPath("reading-after-later-poll.png"), animations: "disabled" });
+  await info.attach("reading-position-later-poll", { contentType: "application/json", body: JSON.stringify({
+    saved, noteAppeared, before: beforePoll, after: afterPoll,
+    scrollDelta: afterPoll.scrollY - beforePoll.scrollY,
+    anchorTopDeltas: afterPoll.anchors.map((anchor, i) => ({ id: anchor.id, delta: anchor.top === undefined || beforePoll.anchors[i].top === undefined ? null : Math.round((anchor.top - beforePoll.anchors[i].top) * 100) / 100 })),
+  }, null, 2) });
   await expectScroll(page, saved);
 });
 
@@ -204,6 +238,15 @@ test("reload on the screen keeps it; Back then restores the scoreboard as it was
   await expect(category(page, "Top 25")).toHaveAttribute("aria-pressed", "true");
   await expect(cardLink(page, "g6")).toBeFocused();
   await expectScroll(page, saved);
+  expect(new URL(page.url()).searchParams.has("date"), "the scoreboard entry's own URL carries no date").toBe(false);
+  // The restored manual day and categories are owned state: a later real poll keeps them.
+  const polls = harness.state.scoreRequests.length;
+  await page.clock.fastForward(30_000);
+  await expect.poll(() => harness.state.scoreRequests.length).toBeGreaterThan(polls);
+  expect(harness.state.scoreRequests.slice(polls).some(search => search.includes("20260906")), "the later poll asks for the restored day").toBe(true);
+  await expect(dateInput(page)).toHaveValue("2026-09-06");
+  await expect(category(page, "Top 25")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".overnight-note")).toHaveCount(0);
 });
 
 test("direct links open the screen and Back stays in the app; unknown or malformed IDs are generic or ignored", async ({ page, harness }) => {

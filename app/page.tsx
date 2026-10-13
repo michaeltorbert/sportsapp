@@ -177,12 +177,18 @@ export default function Home() {
   const restoreJob = useRef<Restore | null>(null);
   const traverse = useRef<(traversal: Traversal) => void>(() => {});
   const snapshotNow = (origin: string): BoardSnapshot => ({ date: followToday ? null : validDate(date) ? date : null, selection: [...selection], period, hideFinals, scrollY: Math.round(window.scrollY), origin });
+  // A restored snapshot owns the scoreboard view. Categories, period and a manual date may currently be
+  // read from the URL being left (a reloaded game URL carries them); the scoreboard entry's URL may not,
+  // so equal values are still pinned as explicit state rather than left to the URL.
   const applyView = (view: BoardView) => {
-    if (!sameSelection(view.selection, selection)) setSelection(view.selection);
-    if (view.period !== period) setPeriod(view.period);
+    setSelection(sameSelection(view.selection, selection) ? selection : view.selection);
+    setPeriod(view.period);
     if (view.hideFinals !== hideFinals) setHideFinals(view.hideFinals);
-    // Only a real change reaches the scoreboard hook, so returning never restarts polling.
-    if (view.date === null ? !followToday : followToday || view.date !== date) setDate(view.date);
+    // The date the scoreboard hook would otherwise take from the current URL.
+    const query = new URLSearchParams(location.search).get("date"), urlDate = query && validDate(query) ? query : null;
+    // Pinning the same manual date keeps the hook's selected value, so polling does not restart;
+    // only a real change of day, or of Today versus a manual day, restarts it.
+    if (view.date === null ? !followToday || urlDate !== null : followToday || view.date !== date || urlDate !== view.date) setDate(view.date);
   };
   const openGame = (id: string, consume = false) => {
     const controller = routeHistory.current;
