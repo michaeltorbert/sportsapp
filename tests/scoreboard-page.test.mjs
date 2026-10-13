@@ -16,7 +16,7 @@ const output = await build({
     build.onLoad({ filter: /.*/, namespace: "page-test" }, args => {
       if (args.path === "@/components/halftime-status") return { contents: "export const HalftimeStatus=()=>\"Halftime\";" };
       if (args.path === "next/link") return { contents: "export default ({children,...props})=>globalThis.scorePageTest.element('a',props,children);" };
-      if (args.path === "react") return { contents: "export const useMemo=fn=>fn(),useState=(...a)=>globalThis.scorePageTest.useState(...a),useRef=v=>({current:v}),useEffect=fn=>globalThis.scorePageTest.effect(fn),useSyncExternalStore=()=>null;" };
+      if (args.path === "react") return { contents: "export const useMemo=fn=>fn(),useState=(...a)=>globalThis.scorePageTest.useState(...a),useRef=v=>({current:v}),useEffect=fn=>globalThis.scorePageTest.effect(fn),useLayoutEffect=()=>{},useSyncExternalStore=()=>null;" };
       if (args.path === "react/jsx-runtime") return { contents: "export const jsx=(...a)=>globalThis.scorePageTest.jsx(...a),jsxs=(...a)=>globalThis.scorePageTest.jsxs(...a),Fragment=globalThis.scorePageTest.Fragment;" };
       if (args.path === "@/lib/use-duke-visibility") return { contents: "export const useDukeVisibility=()=>({prefs:null,storageWarning:'',setHidden(){},setMode(){}});" };
       if (args.path === "@/lib/use-app-update") return { contents: "export const LOADED_COMMIT=undefined,useAppUpdate=()=>({target:null,status:'',refreshing:false,check(){},refresh(){},dismiss(){}});" };
@@ -52,13 +52,13 @@ function fixtures() {
   };
 }
 
-// Home's useState order: selection, period, hideFinals, focusedGame, expanded games.
-function render(selection, { period = "day", hideFinals = false, focusedGame = "", showHelp = false, boards = fixtures(), stale = false, effects = [], changes = [] } = {}) {
+// Home's useState order: selection, period, hideFinals, focusedGame, open game screen route, open intent.
+function render(selection, { period = "day", hideFinals = false, focusedGame = "", route, showHelp = false, boards = fixtures(), stale = false, effects = [], changes = [] } = {}) {
   let state = 0, selectedScope;
   globalThis.scorePageTest = {
     ...jsxRuntime, showHelp, element: React.createElement,
     effect(fn) { effects.push(fn); },
-    useState(initial) { const slot = state++; return [[selection, period, hideFinals, focusedGame][slot] ?? initial, value => changes.push({ slot, value })]; },
+    useState(initial) { const slot = state++; return [[selection, period, hideFinals, focusedGame, route][slot] ?? initial, value => changes.push({ slot, value })]; },
     scoreboard(scope) { selectedScope = scope; return { date: "2026-08-29", today: "2026-09-05", boards, data: boards[scope] && (stale ? boards[scope] : { ...boards[scope], fetchedAt: new Date().toISOString() }), error: "", refreshing: false, online: true, now: Date.now(), timezone: "EDT", refresh() {}, setDate() {}, followToday: true }; },
   };
   try { return { html: renderToStaticMarkup(React.createElement(Home)), scope: selectedScope }; }
@@ -66,6 +66,8 @@ function render(selection, { period = "day", hideFinals = false, focusedGame = "
 }
 
 function cardIds(html) { return [...html.matchAll(/<article id="game-([^"]+)"/g)].map(match => match[1]); }
+// The dedicated game screen for one game, rendered by the real page with that route open.
+function screenOf(id, options = {}) { return render(options.selection || [], { ...options, route: { id, section: "team" } }).html.match(/<div class="game-screen[\s\S]*<\/div><\/main>$/)?.[0] || ""; }
 function badge(html, category) { return Number(new RegExp(`class="filter-tab filter-${category}"[^>]*>.*?<span class="tab-count">(\\d+)</span>`).exec(html)?.[1]); }
 function upsetBadge(html) { const match = /class="tab-count upset-count" aria-hidden="true">(\d+) <span class="upset-total">\((\d+)\)<\/span>/.exec(html); return match ? match.slice(1).map(Number) : null; }
 function pressed(html) { return [...html.matchAll(/class="filter-tab filter-([a-z0-9]+)" aria-pressed="(true|false)"/g)].filter(m => m[2] === "true").map(m => m[1]); }
@@ -187,13 +189,17 @@ test("unranked SEC upset cards explain the favorite without inventing a ranking"
   const boards = fixtures(); boards.daily = scoreboard([florida]);
   const { html } = render(["upset"], { boards });
   assert.deepEqual(cardIds(html), ["florida-ecu"]);
-  assert.match(html, /East Carolina leads Florida · pregame favorite/);
-  assert.match(html, /Upset watch/);
-  assert.doesNotMatch(html, /No\. (null|undefined)/);
+  assert.match(html, /class="compact-upset">Upset watch/);
+  // The explanation moved with the other game details to the game screen.
+  const screen = screenOf("florida-ecu", { boards, selection: ["upset"] });
+  assert.match(screen, /class="upset-reason">.*East Carolina leads Florida · pregame favorite/);
+  assert.match(screen, /class="badge upset-badge">Upset watch/);
+  for (const out of [html, screen]) assert.doesNotMatch(out, /No\. (null|undefined)/);
 });
 
-test("validated lines move from the summary to details after kickoff", () => {
-  const summaryOf = html => html.split("</summary>")[0];
+test("validated lines sit on the row before kickoff and on the game screen throughout", () => {
+  // The scoreboard row is the whole card now; game details live on the game screen.
+  const summaryOf = html => html.match(/<article id="game-[\s\S]*?<\/article>/)?.[0] || "";
   const favorite = game({ id: "favorite-line", state: "upcoming", started: false, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } });
   const pickem = game({ id: "pickem-line", state: "upcoming", started: false, pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } });
   const missing = game({ id: "missing-line", state: "upcoming", started: false });
@@ -210,35 +216,35 @@ test("validated lines move from the summary to details after kickoff", () => {
   assert.doesNotMatch(pickemCard, /Pregame PK/);
   assert.doesNotMatch(pickemCard, /class="team-line"/);
   assert.doesNotMatch(missingCard, /class="(?:team-line|pickem-line)"/);
-  for (const card of [favoriteCard, pickemCard]) {
-    assert.match(card, /class="detail-line"><span class="sr-only">Line source: ESPN<\/span>/);
-    assert.match(card, /<span aria-hidden="true">Line<\/span>.*?<span aria-hidden="true">ESPN<\/span>/);
-  }
-  assert.doesNotMatch(missingCard, /class="detail-line"/);
+  for (const card of [favoriteCard, pickemCard, missingCard]) assert.doesNotMatch(card, /class="detail-line"/);
+  // On the game screen the masthead is visual only, so the line row speaks its full context.
+  assert.match(screenOf("favorite-line", { boards }), /class="detail-line"><span class="sr-only">Pregame betting line: Team b favored by 7\.5 points, ESPN<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">Team b −7\.5<\/strong><span aria-hidden="true">ESPN<\/span>/);
+  assert.match(screenOf("pickem-line", { boards }), /class="detail-line"><span class="sr-only">Pregame pick’em line, ESPN<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">PK<\/strong>/);
+  assert.doesNotMatch(screenOf("missing-line", { boards }), /class="detail-line"/);
   for (const state of ["live", "final"]) {
     const gameWithLine = game({ id: `${state}-line`, state, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } });
     boards.daily = scoreboard([gameWithLine]);
     const liveOrFinal = render([], { boards }).html;
-    assert.doesNotMatch(summaryOf(liveOrFinal), /class="(?:team-line|pickem-line)"/);
-    assert.match(liveOrFinal, /class="detail-line"><span class="sr-only">Pregame betting line: Team b favored by 7\.5 points, ESPN<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">Team b −7\.5<\/strong><span aria-hidden="true">ESPN<\/span>/);
+    assert.doesNotMatch(summaryOf(liveOrFinal), /class="(?:team-line|pickem-line|detail-line)"/);
+    assert.match(screenOf(`${state}-line`, { boards }), /class="detail-line"><span class="sr-only">Pregame betting line: Team b favored by 7\.5 points, ESPN<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">Team b −7\.5<\/strong><span aria-hidden="true">ESPN<\/span>/);
   }
   boards.daily = scoreboard([game({ id: "live-pickem", pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
   const livePickem = render([], { boards }).html;
   assert.doesNotMatch(summaryOf(livePickem), /class="(?:team-line|pickem-line)"/);
-  assert.match(livePickem, /class="detail-line"><span class="sr-only">Pregame pick’em line, ESPN<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">PK<\/strong><span aria-hidden="true">ESPN<\/span>/);
+  assert.match(screenOf("live-pickem", { boards }), /class="detail-line"><span class="sr-only">Pregame pick’em line, ESPN<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">PK<\/strong><span aria-hidden="true">ESPN<\/span>/);
   boards.daily = scoreboard([game({ id: "live-before-clock", state: "live", started: false, period: 0, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } })]);
   const liveBeforeClock = render([], { boards }).html;
   assert.doesNotMatch(summaryOf(liveBeforeClock), /class="team-line"/);
-  assert.match(liveBeforeClock, /class="detail-line"[^>]*>.*?Team b −7\.5/);
+  assert.match(screenOf("live-before-clock", { boards }), /class="detail-line"[^>]*>.*?Team b −7\.5/);
   boards.daily = scoreboard([game({ id: "live-pickem-before-clock", state: "live", started: false, period: 0, pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
   const pickemBeforeClock = render([], { boards }).html;
   assert.doesNotMatch(summaryOf(pickemBeforeClock), /class="pickem-line"/);
-  assert.match(pickemBeforeClock, /class="detail-line"[^>]*>.*?<strong aria-hidden="true">PK<\/strong>/);
+  assert.match(screenOf("live-pickem-before-clock", { boards }), /class="detail-line"[^>]*>.*?<strong aria-hidden="true">PK<\/strong>/);
   for (const started of [true, false]) {
     boards.daily = scoreboard([game({ id: `delayed-${started}`, state: "delayed", started, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } })]);
     const delayed = render([], { boards }).html;
     assert.equal(summaryOf(delayed).includes('class="team-line"'), !started);
-    assert.equal(delayed.includes('class="detail-line"'), true);
+    assert.equal(screenOf(`delayed-${started}`, { boards }).includes('class="detail-line"'), true);
   }
   boards.daily = scoreboard([game({ id: "away-favorite", state: "upcoming", started: false, pregameLine: { favoriteId: "a", spread: 3.5, source: "ESPN" } })]);
   const awayCard = render([], { boards }).html.match(/<article id="game-away-favorite"[\s\S]*?<\/article>/)?.[0];
@@ -251,7 +257,7 @@ test("screen readers hear pregame context for the line instead of the visible la
   const line = { favoriteId: "a", spread: 1, source: "ESPN BET" };
   const boards = fixtures(); boards.daily = scoreboard([game({ id: "one-point-live", pregameLine: line }), game({ id: "one-point-upcoming", state: "upcoming", started: false, pregameLine: line })]);
   const { html } = render([], { boards });
-  const detail = cardOf(html, "one-point-live").match(/<div class="detail-line">([\s\S]*?)<\/div>/)?.[1];
+  const detail = screenOf("one-point-live", { boards }).match(/<p class="detail-line">([\s\S]*?)<\/p>/)?.[1];
   assert.match(detail, /^<span class="sr-only">Pregame betting line: Team a favored by 1 point, ESPN BET<\/span>/);
   assert.equal(detail.replace(/^<span class="sr-only">.*?<\/span>/, "").match(/<(?:span|strong)(?: [^>]*)?>/g).every(tag => tag.includes('aria-hidden="true"')), true);
   assert.match(cardOf(html, "one-point-upcoming"), /<span class="sr-only">Pregame betting line: favored by 1 point, ESPN BET<\/span><span class="team-line-visible" aria-hidden="true">−1<\/span>/);
@@ -268,7 +274,9 @@ test("canceled, postponed and no-contest games omit a retained line from the row
       const boards = fixtures(); boards.daily = retained;
       const card = render([], { boards }).html.match(/<article id="game-called-off"[\s\S]*?<\/article>/)?.[0];
       assert.match(card, new RegExp(`class="game-status status-other">${status}<`));
-      assert.doesNotMatch(card, /class="(?:team-line|pickem-line|detail-line)"|Pregame|−7\.5|>PK</);
+      const screen = screenOf("called-off", { boards });
+      assert.match(screen, new RegExp(`<h2>${status}</h2>`), "status-first game screen");
+      for (const out of [card, screen]) assert.doesNotMatch(out, /class="(?:team-line|pickem-line|detail-line)"|Pregame|−7\.5|>PK</);
     }
   }
 });
@@ -297,9 +305,14 @@ test("recovered finals leave Upsets while completed conference upsets remain", (
   assert.doesNotMatch(comeback, /Earlier upset watch|Upset final|East Carolina beat Florida/);
   final.teams[0].score = 7;
   const upset = render(["upset"], { boards }).html;
-  assert.match(upset, /Conference watch/);
-  assert.match(upset, /East Carolina beat Florida · SEC conference watch/);
-  assert.doesNotMatch(upset, /pregame favorite|No\. (null|undefined)/);
+  assert.match(upset, /class="compact-upset">Conference watch/);
+  const screen = screenOf("retained", { boards, selection: ["upset"] });
+  assert.match(screen, /class="badge upset-badge">Conference watch/);
+  assert.match(screen, /East Carolina beat Florida · SEC conference watch/);
+  for (const out of [upset, screen]) assert.doesNotMatch(out, /pregame favorite|No\. (null|undefined)/);
+  // The recovered final's game screen has no earlier upset context either.
+  final.teams[0].score = 28;
+  assert.doesNotMatch(screenOf("retained", { boards }), /Earlier upset watch|Upset final|East Carolina beat Florida|class="upset-reason"/);
 });
 
 test("ORD-016/017 rendered Final puts ranked Power Four above unranked Group of Six without Virginia Tech's earlier watch", () => {
@@ -325,6 +338,7 @@ test("ORD-016/017 rendered Final puts ranked Power Four above unranked Group of 
   const vtCard = all.match(/<article id="game-vt-bc"[\s\S]*?<\/article>/)?.[0];
   assert.ok(vtCard);
   assert.doesNotMatch(vtCard, /Earlier upset watch|Upset final|Conference watch|class="compact-upset"|class="badge upset-badge"/);
+  assert.doesNotMatch(screenOf("vt-bc", { boards }), /Earlier upset watch|Upset final|Conference watch|class="badge upset-badge"|class="upset-reason"/);
 });
 
 test("Help separates selective alert policy from rank-or-line display categories", () => {
@@ -334,8 +348,11 @@ test("Help separates selective alert policy from rank-or-line display categories
   const boards = fixtures(); boards.daily = scoreboard([underdog]);
   const { html } = render([], { boards, showHelp: true });
   assert.deepEqual(cardIds(html), ["ranked-underdog"]);
-  assert.match(html, /class="badge upset-badge"/);
-  assert.match(html, /rank-based upset/);
+  assert.match(html, /class="compact-upset">Upset watch/);
+  const screen = screenOf("ranked-underdog", { boards });
+  assert.match(screen, /class="badge upset-badge">Upset watch/);
+  // The rank-based explanation moved with the game details to the game screen.
+  assert.match(screen, /class="upset-reason">.*rank-based upset/);
   assert.match(html, /Phone alerts are separate from these display categories/);
   assert.match(html, /Game alerts are off when ESPN confirms both teams are unranked and from Group-of-Six conferences/);
   assert.match(html, /Selected categories do not filter notifications/);
@@ -350,8 +367,10 @@ test("live conference watches use the same honest badge as conference finals", (
   Object.assign(g.teams[1], { conferenceId: "151", rank: null, score: 21 });
   const boards = fixtures(); boards.daily = scoreboard([g]);
   const { html } = render(["upset"], { boards });
-  assert.match(html, /class="badge upset-badge">Conference watch/);
-  assert.match(html, /SEC conference watch/);
+  assert.match(html, /class="compact-upset">Conference watch/);
+  const screen = screenOf("conference-live", { boards, selection: ["upset"] });
+  assert.match(screen, /class="badge upset-badge">Conference watch/);
+  assert.match(screen, /SEC conference watch/);
   const paused = { ...g, state: "delayed", started: true };
   const final = structuredClone(g); final.state = "final"; final.teams[0].score = 35;
   boards.daily = retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(scoreboard([paused]))));
@@ -370,13 +389,54 @@ test("a delayed close observation stays out of One score until its retained fina
   assert.deepEqual(cardIds(delayed), []);
   assert.equal(badge(delayed, "close"), 0);
   const watched = render([], { boards, focusedGame: live.id }).html;
-  assert.match(watched, /Play paused\. Watching for an update\./);
-  assert.doesNotMatch(watched, /class="badge close-badge"/);
+  assert.ok(cardIds(watched).includes(live.id));
+  const pausedScreen = screenOf(live.id, { boards, focusedGame: live.id });
+  assert.match(pausedScreen, /class="delay-note">Play paused\. Watching for an update\./);
+  assert.match(pausedScreen, /Play is paused|You’re offline|Loading team stats/, "the stats section stays present while paused");
+  assert.doesNotMatch(pausedScreen, /class="badge close-badge"/);
   const final = structuredClone(live); final.state = "final"; final.teams[1].score = 35;
   boards.daily = retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(paused)));
   const html = render(["close"], { boards }).html;
   assert.deepEqual(cardIds(html), [live.id]);
-  assert.match(html, /One-score watch/);
+  assert.match(screenOf(live.id, { boards, selection: ["close"] }), /class="badge close-badge">One-score watch/);
+});
+
+test("a card is a link to its game screen and the scoreboard does no stats work", () => {
+  const { html } = render(["top25"], { period: "week" });
+  const card = html.match(/<article id="game-top-live"[\s\S]*?<\/article>/)?.[0];
+  assert.match(card, /<a class="game-summary" href="\/\?event=top-live&amp;cats=top25&amp;period=week" data-focus-key="summary"><span class="sr-only">Game details: <\/span>/);
+  assert.doesNotMatch(html, /<details|<summary|game-details|stats-|view-nav|class="gamecast"|game-screen/, "no inline expansion, stats markup or work on the board");
+  assert.match(html, /<div class="scores-view">/);
+  assert.match(html, /<h1 class="sr-only" id="scoreboard-heading" tabindex="-1">/);
+});
+
+test("the open game screen keeps the scoreboard mounted but hidden and shows score, context and Gamecast", () => {
+  const g = game({ id: "screen-game", broadcast: "ACC Network", possession: "a", downDistance: "3rd & 2 at B 12", redZone: true });
+  g.teams[0].record = "4-2"; g.teams[1].record = "3-3";
+  const boards = fixtures(); boards.daily = scoreboard([g]);
+  const { html } = render([], { boards, route: { id: "screen-game", section: "team" } });
+  assert.match(html, /<div class="scores-view" hidden="">/);
+  assert.deepEqual(cardIds(html), ["screen-game"], "the board stays rendered beneath");
+  const screen = screenOf("screen-game", { boards });
+  assert.match(screen, /aria-label="Back to scores, Sat, Aug 29"/);
+  assert.match(screen, /<h1 class="game-title has-score" tabindex="-1"><span class="title-plain" aria-hidden="true">a <i>at<\/i> b<\/span><span class="title-score" aria-hidden="true">a <b>14<\/b><i>–<\/i><b>21<\/b> b<\/span><span class="sr-only">Team a at Team b<\/span><\/h1>/);
+  assert.match(screen, /<p class="sr-only">Team a, 4-2, 14; No\. 20 Team b, 3-3, 21\. Team a has possession\.<\/p>/);
+  assert.match(screen, /class="mh-score home leading /);
+  assert.match(screen, /class="drive red-zone"><span>RED ZONE<\/span>3rd &amp; 2 at B 12/);
+  assert.match(screen, /class="gamecast" data-focus-key="gamecast" aria-label="Open Team a vs Team b on ESPN">Gamecast/);
+  assert.match(screen, /aria-pressed="true">Team stats/);
+  for (const forbidden of [/spread|moneyline|odds|win probability/i, /<details/]) assert.doesNotMatch(screen, forbidden);
+});
+
+test("unknown and Duke-protected games share one generic screen with no teams, score or stats", () => {
+  const duke = game({ id: "duke-game" }); duke.teams[0] = { ...duke.teams[0], id: "150", name: "Duke", abbreviation: "DUKE" };
+  const boards = fixtures(); boards.daily = scoreboard([duke, ...boards.daily.games]);
+  const hidden = screenOf("duke-game", { boards }), unknown = screenOf("no-such-game", { boards });
+  assert.ok(hidden.length > 0);
+  assert.equal(hidden, unknown, "a protected game is indistinguishable from an unknown one");
+  assert.doesNotMatch(hidden, /Duke|DUKE|masthead|mh-score|view-nav|panel-team|compare-table|player-table|Gamecast/);
+  assert.match(hidden, /<h1 class="game-title" tabindex="-1">(?:Loading game|Game unavailable)<\/h1>/);
+  assert.doesNotMatch(render([], { boards }).html, /game-duke-game/);
 });
 
 test("restoration effect replay uses its captured snapshot after transient URL cleanup", () => {
@@ -389,6 +449,8 @@ test("restoration effect replay uses its captured snapshot after transient URL c
   Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem() { throw Error("Restoration must not read stored preference"); } } });
   try {
     effects[0](); assert.equal(url.search, ""); effects[0]();
-    assert.deepEqual(changes, [{ slot: 2, value: true }, { slot: 3, value: "focused" }, { slot: 2, value: true }, { slot: 3, value: "focused" }]);
+    // A 1.14.0 update link (no _ss_open) keeps its membership and opens that game once.
+    const once = [{ slot: 2, value: true }, { slot: 3, value: "focused" }, { slot: 5, value: "focused" }];
+    assert.deepEqual(changes, [...once, ...once]);
   } finally { for (const [key, descriptor] of original) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; } }
 });

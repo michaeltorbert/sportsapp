@@ -1,6 +1,6 @@
 # Game statistics (issue #115)
 
-Opening a game card loads its stats inside the existing expansion. Before kickoff it shows season averages. Live (including halftime and paused-after-kickoff) and finished games get the team comparison, a Team details disclosure and a Players disclosure; live support is enabled under the gate evidence below. Canceled, postponed, forfeit and no-contest games are status-first and load nothing. The line, upset explanation, situation, delay note and Gamecast link stay where they are. Stats never gate score refresh, line enrichment, halftime timing, ordering, categories, Guide, alerts or board persistence.
+Selecting a scoreboard game opens its dedicated game screen (user-approved r1 design, 2026-10-13; it replaced the inline expansion). The screen shows the score masthead, then **Team stats** by default and **Player stats** as the second section. Before kickoff Team stats shows season averages per game. Live (including halftime and paused-after-kickoff) and finished games show all 15 game metrics in one mirrored comparison, and Player stats lists every supplied passing, rushing and receiving participant as one continuous document. Live support is enabled under the gate evidence below. Canceled, postponed, forfeit and no-contest games are status-first and load nothing. The validated line, upset explanation, situation, delay note, halftime status, badges and Gamecast link moved with the game to its screen. Stats never gate score refresh, line enrichment, halftime timing, ordering, categories, Guide, alerts or board persistence.
 
 ## Pieces
 
@@ -11,10 +11,24 @@ Opening a game card loads its stats inside the existing expansion. Before kickof
 | `app/api/stats/route.ts` | `GET /api/stats?event=<6–12 digits>&phase=pregame\|started\|final&refresh=0\|1`. Anything else gets a 400 before any upstream call. Responses are `no-store` and `nosniff` |
 | `lib/stats-client.ts` | Worker-first load inside the absolute deadline, plus the optional direct fallback (same normalizer) |
 | `lib/stats-scheduler.ts` | Shared FIFO queue: two active loads, one entry per card, deadline counted from enqueue |
-| `lib/use-game-stats.ts` | Card-owned `StatsController` (generation, polling, backoff, cancellation) and the React hook |
-| `components/game-stats.tsx` | `GameStatsPanel` (hook wrapper) and the pure `GameStatsView` |
+| `lib/use-game-stats.ts` | `StatsController` (generation, polling, backoff, cancellation) and the React hook, owned by the open game screen |
+| `components/game-stats.tsx` | `GameStatsScreen` (hook wrapper) and the pure `GameStatsView`: section navigation, Team stats and Player stats |
+| `components/game-screen.tsx` | The game screen: slim bar, masthead, context row and the stats view |
+| `lib/game-route.ts` | Same-root URL (`/?event=<id>[&section=players]`), validated history records and the owned-history controller |
 
-`app/page.tsx` renders `GameStatsPanel` inside `.game-details`, after the delay note and before `.card-bottom`. The panel renders nothing and does no work while its card is collapsed. A native `<details>` keeps its children mounted, so loading is driven by the parent-owned `expanded` prop.
+`app/page.tsx` keeps the scoreboard mounted (one score poller, its state and DOM) inside a hidden wrapper while a game is open, and renders `GameScreen` beside it. Only the open, eligible game mounts `GameStatsScreen`, so the scoreboard itself never does stats work and at most one controller is active.
+
+## Navigation
+
+- **Destination.** `/?event=<id>`, plus the scoreboard's own `date` (only when not following Today), `cats` and `period`, so the view the scoreboard derives from the URL is unchanged. Player stats adds `section=players`; switching sections replaces the entry, so Back returns straight to the scoreboard. Unrelated parameters survive; a legacy `#game-` hash does not. The static homepage serves this URL like any other root query.
+- **History records.** Entries carry a versioned `ss` record merged into the framework's state: a scoreboard snapshot (date or Today, categories, Day/Week, Hide finals, absolute scroll, origin game ID) or a game entry (ID, section, whether our scoreboard entry is directly behind it). UI state and IDs only, never game content. Anything that fails validation is not ours.
+- **Opening.** The current entry is replaced with the scoreboard snapshot, then the game entry is pushed, so Back always has a safe scoreboard behind it.
+- **Back.** On-screen Back uses `history.back()` when our scoreboard entry is behind; otherwise (a direct link, an update reload) it replaces the entry with the scoreboard for the carried view and focuses the game's card, never leaving the app.
+- **Owned traversals.** One capture-phase `popstate` listener on `window` runs before the framework's bubble listeners. It handles a traversal only when the path is `/` and both the entry being left and the target are validated records of ours. It then stops the event, so no RSC request or document load runs (this is what keeps Back and Forward working offline or when the Worker fails), applies the target, and re-commits the URL with the public `history.replaceState`, which the framework patches to keep its own URL state current. Every other traversal, including the Guide and framework entries, reaches the framework untouched. `history` is not patched. Records also carry `__vinext_scrollY`, which the framework's own restoration reads for traversals it handles.
+- **Restoration.** Returning shows the scoreboard, focuses the origin card's link without scrolling (or the Scores heading if that card is gone), then restores the saved absolute scroll position clamped to the page. The card may have moved to another section while the game was open; the position is never re-anchored to it. A cross-document return (Back after reloading a game) restores the saved snapshot once scores load; only real input (pointer, touch, wheel, key) cancels that wait. A plain reload of the scoreboard keeps its URL and saved-preference behavior.
+- **Notification and update links.** `#game-<id>` (alerts) and the update `_ss_focus` remain Watchlist membership. They also open that game once, when it appears on the protected boards and before any input: the entry is replaced by a scoreboard entry with a `consumed` marker and the hash removed, then the game is pushed. Back, polls and reloads never reopen it. Updates serialize `_ss_open` as the still-pending game or `0`; a 1.14.0 update link without it opens its focused game once, as it used to expand. An open game survives an update through its own `event` parameter. Updates never replay notification scrolling.
+- **Privacy.** The screen looks its game up on the Duke-protected boards at every render. Unknown, not yet loaded and protected games share one generic screen with no teams, score, title or stats work; hiding a game while it is open switches to it immediately and unmounts its stats controller.
+- **Appearance.** The approved palette (`--bg`, `--surface`, `--line`, `--lime` and the rest) is scoped to `.game-screen`; the status-bar band uses its navy only while the screen is rendered (`body:has(.game-screen)::before`). The scoreboard's tokens and appearance are unchanged. Only the slim bar and section navigation stick, and only with at least 600 CSS px of zoom-adjusted height and the two bars using no more than a third of the viewport. Neutral share bars appear only on total, passing and rushing yards when both values are non-negative integers; they are decorative and imply no leader. Real team logos keep the scoreboard's light tile; otherwise the abbreviation shows.
 
 ## Contract and semantics
 
@@ -62,14 +76,14 @@ Opening a game card loads its stats inside the existing expansion. Before kickof
   - Memory only: never localStorage, `Game` or `Scoreboard`.
 - **Refresh schedule.**
 
-  | Phase | While expanded and visible |
+  | Phase | While its screen is open and visible |
   |---|---|
   | Started | Polls every 30 s |
   | Pregame | Revalidates once at its 5-minute TTL |
   | Final | Reused for 5 minutes, then revalidated on reopen or **Check again** |
 
   Opening or resuming refreshes once when the applicable TTL has passed.
-- **Cancellation.** Collapsing, unmounting, hiding the tab or going offline cancels owned work and removes queued work.
+- **Cancellation.** Leaving the game screen, switching to another game, a privacy re-hide, hiding the tab or going offline cancels owned work and removes queued work.
 - **Backoff.** Failures back off 60, then 120, then 300 s. `Retry-After` is honored, clamped to 1–300 s. Retry and Check again cannot bypass it: during backoff the control is disabled and reads "Retry in 42s" / "Retry in 5m"; the eligible attempt then runs automatically, or manually when no automatic attempt is due (for example a final whose revalidation failed). Each manual action is one attempt with `refresh=1`, still subject to the queue and deadline.
 - **Fallback boundary.** Worker `429`/`503`, `400`, `502` and identity mismatches are authoritative and never fall back. Only an unreachable Worker, a timeout or an invalid contract may fall back, and only when the fallback is enabled.
 - **Age and warnings.** The age timer runs independently of score refreshes.
@@ -81,7 +95,7 @@ Opening a game card loads its stats inside the existing expansion. Before kickof
 
 ## Focus across section moves
 
-A state change (live ↔ paused, for example) moves a card to another section, remounting it. `app/page.tsx` records the focused card control (`data-focus-key`: summary, Gamecast, Team details/Players buttons, Retry, Check again, player-table regions). When the same event's card remounts, it puts focus back on the matching control, scrolling only as far as needed, but only if the control was removed with the old card and nothing else has focus. Focus the user moved elsewhere, or a deliberate blur, is never overridden. Inner disclosure and expanded state persist as before.
+A state change (live ↔ paused, for example) moves a card to another scoreboard section, remounting it. `app/page.tsx` records the focused card link (`data-focus-key="summary"`). When the same event's card remounts, it puts focus back on it, scrolling only as far as needed, but only if the link was removed with the old card, nothing else has focus and the scoreboard is not hidden behind an open game. Focus the user moved elsewhere, or a deliberate blur, is never overridden. The open game screen is not remounted by such a change, so its section, focused control and stats state stay as they are.
 
 ## Gates
 
@@ -110,5 +124,6 @@ Changing any tuning value requires re-review.
   - Chromium scrolls on the first ArrowRight.
   - Playwright desktop WebKit consistently ignored the first arrow press after focus and scrolled smoothly from the second onward. The test allows at most two presses and logs the count. This was observed in Playwright's WebKit build, not Safari.
   - Mobile-emulated WebKit (touch) does not arrow-key scroll overflow regions; touch is its input there.
-- **Live coverage.** Browser tests cover live first-tap loading, the separate source status, 30 s polling while open and no polling when collapsed. These run against intercepted responses built from the genuine live capture; the real-ESPN evidence is the coordinator probe above.
+- **Live coverage.** Browser tests cover live loading on opening the screen, the separate source status, 30 s polling while open and no polling after Back. These run against intercepted responses built from the genuine live capture; the real-ESPN evidence is the coordinator probe above.
+- **Navigation evidence.** `tests/browser/game-screen.spec.mjs` covers restoration (including a group/order change and a later poll), Forward, reload then Back, direct and unknown links, one-shot notification links, A→B isolation, a Duke re-hide while open, owned Back/Forward offline and with failing RSC responses (zero RSC or document requests, same document), a framework-handled Guide traversal, and sticky/zoom behavior, in mobile-emulated Chromium and WebKit. Physical iPhone gestures (edge-swipe Back) and installed Home Screen behavior are not covered.
 - **No device evidence.** No physical device, Safari or Simulator verification has been done.

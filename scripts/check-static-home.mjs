@@ -39,7 +39,7 @@ try {
   }
   assert.ok(health?.ok, output);
   const { version, commit } = await health.json();
-  for (const suffix of ["/guide", "/guide?date=2026-09-12&view=watch", "/", "/?tab=acc&date=2026-09-07&_ss_update=1", "/?game=401858212#game-401858212"]) {
+  for (const suffix of ["/guide", "/guide?date=2026-09-12&view=watch", "/", "/?tab=acc&date=2026-09-07&_ss_update=1", "/?game=401858212#game-401858212", "/?event=401858212&section=players"]) {
     const response = await fetch(origin + suffix);
     assert.equal(response.status, 200, suffix);
     assert.equal(response.headers.get("cache-control"), "public, max-age=0, must-revalidate", suffix);

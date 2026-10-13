@@ -91,7 +91,23 @@ test('text logo fallbacks stay inside their boxes at 200 percent text', async ({
   }
 });
 
-test('touch users can expand upcoming lines to read favorite and pickem sources', async ({ page, harness }, info) => {
+// The game screen's score area and line row stay inside the page at every width.
+async function screenFits(page) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(await page.locator('.game-screen').evaluate(screen => {
+    const problems = [], edge = screen.getBoundingClientRect();
+    for (const el of screen.querySelectorAll('.mh-name, .mh-meta, .mh-score, .mh-status, .detail-line, .detail-line > [aria-hidden], .drive, .game-context')) {
+      const box = el.getBoundingClientRect();
+      if (el.scrollWidth > el.clientWidth + 1) problems.push(`${el.className || el.tagName} overflows`);
+      if (box.left < edge.left - 1 || box.right > edge.right + 1) problems.push(`${el.className || el.tagName} leaves the screen`);
+    }
+    return problems;
+  })).toEqual([]);
+}
+const openScreen = async (page, id) => { await page.locator(`#game-${id} a.game-summary`).tap(); await expect(page.locator('.game-screen')).toBeVisible(); };
+const closeScreen = async page => { await page.locator('.game-screen').getByRole('button', { name: /^Back to scores/ }).tap(); await expect(page.locator('.game-screen')).toHaveCount(0); };
+
+test('touch users can open upcoming games to read favorite and pickem sources', async ({ page, harness }, info) => {
   const favorite = event('touch-favorite', { state: 'upcoming', rank: 5 });
   const pickem = event('touch-pickem', { state: 'upcoming', rank: 12 });
   for (const [matchup, spread] of [[favorite, -7.5], [pickem, 0]]) {
@@ -103,24 +119,30 @@ test('touch users can expand upcoming lines to read favorite and pickem sources'
   harness.state.events = [favorite, pickem];
   await page.setViewportSize({ width: 320, height: 844 });
   await harness.open({ path: '/?date=2026-09-05' });
-  for (const [id, inline] of [['touch-favorite', '−7.5'], ['touch-pickem', 'PK']]) {
-    const row = page.locator(`#game-${id}`), summary = row.locator('summary'), line = row.locator('.detail-line');
+  for (const [id, inline, spoken] of [['touch-favorite', '−7.5', 'Pregame betting line: touch-favorite home favored by 7.5 points, ESPN BET Sportsbook'], ['touch-pickem', 'PK', 'Pregame pick’em line, ESPN BET Sportsbook']]) {
+    const row = page.locator(`#game-${id}`), summary = row.locator('a.game-summary');
     await expect(summary.locator(id === 'touch-favorite' ? '.team-line-visible' : '.pickem-line [aria-hidden]')).toHaveText(inline);
-    await expect(line).toBeHidden();
-    await summary.tap();
+    await expect(row.locator('.detail-line')).toHaveCount(0);
+    await rowFits(page, row);
+    await openScreen(page, id);
+    const line = page.locator('.game-screen .detail-line');
     await expect(line).toBeVisible();
     await expect(line.locator('[aria-hidden="true"]').last()).toHaveText('ESPN BET Sportsbook');
-    expect((await line.ariaSnapshot())).toContain('Line source: ESPN BET Sportsbook');
+    expect((await line.ariaSnapshot())).toContain(spoken);
     expect((await line.locator('[aria-hidden="true"]').allInnerTexts()).join(' ')).not.toMatch(/Pregame/i);
-    await rowFits(page, row);
-    await row.screenshot({ path: info.outputPath(`${id}-expanded-320.png`), animations: 'disabled' });
+    await screenFits(page);
+    await page.screenshot({ path: info.outputPath(`${id}-screen-320.png`), animations: 'disabled' });
+    await page.addStyleTag({ content: 'html { font-size: 200%; }' });
+    await screenFits(page);
+    await page.addStyleTag({ content: 'html { font-size: 100%; }' });
+    await closeScreen(page);
   }
   await page.addStyleTag({ content: 'html { font-size: 200%; }' });
   for (const row of await page.locator('#game-touch-favorite, #game-touch-pickem').all()) await rowFits(page, row);
   await page.screenshot({ path: info.outputPath('touch-sources-320-large-text.png'), fullPage: true, animations: 'disabled' });
 });
 
-test('after kickoff the line moves below the collapsed score row', async ({ page, harness }, info) => {
+test('after kickoff the line leaves the score row and stays on the game screen', async ({ page, harness }, info) => {
   const withRecords = game => {
     const [away, home] = game.competitions[0].competitors;
     away.team.shortDisplayName = 'Mississippi State';
@@ -137,25 +159,30 @@ test('after kickoff the line moves below the collapsed score row', async ({ page
   harness.state.events = [upcoming];
   await page.setViewportSize({ width: 320, height: 700 });
   await harness.open({ path: '/?date=2026-09-05' });
-  const row = page.locator('#game-line-transition');
-  await expect(row.locator('summary .team-line-visible')).toHaveText('−7.5');
+  const row = page.locator('#game-line-transition'), screenLine = page.locator('.game-screen .detail-line');
+  await expect(row.locator('a.game-summary .team-line-visible')).toHaveText('−7.5');
 
   harness.state.events = [withRecords(event('line-transition', { state: 'live', rank: 5 }))];
   await page.getByRole('button', { name: 'Refresh scores' }).click();
   await expect(row.locator('.game-status')).toContainText('4th');
-  await expect(row.locator('summary .team-line, summary .pickem-line')).toHaveCount(0);
-  await expect(row.locator('summary .team-record')).toHaveText(['3-1', '2-2']);
-  await expect(row.locator('.detail-line')).toBeHidden();
-  await row.locator('summary').click();
-  await expect(row.locator('.detail-line')).toContainText('North Carolina −7.5');
-  await expect(row.locator('.detail-line')).toContainText('ESPN');
-  await page.screenshot({ path: info.outputPath('live-line-in-details-320.png'), fullPage: true, animations: 'disabled' });
+  await expect(row.locator('a.game-summary .team-line, a.game-summary .pickem-line')).toHaveCount(0);
+  await expect(row.locator('a.game-summary .team-record')).toHaveText(['3-1', '2-2']);
+  await expect(row.locator('.detail-line')).toHaveCount(0);
+  await row.locator('a.game-summary').click();
+  await expect(screenLine).toContainText('North Carolina −7.5');
+  await expect(screenLine).toContainText('ESPN');
+  await expect(page.locator('.game-screen .mh-meta')).toHaveText(['3-1 · Away', '2-2 · Home']);
+  await page.screenshot({ path: info.outputPath('live-line-on-screen-320.png'), fullPage: true, animations: 'disabled' });
 
+  // The line stays with the open game as it finishes.
   harness.state.events = [withRecords(event('line-transition', { state: 'final', rank: 5 }))];
-  await page.getByRole('button', { name: 'Refresh scores' }).click();
+  await page.clock.fastForward(31_000);
+  await expect(page.locator('.game-screen .mh-state')).toHaveText('Final');
+  await expect(screenLine).toContainText('North Carolina −7.5');
+  await screenFits(page);
+  await closeScreen(page);
   await expect(row.locator('.game-status')).toHaveText('Final');
-  await expect(row.locator('summary .team-line, summary .pickem-line')).toHaveCount(0);
-  await expect(row.locator('.detail-line')).toContainText('North Carolina −7.5');
+  await expect(row.locator('a.game-summary .team-line, a.game-summary .pickem-line')).toHaveCount(0);
   await geometry(page);
 });
 
@@ -169,14 +196,14 @@ async function rowFits(page, row) {
       if (el.scrollWidth > el.clientWidth + 1) problems.push(`${el.className || el.tagName} overflows`);
       if (box.left < edge.left - 1 || box.right > edge.right + 1) problems.push(`${el.className || el.tagName} leaves the card`);
     }
-    for (const team of card.querySelectorAll('summary .team-row')) {
+    for (const team of card.querySelectorAll('a.game-summary .team-row')) {
       if (team.querySelector('.team-identity').getBoundingClientRect().right > team.querySelector('.score').getBoundingClientRect().left + 1) problems.push('team identity overlaps score');
     }
     return problems;
   })).toEqual([]);
 }
 
-for (const state of ['live', 'delayed', 'final']) test(`expanded ${state} line, records and scores fit phone and desktop widths`, async ({ page, harness }, info) => {
+for (const state of ['live', 'delayed', 'final']) test(`${state} game screen line, records and scores fit phone and desktop widths`, async ({ page, harness }, info) => {
   const id = `fit-${state}`;
   const matchup = started => {
     const game = event(id, { state: !started ? 'upcoming' : state === 'final' ? 'final' : 'live', rank: 12, scores: [100, 107] });
@@ -196,7 +223,7 @@ for (const state of ['live', 'delayed', 'final']) test(`expanded ${state} line, 
   harness.state.events = [matchup(false)];
   await page.setViewportSize({ width: 320, height: 844 });
   await harness.open({ path: '/?date=2026-09-05' });
-  const row = page.locator(`#game-${id}`), summary = row.locator('summary'), line = row.locator('.detail-line');
+  const row = page.locator(`#game-${id}`), summary = row.locator('a.game-summary'), line = page.locator('.game-screen .detail-line');
   await expect(summary.locator('.team-line-visible')).toHaveText('−14.5');
 
   harness.state.events = [matchup(true)];
@@ -205,6 +232,7 @@ for (const state of ['live', 'delayed', 'final']) test(`expanded ${state} line, 
   await expect(summary.locator('.team-line, .pickem-line')).toHaveCount(0);
   await expect(summary.locator('.team-record')).toHaveText(['10-2', '12-12-1']);
   await expect(summary.getByLabel('Possession')).toHaveCount(state === 'live' ? 1 : 0);
+  await rowFits(page, row);
   await summary.focus(); await summary.press('Enter');
   await expect(line).toBeVisible();
   await expect(line).toContainText('Northern Appalachian State Mountaineers −14.5');
@@ -213,27 +241,32 @@ for (const state of ['live', 'delayed', 'final']) test(`expanded ${state} line, 
   const spoken = await line.ariaSnapshot();
   expect(spoken).toContain('Pregame betting line: Northern Appalachian State Mountaineers favored by 14.5 points, ESPN BET Sportsbook');
   expect(spoken).not.toContain('−');
+  await expect(page.locator('.game-screen .mh-meta')).toHaveText(['10-2 · Away', '12-12-1 · Home']);
+  await expect(page.locator('.game-screen .mh-name').first()).toContainText('Northern Appalachian State Mountaineers');
+  if (state === 'live') await expect(page.locator('.game-screen .drive')).toContainText('3rd & Goal at CCU 4');
+  if (state === 'delayed') await expect(page.locator('.game-screen .delay-note')).toBeVisible();
 
   const widths = [];
   for (const width of [320, 375, 390, 430, 768, 1280]) {
     await page.setViewportSize({ width, height: 844 });
-    await rowFits(page, row);
-    const box = await row.boundingBox();
-    widths.push({ width, card: Math.round(box.width), height: Math.round(box.height) });
-    await row.screenshot({ path: info.outputPath(`${state}-expanded-${width}.png`), animations: 'disabled' });
+    await screenFits(page);
+    const box = await page.locator('.game-screen .masthead').boundingBox();
+    widths.push({ width, masthead: Math.round(box.width), height: Math.round(box.height) });
+    await page.locator('.game-screen .masthead').screenshot({ path: info.outputPath(`${state}-screen-${width}.png`), animations: 'disabled' });
   }
   await page.setViewportSize({ width: 320, height: 844 });
-  const scaled = row.locator(state === 'live' ? '.detail-line, .drive > span' : '.detail-line');
+  const scaled = page.locator(state === 'live' ? '.game-screen .detail-line, .game-screen .drive > span' : '.game-screen .detail-line');
   const sizes = () => scaled.evaluateAll(els => els.map(el => parseFloat(getComputedStyle(el).fontSize)));
   const baseSizes = await sizes();
   await page.addStyleTag({ content: 'html { font-size: 200%; }' });
   expect(await sizes()).toEqual(baseSizes.map(size => size * 2));
-  await rowFits(page, row);
-  await row.screenshot({ path: info.outputPath(`${state}-expanded-320-large-text.png`), animations: 'disabled' });
-  await info.attach('expanded-row-geometry', { body: JSON.stringify({ state, widths }), contentType: 'application/json' });
+  await screenFits(page);
+  await page.screenshot({ path: info.outputPath(`${state}-screen-320-large-text.png`), animations: 'disabled' });
+  await info.attach('screen-geometry', { body: JSON.stringify({ state, widths }), contentType: 'application/json' });
 
-  await summary.tap(); await expect(line).toBeHidden();
-  await summary.tap(); await expect(line).toBeVisible();
+  await closeScreen(page); await expect(line).toHaveCount(0);
+  await rowFits(page, row);
+  await openScreen(page, id); await expect(line).toBeVisible();
 });
 
 test('malformed ESPN records are omitted without dropping the game at 320px', async ({ page, harness }) => {
@@ -251,45 +284,54 @@ test('malformed ESPN records are omitted without dropping the game at 320px', as
   await rowFits(page, row);
 });
 
-test('details support keyboard and touch, preserve live-to-final context and show overall records', async ({ page, harness }, info) => {
+test('game links support keyboard and touch, preserve live-to-final context and show overall records', async ({ page, harness }, info) => {
   const game = event('context', { rank: 5 });
   game.competitions[0].situation = { possession: 'context-away', isRedZone: true, downDistanceText: '3rd & 2 at HOME 12' };
   for (const team of game.competitions[0].competitors) team.records = [{ type: 'total', summary: '3-1' }];
   harness.state.events = [game];
   await harness.open({ path: '/?date=2026-09-05' });
-  const row = page.locator('#game-context'), details = row.locator('details'), summary = row.locator('summary');
-  await expect(details).not.toHaveAttribute('open');
+  const row = page.locator('#game-context'), summary = row.locator('a.game-summary'), screen = page.locator('.game-screen');
+  await expect(row.locator('details, .game-details')).toHaveCount(0);
   await expect(summary).toContainText('Game details:');
   await expect(summary.locator('a,button,input')).toHaveCount(0);
   await expect(summary).toContainText('RED ZONE');
   await expect(summary.getByLabel('Possession')).toBeVisible();
   await summary.focus(); await summary.press('Enter');
-  await expect(details).toHaveAttribute('open', '');
-  await expect(row.getByRole('link', { name: /Open context away vs context home on ESPN/ })).toHaveAttribute('href', /espn.com/);
-  await expect(row.locator('.drive')).toContainText('3rd & 2');
-  await expect(row.locator('.team-record')).toHaveText(['3-1', '3-1']);
-  await page.screenshot({ path: info.outputPath('compact-expanded.png'), fullPage: true, animations: 'disabled' });
+  await expect(screen).toBeVisible();
+  await expect(screen.getByRole('link', { name: /Open context away vs context home on ESPN/ })).toHaveAttribute('href', /espn.com/);
+  await expect(screen.locator('.drive')).toContainText('3rd & 2');
+  await expect(screen.locator('.drive')).toContainText('RED ZONE');
+  await expect(screen.locator('.possession')).toHaveCount(1);
+  await expect(screen.locator('.mh-meta')).toHaveText(['3-1 · Away', '3-1 · Home']);
+  await page.screenshot({ path: info.outputPath('compact-screen.png'), fullPage: true, animations: 'disabled' });
   harness.state.events = [event('context', { rank: 5, state: 'final', scores: [28, 21] })];
   await page.clock.fastForward(31_000);
+  await expect(screen.locator('.mh-state')).toHaveText('Final');
+  await expect(screen.locator('.drive, .possession')).toHaveCount(0);
+  await expect(screen).not.toContainText('Earlier upset watch');
+  await expect(screen.locator('.upset-badge, .upset-reason')).toHaveCount(0);
+  // Keyboard Back, then touch reopens it.
+  await screen.getByRole('button', { name: /^Back to scores/ }).focus(); await page.keyboard.press('Enter');
+  await expect(screen).toHaveCount(0);
   await expect(row.locator('.game-status')).toHaveText('Final');
-  await expect(details).toHaveAttribute('open', '');
+  await expect(summary).toBeFocused();
   await expect(summary).not.toContainText('Earlier upset watch');
   await expect(summary.locator('.compact-upset')).toHaveCount(0);
-  await expect(row.locator('.upset-badge')).toHaveCount(0);
-  await summary.tap(); await expect(details).not.toHaveAttribute('open');
-  await summary.press('Space'); await expect(details).toHaveAttribute('open', '');
+  await summary.tap(); await expect(screen).toBeVisible();
 });
 
-test('focused links disclose only visible games and opening bell does not enable notifications', async ({ page, harness }) => {
-  await harness.open({ path: '/?date=2026-09-05#game-ranked-live' });
-  await expect(page.locator('#game-ranked-live details')).toHaveAttribute('open', '');
-  const landing = await page.locator('#game-ranked-live summary').boundingBox();
+test('focused links open only visible games, once, and opening bell does not enable notifications', async ({ page, harness }) => {
+  await harness.open({ path: '/?date=2026-09-05#game-ranked-live', waitForScores: false });
+  await expect(page.locator('.game-screen h1.game-title')).toContainText('ranked-live away');
+  await page.goBack();
+  await expect(page.locator('.game-screen')).toHaveCount(0);
+  // Back lands on the notification card as it was scrolled into view.
+  const landing = await page.locator('#game-ranked-live a.game-summary').boundingBox();
   const tabs = await page.locator('.filter-tabs').boundingBox();
   expect(landing.y).toBeGreaterThanOrEqual(tabs.y + tabs.height);
   expect(landing.y + landing.height).toBeLessThan(844);
-  await page.locator('#game-ranked-live summary').tap();
   await page.clock.fastForward(31_000);
-  await expect(page.locator('#game-ranked-live details')).not.toHaveAttribute('open');
+  await expect(page.locator('.game-screen')).toHaveCount(0);
   await page.getByRole('button', { name: 'Alerts off', exact: true }).tap();
   await expect(page.getByRole('dialog')).toBeVisible();
   expect(await page.evaluate(() => window.__pushSimulation)).toEqual({ permissionRequests: 0, subscribes: 0, unsubscribes: 0 });
@@ -329,7 +371,7 @@ test.describe('device time distinct from Eastern date', () => {
 });
 
 
-test('update restoration opens details while hidden Duke focus stays protected', async ({ page, harness }) => {
+test('a legacy update link opens its game once while hidden Duke focus stays protected', async ({ page, harness }) => {
   // ORD-019 hides only a started game with Duke as the confirmed away team. event() is live and
   // started but omits neutralSite (unknown venue, which stays visible), so confirm the venue here.
   const duke = event('duke-hidden', { acc: true });
@@ -337,11 +379,21 @@ test('update restoration opens details while hidden Duke focus stays protected',
   duke.competitions[0].competitors[0].team.id = '150';
   duke.competitions[0].competitors[0].team.shortDisplayName = 'Duke';
   harness.state.events.push(duke);
-  await harness.open({ path: '/?date=2026-09-05&_ss_update=' + 'a'.repeat(40) + '&_ss_hide_finals=0&_ss_focus=ranked-live' });
-  await expect(page.locator('#game-ranked-live details')).toHaveAttribute('open', '');
+  // A 1.14.0 update URL (no _ss_open) opens its focused game once, as it used to expand.
+  await harness.open({ path: '/?date=2026-09-05&_ss_update=' + 'a'.repeat(40) + '&_ss_hide_finals=0&_ss_focus=ranked-live', waitForScores: false });
+  await expect(page.locator('.game-screen h1.game-title')).toContainText('ranked-live away');
+  expect(page.url()).not.toContain('_ss_');
   await page.goto('/?date=2026-09-05#game-duke-hidden');
   await expect(page.getByRole('button', { name: 'Refresh scores' })).toBeEnabled();
   await expect(page.locator('#game-duke-hidden')).toHaveCount(0);
+  await page.clock.fastForward(1_000);
+  await expect(page.locator('.game-screen')).toHaveCount(0);
+  // The same protected game by direct link is the generic screen.
+  await page.goto('/?date=2026-09-05&event=duke-hidden');
+  await expect(page.locator('.game-screen').getByRole('heading', { name: 'This game isn’t available' })).toBeVisible();
+  await expect(page.locator('.game-screen')).not.toContainText('Duke');
+  await page.goto('/?date=2026-09-05');
+  await expect(page.getByRole('button', { name: 'Refresh scores' })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Show Duke game on Sep 5', exact: true })).toBeVisible();
   // The hash focus never opened it: protection comes from the automatic started-away decision.
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ss:duke-visibility:v2'))?.remembered)).toEqual({ 'duke-hidden': true });
@@ -354,8 +406,9 @@ test('delayed state remains visible and full explanation is disclosed', async ({
   await harness.open();
   const row = page.locator('#game-paused');
   await expect(row.locator('.game-status')).toHaveText('Delayed');
-  await row.locator('summary').tap();
-  await expect(row.locator('.delay-note')).toHaveText('Play paused. Watching for an update.');
+  await row.locator('a.game-summary').tap();
+  await expect(page.locator('.game-screen .delay-note')).toHaveText('Play paused. Watching for an update.');
+  await expect(page.locator('.game-screen .mh-state')).toContainText('Delayed');
 });
 
 
@@ -363,7 +416,7 @@ test('score change feedback remains on summary scores and honors reduced motion'
   await harness.open({ path: '/?date=2026-09-05' });
   harness.state.events[0].competitions[0].competitors[0].score = '17';
   await page.getByRole('button', { name: 'Refresh scores' }).tap();
-  const changed = page.locator('#game-ranked-live summary .score-changed').first();
+  const changed = page.locator('#game-ranked-live a.game-summary .score-changed').first();
   await expect(changed).toHaveText('17');
   expect(await changed.evaluate(el => getComputedStyle(el).animationName)).toBe('score-flash');
   await page.emulateMedia({ reducedMotion: 'reduce' });
