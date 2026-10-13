@@ -149,17 +149,27 @@ async function readingState(page, anchorIds, exclude) {
       now: Date.now(), eastern: new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "medium", timeZone: "America/New_York" }).format(Date.now()),
       scrollY: window.scrollY, scrollHeight: document.documentElement.scrollHeight, innerHeight, coveredTop: covered,
       overflowAnchor: getComputedStyle(document.documentElement).overflowAnchor,
-      anchors: ids.map(id => { const el = document.getElementById(id); return { id, ...box(el), whollyVisible: !!el && whollyVisible(el) }; }),
+      // Document position of the results region: unchanged means nothing was inserted above the list.
+      contentTop: Math.round((document.querySelector(".score-content").getBoundingClientRect().top + scrollY) * 100) / 100,
+      anchors: ids.map(id => { const el = document.getElementById(id); return { id, ...box(el), docTop: el ? Math.round((el.getBoundingClientRect().top + scrollY) * 100) / 100 : null, whollyVisible: !!el && whollyVisible(el) }; }),
       overnightNote: note ? { ...box(note), marginTop: noteStyle.marginTop, marginBottom: noteStyle.marginBottom, text: note.textContent } : null,
       activeElement: active ? { tag: active.tagName, card: active.closest("article.game-card")?.id ?? null, focusKey: active.getAttribute("data-focus-key") } : null,
     };
   }, { anchorIds: anchorIds ?? null, exclude });
 }
 
-test("absolute scroll survives a group and order change while the screen is open, and a later poll", async ({ page, harness }, info) => {
+// New direct ESPN scoreboard requests since `since` for one exact `dates` value (compact, as espn-data.ts sends it).
+const requestedDates = (harness, since, dates) => harness.state.scoreRequests.slice(since).some(search => new URLSearchParams(search).get("dates") === dates);
+const attachReading = (info, name, data) => info.attach(name, { contentType: "application/json", body: JSON.stringify(data, null, 2) });
+
+// Criterion (dispositioned 2026-10-13, criterion-disposition-r5.json): the exact absolute position is required on
+// Back and through a later poll that inserts nothing above the reading place. A legitimate notice inserted above
+// it is covered separately below by the reading place itself, not by an unchanged absolute position.
+test("absolute scroll survives a group and order change while the screen is open, and a later stable-layout poll", async ({ page, harness }, info) => {
   harness.state.events = filler(18);
   await page.setViewportSize({ width: 393, height: 640 });
-  await harness.open();
+  // 6 p.m. Eastern: both polls stay well before midnight, so no overnight notice can appear.
+  await harness.open({ now: "2026-09-05T22:00:00Z" });
   const target = "g8";
   await cardLink(page, target).scrollIntoViewIfNeeded();
   await page.evaluate(() => scrollBy(0, 80));
@@ -184,23 +194,76 @@ test("absolute scroll survives a group and order change while the screen is open
   await expectScroll(page, saved);
   // Focus returns to the moved card without re-anchoring the position to it.
   await expect(cardLink(page, target)).toBeFocused();
-  // DIAGNOSTIC (r4): measurements and viewport screenshots before and after the later poll, which crosses
-  // Eastern midnight. They decide nothing; the assertions below are unchanged.
+  // A later real poll with a stable layout above the reading place: the exact position and focus hold.
   const beforePoll = await readingState(page, null, target);
-  await page.screenshot({ path: info.outputPath("reading-before-later-poll.png"), animations: "disabled" });
+  await expect(page.locator(".overnight-note")).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("stable-before-later-poll.png"), animations: "disabled" });
   const polls = harness.state.scoreRequests.length;
   await page.clock.fastForward(30_000);
-  await expect.poll(() => harness.state.scoreRequests.length).toBeGreaterThan(polls);
-  // Give a midnight notice (if any) its render before measuring; absence is recorded, not asserted.
-  const noteAppeared = await page.locator(".overnight-note").waitFor({ timeout: 2000 }).then(() => true, () => false);
+  // The poll has actually requested Today's board (Sep 5), not just started.
+  await expect.poll(() => requestedDates(harness, polls, "20260905")).toBe(true);
+  await page.waitForTimeout(300); // Settle the render; no user input and no clock advance.
   const afterPoll = await readingState(page, beforePoll.anchors.map(anchor => anchor.id), target);
-  await page.screenshot({ path: info.outputPath("reading-after-later-poll.png"), animations: "disabled" });
-  await info.attach("reading-position-later-poll", { contentType: "application/json", body: JSON.stringify({
-    saved, noteAppeared, before: beforePoll, after: afterPoll,
-    scrollDelta: afterPoll.scrollY - beforePoll.scrollY,
-    anchorTopDeltas: afterPoll.anchors.map((anchor, i) => ({ id: anchor.id, delta: anchor.top === undefined || beforePoll.anchors[i].top === undefined ? null : Math.round((anchor.top - beforePoll.anchors[i].top) * 100) / 100 })),
-  }, null, 2) });
+  await page.screenshot({ path: info.outputPath("stable-after-later-poll.png"), animations: "disabled" });
+  await attachReading(info, "stable-later-poll", { saved, before: beforePoll, after: afterPoll });
+  // Established, not assumed: nothing was inserted above the list and no notice appeared.
+  await expect(page.locator(".overnight-note")).toHaveCount(0);
+  expect(Math.abs(afterPoll.contentTop - beforePoll.contentTop), "results region did not move in the document").toBeLessThanOrEqual(1);
+  expect(beforePoll.anchors.length).toBeGreaterThanOrEqual(1);
+  for (const [i, anchor] of afterPoll.anchors.entries()) expect(Math.abs(anchor.docTop - beforePoll.anchors[i].docTop), `${anchor.id} document position`).toBeLessThanOrEqual(2);
   await expectScroll(page, saved);
+  await expect(cardLink(page, target)).toBeFocused();
+});
+
+test("Today across Eastern midnight: the new overnight notice keeps the reader's place while the scroll value moves by its height", async ({ page, harness }, info) => {
+  harness.state.events = filler(18);
+  await page.setViewportSize({ width: 393, height: 640 });
+  await harness.open(); // NOW is Sep 5, 11:59 PM Eastern; the live games keep Today on Sep 5.
+  const target = "g8";
+  await cardLink(page, target).scrollIntoViewIfNeeded();
+  await page.evaluate(() => scrollBy(0, 80));
+  const beforeTap = await scrollY(page);
+  await recordDeparture(page);
+  await cardLink(page, target).tap();
+  await expect(screen(page)).toBeVisible();
+  const saved = await departure(page, info, beforeTap);
+  await page.goBack();
+  await expect(board(page)).toBeVisible();
+  await expectScroll(page, saved);
+  await expect(cardLink(page, target)).toBeFocused();
+  // Reading anchors: existing cards other than the origin, wholly visible below the sticky row, chosen once now.
+  const before = await readingState(page, null, target);
+  expect(before.anchors.length, "two reading anchors are available before the poll").toBeGreaterThanOrEqual(2);
+  for (const anchor of before.anchors) expect(anchor.whollyVisible, anchor.id).toBe(true);
+  expect(before.overnightNote).toBeNull();
+  expect(before.eastern).toMatch(/Sep 5, 2026.*11:59/);
+  expect(before.activeElement).toMatchObject({ card: `game-${target}`, focusKey: "summary" });
+  await page.screenshot({ path: info.outputPath("midnight-before.png"), animations: "disabled" });
+  const polls = harness.state.scoreRequests.length;
+  await page.clock.fastForward(60_000); // Two real polls; the clock crosses 12:00 AM Eastern, Sep 6.
+  await expect.poll(() => harness.state.scoreRequests.length).toBeGreaterThan(polls);
+  await expect(page.locator(".overnight-note")).toHaveText("Late games are still on. Today is staying on Sep 5.");
+  const after = await readingState(page, before.anchors.map(anchor => anchor.id), target);
+  await page.screenshot({ path: info.outputPath("midnight-after.png"), animations: "disabled" });
+  // A later settled snapshot with no input in between.
+  await page.waitForTimeout(500);
+  const settled = await readingState(page, before.anchors.map(anchor => anchor.id), target);
+  await page.screenshot({ path: info.outputPath("midnight-settled.png"), animations: "disabled" });
+  const note = after.overnightNote, noteSpace = note ? note.height + parseFloat(note.marginTop) + parseFloat(note.marginBottom) : null;
+  await attachReading(info, "midnight-reading-place", { saved, noteSpace, before, after, settled });
+  expect(after.eastern).toMatch(/Sep 6, 2026.*AM/);
+  expect(note, "the notice is a real inserted element").not.toBeNull();
+  for (const state of [after, settled]) {
+    expect(state.anchors.map(anchor => anchor.id)).toEqual(before.anchors.map(anchor => anchor.id));
+    for (const [i, anchor] of state.anchors.entries()) {
+      expect(anchor.whollyVisible, `${anchor.id} stays wholly visible below the sticky row`).toBe(true);
+      expect(Math.abs(anchor.top - before.anchors[i].top), `${anchor.id} on-screen position`).toBeLessThanOrEqual(2);
+    }
+    // The scroll value moves by the notice's measured space: consistent with native scroll anchoring.
+    expect(Math.abs(state.scrollY - before.scrollY - noteSpace), "scroll change matches the inserted notice").toBeLessThanOrEqual(2);
+    expect(state.activeElement).toEqual(before.activeElement);
+  }
+  expect(Math.abs(settled.scrollY - after.scrollY), "no further movement once settled").toBeLessThanOrEqual(2);
 });
 
 test("a missing origin card falls back to the stable Scores heading", async ({ page, harness }) => {
@@ -243,7 +306,11 @@ test("reload on the screen keeps it; Back then restores the scoreboard as it was
   const polls = harness.state.scoreRequests.length;
   await page.clock.fastForward(30_000);
   await expect.poll(() => harness.state.scoreRequests.length).toBeGreaterThan(polls);
-  expect(harness.state.scoreRequests.slice(polls).some(search => search.includes("20260906")), "the later poll asks for the restored day").toBe(true);
+  // Each refresh first loads yesterday's board (overnight check) and only then the selected day, so the
+  // first new request is not the restored day's. Wait for this poll to request exactly Sep 6. Had ownership
+  // fallen back to Today (held on Sep 5 by the live games), Sep 5 would be requested or reused from the
+  // yesterday load and no exact Sep 6 daily request would follow; the week request has a range value.
+  await expect.poll(() => requestedDates(harness, polls, "20260906"), "the later poll requests the restored day").toBe(true);
   await expect(dateInput(page)).toHaveValue("2026-09-06");
   await expect(category(page, "Top 25")).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".overnight-note")).toHaveCount(0);
