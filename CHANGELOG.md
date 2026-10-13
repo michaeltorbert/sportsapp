@@ -1,5 +1,16 @@
 # Saturday Signal releases
 
+## 1.14.0 · 2026-10-12
+
+- Opening a game card now loads its statistics inside the existing expanded details, with a short loading state; scores, the line, situation, upset note, delay note and Gamecast link stay where they were (#115).
+- Live and completed games show a team comparison in fixed away/home order: total, passing and rushing yards, first downs, third-down conversions, turnovers, penalties/yards and time of possession. A Team details section adds fourth-down conversions, completions/attempts, yards per pass, rush attempts, yards per rush, interceptions thrown and fumbles lost. A Players section lists every passing, rushing and receiving participant ESPN supplies for both teams, with abbreviations explained. There are no winner highlights or comparison bars.
+- Before kickoff, including a kickoff delay, the card shows season averages labeled per game: points scored and allowed, and total, passing and rushing yards gained and allowed. No zero-filled game totals or empty player tables are shown before kickoff.
+- Data is shown truthfully. "Stats checked at" gives the retrieval time and the source's own game status appears separately. Missing values show a dash rather than zero, and 0-0 conversions are not shown as percentages. A missing or malformed section is labeled unavailable without hiding the valid ones. When the stats source has not caught up with the scoreboard, the card says so instead of relabeling season averages as game totals. A failed or offline refresh keeps the last stats with their age and a warning, and Retry waits for the backoff. Paused games keep their latest game totals with honest age.
+- Live stats refresh about every 30 seconds while a card is open and visible; collapsing it, hiding the tab or going offline stops refreshing. Canceled, postponed, forfeited and no-contest games load no stats. Stats are fetched through the app's own server route and are never saved on the device; score refresh, ordering, categories, the Guide and alerts are unaffected.
+- The existing validated pregame spread or pick'em is unchanged; no totals, moneylines, live odds, picks, predictions or win probabilities are added.
+- At 200% zoom, the Scores and Guide tabs at the top may use slightly less side padding instead of pushing the page wider; at normal sizes the header is unchanged.
+- Confirmed on the hosted preview for completed and upcoming games. Live stats were checked against real ESPN data through a local server, not on the hosted site during a live game, and not on a physical phone. Halftime, overtime, delays and other rare states are covered only by test data.
+
 ## 1.13.8 · 2026-10-10
 
 - Keep the Guide details title and Close button pinned while the body scrolls. Opening game details by touch no longer outlines the X; keyboard focus indicators remain available. Browser regressions cover these interactions.
