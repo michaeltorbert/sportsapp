@@ -117,8 +117,10 @@ test("September 26 ranked deficits enter Day Upsets after retaining contrary pre
   for (const [id] of scenarios) {
     const card = page.locator(`#game-${id}`);
     await expect(card).toBeVisible();
-    await card.locator("summary").tap();
-    await expect(card.locator(".upset-reason")).toContainText("rank-based upset");
+    await card.locator("a.game-summary").tap();
+    await expect(page.locator(".game-screen .upset-reason")).toContainText("rank-based upset");
+    await page.locator(".game-screen").getByRole("button", { name: /^Back to scores/ }).tap();
+    await expect(page.locator(".game-screen")).toHaveCount(0);
   }
 });
 

@@ -22,14 +22,35 @@ test("refresh URL preserves actual view and unrelated URL data without replaying
   const url = new URL(refreshUrl("https://example.test/?other=keep&tab=acc#game-abc", B, { date: "2026-09-05", followToday: false, selection: ["upset", "acc"], period: "day", hideFinals: true, focusedGame: "abc" }));
   assert.equal(url.hash, ""); assert.equal(url.searchParams.get("other"), "keep"); assert.equal(url.searchParams.get("date"), "2026-09-05");
   assert.equal(url.searchParams.has("tab"), false); assert.equal(url.searchParams.get("cats"), "acc,upset"); assert.equal(url.searchParams.has("period"), false);
-  assert.deepEqual(initialView(url.search), { selection: ["acc", "upset"], period: "day" }); assert.deepEqual(updateRestoration(url.search), { hideFinals: true, focusedGame: "abc" });
+  assert.deepEqual(initialView(url.search), { selection: ["acc", "upset"], period: "day" }); assert.deepEqual(updateRestoration(url.search), { hideFinals: true, focusedGame: "abc", openGame: "" });
   const home = new URL(refreshUrl(url.href + "#unrelated", B, { date: "2026-09-05", followToday: true, selection: [], period: "day", hideFinals: false, focusedGame: "" }));
   assert.equal(home.hash, "#unrelated"); assert.equal(home.searchParams.has("date"), false); assert.equal(home.searchParams.has("_ss_focus"), false);
   assert.equal(home.searchParams.has("cats"), false); assert.equal(home.searchParams.has("period"), false);
   assert.deepEqual(initialView(home.search), { selection: [], period: "day" });
-  assert.deepEqual(updateRestoration(home.search), { hideFinals: false, focusedGame: "" });
+  assert.deepEqual(updateRestoration(home.search), { hideFinals: false, focusedGame: "", openGame: "" });
   assert.equal(updateRestoration(`?_ss_update=${B}`), null);
   assert.equal(updateRestoration(`?_ss_update=${B}&_ss_hide_finals=1&_ss_focus=%3Cscript%3E`), null);
+});
+test("game screen open intent: an open game survives refresh by URL; a pending intent serializes once; legacy focus opens once", () => {
+  const base = { date: "2026-09-05", followToday: false, selection: [], period: "day", hideFinals: false, focusedGame: "abc" };
+  // The game screen's own event and section are unrelated URL data to the updater and survive it.
+  const screen = new URL(refreshUrl("https://example.test/?event=401858481&section=players&date=2026-09-05", B, base));
+  assert.equal(screen.searchParams.get("event"), "401858481"); assert.equal(screen.searchParams.get("section"), "players");
+  assert.equal(screen.searchParams.get("_ss_open"), "0");
+  assert.deepEqual(updateRestoration(screen.search), { hideFinals: false, focusedGame: "abc", openGame: "" });
+  // Still unconsumed (for example scores had not loaded): it opens once after the update.
+  const pending = new URL(refreshUrl("https://example.test/#game-abc", B, { ...base, openGame: "abc" }));
+  assert.equal(pending.searchParams.get("_ss_open"), "abc"); assert.equal(pending.hash, "");
+  assert.deepEqual(updateRestoration(pending.search), { hideFinals: false, focusedGame: "abc", openGame: "abc" });
+  // Consumed or returned to the scoreboard: X is 0, membership only.
+  assert.equal(new URL(refreshUrl("https://example.test/", B, { ...base, openGame: "" })).searchParams.get("_ss_open"), "0");
+  assert.equal(new URL(refreshUrl("https://example.test/", B, { ...base, openGame: "<bad>" })).searchParams.get("_ss_open"), "0");
+  // A 1.14.0 update link has no _ss_open: its focused game opens once, as it used to expand.
+  assert.deepEqual(updateRestoration(`?_ss_update=${B}&_ss_hide_finals=0&_ss_focus=abc`), { hideFinals: false, focusedGame: "abc", openGame: "abc" });
+  assert.deepEqual(updateRestoration(`?_ss_update=${B}&_ss_hide_finals=0`), { hideFinals: false, focusedGame: "", openGame: "" });
+  assert.equal(updateRestoration(`?_ss_update=${B}&_ss_hide_finals=0&_ss_open=%3Cx%3E`), null);
+  // The Guide never carries a Scores open intent.
+  assert.equal(new URL(refreshUrl("https://example.test/guide?_ss_open=abc", B, { page: "guide", date: "", followToday: true, view: "all" })).searchParams.has("_ss_open"), false);
 });
 test("ORD-011 view restoration round-trips every period and selection, including Week with All and Day with a weekly-named category", () => {
   for (const view of [

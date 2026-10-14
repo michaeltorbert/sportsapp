@@ -36,7 +36,11 @@ test('Duke reveal is per-game, persisted, shared with Guide and never bypassed b
  await page.getByRole('button',{name:'Show this game only',exact:true}).click();
  await expect(page.locator('#game-duke-away')).toBeVisible();
  await expect(page.locator('#game-duke-away .team-record')).toHaveText(['2-1','2-1']);
- await page.reload();await expect(page.locator('#game-duke-away')).toBeVisible();
+ // Revealing never opened it: the hidden game's link was not consumed by the reveal.
+ await expect(page.locator('.game-screen')).toHaveCount(0);
+ // Reloading the still-unconsumed notification link now opens the revealed game once.
+ await page.reload();await expect(page.locator('.game-screen h1.game-title')).toContainText('Duke');
+ await page.goBack();await expect(page.locator('#game-duke-away')).toBeVisible();
  await page.getByRole('link',{name:'Guide',exact:true}).click();
  await expect(page.locator('.guide-game[data-game="duke-away"]')).toBeVisible();
  await page.getByRole('button',{name:'Hide Duke game on Sep 5',exact:true}).click();
@@ -52,10 +56,13 @@ test('ORD-019 an away game stays listed past a delayed kickoff, then hides every
  // The scheduled kickoff (4 p.m. Eastern) passed hours before the harness clock.
  const away=play(duke('duke-away',false,false,'2026-09-05T20:00:00Z'),'scheduled'),ordinary=event('ordinary',{acc:true});
  harness.state.events=[away,ordinary];
- await harness.open({path:'/?date=2026-09-05#game-duke-away'});
+ await harness.open({path:'/?date=2026-09-05#game-duke-away',waitForScores:false});
  const refresh=page.getByRole('button',{name:'Refresh scores',exact:true});
+ // A visible game's notification link opens its screen once; Back returns to the scoreboard.
+ await expect(page.locator('.game-screen h1.game-title')).toContainText('Duke');
+ await page.goBack();
+ await expect(page.locator('.game-screen')).toHaveCount(0);
  await expect(page.locator('#game-duke-away')).toBeVisible();
- await expect(page.locator('#game-duke-away details')).toHaveAttribute('open','');
  await expectCount(page,'All',2);await expectCount(page,'ACC',2);
  play(away,'delayed');await refresh.click();
  await expect(page.locator('#game-duke-away .game-status')).toHaveText('Delayed');

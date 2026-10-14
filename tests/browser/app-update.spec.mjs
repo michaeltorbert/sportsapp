@@ -62,13 +62,20 @@ test("confirms twice, dismisses per target, manual override shares Help owner an
 });
 test("refresh preserves actual notification view without rescroll or alert mutation; Home clears tab and focus", async ({ page, harness }) => {
   const state = await mockHealth(page);
-  await harness.open({ path: "/?date=2026-09-05&keep=yes#game-acc-final", push: { existing: true, credentials: true, permission: "granted" } });
+  await harness.open({ path: "/?date=2026-09-05&keep=yes#game-acc-final", push: { existing: true, credentials: true, permission: "granted" }, waitForScores: false });
+  // The notification opens its game once; Back returns to the scoreboard it replaced.
+  await expect(page.locator(".game-screen h1.game-title")).toContainText("acc-final away");
+  await page.goBack();
+  await expect(page.locator(".game-screen")).toHaveCount(0);
+  expect(new URL(page.url()).hash).toBe(""); expect(new URL(page.url()).searchParams.get("keep")).toBe("yes");
   const savedPush = await page.evaluate(() => localStorage.getItem("ss:push"));
   await page.getByLabel("Hide finals").check();
   await page.getByRole("button", { name: "Next day" }).click();
   await page.getByRole("button", { name: /^Upsets/ }).click();
   await detect(page, state);
-  await page.getByRole("button", { name: "Refresh app", exact: true }).click();
+  // The notification hash was already consumed, so wait for the update's own document load.
+  const navigation = page.waitForEvent("load");
+  await page.getByRole("button", { name: "Refresh app", exact: true }).click(); await navigation;
   await expect.poll(() => new URL(page.url()).hash).toBe("");
   await expect(page.getByRole("button", { name: /^Upsets/ })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "false");
@@ -77,6 +84,9 @@ test("refresh preserves actual notification view without rescroll or alert mutat
   await expect(page.getByLabel("Hide finals")).toBeChecked();
   await expect.poll(() => page.url()).not.toContain("_ss_update");
   expect(new URL(page.url()).hash).toBe(""); expect(new URL(page.url()).searchParams.get("keep")).toBe("yes");
+  // The consumed notification never reopens after the update.
+  await page.clock.fastForward(1_000);
+  await expect(page.locator(".game-screen")).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem("ss:push"))).toBe(savedPush);
   expect(await page.evaluate(() => Object.keys(localStorage).some(key => key.startsWith("ss:board:")))).toBe(true);
   expect(harness.state.alertRequests.filter(r => r.method !== "GET")).toEqual([]);
@@ -145,9 +155,13 @@ test("update keeps notification-only Watchlist membership, never rescrolls, and 
     Object.defineProperty(window, "caches", { value: { delete() { throw new Error("Updater must not delete caches"); } } });
   });
   const state = await mockHealth(page);
-  await harness.open({ path: "/?date=2026-09-05#game-notification-only" });
-  await expect(page.locator("#game-notification-only")).toBeVisible();
+  await harness.open({ path: "/?date=2026-09-05#game-notification-only", waitForScores: false });
+  // The landing scrolls its card into view once, then opens its game; Back restores that position.
+  await expect(page.locator(".game-screen h1.game-title")).toContainText("notification-only away");
   await expect.poll(() => page.evaluate(() => window.__scrolls)).toBe(1);
+  await page.locator(".game-screen").getByRole("button", { name: /^Back to scores/ }).click();
+  await expect(page.locator("#game-notification-only")).toBeVisible();
+  expect(await page.evaluate(() => window.__scrolls)).toBe(1);
   await page.getByLabel("Hide finals").check();
   await detect(page, state);
   await page.getByRole("button", { name: "Later", exact: true }).click();
@@ -155,13 +169,43 @@ test("update keeps notification-only Watchlist membership, never rescrolls, and 
   await page.getByRole("button", { name: "Check for app update", exact: true }).click();
   await page.clock.fastForward(2100);
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("button", { name: "Refresh app", exact: true }).click();
+  // The notification hash was already consumed, so wait for the update's own document load.
+  const navigation = page.waitForEvent("load");
+  await page.getByRole("button", { name: "Refresh app", exact: true }).click(); await navigation;
   await expect.poll(() => new URL(page.url()).hash).toBe("");
   await expect(page.locator("#game-notification-only")).toBeVisible();
   await expect(page.getByLabel("Hide finals")).toBeChecked();
   expect(await page.evaluate(() => window.__scrolls)).toBe(0);
+  await expect(page.locator(".game-screen")).toHaveCount(0);
   await page.getByRole("link", { name: "Saturday Signal home" }).click();
   await expect(page.locator("#game-notification-only")).toHaveCount(0);
+});
+test("an update from the game screen reopens that screen and section by URL; Back then stays in the app", async ({ page, harness }) => {
+  const state = await mockHealth(page);
+  await harness.open();
+  await page.locator("#game-ranked-live a.game-summary").tap();
+  await page.locator(".game-screen").getByRole("button", { name: "Player stats", exact: true }).tap();
+  await detect(page, state);
+  // The update notice is reachable on the screen itself.
+  const navigation = page.waitForEvent("load");
+  await page.locator(".game-screen").getByRole("button", { name: "Refresh app", exact: true }).click(); await navigation;
+  await expect.poll(() => page.url()).not.toContain("_ss_update");
+  const url = new URL(page.url());
+  expect(url.searchParams.get("event")).toBe("ranked-live"); expect(url.searchParams.get("section")).toBe("players");
+  await expect(page.locator(".game-screen").getByRole("button", { name: "Player stats", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.locator(".game-screen").getByRole("button", { name: /^Back to scores/ }).tap();
+  await expect(page.locator(".game-screen")).toHaveCount(0);
+  await expect(page.locator("#game-ranked-live a.game-summary")).toBeFocused();
+  expect(new URL(page.url()).searchParams.has("event")).toBe(false);
+  // An update from the scoreboard after that return never reopens the game.
+  state.commit = C;
+  await detect(page, state);
+  const again = page.waitForEvent("load");
+  await page.getByRole("button", { name: "Refresh app", exact: true }).click(); await again;
+  await expect(page.getByRole("button", { name: "Refresh scores" })).toBeEnabled();
+  await page.clock.fastForward(1_000);
+  await expect(page.locator(".game-screen")).toHaveCount(0);
+  expect(harness.state.alertRequests.filter(r => r.method !== "GET")).toEqual([]);
 });
 test("updater preserves initial manual date before slow scores finish", async ({ page, harness }) => {
   const state = await mockHealth(page);

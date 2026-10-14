@@ -34,12 +34,14 @@ export function viewSearch(url: URL, view: ScoreboardView) {
 export function gameId(value: string | null): string {
   return value && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : "";
 }
+// `openGame` is a one-shot request to open that game's screen. `_ss_open=0` means
+// none. A 1.14.0 link has no `_ss_open`; its focused game opens once, as it used to expand.
 export function updateRestoration(search: string) {
-  const p = new URLSearchParams(search), hide = p.get("_ss_hide_finals"), focus = p.get("_ss_focus");
-  if (!validCommit(p.get("_ss_update")) || (hide !== "0" && hide !== "1") || (focus !== null && !gameId(focus))) return null;
-  return { hideFinals: hide === "1", focusedGame: gameId(focus) };
+  const p = new URLSearchParams(search), hide = p.get("_ss_hide_finals"), focus = p.get("_ss_focus"), open = p.get("_ss_open");
+  if (!validCommit(p.get("_ss_update")) || (hide !== "0" && hide !== "1") || (focus !== null && !gameId(focus)) || (open !== null && open !== "0" && !gameId(open))) return null;
+  return { hideFinals: hide === "1", focusedGame: gameId(focus), openGame: open === null ? gameId(focus) : open === "0" ? "" : open };
 }
-export type ScoresUpdateView = ScoreboardView & { date: string; followToday: boolean; hideFinals: boolean; focusedGame: string };
+export type ScoresUpdateView = ScoreboardView & { date: string; followToday: boolean; hideFinals: boolean; focusedGame: string; openGame?: string };
 export type UpdateView = ScoresUpdateView | { page: "guide"; date: string; followToday: boolean; view: "all" | "watch" };
 export function refreshUrl(href: string, commit: string, view: UpdateView): string {
   const url = new URL(href), identity = validCommit(commit);
@@ -49,7 +51,7 @@ export function refreshUrl(href: string, commit: string, view: UpdateView): stri
   else if (!validDate(url.searchParams.get("date") || "")) url.searchParams.delete("date");
   if ("page" in view && view.page === "guide") {
     if (view.view === "watch") url.searchParams.set("view", "watch"); else url.searchParams.delete("view");
-    for (const key of ["tab", "cats", "period", "_ss_hide_finals", "_ss_focus"]) url.searchParams.delete(key);
+    for (const key of ["tab", "cats", "period", "_ss_hide_finals", "_ss_focus", "_ss_open"]) url.searchParams.delete(key);
     url.searchParams.set("_ss_update", identity);
     return url.href;
   }
@@ -59,6 +61,7 @@ export function refreshUrl(href: string, commit: string, view: UpdateView): stri
   url.searchParams.set("_ss_hide_finals", scores.hideFinals ? "1" : "0");
   const focus = gameId(scores.focusedGame);
   if (focus) url.searchParams.set("_ss_focus", focus); else url.searchParams.delete("_ss_focus");
+  url.searchParams.set("_ss_open", gameId(scores.openGame ?? "") || "0");
   if (/^#game-[A-Za-z0-9_-]+$/.test(url.hash)) url.hash = "";
   return url.href;
 }
