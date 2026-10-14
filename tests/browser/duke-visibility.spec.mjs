@@ -63,10 +63,11 @@ test('ORD-019 an away game stays listed past a delayed kickoff, then hides every
  await page.goBack();
  await expect(page.locator('.game-screen')).toHaveCount(0);
  await expect(page.locator('#game-duke-away')).toBeVisible();
- await expectCount(page,'All',2);await expectCount(page,'ACC',2);
+ // The ordinary game is live; the scheduled, then pregame-delayed, Duke game counts only in the total.
+ await expectCount(page,'All',1,2);await expectCount(page,'ACC',1,2);
  play(away,'delayed');await refresh.click();
  await expect(page.locator('#game-duke-away .game-status')).toHaveText('Delayed');
- await expectCount(page,'All',2);await expectCount(page,'ACC',2);
+ await expectCount(page,'All',1,2);await expectCount(page,'ACC',1,2);
  await page.getByRole('link',{name:'Guide',exact:true}).click();
  await expect(page.locator('.guide-game[data-game="duke-away"]')).toBeVisible();
  // Before play only the waiting observation is saved; no decision is frozen.
@@ -77,10 +78,12 @@ test('ORD-019 an away game stays listed past a delayed kickoff, then hides every
  await expect.poll(async()=>(await stored(page))?.remembered).toEqual({'duke-away':true});
  await page.goto('/?date=2026-09-05#game-duke-away');await expect(refresh).toBeEnabled();
  await expect(page.locator('#game-duke-away')).toHaveCount(0);
- await expectCount(page,'All',1);await expectCount(page,'ACC',1);
+ // Hidden at kickoff: neither number includes the started Duke game.
+ await expectCount(page,'All',1,1);await expectCount(page,'ACC',1,1);
  play(away,'final');play(ordinary,'final');await refresh.click();
  await expect(page.locator('#game-ordinary .game-status')).toHaveText('Final');
  await expect(page.locator('#game-duke-away')).toHaveCount(0);
+ await expectCount(page,'All',0,1);await expectCount(page,'ACC',0,1);
  await page.reload();await expect(refresh).toBeEnabled();
  await expect(page.locator('#game-duke-away')).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Show Duke game on Sep 5',exact:true})).toBeVisible();

@@ -10,9 +10,9 @@ test("primary failure renders browser CDN games without the hosted scoreboard", 
   } } };
   await harness.open();
   await expect(cards(page).filter({ hasText: "ranked-live away" })).toBeVisible();
-  await expectCount(page, "Top 25", 1);
+  await expectCount(page, "Top 25", 1, 1);
   await period(page, "Week").click();
-  await expectCount(page, "Top 25", 3);
+  await expectCount(page, "Top 25", 1, 3);
   await category(page, "ACC").click();
   await expect(cards(page).filter({ hasText: "sunday-acc away" })).toBeVisible();
   expect(harness.state.scoreRequests.length).toBeGreaterThan(0);

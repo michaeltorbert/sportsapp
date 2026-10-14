@@ -44,16 +44,35 @@ export function viewGames(board: Scoreboard | null, selection: Selection, hideFi
 
 export type UpsetCounts = { brewing: number; total: number };
 
+// Live, including halftime, or delayed after kickoff.
+function inProgress(game: Game) {
+  return game.state === "live" || (game.state === "delayed" && game.started);
+}
+
 // The first number is active watches. The parenthesized total adds only finals
 // that actually ended as upsets, excluding retained watches where the favorite recovered.
 export function upsetCounts(board: Scoreboard | null, hideFinals = false): UpsetCounts {
   const games = viewGames(board, ["upset"], hideFinals);
-  const brewing = games.filter(game => game.state === "live" || (game.state === "delayed" && game.started)).length;
+  const brewing = games.filter(inProgress).length;
   const concluded = games.filter(game => game.state === "final" && classify({ ...game, retainedCategories: undefined }).upset).length;
   return {
     brewing,
     total: brewing + concluded,
   };
+}
+
+export type CategoryCounts = { current: number; total: number };
+
+// A chip's qualifying games in progress, then every game its view lists: upcoming,
+// delayed, schedule updates and finals included. Membership is the view's own, so a
+// delay never adds a One-score game. Upsets alone keeps its brewing count and total.
+export function categoryCounts(board: Scoreboard | null, selection: Selection, hideFinals = false, focusedGame = ""): CategoryCounts {
+  if (selection.length === 1 && selection[0] === "upset") {
+    const { brewing, total } = upsetCounts(board, hideFinals);
+    return { current: brewing, total };
+  }
+  const games = viewGames(board, selection, hideFinals, focusedGame);
+  return { current: games.filter(inProgress).length, total: games.length };
 }
 
 export function matchingBoard(board: Scoreboard | null, start: string, end = start) {

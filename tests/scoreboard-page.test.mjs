@@ -68,7 +68,10 @@ function render(selection, { period = "day", hideFinals = false, focusedGame = "
 function cardIds(html) { return [...html.matchAll(/<article id="game-([^"]+)"/g)].map(match => match[1]); }
 // The dedicated game screen for one game, rendered by the real page with that route open.
 function screenOf(id, options = {}) { return render(options.selection || [], { ...options, route: { id, section: "team" } }).html.match(/<div class="game-screen[\s\S]*<\/div><\/main>$/)?.[0] || ""; }
-function badge(html, category) { return Number(new RegExp(`class="filter-tab filter-${category}"[^>]*>.*?<span class="tab-count">(\\d+)</span>`).exec(html)?.[1]); }
+// An ordinary chip's [in progress, total]; badge() is its parenthesized total.
+function pair(html, category) { const match = new RegExp(`class="filter-tab filter-${category}"[^>]*><span>[^<]*</span><span class="tab-count count-pair" aria-hidden="true">(\\d+) <span class="count-total">\\((\\d+)\\)</span></span>`).exec(html); return match ? match.slice(1).map(Number) : null; }
+function badge(html, category) { return pair(html, category)?.[1]; }
+const unknownPair = category => new RegExp(`class="filter-tab filter-${category}"[^>]*><span>[^<]*</span><span class="tab-count count-pair" aria-hidden="true">– \\(–\\)</span>`);
 function upsetBadge(html) { const match = /class="tab-count upset-count" aria-hidden="true">(\d+) <span class="upset-total">\((\d+)\)<\/span>/.exec(html); return match ? match.slice(1).map(Number) : null; }
 function pressed(html) { return [...html.matchAll(/class="filter-tab filter-([a-z0-9]+)" aria-pressed="(true|false)"/g)].filter(m => m[2] === "true").map(m => m[1]); }
 
@@ -88,6 +91,11 @@ test("Week with Top 25 renders weekly sections, future non-ACC and ACC games, da
   assert.equal(badge(html, "top25"), cardIds(html).length);
   // Every count describes the week: All is the deduplicated union and ACC includes the ranked ACC game.
   assert.equal(badge(html, "watch"), 7); assert.equal(badge(html, "acc"), 2);
+  // In progress: live and delayed-after-kickoff games; totals keep upcoming, schedule updates and finals.
+  assert.deepEqual(pair(html, "watch"), [3, 7]); assert.deepEqual(pair(html, "acc"), [1, 2]);
+  assert.deepEqual(pair(html, "top25"), [2, 6]); assert.deepEqual(pair(html, "close"), [2, 3]);
+  assert.match(html, /aria-label="Top 25, 2 in progress, 6 total"/);
+  assert.match(html, /aria-label="All, 3 in progress, 7 total"/);
   assert.equal((html.match(/<section class="score-content"/g) || []).length, 1, "one results region");
 });
 
@@ -95,6 +103,7 @@ test("Hide finals removes the weekly final section and adjusts every weekly coun
   const { html } = render(["top25"], { period: "week", hideFinals: true });
   assert.equal(badge(html, "top25"), 5); assert.equal(cardIds(html).length, 5);
   assert.equal(badge(html, "watch"), 6);
+  assert.deepEqual(pair(html, "top25"), [2, 5]); assert.deepEqual(pair(html, "watch"), [3, 6]);
   assert.doesNotMatch(html, /game-top-final|<h2>Final<\/h2>/); assert.match(html, /Coming up/);
 });
 
@@ -109,9 +118,12 @@ test("Upsets shows brewing first, completed upset results in the total, and an a
   assert.deepEqual(upsetBadge(shown), [1, 2]);
   assert.match(shown, /aria-label="Upsets, 1 brewing, 2 brewing or completed upsets"/);
   assert.deepEqual(cardIds(shown), ["brewing", "concluded"]);
+  // All still lists the recovered favorite's final; only Upsets leaves it out.
+  assert.deepEqual(pair(shown, "watch"), [1, 3]);
   const hidden = render(["upset"], { boards, hideFinals: true }).html;
   assert.deepEqual(upsetBadge(hidden), [1, 1]);
   assert.match(hidden, /aria-label="Upsets, 1 brewing, 1 brewing or completed upsets"/);
+  assert.deepEqual(pair(hidden, "watch"), [1, 1]);
 });
 
 test("stale score cards remain visible while counts are unknown", () => {
@@ -119,9 +131,11 @@ test("stale score cards remain visible while counts are unknown", () => {
   assert.deepEqual(cardIds(stale.html), cardIds(fresh.html));
   assert.match(stale.html, /Upsets, counts unavailable while scores are stale/);
   for (const label of ["All", "ACC", "Top 25", "One score"])
-    assert.match(stale.html, new RegExp(`aria-label="${label}, count unavailable while scores are stale"`));
+    assert.match(stale.html, new RegExp(`aria-label="${label}, counts unavailable while scores are stale"`));
   assert.match(stale.html, /class="tab-count upset-count" aria-hidden="true">– \(–\)/);
-  assert.match(stale.html, /class="filter-tab filter-watch"[^>]*><span>All<\/span><span class="tab-count">–<\/span>/);
+  assert.match(stale.html, /class="filter-tab filter-watch"[^>]*><span>All<\/span><span class="tab-count count-pair" aria-hidden="true">– \(–\)<\/span>/);
+  for (const category of ["watch", "acc", "top25", "close"]) assert.match(stale.html, unknownPair(category));
+  assert.doesNotMatch(stale.html, /class="(?:count-total|upset-total)"| in progress, \d+ total"/, "no fresh numbers while stale");
   assert.match(stale.html, /Waiting for a fresh score update/);
   const help = render(["upset"], { stale: true, showHelp: true }).html;
   assert.match(help, /When scores are stale, offline, or more than 90 seconds old/);
@@ -135,6 +149,8 @@ test("Day keeps manual date navigation and the All-only focused game; Week hides
   assert.equal(all.scope, "daily");
   assert.deepEqual(pressed(all.html), ["watch"]);
   assert.deepEqual(cardIds(all.html), ["daily-only", "focused"]); assert.equal(badge(all.html, "watch"), 2);
+  assert.deepEqual(pair(all.html, "watch"), [2, 2]);
+  assert.deepEqual(pair(render([]).html, "watch"), [1, 1], "without focus, All counts only qualifying games");
   assert.match(all.html, /Your watchlist\./);
   assert.match(all.html, /value="2026-08-29"/); assert.match(all.html, /overnight-note/);
   assert.doesNotMatch(all.html, /game-day-label|THU–MON/);
@@ -172,12 +188,18 @@ test("empty weekly copy explains the weekly scope without offering hidden daily 
   const { html } = render(["top25"], { period: "week", boards });
   assert.match(html, /No Top 25 games this week/);
   assert.doesNotMatch(html, /Choose another date/); assert.equal(badge(html, "top25"), 0);
+  // A loaded empty week is a real zero, not unknown.
+  for (const category of ["watch", "acc", "top25", "close"]) assert.deepEqual(pair(html, category), [0, 0], category);
+  assert.match(html, /aria-label="Top 25, 0 in progress, 0 total"/);
   const combined = render(["acc", "upset"], { period: "week", boards }).html;
   assert.match(combined, /Nothing matches these categories this week\./); assert.doesNotMatch(combined, /Choose another date/);
   const day = render(["acc", "upset"], { boards: { ...fixtures(), daily: scoreboard([]) } }).html;
   assert.match(day, /Nothing matches these categories\./); assert.match(day, /Choose another date/);
   const unknown = render([], { boards: { ...fixtures(), daily: null } }).html;
-  assert.equal((unknown.match(/<span class="tab-count">–<\/span>/g) || []).length, 4, "ordinary unloaded counts stay unknown, not zero");
+  assert.equal((unknown.match(/<span class="tab-count count-pair" aria-hidden="true">– \(–\)<\/span>/g) || []).length, 4, "ordinary unloaded counts stay unknown, not zero");
+  for (const category of ["watch", "acc", "top25", "close"]) assert.match(unknown, unknownPair(category));
+  for (const label of ["All", "ACC", "Top 25", "One score"]) assert.match(unknown, new RegExp(`aria-label="${label}, counts loading"`));
+  assert.doesNotMatch(unknown, /class="(?:count-total|upset-total)"| in progress, \d+ total"/, "no numbers while loading");
   assert.match(unknown, /aria-label="Upsets, counts loading"[^>]*>.*?<span class="tab-count upset-count" aria-hidden="true">– \(–\)<\/span>/);
 });
 
@@ -362,6 +384,8 @@ test("Help separates selective alert policy from rank-or-line display categories
   assert.match(html, /Selected categories do not filter notifications/);
   assert.match(html, /Upcoming games remain chronological within those pin tiers/);
   assert.match(html, /Day shows the selected Eastern date\. Week shows the current football week/);
+  assert.match(html, /Each count shows that category’s games in progress, live or delayed after kickoff, then in parentheses every game it lists for the selected Day or Week, including upcoming, delayed and finished games\./);
+  assert.match(html, /The first Upsets number is games brewing now; the number in parentheses adds completed games that finished as upsets/);
   assert.deepEqual(cardIds(render(["upset"], { boards }).html), ["ranked-underdog"]);
 });
 
@@ -392,6 +416,8 @@ test("a delayed close observation stays out of One score until its retained fina
   const delayed = render(["close"], { boards }).html;
   assert.deepEqual(cardIds(delayed), []);
   assert.equal(badge(delayed, "close"), 0);
+  assert.deepEqual(pair(delayed, "close"), [0, 0]);
+  assert.deepEqual(pair(delayed, "top25"), [1, 1], "the delay after kickoff is in progress where it qualifies");
   const watched = render([], { boards, focusedGame: live.id }).html;
   assert.ok(cardIds(watched).includes(live.id));
   const pausedScreen = screenOf(live.id, { boards, focusedGame: live.id });
@@ -402,6 +428,7 @@ test("a delayed close observation stays out of One score until its retained fina
   boards.daily = retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(paused)));
   const html = render(["close"], { boards }).html;
   assert.deepEqual(cardIds(html), [live.id]);
+  assert.deepEqual(pair(html, "close"), [0, 1]);
   assert.match(screenOf(live.id, { boards, selection: ["close"] }), /class="badge close-badge">One-score watch/);
 });
 
@@ -462,6 +489,18 @@ test("unknown and Duke-protected games share one generic screen with no teams, s
   assert.doesNotMatch(hidden, /Duke|DUKE|masthead|mh-score|view-nav|panel-team|compare-table|player-table|Gamecast/);
   assert.match(hidden, /<h1 class="game-title" tabindex="-1">(?:Loading game|Game unavailable)<\/h1>/);
   assert.doesNotMatch(render([], { boards }).html, /game-duke-game/);
+});
+
+test("counts use the Duke-protected board, so a hidden Duke game is never counted", () => {
+  const duke = game({ id: "duke-game" }); duke.teams[0] = { ...duke.teams[0], id: "150", name: "Duke", abbreviation: "DUKE", conferenceId: "1" };
+  const boards = fixtures(); boards.daily = scoreboard([duke, ...boards.daily.games]);
+  for (const focusedGame of ["", "duke-game"]) {
+    const { html } = render([], { boards, focusedGame });
+    assert.doesNotMatch(html, /game-duke-game/);
+    // Unprotected, the live ranked ACC Duke game would make these [2, 2], [1, 1] and [2, 2].
+    assert.deepEqual(pair(html, "watch"), [1, 1], focusedGame); assert.deepEqual(pair(html, "acc"), [0, 0]); assert.deepEqual(pair(html, "top25"), [1, 1]);
+    assert.match(html, /aria-label="All, 1 in progress, 1 total"/); assert.match(html, /aria-label="ACC, 0 in progress, 0 total"/);
+  }
 });
 
 test("restoration effect replay uses its captured snapshot after transient URL cleanup", () => {
