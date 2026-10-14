@@ -264,7 +264,7 @@ function busyWeek() {
 // The rendered category row: geometry, fonts and line counts of each label and count pair.
 function chipLayout(page) {
   return page.evaluate(() => {
-    const group = document.querySelector(".filter-tabs");
+    const group = document.querySelector(".filter-tabs"), groupBox = group.getBoundingClientRect();
     // Distinct line positions within an element; one line has (almost) no spread.
     const spread = element => { const range = document.createRange(); range.selectNodeContents(element); const tops = [...range.getClientRects()].filter(r => r.width > 0 && r.height > 0).map(r => r.top); return tops.length ? Math.max(...tops) - Math.min(...tops) : Infinity; };
     const inside = (inner, outer) => inner.left >= outer.left - .5 && inner.right <= outer.right + .5 && inner.top >= outer.top - .5 && inner.bottom <= outer.bottom + .5;
@@ -277,7 +277,7 @@ function chipLayout(page) {
         return {
           label: label.textContent, count: count.textContent, top: box.top, height: box.height,
           // Subpixel content widths round differently, so text clipping is checked by the boxes below.
-          fits: button.scrollWidth <= button.clientWidth,
+          fits: button.scrollWidth <= button.clientWidth, inGroup: inside(box, groupBox),
           labelInside: inside(labelBox, box), countInside: inside(countBox, box), countBelow: countBox.top >= labelBox.bottom - .5,
           labelSpread: spread(label), countSpread: spread(count),
           labelSize: getComputedStyle(label).fontSize, countSize: getComputedStyle(count).fontSize, countOpacity: getComputedStyle(count).opacity,
@@ -288,18 +288,20 @@ function chipLayout(page) {
   });
 }
 
-async function expectCompactChips(page, expected) {
+// At normal text sizes the five chips share one row. Enlarged text or zoom may wrap whole chips,
+// but never shrinks, clips or splits a label or count pair, or overflows the row or page.
+async function expectCompactChips(page, expected, { oneRow = true, labelSize = "12px", countSize = "11px" } = {}) {
   const layout = await chipLayout(page);
   expect(layout.documentFits, "no document overflow").toBe(true);
   expect(layout.groupFits, "no category row overflow").toBe(true);
   expect(layout.chips.map(chip => [chip.label, chip.count])).toEqual(expected);
   for (const chip of layout.chips) {
-    expect(Math.abs(chip.top - layout.chips[0].top), `${chip.label} shares the one row`).toBeLessThan(1);
+    if (oneRow) expect(Math.abs(chip.top - layout.chips[0].top), `${chip.label} shares the one row`).toBeLessThan(1);
     expect(chip.height, `${chip.label} height`).toBeGreaterThanOrEqual(44);
-    expect(chip, chip.label).toMatchObject({ fits: true, labelInside: true, countInside: true, countBelow: true, labelSize: "12px", countSize: "11px", countOpacity: "1" });
+    expect(chip, chip.label).toMatchObject({ fits: true, inGroup: true, labelInside: true, countInside: true, countBelow: true, labelSize, countSize, countOpacity: "1" });
     expect(chip.labelSpread, `${chip.label} label stays on one line`).toBeLessThan(4);
     expect(chip.countSpread, `${chip.label} count pair stays on one line`).toBeLessThan(4);
-    if (chip.totalSize !== null) expect(chip, `${chip.label} total`).toMatchObject({ totalSize: "11px", totalOpacity: "0.62" });
+    if (chip.totalSize !== null) expect(chip, `${chip.label} total`).toMatchObject({ totalSize: countSize, totalOpacity: "0.62" });
   }
 }
 
@@ -335,6 +337,30 @@ for (const width of [320, 390, 1280]) test(`category chips keep one row of one-l
   for (const label of ["All", "ACC", "Top 25", "One score"]) await expectCount(page, label, 0, 0);
   await expectUpsetCount(page, 0, 0);
   await expectCompactChips(page, ["All", "ACC", "Top 25", "One score", "Upsets"].map(label => [label, "0 (0)"]));
+});
+
+// The preserved 200 percent flows: doubled root text, and actual CSS zoom with and without wide
+// fallback fonts (Linux CI WebKit's wider metrics), on a busy week's multidigit counts.
+const BUSY_CHIPS = [["All", "18 (196)"], ["ACC", "4 (64)"], ["Top 25", "12 (130)"], ["One score", "10 (68)"], ["Upsets", "4 (12)"]];
+const WIDE_FONT = "*, *::before, *::after { font-family: Verdana, 'DejaVu Sans', sans-serif !important; }";
+for (const width of [320, 375, 390, 430]) for (const [mode, style, sizes] of [
+  ["text", "html { font-size: 200%; }", { labelSize: "24px", countSize: "22px" }],
+  ["zoom", "html { zoom: 2; }", {}],
+  ["zoom-wide", `html { zoom: 2; } ${WIDE_FONT}`, {}],
+]) test(`enlarged ${mode} at ${width}px wraps whole category chips without overflow, clipping or smaller text`, async ({ page, harness }, testInfo) => {
+  await page.setViewportSize({ width, height: 844 });
+  await harness.open();
+  await period(page, "Week").click();
+  harness.state.events = busyWeek();
+  await page.getByRole("button", { name: "Refresh scores" }).click();
+  await expectCount(page, "All", 18, 196);
+  await expectCompactChips(page, BUSY_CHIPS);
+  await page.addStyleTag({ content: style });
+  if (mode !== "text") expect(await page.evaluate(() => getComputedStyle(document.documentElement).zoom)).toBe("2");
+  await expectCompactChips(page, BUSY_CHIPS, { oneRow: false, ...sizes });
+  // Counts and their spoken meaning are unchanged by the enlarged layout.
+  await expectCount(page, "All", 18, 196); await expectUpsetCount(page, 4, 12);
+  await attachScreenshot(page, testInfo, `chips-enlarged-${mode}-${width}`);
 });
 
 test("home wordmark returns a manually selected date to Today", async ({ page, harness }) => {

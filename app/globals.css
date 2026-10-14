@@ -289,8 +289,9 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .compact-scoreboard .week-label { font-size: .875rem; }
 .compact-scoreboard .week-note { font-size: .625rem; }
 .compact-scoreboard .timezone-cue { color: #98a9c0; font-size: .6875rem; margin: 0 0 8px; overflow-wrap: anywhere; }
-/* All five categories share one row: each label and its count pair stay on one line. */
-.compact-scoreboard .filter-tabs { display: flex; flex-wrap: nowrap; gap: 2px; border-radius: 8px; padding: 3px; min-height: 50px; max-width: none; }
+/* All five categories share one row: each label and its count pair stay on one line. Whole buttons
+   wrap only when enlarged text or zoom makes their content wider than the row, never past the page. */
+.compact-scoreboard .filter-tabs { display: flex; flex-wrap: wrap; gap: 2px; border-radius: 8px; padding: 3px; min-height: 50px; max-width: none; }
 .compact-scoreboard .filter-tab { flex: 1 1 auto; min-width: auto; flex-direction: column; flex-wrap: nowrap; gap: 1px; font-size: .75rem; padding: 4px 2px; }
 .compact-scoreboard .filter-tab > span { white-space: nowrap; overflow-wrap: normal; }
 .compact-scoreboard .tab-count { font-size: .6875rem; height: auto; min-width: 0; }
