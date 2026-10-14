@@ -357,18 +357,18 @@ const BUSY_CHIPS = [["All", "18 (196)"], ["ACC", "4 (64)"], ["Top 25", "12 (130)
 const WIDE_FONT = "*, *::before, *::after { font-family: Verdana, 'DejaVu Sans', sans-serif !important; }";
 // Base control (4a666106, identical external diagnostic harness, WebKit): with actual 2x CSS zoom the
 // Scores header's four 44px controls (88px each when zoomed) already extend past the viewport: Settings
-// ends at 376px of 320 (busy week) and at 392px of 390 (Day, Week and busy week, normal and wide fonts),
-// whether or not the category row is shown or reset; hiding only the header removes the page overflow,
-// and the candidate measures the same. 375px was not measured and is included by the same header
-// geometry. That existing header overflow is a separate follow-up, so only the zoom cases below 393px
+// ends at 376px of 320 (busy week, normal and wide fonts), at 392px of 375 (busy week, normal and wide
+// fonts) and at 392px of 390 (Day, Week and busy week, normal and wide fonts), whether or not the category
+// row is shown or reset; hiding only the header removes the page overflow, and the candidate measures
+// the same in all 10 cases. That existing header overflow is a separate follow-up, so only WebKit's zoom cases below 393px
 // replace the whole-page check with: nothing outside the header may extend past the viewport, and the
-// category row stays inside it. Doubled root text, 393px and 430px keep the whole-page check.
+// category row stays inside it. Chromium, doubled root text, 393px and 430px keep the whole-page check.
 for (const width of [320, 375, 390, 393, 430]) for (const [mode, style, sizes] of [
   ["text", "html { font-size: 200%; }", { labelSize: "24px", countSize: "22px" }],
   ["zoom", "html { zoom: 2; }", {}],
   ["zoom-wide", `html { zoom: 2; } ${WIDE_FONT}`, {}],
-]) test(`enlarged ${mode} at ${width}px wraps whole category chips without overflow, clipping or smaller text`, async ({ page, harness }, testInfo) => {
-  const headerOverflowControl = mode !== "text" && width < 393;
+]) test(`enlarged ${mode} at ${width}px wraps whole category chips without overflow, clipping or smaller text`, async ({ page, harness, browserName }, testInfo) => {
+  const headerOverflowControl = browserName === "webkit" && mode !== "text" && width < 393;
   await page.setViewportSize({ width, height: 844 });
   await harness.open();
   await period(page, "Week").click();
