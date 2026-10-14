@@ -5,6 +5,7 @@
 - All, ACC, Top 25 and One score now show the same current (total) count as Upsets. The first number is the category's games in progress: live, including halftime, or delayed after kickoff. The total counts every game the category lists for the selected Day or Week, including upcoming, delayed, schedule-update and finished games; Hide finals removes finals. Upsets keeps its brewing count and actual-upset total (#146).
 - On the compact scoreboard, all five categories stay in one row, with each label on one line and its counts below, at unchanged text sizes and touch height. There is no added legend or explanation strip; Help explains the counts.
 - Counts still use the Duke-protected board and the All-only focused game. Stale scores show dashes, loading shows dashes, and a loaded empty view shows real zeros. Each button's screen-reader label gives both numbers.
+- Opening a game notification now scrolls its scoreboard card into view once before the game opens, even when the week's scores arrive before the day's, so Back returns to that card. The game still opens if the day's scores fail, or if it is on the week board but not the displayed day.
 - Not yet confirmed on a physical iPhone.
 
 ## 1.15.0 · 2026-10-13
