@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bundle, game, scoreboard } from "./helpers.mjs";
-const { viewGames, upsetCounts, matchingBoard, expiredBoardKey, scoreboardScope, toggleCategory, normalizeSelection, boardKey } = await bundle("lib/scoreboard-views.ts");
+const { viewGames, upsetCounts, categoryCounts, matchingBoard, expiredBoardKey, scoreboardScope, toggleCategory, normalizeSelection, boardKey } = await bundle("lib/scoreboard-views.ts");
 const { gamePriority } = await bundle("lib/watch-priority.ts");
 const { classify, retainFinalCategories } = await bundle("lib/football.ts");
 const { upsetExplanation } = await bundle("lib/upset.ts");
@@ -40,6 +40,101 @@ test("Upsets count active watches first and add only games that concluded as ups
   assert.deepEqual(upsetCounts(board), { brewing: 2, total: 3 });
   assert.deepEqual(upsetCounts(board, true), { brewing: 2, total: 2 });
   assert.deepEqual(upsetCounts(null), { brewing: 0, total: 0 });
+});
+
+test("category counts pair qualifying games in progress with every listed game, whatever its state", () => {
+  // ACC games that are never close or upsets: the ACC team leads comfortably.
+  const acc = (id, changes = {}) => {
+    const value = game({ id, ...changes });
+    Object.assign(value.teams[0], { conferenceId: "1", score: 35 });
+    value.teams.forEach(team => { team.rank = null; });
+    return value;
+  };
+  const games = [
+    acc("live"),
+    acc("halftime", { halftime: true, intermission: true, period: 2, status: "Halftime" }),
+    acc("started-delay", { state: "delayed", status: "Delayed" }),
+    acc("pregame-delay", { state: "delayed", started: false, period: 0, status: "Delayed" }),
+    acc("upcoming", { state: "upcoming", started: false, period: 0, status: "Scheduled" }),
+    acc("final", { state: "final", status: "Final" }),
+    acc("other", { state: "other", started: false, period: 0, status: "Postponed" }),
+  ];
+  const board = scoreboard(games);
+  assert.equal(viewGames(board, ["acc"]).length, 7, "fixture: every state is listed under ACC");
+  assert.deepEqual(categoryCounts(board, ["acc"]), { current: 3, total: 7 });
+  assert.deepEqual(categoryCounts(board, ["acc"], true), { current: 3, total: 6 });
+  assert.deepEqual(categoryCounts(board, []), { current: 3, total: 7 });
+  // The total is every listed game, not in-progress games plus finals.
+  assert.notEqual(categoryCounts(board, ["acc"]).total, 3 + 1);
+  for (const selection of [["top25"], ["close"], ["upset"]]) assert.deepEqual(categoryCounts(board, selection), { current: 0, total: 0 }, JSON.stringify(selection));
+  // Reversed input order counts the same.
+  assert.deepEqual(categoryCounts(scoreboard([...games].reverse()), ["acc"]), { current: 3, total: 7 });
+});
+
+test("category counts follow OR membership once per game and the All-only focused game", () => {
+  const rankedAcc = game({ id: "ranked-acc" });
+  Object.assign(rankedAcc.teams[0], { conferenceId: "1", rank: 3, score: 35 }); rankedAcc.teams[1].rank = null;
+  const plainAcc = game({ id: "plain-acc", state: "upcoming", started: false, period: 0 });
+  plainAcc.teams[0].conferenceId = "1"; plainAcc.teams.forEach(team => { team.rank = null; });
+  const ranked = game({ id: "ranked-final", state: "final" });
+  Object.assign(ranked.teams[0], { rank: 7, score: 35 }); ranked.teams[1].rank = null;
+  const focused = game({ id: "focused" });
+  focused.teams.forEach(team => { team.rank = null; }); focused.teams[0].score = 0;
+  const board = scoreboard([focused, ranked, plainAcc, rankedAcc]);
+  assert.deepEqual(categoryCounts(board, ["acc"]), { current: 1, total: 2 });
+  assert.deepEqual(categoryCounts(board, ["top25"]), { current: 1, total: 2 });
+  assert.deepEqual(categoryCounts(board, ["acc", "top25"]), { current: 1, total: 3 }, "the ranked ACC game counts once");
+  assert.deepEqual(categoryCounts(board, []), { current: 1, total: 3 });
+  assert.deepEqual(categoryCounts(board, [], false, "focused"), { current: 2, total: 4 });
+  assert.deepEqual(categoryCounts(board, [], true, "focused"), { current: 2, total: 3 });
+  assert.deepEqual(categoryCounts(board, ["acc", "top25"], false, "focused"), { current: 1, total: 3 }, "categories never inherit the focus exception");
+  for (const [selection, hideFinals, focusedGame] of [[[], false, "focused"], [["acc", "top25"], false, ""], [["acc", "top25"], true, ""]])
+    assert.equal(categoryCounts(board, selection, hideFinals, focusedGame).total, viewGames(board, selection, hideFinals, focusedGame).length);
+});
+
+test("exact Upsets counts delegate brewing and actual upsets; mixed selections use the general path", () => {
+  const activeUpset = changes => { const value = game(changes); value.teams[0].rank = 5; value.teams[1].rank = null; return value; };
+  const live = activeUpset({ id: "live-upset" });
+  const delayed = activeUpset({ id: "delayed-upset", state: "delayed" });
+  const final = activeUpset({ id: "final-upset", state: "final" });
+  const recovered = game({ id: "recovered-favorite", state: "final", retainedCategories: { acc: false, top25: false, close: false, upset: true } });
+  const plain = game({ id: "plain" });
+  plain.teams.forEach(team => { team.rank = null; });
+  plain.teams[1].score = plain.teams[0].score + 20;
+  const board = scoreboard([live, delayed, final, recovered, plain]);
+  for (const hideFinals of [false, true]) {
+    const { brewing, total } = upsetCounts(board, hideFinals);
+    assert.deepEqual(categoryCounts(board, ["upset"], hideFinals), { current: brewing, total });
+  }
+  assert.deepEqual(categoryCounts(board, ["upset"]), { current: 2, total: 3 }, "the recovered favorite's final is excluded");
+  assert.deepEqual(categoryCounts(board, ["upset"], true), { current: 2, total: 2 });
+  const accLive = activeUpset({ id: "acc-live-upset" }); accLive.teams[0].conferenceId = "1";
+  const accUpcoming = game({ id: "acc-upcoming", state: "upcoming", started: false, period: 0 });
+  accUpcoming.teams[0].conferenceId = "1"; accUpcoming.teams.forEach(team => { team.rank = null; });
+  const mixed = scoreboard([accLive, live, final, recovered, accUpcoming]);
+  assert.deepEqual(categoryCounts(mixed, ["acc"]), { current: 1, total: 2 });
+  assert.deepEqual(categoryCounts(mixed, ["upset"]), { current: 2, total: 3 });
+  assert.deepEqual(categoryCounts(mixed, ["acc", "upset"]), { current: 2, total: 4 }, "the ACC upset counts once");
+  assert.deepEqual(categoryCounts(mixed, ["acc", "upset"], true), { current: 2, total: 3 });
+});
+
+test("a delay never adds a One-score count; its retained final counts in the total only", () => {
+  const live = game({ id: "delay-close" });
+  const paused = retainFinalCategories(scoreboard([{ ...live, state: "delayed" }]), scoreboard([live]));
+  assert.equal(paused.games[0].lastActiveClose, true);
+  assert.deepEqual(categoryCounts(paused, ["close"]), { current: 0, total: 0 });
+  assert.deepEqual(categoryCounts(paused, ["top25"]), { current: 1, total: 1 }, "a delay after kickoff is in progress where it qualifies");
+  const final = structuredClone(live); final.state = "final"; final.teams[1].score = 35;
+  const finished = retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(paused)));
+  assert.deepEqual(categoryCounts(finished, ["close"]), { current: 0, total: 1 });
+  assert.deepEqual(categoryCounts(finished, ["close"], true), { current: 0, total: 0 });
+});
+
+test("an empty board counts real zeros for every selection", () => {
+  for (const selection of [[], ["acc"], ["top25"], ["close"], ["upset"], ["acc", "upset"]]) {
+    assert.deepEqual(categoryCounts(scoreboard([]), selection), { current: 0, total: 0 }, JSON.stringify(selection));
+    assert.deepEqual(categoryCounts(null, selection), { current: 0, total: 0 }, JSON.stringify(selection));
+  }
 });
 
 test("ORD-016 Virginia Tech comeback leaves Upsets but remains in its other categories", () => {

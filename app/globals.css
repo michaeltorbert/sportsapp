@@ -44,8 +44,8 @@ button:focus-visible, a:focus-visible, .date-picker:focus-within { outline: 2px 
 .filter-tabs .filter-tab { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; height: 100%; padding: 8px 7px; border: 0; border-radius: 9px; gap: 6px; font-size: 14px; font-weight: 600; color: #b8c4d7; flex-wrap: wrap; white-space: normal; line-height: 1.2; }
 .filter-tabs .filter-tab[aria-pressed="true"] { background: #d3fc81; color: #1b280a; box-shadow: 0 2px 8px #0002; }
 .tab-count { font-size: 12px; min-width: 17px; height: 19px; display: inline-grid; place-items: center; color: inherit; opacity: .7; font-variant-numeric: tabular-nums; }
-.tab-count.upset-count { display: inline-flex; gap: 3px; white-space: nowrap; opacity: 1; }
-.upset-total { opacity: .62; }
+.tab-count.upset-count, .tab-count.count-pair { display: inline-flex; gap: 3px; white-space: nowrap; opacity: 1; }
+.upset-total, .count-total { opacity: .62; }
 .watch-header { padding: 25px 0 22px; }.eyebrow { color: #95a5be; font-size: 12px; letter-spacing: 1.9px; font-weight: 700; margin-bottom: 8px; }
 h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px, 5.7vw, 34px); line-height: 1.16; }
 .watch-header > p { font-size: 14px; color: #a1aec3; margin: 10px 0 18px; line-height: 1.55; }
@@ -289,8 +289,10 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .compact-scoreboard .week-label { font-size: .875rem; }
 .compact-scoreboard .week-note { font-size: .625rem; }
 .compact-scoreboard .timezone-cue { color: #98a9c0; font-size: .6875rem; margin: 0 0 8px; overflow-wrap: anywhere; }
-.compact-scoreboard .filter-tabs { display: flex; flex-wrap: wrap; border-radius: 8px; padding: 3px; min-height: 50px; max-width: none; }
-.compact-scoreboard .filter-tab { flex: 1; font-size: .75rem; min-width: min(100%, 3.4rem); white-space: normal; overflow-wrap: anywhere; padding: 4px 2px; }
+/* All five categories share one row: each label and its count pair stay on one line. */
+.compact-scoreboard .filter-tabs { display: flex; flex-wrap: nowrap; gap: 2px; border-radius: 8px; padding: 3px; min-height: 50px; max-width: none; }
+.compact-scoreboard .filter-tab { flex: 1 1 auto; min-width: auto; flex-direction: column; flex-wrap: nowrap; gap: 1px; font-size: .75rem; padding: 4px 2px; }
+.compact-scoreboard .filter-tab > span { white-space: nowrap; overflow-wrap: normal; }
 .compact-scoreboard .tab-count { font-size: .6875rem; height: auto; min-width: 0; }
 .compact-scoreboard .watch-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 10px; padding: 2px 0; }
 .compact-scoreboard .feed-status { font-size: .75rem; }
