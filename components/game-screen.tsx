@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { ArrowUpRight, ChevronLeft, CloudOff, Signal, TriangleAlert, Tv, Zap } from "lucide-react";
+import { ChevronLeft, CloudOff, Signal, TriangleAlert, Tv, Zap } from "lucide-react";
 import { classify, type Game, type Scoreboard, type Team } from "@/lib/football";
 import { upsetExplanation, upsetWatch } from "@/lib/upset";
 import { PLAYER_CATEGORIES, type PlayerCategory } from "@/lib/game-stats";
@@ -71,7 +71,7 @@ function Context({ game }: { game: Game }) {
   const upsetLabel = watch?.basis === "conference" ? "Conference watch" : game.state === "final" ? "Upset final" : "Upset watch";
   return <div className="game-context">
     <div className="badges">{tags.acc && <span className="badge acc-badge">ACC</span>}{tags.top25 && <span className="badge top25-badge">Top 25</span>}{tags.close && <span className="badge close-badge">{margin === 0 ? "Tied" : margin !== null && margin <= 8 ? `${margin}-point game` : "One-score watch"}</span>}{tags.upset && <span className="badge upset-badge">{upsetLabel}</span>}</div>
-    <a href={game.url} target="_blank" rel="noopener noreferrer" className="gamecast" data-focus-key="gamecast" aria-label={`Open ${away.name} vs ${home.name} on ESPN`}>Gamecast<ArrowUpRight size={15} aria-hidden="true" /></a>
+    {/* No external Gamecast link: the user wants the game kept in this app (2026-10-13). */}
   </div>;
 }
 

@@ -312,7 +312,9 @@ test('game links support keyboard and touch, preserve live-to-final context and 
   await expect(summary.getByLabel('Possession')).toBeVisible();
   await summary.focus(); await summary.press('Enter');
   await expect(screen).toBeVisible();
-  await expect(screen.getByRole('link', { name: /Open context away vs context home on ESPN/ })).toHaveAttribute('href', /espn.com/);
+  // The game stays in the app: no external ESPN/Gamecast link on the screen (user request).
+  await expect(screen.getByRole('link')).toHaveCount(0);
+  await expect(screen.locator('a[href*="espn.com"]')).toHaveCount(0);
   await expect(screen.locator('.drive')).toContainText('3rd & 2');
   await expect(screen.locator('.drive')).toContainText('RED ZONE');
   await expect(screen.locator('.possession')).toHaveCount(1);

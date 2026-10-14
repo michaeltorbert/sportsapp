@@ -131,11 +131,13 @@ test("live gate: enabled live games render game stats; the off path still shows 
   assert.match(render(g, null), /Loading team stats…/, "enabled: the first open loads");
   for (const section of ["team", "players"]) {
     const html = render(g, state("started", null, { mode: "disabled" }), { section });
-    assert.match(html, /Live stats are not available yet/); assert.match(html, /Open Gamecast for live game statistics/);
+    assert.match(html, /Live stats are not available yet/); assert.match(html, /Stats for games in progress are not shown here\. The score and game details are still available\./);
+    assert.doesNotMatch(html, /Gamecast/);
     assert.doesNotMatch(html, /Loading|skeleton/);
   }
   const postponed = render(card("final", { state: "other", status: "Postponed", started: false }).g, null);
-  assert.match(postponed, /<h2>Postponed<\/h2><p>Check Gamecast for schedule updates.<\/p>/);
+  assert.match(postponed, /<h2>Postponed<\/h2><p>This game is reported as postponed\. Stats are not shown for this status\.<\/p>/);
+  assert.doesNotMatch(postponed, /Gamecast/);
   assert.doesNotMatch(postponed, /view-nav|Team stats|Player stats|Loading/, "status-first: no sections or stats work");
   assert.match(render(card("final", { state: "other", status: "Forfeit" }).g, null), /A played final is not implied/);
   assert.match(render(card("final", { state: "other", status: "Canceled" }).g, null), /will not be played as scheduled/);
@@ -185,13 +187,17 @@ test("failure, stale age, offline and partial states stay explicit and keep vali
   assert.match(players, /All participants supplied for these categories are shown/);
   // Whole Players too large: explicit, team data intact.
   const big = { ...stats, players: { unavailable: "too-large" } };
-  assert.match(render(g, state("final", big), { section: "players" }), /too large to show here/);
+  const tooLarge = render(g, state("final", big), { section: "players" });
+  assert.match(tooLarge, /too large to show here\. Team stats remain available\./); assert.doesNotMatch(tooLarge, /Gamecast/);
+  const missingPlayers = render(g, state("final", { ...stats, players: { unavailable: "missing" } }), { section: "players" });
+  assert.match(missingPlayers, /Player stats were not supplied for this game\. Team stats remain available\./); assert.doesNotMatch(missingPlayers, /Gamecast/);
   assert.match(render(g, state("final", big)), /Total yards/);
   // Team stats unavailable: the players remain reachable.
   const noTeam = render(g, state("final", { ...stats, team: { unavailable: "identity" } }));
   assert.match(noTeam, /Team stats unavailable/); assert.match(noTeam, /Player stats remain available/); assert.match(noTeam, /data-focus-key="notice-players">View player stats/);
   // No data at all.
-  assert.match(render(g, state("final", { ...stats, team: { unavailable: "missing" }, players: { unavailable: "missing" } })), /No stats available yet/);
+  const empty = render(g, state("final", { ...stats, team: { unavailable: "missing" }, players: { unavailable: "missing" } }));
+  assert.match(empty, /No stats available yet<\/h3><p>The source has not supplied stats for this game yet\.<\/p>/); assert.doesNotMatch(empty, /Gamecast/);
 });
 
 test("paused play keeps game totals with honest age and source status, without claiming when they were recorded", () => {

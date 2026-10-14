@@ -52,9 +52,10 @@ test("first tap opens the dedicated screen with the final team comparison; Playe
   await expect(screen(page).getByRole("row", { name: /Fourth-down conversions/ })).toBeVisible();
   await expect(screen(page).getByText("Stats checked at")).toBeVisible();
   expect(harness.state.statsRequests).toEqual([`?event=${FINAL.id}&phase=final&refresh=0`]);
-  // Existing game details stay with the game: score, status and Gamecast.
+  // Game details stay in the app: score and status, with no external Gamecast link (user request).
   await expect(screen(page).locator(".mh-score")).toHaveText(["20", "17"]);
-  await expect(screen(page).getByRole("link", { name: /on ESPN/ })).toHaveAttribute("href", /espn\.com/);
+  await expect(screen(page).getByRole("link")).toHaveCount(0);
+  await expect(screen(page).getByText("Gamecast")).toHaveCount(0);
   const team = view(page, "Team stats"), players = view(page, "Player stats");
   for (const control of [team, players]) expect((await control.boundingBox()).height).toBeGreaterThanOrEqual(44);
   await players.tap();
@@ -99,7 +100,7 @@ test("live stats: opening loads started totals, the source status shows separate
   await expect(screen(page).getByRole("heading", { name: "Team stats", level: 2 })).toBeVisible();
   await expect(screen(page).getByRole("row", { name: /Total yards/ })).toContainText("235");
   await expect(screen(page).getByText("Source reports 3:48 - 3rd")).toBeVisible();
-  await expect(screen(page).locator("a.gamecast")).toBeVisible();
+  await expect(screen(page).locator("a.gamecast, a[target=\"_blank\"]")).toHaveCount(0);
   expect(harness.state.statsRequests).toEqual([`?event=${LIVE.id}&phase=started&refresh=0`]);
   await page.clock.fastForward(31_000);
   await expect.poll(() => harness.state.statsRequests.length).toBe(2);

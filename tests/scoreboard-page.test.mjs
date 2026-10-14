@@ -414,7 +414,7 @@ test("a card is a link to its game screen and the scoreboard does no stats work"
   assert.match(html, /<h1 class="sr-only" id="scoreboard-heading" tabindex="-1">/);
 });
 
-test("the open game screen keeps the scoreboard mounted but hidden and shows score, context and Gamecast", () => {
+test("the open game screen keeps the scoreboard mounted but hidden and shows score and context in the app, with no external Gamecast link", () => {
   const g = game({ id: "screen-game", broadcast: "ACC Network", possession: "a", downDistance: "3rd & 2 at B 12", redZone: true });
   g.teams[0].record = "4-2"; g.teams[1].record = "3-3";
   const boards = fixtures(); boards.daily = scoreboard([g]);
@@ -427,7 +427,9 @@ test("the open game screen keeps the scoreboard mounted but hidden and shows sco
   assert.match(screen, /<p class="sr-only">Team a, 4-2, 14; No\. 20 Team b, 3-3, 21\. Team a has possession\.<\/p>/);
   assert.match(screen, /class="mh-score home leading /);
   assert.match(screen, /class="drive red-zone"><span>RED ZONE<\/span>3rd &amp; 2 at B 12/);
-  assert.match(screen, /class="gamecast" data-focus-key="gamecast" aria-label="Open Team a vs Team b on ESPN">Gamecast/);
+  // The user wants the game kept in this app: no Gamecast or other external link on the screen.
+  assert.doesNotMatch(screen, /Gamecast|class="gamecast"|espn\.com|target="_blank"/);
+  assert.match(screen, /<div class="game-context"><div class="badges">/);
   assert.match(screen, /aria-pressed="true">Team stats/);
   for (const forbidden of [/spread|moneyline|odds|win probability/i, /<details/]) assert.doesNotMatch(screen, forbidden);
   // The game's own Eastern calendar day leads the status line (02:30 UTC Sunday is Saturday evening in ET).

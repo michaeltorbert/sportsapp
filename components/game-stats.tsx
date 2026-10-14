@@ -67,7 +67,7 @@ function Notice({ title, children, detail, warning = false, live = false, retry,
 }
 function Players({ game, stats }: { game: Game; stats: GameStats }) {
   const players = stats.players;
-  if (!("teams" in players)) return <Notice title="Player stats unavailable">{players.unavailable === "too-large" ? "The player box score is too large to show here. Team stats remain available; open Gamecast for the full box score." : "Team stats remain available. Open Gamecast for the full box score."}</Notice>;
+  if (!("teams" in players)) return <Notice title="Player stats unavailable">{players.unavailable === "too-large" ? "The player box score is too large to show here. Team stats remain available." : "Player stats were not supplied for this game. Team stats remain available."}</Notice>;
   // Negative source IDs are team-attributed entries; the source supplies their name.
   const teamEntry = players.teams.some(entry => "categories" in entry && PLAYER_CATEGORIES.some(c => { const rows = entry.categories[c]; return "rows" in rows && rows.rows.some(row => row.athleteId.startsWith("-")); }));
   // The completeness claim holds only when every category for both teams is listed.
@@ -112,7 +112,7 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
   const expected = expectedPhase(game), [away, home] = game.teams, matchup = `${away.name} vs ${home.name}`;
   // Exceptional states are status-first and make no stats request.
   if (expected === null) {
-    const body = /postpon/i.test(game.status) ? "Check Gamecast for schedule updates." : /forfeit|no contest/i.test(game.status) ? "This is a reported game status. A played final is not implied." : /cancel/i.test(game.status) ? "This game will not be played as scheduled." : "Stats are not shown for this game status.";
+    const body = /postpon/i.test(game.status) ? "This game is reported as postponed. Stats are not shown for this status." : /forfeit|no contest/i.test(game.status) ? "This is a reported game status. A played final is not implied." : /cancel/i.test(game.status) ? "This game will not be played as scheduled." : "Stats are not shown for this game status.";
     return <div className="game-body"><section className="status-first" aria-label={`Game status for ${matchup}`}><h2>{game.status}</h2><p>{body}</p></section></div>;
   }
   const heading = expected === "pregame" ? "Season averages" : "Team stats";
@@ -133,7 +133,7 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
   const showJumps = players && hasBody && "teams" in snapshot!.players;
 
   let status: ReactNode;
-  if (disabled) status = <div className="stats-empty" role="status"><h3>Live stats are not available yet</h3><p>Open Gamecast for live game statistics.</p></div>;
+  if (disabled) status = <div className="stats-empty" role="status"><h3>Live stats are not available yet</h3><p>Stats for games in progress are not shown here. The score and game details are still available.</p></div>;
   else if (!snapshot) {
     if (!online) status = <Notice title="You’re offline" warning live>Stats will load when you reconnect. The score and game details are still available.</Notice>;
     else if (failure && !pending) status = <Notice title="Stats could not be loaded" warning live retry={retryState}>The score and game details are still available. Try again.</Notice>;
@@ -194,7 +194,7 @@ function StatsStatus({ game, stats, expected, now, online, failure, retry }: { g
   // Retrieval time is the only timestamp shown; the source's own status is reported separately.
   const freshness = <p className="stats-freshness"><span>Stats checked at {checkedTime(stats.checkedAt)}</span>{expected !== "pregame" && stats.sourceStatus.detail && <span>Source reports {stats.sourceStatus.detail}</span>}{pastTtl && !failure && online && <span className="stats-age">Checked {ago(age)}</span>}{pastTtl && !failure && online && expected !== "started" && <button type="button" className="stats-refresh" data-focus-key="stats-refresh" onClick={retry.onRetry} disabled={pending || retry.waitMs !== 0}>{pending ? "Checking…" : "Check again"}</button>}</p>;
   if (display.mode === "catching-up") return <>{warnings}<Notice title="Stats catching up" live>{display.reason === "season-only" ? "Game stats are not available yet. The source is still reporting pregame information." : "The stats source has not caught up with the current game status yet."}</Notice>{freshness}</>;
-  if (display.mode === "empty") return <>{warnings}<div className="stats-empty" role="status"><h3>No stats available yet</h3><p>Check again shortly, or open Gamecast for more game information.</p></div>{freshness}</>;
+  if (display.mode === "empty") return <>{warnings}<div className="stats-empty" role="status"><h3>No stats available yet</h3><p>The source has not supplied stats for this game yet.</p></div>{freshness}</>;
   const paused = game.state === "delayed" && game.started;
   return <>
     {warnings}
