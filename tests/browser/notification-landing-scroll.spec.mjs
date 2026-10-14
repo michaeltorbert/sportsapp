@@ -47,8 +47,15 @@ const open = (harness, path = `/?date=2026-09-05#game-${TARGET}`) => harness.ope
 const title = page => page.locator(".game-screen h1.game-title");
 const card = page => page.locator(`#game-${TARGET}`);
 const settled = page => expect(page.getByRole("button", { name: "Refresh scores" })).toBeEnabled();
+// Viewport pixels from the real renderer for review, named by engine and state; the build's identity is in
+// the run's config metadata.
+async function shot(page, testInfo, state) {
+  const name = `notification-landing-${testInfo.project.name}-${state}`, path = testInfo.outputPath(`${name}.png`);
+  await page.screenshot({ path, fullPage: false, animations: "disabled" });
+  await testInfo.attach(name, { path, contentType: "image/png" });
+}
 
-for (const denyStorage of [false, true]) test(`week board first: the day card scrolls once before its game opens, then Back restores it${denyStorage ? " (storage denied, caches untouched)" : ""}`, async ({ page, harness }) => {
+for (const denyStorage of [false, true]) test(`week board first: the day card scrolls once before its game opens, then Back restores it${denyStorage ? " (storage denied, caches untouched)" : ""}`, async ({ page, harness }, testInfo) => {
   harness.state.events = events();
   await countScrolls(page, { denyStorage });
   const day = await holdBoard(page, DAY, WEEK);
@@ -57,16 +64,26 @@ for (const denyStorage of [false, true]) test(`week board first: the day card sc
   // The week board alone neither opens the game nor consumes the landing.
   await expect(page.locator(".game-screen")).toHaveCount(0);
   expect(await scrolls(page)).toEqual([]);
+  if (!denyStorage) await shot(page, testInfo, "1-waiting-for-day-board");
   day.release();
   await expect(title(page)).toContainText(`${TARGET} away`);
   expect(await scrolls(page)).toEqual([{ id: `game-${TARGET}`, screenOpen: false }]);
   const landingY = await page.evaluate(() => window.__landingY);
   expect(landingY).toBeGreaterThan(0);
   expect(new URL(page.url()).hash).toBe("");
+  if (!denyStorage) await shot(page, testInfo, "2-game-open");
   await page.locator(".game-screen").getByRole("button", { name: /^Back to scores/ }).click();
   await expect(card(page)).toBeVisible();
   await expect(card(page).locator("a.game-summary")).toBeFocused();
   expect(Math.abs(await page.evaluate(() => window.scrollY) - landingY)).toBeLessThanOrEqual(1);
+  if (!denyStorage) {
+    await shot(page, testInfo, "3-back-at-saved-card-position");
+    // The category counts in their normal initial context, from the top of the same loaded board.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(page.locator(".filter-tabs")).toBeInViewport();
+    await shot(page, testInfo, "4-counts-top-of-board");
+    await page.evaluate(y => window.scrollTo(0, y), landingY);
+  }
   // No new landing after Back or a refresh, and the consumed notification never reopens.
   await page.getByRole("button", { name: "Refresh scores" }).click(); await settled(page);
   await page.clock.fastForward(1_000);
