@@ -294,13 +294,17 @@ export default function Home() {
     if (job.fallback && link) link.scrollIntoView({ block: "center" });
     else window.scrollTo(0, Math.max(0, Math.min(job.scrollY, document.documentElement.scrollHeight - innerHeight)));
   });
+  // The displayed board has loaded, or this period's refresh has failed. Until then a notification waits,
+  // so the landing scroll above sees its card first whichever board arrives first; a failure still opens it.
+  const boardSettled = !!data || !!scopeError || (!refreshing && !!error);
   // Auto-open once: an explicit event wins; real input before the game appears cancels the request.
   useEffect(() => {
     if (!openIntent) return;
     if (route) { setOpenIntent(""); return; }
+    if (!boardSettled) return;
     if (Object.values(protectedBoards).some(board => board?.games.some(game => game.id === openIntent))) openGame(openIntent, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openIntent, protectedBoards, route]);
+  }, [openIntent, protectedBoards, route, boardSettled]);
   useEffect(() => {
     if (!openIntent) return;
     const cancel = () => setOpenIntent("");
