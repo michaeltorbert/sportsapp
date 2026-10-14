@@ -316,7 +316,70 @@ test("reload on the screen keeps it; Back then restores the scoreboard as it was
   await expect(page.locator(".overnight-note")).toHaveCount(0);
 });
 
-test("direct links open the screen and Back stays in the app; unknown or malformed IDs are generic or ignored", async ({ page, harness }) => {
+// Request tracking for tests that start a new document mid-test. Installed at test start, before the first
+// load. Records URLs and lifecycle only (no headers or bodies). `doc` counts main-frame document requests,
+// so "finished in the current document" never counts an earlier document's request.
+function trackRequests(page) {
+  const started = Date.now(), log = [], pending = new Map();
+  let doc = 0;
+  const now = () => Date.now() - started;
+  const describe = request => {
+    let mainFrame = null, frameUrl = null;
+    try { const frame = request.frame(); mainFrame = frame === page.mainFrame(); frameUrl = frame.url(); } catch { /* Not frame-initiated. */ }
+    return { url: request.url(), resourceType: request.resourceType(), navigation: request.isNavigationRequest(), mainFrame, frameUrl };
+  };
+  page.on("request", request => {
+    const info = describe(request);
+    if (info.navigation && info.mainFrame && info.resourceType === "document") doc++;
+    pending.set(request, doc);
+    log.push({ event: "start", t: now(), doc, ...info });
+  });
+  page.on("requestfinished", request => { log.push({ event: "finish", t: now(), doc: pending.get(request) ?? null, url: request.url() }); pending.delete(request); });
+  page.on("requestfailed", request => { log.push({ event: "fail", t: now(), doc: pending.get(request) ?? null, url: request.url(), error: request.failure()?.errorText ?? null }); pending.delete(request); });
+  page.on("pageerror", error => log.push({ event: "pageerror", t: now(), doc, message: error.message, stack: error.stack ?? null }));
+  return {
+    log,
+    pending: () => [...pending.keys()].map(request => request.url()),
+    finishedInCurrentDocument: predicate => log.some(entry => entry.event === "finish" && entry.doc === doc && predicate(new URL(entry.url))),
+    boundary(label) { log.push({ event: "boundary", label, t: now(), doc, pending: this.pending() }); },
+  };
+}
+// The RSC prefetches the current document will make for its visible framework Links, per
+// node_modules/vinext/dist/shims/link.js: each Link is observed by a shared IntersectionObserver
+// (rootMargin 250px) and, once intersecting, prefetches on idle, only when the route table global
+// exists, and at most once per URL per document (cached in getPrefetchedUrls). The scoreboard's
+// framework Links are the wordmark and the Scores/Guide navigation (app/page.tsx, app-navigation.tsx);
+// game cards are plain anchors and never prefetch. Hidden (board behind a game) Links never intersect.
+async function expectedPrefetches(page) {
+  return page.evaluate(() => {
+    if (!window.__VINEXT_LINK_PREFETCH_ROUTES__) return [];
+    return [...document.querySelectorAll(".app-header a.wordmark, .destination-nav a")].filter(a => {
+      const box = a.getBoundingClientRect();
+      return box.width > 0 && box.height > 0 && box.bottom >= -250 && box.top <= innerHeight + 250 && box.right >= -250 && box.left <= innerWidth + 250;
+    }).map(a => { const url = new URL(a.href); return { path: url.pathname === "/" ? "/.rsc" : `${url.pathname}.rsc`, search: url.search }; });
+  });
+}
+const sameQueryWithoutRsc = (url, search) => {
+  const a = new URLSearchParams(url.search), b = new URLSearchParams(search);
+  a.delete("_rsc"); a.sort(); b.sort();
+  return a.toString() === b.toString();
+};
+// Before a test starts a new document: the scoreboard refresh in progress has completed, every prefetch the
+// visible Links will make in this document has finished, and nothing the page started is still pending.
+async function settleBeforeDocumentLoad(page, harness, tracker, info, label, { pollSince } = {}) {
+  tracker.boundary(`${label}: before settle`);
+  if (pollSince !== undefined) await expect.poll(() => harness.state.scoreRequests.length, `${label}: the triggered poll started`).toBeGreaterThan(pollSince);
+  // Disabled while a refresh runs (refreshing || !date); found by label, since the board may be hidden.
+  await expect(page.locator('button[aria-label="Refresh scores"]')).toBeEnabled();
+  const prefetches = await expectedPrefetches(page);
+  await expect.poll(() => prefetches.filter(p => !tracker.finishedInCurrentDocument(url => url.pathname === p.path && sameQueryWithoutRsc(url, p.search))), `${label}: expected Link prefetches finished`).toEqual([]);
+  await expect.poll(() => tracker.pending(), `${label}: no request pending`).toEqual([]);
+  tracker.boundary(`${label}: settled`);
+  await info.attach(`requests-${label}`, { contentType: "application/json", body: JSON.stringify({ prefetches, log: tracker.log }, null, 2) });
+}
+
+test("direct links open the screen and Back stays in the app; unknown or malformed IDs are generic or ignored", async ({ page, harness }, info) => {
+  const tracker = trackRequests(page);
   await harness.open({ path: "/?event=ranked-live&date=2026-09-05", waitForScores: false });
   await expect(screen(page).locator("h1.game-title")).toContainText("ranked-live away at ranked-live home");
   const length = await page.evaluate(() => history.length);
@@ -327,13 +390,17 @@ test("direct links open the screen and Back stays in the app; unknown or malform
   expect(await page.evaluate(() => history.length)).toBe(length);
   expect(new URL(page.url()).search).toBe("?date=2026-09-05");
   const statsRequests = harness.state.statsRequests.length;
+  await settleBeforeDocumentLoad(page, harness, tracker, info, "before-unknown-id");
   await page.goto("/?event=999999999");
   await expect(screen(page).getByRole("heading", { name: "This game isn’t available" })).toBeVisible();
   await expect(screen(page).locator(".masthead, .view-nav")).toHaveCount(0);
+  await settleBeforeDocumentLoad(page, harness, tracker, info, "before-malformed-id");
   await page.goto("/?event=%3Cscript%3E");
   await expect(page.getByRole("button", { name: "Refresh scores" })).toBeEnabled();
   await expect(screen(page)).toHaveCount(0);
   expect(harness.state.statsRequests, "unknown and malformed IDs do no stats work").toHaveLength(statsRequests);
+  tracker.boundary("end");
+  await info.attach("requests-end", { contentType: "application/json", body: JSON.stringify(tracker.log, null, 2) });
 });
 
 test("a notification link opens once: replace-then-push, a consumed marker, and no reopening after Back, a poll or reload", async ({ page, harness }) => {
@@ -374,7 +441,8 @@ test("switching from game A to game B never shows A's stats on B's screen", asyn
   expect(harness.state.statsRequests).toEqual([`?event=${LIVE.id}&phase=started&refresh=0`, `?event=${FINAL.id}&phase=final&refresh=0`]);
 });
 
-test("hiding a Duke game while its screen is open leaves only the generic screen and stops its stats work", async ({ page, harness }) => {
+test("hiding a Duke game while its screen is open leaves only the generic screen and stops its stats work", async ({ page, harness }, info) => {
+  const tracker = trackRequests(page);
   serve(harness);
   // A Duke home game: visible under the default, so its screen and stats load first.
   const duke = matchup(DUKE, { acc: true });
@@ -397,12 +465,19 @@ test("hiding a Duke game while its screen is open leaves only the generic screen
   await expect(screen(page).getByRole("heading", { name: "This game isn’t available" })).toBeVisible();
   await expect(screen(page)).not.toContainText(/Duke|DUKE/);
   await expect(screen(page).locator(".masthead, .view-nav, table")).toHaveCount(0);
+  const polls = harness.state.scoreRequests.length;
   await page.clock.fastForward(61_000);
   expect(harness.state.statsRequests).toHaveLength(requests);
+  // The fast-forward starts score polls; let that refresh complete before starting a new document.
+  // (Its yesterday board may serve the selected day, so no particular set of fetches is required.)
+  await settleBeforeDocumentLoad(page, harness, tracker, info, "before-direct-link", { pollSince: polls });
+  expect(harness.state.statsRequests, "no stats work for the hidden game, through the polls").toHaveLength(requests);
   // A direct link to it is the same generic screen.
   await page.goto(`/?event=${DUKE.id}&date=2026-09-05`);
   await expect(screen(page).getByRole("heading", { name: "This game isn’t available" })).toBeVisible();
   await expect(screen(page)).not.toContainText(/Duke|DUKE/);
+  tracker.boundary("end");
+  await info.attach("requests-end", { contentType: "application/json", body: JSON.stringify(tracker.log, null, 2) });
 });
 
 for (const mode of ["offline", "rsc-503"]) {

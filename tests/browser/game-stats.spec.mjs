@@ -120,7 +120,9 @@ test("a stats failure stays explicit on the screen; Retry waits for backoff, the
   await expect(screen(page).getByText("Stats could not be loaded")).toBeVisible();
   await expect(screen(page).locator(".mh-score").first()).toHaveText("20");
   // Retry-After: 300 is honored: the control is disabled with an honest wait and no early request.
-  const retry = screen(page).getByRole("button", { name: /Retry/ });
+  // The stats Retry specifically: CI observed the score-feed warning's own Retry on screen at the same time.
+  const retry = screen(page).locator('[data-focus-key="stats-retry"]');
+  await expect(retry).toHaveCount(1);
   await expect(retry).toBeDisabled();
   await expect(retry).toHaveText(/Retry in 5m/);
   await page.clock.fastForward(120_000);
