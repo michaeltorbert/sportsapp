@@ -218,20 +218,21 @@ test("validated lines sit on the row before kickoff and on the game screen throu
   assert.doesNotMatch(missingCard, /class="(?:team-line|pickem-line)"/);
   for (const card of [favoriteCard, pickemCard, missingCard]) assert.doesNotMatch(card, /class="detail-line"/);
   // On the game screen the masthead is visual only, so the line row speaks its full context.
-  assert.match(screenOf("favorite-line", { boards }), /class="detail-line"><span class="sr-only">Pregame betting line: Team b favored by 7\.5 points, ESPN<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">Team b −7\.5<\/strong><span aria-hidden="true">ESPN<\/span>/);
-  assert.match(screenOf("pickem-line", { boards }), /class="detail-line"><span class="sr-only">Pregame pick’em line, ESPN<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">PK<\/strong>/);
+  // The game screen shows the line without its bookmaker, visibly and to screen readers (user request).
+  assert.match(screenOf("favorite-line", { boards }), /class="detail-line"><span class="sr-only">Pregame betting line: Team b favored by 7\.5 points<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">Team b −7\.5<\/strong><\/p>/);
+  assert.match(screenOf("pickem-line", { boards }), /class="detail-line"><span class="sr-only">Pregame pick’em line<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">PK<\/strong><\/p>/);
   assert.doesNotMatch(screenOf("missing-line", { boards }), /class="detail-line"/);
   for (const state of ["live", "final"]) {
     const gameWithLine = game({ id: `${state}-line`, state, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } });
     boards.daily = scoreboard([gameWithLine]);
     const liveOrFinal = render([], { boards }).html;
     assert.doesNotMatch(summaryOf(liveOrFinal), /class="(?:team-line|pickem-line|detail-line)"/);
-    assert.match(screenOf(`${state}-line`, { boards }), /class="detail-line"><span class="sr-only">Pregame betting line: Team b favored by 7\.5 points, ESPN<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">Team b −7\.5<\/strong><span aria-hidden="true">ESPN<\/span>/);
+    assert.match(screenOf(`${state}-line`, { boards }), /class="detail-line"><span class="sr-only">Pregame betting line: Team b favored by 7\.5 points<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">Team b −7\.5<\/strong><\/p>/);
   }
   boards.daily = scoreboard([game({ id: "live-pickem", pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
   const livePickem = render([], { boards }).html;
   assert.doesNotMatch(summaryOf(livePickem), /class="(?:team-line|pickem-line)"/);
-  assert.match(screenOf("live-pickem", { boards }), /class="detail-line"><span class="sr-only">Pregame pick’em line, ESPN<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">PK<\/strong><span aria-hidden="true">ESPN<\/span>/);
+  assert.match(screenOf("live-pickem", { boards }), /class="detail-line"><span class="sr-only">Pregame pick’em line<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">PK<\/strong><\/p>/);
   boards.daily = scoreboard([game({ id: "live-before-clock", state: "live", started: false, period: 0, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } })]);
   const liveBeforeClock = render([], { boards }).html;
   assert.doesNotMatch(summaryOf(liveBeforeClock), /class="team-line"/);
@@ -258,8 +259,11 @@ test("screen readers hear pregame context for the line instead of the visible la
   const boards = fixtures(); boards.daily = scoreboard([game({ id: "one-point-live", pregameLine: line }), game({ id: "one-point-upcoming", state: "upcoming", started: false, pregameLine: line })]);
   const { html } = render([], { boards });
   const detail = screenOf("one-point-live", { boards }).match(/<p class="detail-line">([\s\S]*?)<\/p>/)?.[1];
-  assert.match(detail, /^<span class="sr-only">Pregame betting line: Team a favored by 1 point, ESPN BET<\/span>/);
+  assert.match(detail, /^<span class="sr-only">Pregame betting line: Team a favored by 1 point<\/span>/);
   assert.equal(detail.replace(/^<span class="sr-only">.*?<\/span>/, "").match(/<(?:span|strong)(?: [^>]*)?>/g).every(tag => tag.includes('aria-hidden="true"')), true);
+  // The game screen's line names no bookmaker, visibly or to screen readers.
+  assert.doesNotMatch(detail, /ESPN BET|ESPN/);
+  // The scoreboard row keeps its existing source wording.
   assert.match(cardOf(html, "one-point-upcoming"), /<span class="sr-only">Pregame betting line: favored by 1 point, ESPN BET<\/span><span class="team-line-visible" aria-hidden="true">−1<\/span>/);
 });
 

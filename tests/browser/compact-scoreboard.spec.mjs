@@ -127,7 +127,8 @@ test('touch users can open upcoming games to read favorite and pickem sources', 
   harness.state.events = [favorite, pickem];
   await page.setViewportSize({ width: 320, height: 844 });
   await harness.open({ path: '/?date=2026-09-05' });
-  for (const [id, inline, spoken] of [['touch-favorite', '−7.5', 'Pregame betting line: touch-favorite home favored by 7.5 points, ESPN BET Sportsbook'], ['touch-pickem', 'PK', 'Pregame pick’em line, ESPN BET Sportsbook']]) {
+  // The game screen's line row names no bookmaker, visibly or to screen readers (user request).
+  for (const [id, inline, spoken, visible] of [['touch-favorite', '−7.5', 'Pregame betting line: touch-favorite home favored by 7.5 points', 'touch-favorite home −7.5'], ['touch-pickem', 'PK', 'Pregame pick’em line', 'PK']]) {
     const row = page.locator(`#game-${id}`), summary = row.locator('a.game-summary');
     await expect(summary.locator(id === 'touch-favorite' ? '.team-line-visible' : '.pickem-line [aria-hidden]')).toHaveText(inline);
     await expect(row.locator('.detail-line')).toHaveCount(0);
@@ -135,8 +136,10 @@ test('touch users can open upcoming games to read favorite and pickem sources', 
     await openScreen(page, id);
     const line = page.locator('.game-screen .detail-line');
     await expect(line).toBeVisible();
-    await expect(line.locator('[aria-hidden="true"]').last()).toHaveText('ESPN BET Sportsbook');
+    await expect(line.locator('[aria-hidden="true"]')).toHaveText(['Line', visible]);
+    await expect(line).not.toContainText('ESPN');
     expect((await line.ariaSnapshot())).toContain(spoken);
+    expect((await line.ariaSnapshot())).not.toContain('ESPN');
     expect((await line.locator('[aria-hidden="true"]').allInnerTexts()).join(' ')).not.toMatch(/Pregame/i);
     await screenFits(page);
     await page.screenshot({ path: info.outputPath(`${id}-screen-320.png`), animations: 'disabled' });
@@ -178,7 +181,7 @@ test('after kickoff the line leaves the score row and stays on the game screen',
   await expect(row.locator('.detail-line')).toHaveCount(0);
   await row.locator('a.game-summary').click();
   await expect(screenLine).toContainText('North Carolina −7.5');
-  await expect(screenLine).toContainText('ESPN');
+  await expect(screenLine).not.toContainText('ESPN');
   await expect(page.locator('.game-screen .mh-meta')).toHaveText(['3-1 · Away', '2-2 · Home']);
   await page.screenshot({ path: info.outputPath('live-line-on-screen-320.png'), fullPage: true, animations: 'disabled' });
 
@@ -187,6 +190,7 @@ test('after kickoff the line leaves the score row and stays on the game screen',
   await page.clock.fastForward(31_000);
   await expect(page.locator('.game-screen .mh-state')).toHaveText('Final');
   await expect(screenLine).toContainText('North Carolina −7.5');
+  await expect(screenLine).not.toContainText('ESPN');
   await screenFits(page);
   await closeScreen(page);
   await expect(row.locator('.game-status')).toHaveText('Final');
@@ -244,10 +248,12 @@ for (const state of ['live', 'delayed', 'final']) test(`${state} game screen lin
   await summary.focus(); await summary.press('Enter');
   await expect(line).toBeVisible();
   await expect(line).toContainText('Northern Appalachian State Mountaineers −14.5');
-  await expect(line).toContainText('ESPN BET Sportsbook');
+  // The bookmaker is not shown on the game screen's line row (user request); the broadcast elsewhere is unaffected.
+  await expect(line).not.toContainText('ESPN');
   // Screen readers get the context instead of the visible label and minus sign.
   const spoken = await line.ariaSnapshot();
-  expect(spoken).toContain('Pregame betting line: Northern Appalachian State Mountaineers favored by 14.5 points, ESPN BET Sportsbook');
+  expect(spoken).toContain('Pregame betting line: Northern Appalachian State Mountaineers favored by 14.5 points');
+  expect(spoken).not.toContain('ESPN');
   expect(spoken).not.toContain('−');
   await expect(page.locator('.game-screen .mh-meta')).toHaveText(['10-2 · Away', '12-12-1 · Home']);
   await expect(page.locator('.game-screen .mh-name').first()).toContainText('Northern Appalachian State Mountaineers');

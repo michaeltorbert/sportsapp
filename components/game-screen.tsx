@@ -60,7 +60,8 @@ function Masthead({ game, board, scopeError }: { game: Game; board: Scoreboard |
     </div>
     {game.state === "live" && game.downDistance && <div className="mh-situation"><p className={`drive ${game.redZone ? "red-zone" : ""}`}>{game.redZone && <span>RED ZONE</span>}{game.downDistance}</p></div>}
     {game.state === "delayed" && <div className="mh-situation"><p className="delay-note">{game.started ? "Play paused. Watching for an update." : "Kickoff delayed. Watching for an update."}</p></div>}
-    {validLine && <p className="detail-line"><span className="sr-only">{favorite ? `Pregame betting line: ${favorite.name} favored by ${points(line.spread)}, ${line.source}` : `Pregame pick’em line, ${line.source}`}</span><span aria-hidden="true">Line</span><strong aria-hidden="true">{favorite ? `${favorite.name} −${line.spread}` : "PK"}</strong><span aria-hidden="true">{line.source}</span></p>}
+    {/* The user asked for the line without its bookmaker here; the source still gates which lines are valid. */}
+    {validLine && <p className="detail-line"><span className="sr-only">{favorite ? `Pregame betting line: ${favorite.name} favored by ${points(line.spread)}` : "Pregame pick’em line"}</span><span aria-hidden="true">Line</span><strong aria-hidden="true">{favorite ? `${favorite.name} −${line.spread}` : "PK"}</strong></p>}
     {result.upset && <p className="upset-reason"><Zap size={14} fill="currentColor" aria-hidden="true" /><span>{upsetExplanation(game)}</span></p>}
   </section>;
 }
