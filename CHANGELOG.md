@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.15.1 · 2026-10-14
+
+- All, ACC, Top 25 and One score now show the same current (total) count as Upsets. The first number is the category's games in progress: live, including halftime, or delayed after kickoff. The total counts every game the category lists for the selected Day or Week, including upcoming, delayed, schedule-update and finished games; Hide finals removes finals. Upsets keeps its brewing count and actual-upset total (#146).
+- On the compact scoreboard, all five categories stay in one row, with each label on one line and its counts below, at unchanged text sizes and touch height. There is no added legend or explanation strip; Help explains the counts.
+- Counts still use the Duke-protected board and the All-only focused game. Stale scores show dashes, loading shows dashes, and a loaded empty view shows real zeros. Each button's screen-reader label gives both numbers.
+- Not yet confirmed on a physical iPhone.
+
 ## 1.15.0 · 2026-10-13
 
 - Selecting a game on the scoreboard opens a dedicated game screen instead of expanding the card. A slim bar with Back to Scores sits above a score header with status, broadcast, teams, records and scores; the bar condenses to the score as you scroll. The validated pregame line (shown without the bookmaker's name), upset explanation, down and distance, delay note, halftime countdown and category badges move to this screen; the scoreboard rows look as before (#115). Game details and stats stay in the app: the game screen has no Gamecast or other external link, and its messages do not send you elsewhere.
