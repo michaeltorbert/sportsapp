@@ -151,7 +151,7 @@ test('without a Duke game, Close takes initial focus and keyboard scrolling chan
   await expect(body(page)).toBeFocused();
   await page.keyboard.press('PageDown');
   await page.keyboard.press('ArrowDown');
-  await expect(settings(page).getByRole('radio', { name: 'Hide away games once they start', exact: true })).toBeChecked();
+  await expect(settings(page).getByRole('radio', { name: 'Hide away games during play', exact: true })).toBeChecked();
   await page.keyboard.press('Escape');
   await expectClosed(page);
   expect(await storedPrefs(page)).toBe(before);
@@ -197,7 +197,7 @@ test('deliberate default choices save immediately and survive close, reopen and 
   await expect.poll(savedMode).toBe('show');
   await closeButton(page).tap();
   await expectClosed(page);
-  // The already-started game keeps the setting recorded when it was first seen.
+  // The game already in progress keeps the default in effect at its kickoff.
   await expect(page.locator('#game-duke-away')).toHaveCount(0);
   await openSettings(page, 'tap');
   await expect(radio('Always show')).toBeChecked();
@@ -225,7 +225,7 @@ test('revealing from Settings uses a nested confirmation that Cancel and Escape 
   // nested layer is fully mounted before any key or tap reaches it.
   async function openConfirm() {
     await reveal.tap();
-    await expect(confirm).toContainText('Your default stays “Hide away games once they start.” Duke notifications stay off.');
+    await expect(confirm).toContainText('Your default stays “Hide away games during play.” Duke notifications stay off.');
     await expect(confirm.getByRole('button', { name: 'Keep hidden', exact: true })).toBeFocused();
     await page.evaluate(() => Promise.all([...document.querySelectorAll('[data-slot="alert-dialog-overlay"], [data-slot="alert-dialog-content"]')]
       .flatMap(el => el.getAnimations({ subtree: true })).map(animation => animation.finished.catch(() => {}))));
@@ -245,7 +245,7 @@ test('revealing from Settings uses a nested confirmation that Cancel and Escape 
   await expect(confirm).toHaveCount(0);
   await expect(settings(page).getByRole('button', { name: 'Hide Duke game on Sep 5', exact: true })).toBeFocused();
   await expect(settings(page).getByText('Shown for this game only', { exact: true })).toBeVisible();
-  await expect(settings(page).getByRole('radio', { name: 'Hide away games once they start', exact: true })).toBeChecked();
+  await expect(settings(page).getByRole('radio', { name: 'Hide away games during play', exact: true })).toBeChecked();
   await expect(settings(page)).toContainText('Always off, even when you show a game.');
   expect(JSON.parse(await storedPrefs(page))).toEqual({ ...before, manual: { ...before.manual, 'duke-away': false } });
   await closeButton(page).tap();
@@ -253,17 +253,19 @@ test('revealing from Settings uses a nested confirmation that Cancel and Escape 
   await expect(page.locator('#game-duke-away')).toBeVisible();
 });
 
-// Issue #123 copy as actual pixels. A fixture v1 save with per-game values produces the one-time
-// migration notice; each new block is scrolled fully into the Settings body and captured full-screen.
+// Issue #123 copy as actual pixels, revised for issue #155 (ORD-020). A fixture v1 save with per-game values
+// produces the one-time migration notice; each new block is scrolled fully into the Settings body and captured full-screen.
 const LEGACY_KEY = 'ss:duke-visibility:v1';
-const MIGRATION_NOTICE = 'Spoiler protection now hides away games only once they start. Your earlier hide and show choices for individual Duke games were cleared; your default was kept.';
-const SPOILER_HELP = 'Hiding away games once they start keeps home and neutral-site games visible. An away game stays visible until play begins, even if kickoff is delayed, then stays hidden through the final until you show it.';
+const MIGRATION_NOTICE = 'Spoiler protection now hides away games only while they’re being played. Your earlier hide and show choices for individual Duke games were cleared; your default was kept.';
+const SPOILER_HELP = 'Hiding away games during play keeps home and neutral-site games visible. An away game stays visible until play begins, even if kickoff is delayed, is hidden while it’s being played, including halftime and pauses, and shows again once it’s final or called off.';
+const MANUAL_HELP = 'Hide or show one matchup without changing your default. Games you hide yourself stay hidden after the final whistle.';
 const SPOILER_SCOPE = 'Applies to games that haven’t started. Once its kickoff time passes, a delayed game picks up the change only if the app has loaded it when you choose. Games already under way or finished, or individually hidden or shown, keep their setting.';
 const seedLegacyPrefs = page => page.addInitScript(([key, value]) => localStorage.setItem(key, value), [LEGACY_KEY, JSON.stringify({ version: 1, rules: [{ from: 0, mode: 'away' }], overrides: { 'duke-away': false, 'older-game': true } })]);
 async function captureSpoilerCopy(page, testInfo, label) {
-  await expect(settings(page).getByRole('radio', { name: 'Hide away games once they start', exact: true })).toBeChecked();
+  await expect(settings(page).getByRole('radio', { name: 'Hide away games during play', exact: true })).toBeChecked();
   const blocks = [
     ['migration notice', settings(page).getByRole('status').filter({ hasText: MIGRATION_NOTICE })],
+    ['per-game help', settings(page).getByText(MANUAL_HELP, { exact: true })],
     ['default choices', settings(page).getByRole('group', { name: 'For future Duke games', exact: true })],
     ['default help', settings(page).getByText(SPOILER_HELP, { exact: true })],
     ['default scope', settings(page).getByText(SPOILER_SCOPE, { exact: true })],

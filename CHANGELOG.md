@@ -1,5 +1,13 @@
 # Saturday Signal releases
 
+## 1.15.2 · 2026-10-15
+
+- Duke spoiler protection's automatic setting, now labeled Hide away games during play, hides a Duke game only when Duke is the confirmed away team and play is under way: live, including halftime and overtime, or paused after play started. Home, neutral-site and unknown-venue games stay visible in every state. An away game is visible before play, even through a delayed kickoff, and visible again once it's final, canceled or postponed, in Scores, Guide, counts, focus links and the game screen (ORD-020, #155).
+- Games you hide yourself, and games governed by Always hide, still stay hidden after the final. Always show, per-game reveals and a default chosen while a loaded game waits through a delay are unchanged. A game this device saw start keeps the default in effect then, even if ESPN later reports it as delayed without start evidence.
+- Per-game decisions the app saved automatically no longer decide visibility, so finished away games show again and a saved automatic decision can no longer hide a home or neutral-site game by itself. They remain saved for tabs still running the previous version, which keep the old behavior until reloaded.
+- Damaged saved preferences now use the automatic setting with a warning, instead of hiding every Duke game, and stay as saved until you choose something. Unreadable storage behaves the same for the visit. A first Always hide rule that earlier versions saved only after such damage is replaced with the automatic setting once; later default choices and per-game choices are kept, and Settings explains the change.
+- Duke notifications stay off. Ordering, categories, Hide finals, alerts and sound are unchanged. Not yet confirmed on a physical iPhone; what hid home games on the reporting phone is not known.
+
 ## 1.15.1 · 2026-10-14
 
 - All, ACC, Top 25 and One score now show the same current (total) count as Upsets. The first number is the category's games in progress: live, including halftime, or delayed after kickoff. The total counts every game the category lists for the selected Day or Week, including upcoming, delayed, schedule-update and finished games; Hide finals removes finals. Upsets keeps its brewing count and actual-upset total (#146).
