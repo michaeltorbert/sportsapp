@@ -46,7 +46,8 @@ test("the screen's stats wrapper starts with a finite polite loading state; queu
 test("Team stats is the default: caption, real headers, fixed away/home order and all 15 metrics continuous", () => {
   const { g, stats } = card("final", { state: "final" });
   const html = render(g, state("final", stats));
-  assert.match(html, /<button type="button" data-focus-key="view-team" aria-controls="panel-team" aria-pressed="true">Team stats<\/button><button type="button" data-focus-key="view-players" aria-controls="panel-players" aria-pressed="false">Player stats<\/button>/);
+  assert.match(html, /<button type="button" data-focus-key="view-team" aria-controls="panel-team" aria-pressed="true">Team stats<\/button><button type="button" data-focus-key="view-scoring" aria-controls="panel-scoring" aria-pressed="false">Scoring<\/button><button type="button" data-focus-key="view-players" aria-controls="panel-players" aria-pressed="false">Player stats<\/button>/);
+  assert.match(html, /<section class="panel" id="panel-scoring" aria-label="Scoring" hidden=""><\/section>/);
   assert.match(html, /<h2 id="team-h" tabindex="-1">Team stats<\/h2><span class="stats-phase">Final<\/span>/);
   assert.match(html, /<caption class="sr-only">Team stats · IU name, away; NEB name, home<\/caption>/);
   assert.match(html, /<th scope="col" id="cmp-core-away" class="c-away"><span>IU<\/span><small>away<\/small><span class="sr-only"> · IU name<\/span><\/th><th scope="col" class="c-label">Team stat<\/th><th scope="col" id="cmp-core-home" class="c-home"><span>NEB<\/span><small>home<\/small>/);
@@ -254,6 +255,134 @@ test("rendered state is bound to the game's full generation and identity", () =>
   assert.doesNotMatch(render(g, state("final", { ...stats, teamIds: ["158", "84"] })), /Total yards/);
   assert.doesNotMatch(render(g, state("final", { ...stats, eventId: "401858482" })), /Total yards/);
   assert.doesNotMatch(render(g, state("final", { ...stats, eventId: "401858482" }), { section: "players" }), /player-table/);
+});
+
+// Scoring (issue #149). COMPOSED: a scoring fixture's genuine header and scoringPlays joined to the
+// existing genuine boxscore fixture for the same event; header-only where no boxscore fixture exists.
+const scoringFixture = name => JSON.parse(readFileSync(new URL(`./fixtures/espn-summary-scoring-${name}.json`, import.meta.url), "utf8"));
+function composed(name, boxscore) {
+  const scoring = scoringFixture(name);
+  return boxscore ? { ...fixture(boxscore), header: scoring.header, scoringPlays: scoring.scoringPlays } : scoring;
+}
+function scoringCard(raw, changes) {
+  const [away, home] = ["away", "home"].map(side => raw.header.competitions[0].competitors.find(c => c.homeAway === side));
+  const g = game({ id: raw.header.id, ...changes });
+  g.teams[0] = { ...g.teams[0], id: away.team.id, abbreviation: away.team.abbreviation, name: away.team.displayName };
+  g.teams[1] = { ...g.teams[1], id: home.team.id, abbreviation: home.team.abbreviation, name: home.team.displayName };
+  return { g, stats: ui.normalizeGameStats(raw, raw.header.id, CHECKED) };
+}
+const periodRows = html => [...html.matchAll(/<tr><th scope="row" class="scoring-team"><span>([^<]+)<\/span>.*?<\/th>(.*?)<\/tr>/g)].map(m => [m[1], ...[...m[2].matchAll(/<td[^>]*>(.*?)<\/td>/g)].map(c => text(c[1]).trim())]);
+const plays = html => [...html.matchAll(/<li class="scoring-play">(.*?)<\/li>/g)].map(m => text(m[1].replace(/<span class="sr-only">.*?<\/span>/g, "")).trim());
+
+test("Scoring section: COMPOSED live game shows supplied quarters only and the source's plays in order with running scores", () => {
+  const { g, stats } = scoringCard(composed("live", "live"), { state: "live" });
+  const html = render(g, state("started", stats), { section: "scoring" });
+  assert.match(html, /aria-pressed="false">Team stats<\/button><button type="button" data-focus-key="view-scoring" aria-controls="panel-scoring" aria-pressed="true">Scoring<\/button>/);
+  assert.match(html, /<section class="panel" id="panel-team" aria-label="Team stats" hidden=""><\/section>/);
+  assert.match(html, /<h2 id="scoring-h" tabindex="-1">Scoring<\/h2><span class="stats-phase">This game<\/span>/);
+  // Shared retrieval time and source status, then scores by quarter.
+  assert.match(html, /Stats checked at 3:18:05 PM ET.*Source reports 3:48 - 3rd.*Score by quarter/);
+  // Live in the 3rd: three supplied quarters, no future Q4 column; real zeros stay zero.
+  assert.match(html, /<abbr title="1st quarter">Q1<\/abbr><\/th><th scope="col"><abbr title="2nd quarter">Q2<\/abbr><\/th><th scope="col"><abbr title="3rd quarter">Q3<\/abbr><\/th><th scope="col" class="scoring-total">/);
+  assert.doesNotMatch(html, /Q4/);
+  assert.deepEqual(periodRows(html), [["TEX", "7", "10", "0", "17"], ["OU", "0", "7", "3", "10"]]);
+  assert.match(html, /Score after each play: TEX–OU/);
+  assert.deepEqual(plays(html), [
+    "Q1 6:56 TEX Passing Touchdown A. Manning pass to C. Coleman for 41 yds, for a TD (G. Spetic KICK) 7 – 0",
+    "Q2 14:11 OU Blocked Punt Touchdown Punt blocked by D. Okoye, recovered by D. Fields for a TD (T. Sandell KICK) 7 – 7",
+    "Q2 10:09 TEX Passing Touchdown A. Manning pass to R. Wingo for 34 yds, for a TD (G. Spetic KICK) 14 – 7",
+    "Q2 0:12 TEX Field Goal Good G. Spetic 23 yd FG GOOD 17 – 7",
+    "Q3 10:56 OU Field Goal Good T. Sandell 53 yd FG GOOD 17 – 10",
+  ]);
+  assert.match(html, /Score after this play: Texas Longhorns 17, Oklahoma Sooners 10/);
+  // Complete, consistent source data carries no caveats and no completeness claim.
+  assert.doesNotMatch(html, /incomplete|don’t add up|don’t fully match|isn’t shown|aren’t shown|unavailable|All scoring plays|complete list/i);
+  assert.doesNotMatch(html, /compare-table|player-table/);
+  assert.doesNotMatch(text(html), /\b(?:spread|odds|bet|betting|win probability)\b/i);
+});
+
+test("Scoring section: genuine Final/OT keeps the fifth period, supplied zeros and two OT 0:00 plays in source order; Team stats stays independent", () => {
+  const { g, stats } = scoringCard(composed("final-ot"), { state: "final" });
+  const html = render(g, state("final", stats), { section: "scoring" });
+  assert.match(html, /<abbr title="Overtime">OT<\/abbr>/);
+  assert.deepEqual(periodRows(html), [["LSU", "10", "7", "3", "7", "7", "34"], ["UK", "7", "14", "0", "6", "8", "35"]]);
+  const list = plays(html);
+  assert.equal(list.length, 12);
+  assert.deepEqual(list.slice(-2), ["OT 0:00 LSU Rushing Touchdown Sam Leavitt 15 Yd Run (Scott Starzyk Kick) 34 – 27", "OT 0:00 UK Rushing Touchdown CJ Baxter 1 Yd Run (Kenny Minchey Run for Two-Point Conversion) 34 – 35"]);
+  // No inferred touchdown or conversion points anywhere.
+  assert.doesNotMatch(html, /\+6|\+7|\+8|\bPAT\b/);
+  // This header-only source has no boxscore: Team stats says so, and scoring is unaffected.
+  assert.match(render(g, state("final", stats)), /No stats available yet/);
+  assert.doesNotMatch(html, /No stats available yet/);
+});
+
+test("Scoring section: pregame waits for kickoff; a started source without scoring, a behind source and an oversized summary are explicit", () => {
+  const pre = scoringCard(scoringFixture("pregame"), { state: "upcoming", started: false });
+  const pregame = render(pre.g, state("pregame", pre.stats), { section: "scoring" });
+  assert.match(pregame, /Scoring starts after kickoff/);
+  assert.doesNotMatch(pregame, /scoring-periods|scoring-play|Source reports/);
+  assert.equal(pre.stats.scoring, undefined, "a pregame source carries no scoring");
+  // An older Worker (no scoring key) or a source that supplies none.
+  const { g, stats } = card("live", { state: "live" });
+  assert.equal(stats.scoring, undefined);
+  const legacy = render(g, state("started", stats), { section: "scoring" });
+  assert.match(legacy, /Scoring unavailable/); assert.match(legacy, /Scoring isn’t available for this game\. Team stats and Player stats remain available\./);
+  assert.match(legacy, /Source reports 3:48 - 3rd/);
+  // The scoreboard has started but the source still reports pregame: catching up, not "no scoring".
+  const behind = card("pregame", { state: "live", started: true });
+  const catching = render(behind.g, state("started", behind.stats), { section: "scoring" });
+  assert.match(catching, /Scoring catching up/); assert.match(catching, /still reporting pregame information/);
+  assert.doesNotMatch(catching, /Stats catching up|scoring-periods/);
+  const live = scoringCard(composed("live", "live"), { state: "live" });
+  const big = render(live.g, state("started", { ...live.stats, scoring: { unavailable: "too-large" } }), { section: "scoring" });
+  assert.match(big, /The scoring summary is too large to show here\. Team stats and Player stats remain available\./);
+});
+
+test("Scoring survives empty Team stats; failure and offline notices are shared; nothing renders for another game", () => {
+  const raw = composed("live", "live"); raw.boxscore = {};
+  const { g, stats } = scoringCard(raw, { state: "live" });
+  assert.match(render(g, state("started", stats)), /No stats available yet/);
+  const html = render(g, state("started", stats), { section: "scoring" });
+  assert.equal(plays(html).length, 5);
+  const stale = render(g, state("started", stats, { failure: "network" }), { section: "scoring", now: Date.parse(CHECKED) + 4 * 60_000 });
+  assert.match(stale, /Stats may be out of date/); assert.match(stale, /checked 4 minutes ago/); assert.equal(plays(stale).length, 5);
+  assert.match(render(g, state("started", stats), { section: "scoring", online: false }), /Offline · saved stats/);
+  assert.match(render(g, state("started", null), { section: "scoring", online: false }), /You’re offline/);
+  assert.match(render(g, state("started", null)), /Loading team stats…/);
+  assert.match(render(g, state("started", null), { section: "scoring" }), /Loading scoring…/);
+  assert.match(render(g, state("started", null, { failure: "upstream" }), { section: "scoring" }), /Stats could not be loaded/);
+  // Identity disagreement: no scoring either.
+  assert.equal(plays(render(g, state("started", { ...stats, teamIds: [stats.teamIds[1], stats.teamIds[0]] }), { section: "scoring" })).length, 0);
+});
+
+test("SYNTHETIC partial scoring: unequal quarters get the whole-table warning, unknown teams are omitted, missing fields show a dash", () => {
+  const raw = composed("live", "live"), competitors = raw.header.competitions[0].competitors;
+  competitors.find(c => c.homeAway === "home").linescores.pop();
+  delete raw.scoringPlays[1].clock;
+  delete raw.scoringPlays[4].homeScore;
+  raw.scoringPlays.splice(2, 0, { ...raw.scoringPlays[2], id: "999", team: { id: "999" } });
+  const { g, stats } = scoringCard(raw, { state: "live" });
+  const html = render(g, state("started", stats), { section: "scoring" });
+  assert.deepEqual(periodRows(html), [["TEX", "7", "10", "0", "17"], ["OU", "0", "7", "—", "10"]]);
+  assert.match(html, /Quarter scores are incomplete and may not align correctly\./);
+  assert.equal(plays(html).length, 5);
+  assert.match(plays(html)[1], /^Q2 — OU /);
+  assert.match(plays(html)[4], /17 – —$/);
+  assert.match(html, /1 supplied scoring play isn’t shown because its details couldn’t be matched to this game\./);
+  assert.match(html, /— means this value is unavailable\. Supplied zeros remain zero\./);
+  // The unmatched copy is not attributed to either team: its text appears once.
+  assert.equal(plays(html).filter(p => p.includes("pass to R. Wingo")).length, 1);
+  // The shared legend follows any rendered dash: one missing play field with a complete table is enough;
+  // an unavailable list with a complete table shows none. Every unavailable reason except order reads the same.
+  const live = scoringCard(composed("live", "live"), { state: "live" }), complete = live.stats.scoring;
+  const oneMissing = { ...complete, plays: { items: complete.plays.items.map((p, i) => i === 2 ? { ...p, clock: null } : p) } };
+  assert.match(render(live.g, state("started", { ...live.stats, scoring: oneMissing }), { section: "scoring" }), /— means this value is unavailable/);
+  for (const reason of ["too-many", "missing", "malformed"]) {
+    const out = render(live.g, state("started", { ...live.stats, scoring: { ...complete, plays: { unavailable: reason } } }), { section: "scoring" });
+    assert.match(out, /Scoring plays are unavailable for this game\./, reason);
+    assert.doesNotMatch(out, /— means this value is unavailable|too many/, reason);
+  }
+  assert.match(render(live.g, state("started", { ...live.stats, scoring: { ...complete, plays: { unavailable: "order" } } }), { section: "scoring" }), /source’s order couldn’t be confirmed/);
 });
 
 test("a remounted screen's first paint shows the remembered failed-refresh warning and backoff wait", async () => {

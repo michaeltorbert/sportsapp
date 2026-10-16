@@ -94,6 +94,23 @@ function fitMasthead(root: HTMLElement | null, compact: boolean) {
   }
   if (stack) mast.setAttribute("data-stacked", "");
 }
+// The section buttons share one row while every label word fits its button; when a single word
+// would not (narrow width, CSS zoom or larger text), they stack. Labels break only between words.
+// Measured like the header above; the attribute is set only here, never by React.
+function fitSections(root: HTMLElement | null) {
+  const nav = root?.querySelector<HTMLElement>(".view-switch");
+  if (!nav) return;
+  nav.removeAttribute("data-stacked");
+  const stack = [...nav.querySelectorAll<HTMLElement>("button")].some(button => {
+    // The label's own line boxes, in the same coordinates as the button's box.
+    const range = document.createRange();
+    range.selectNodeContents(button);
+    const text = range.getBoundingClientRect(), box = button.getBoundingClientRect();
+    return button.scrollWidth > button.clientWidth + 1 || (text.width > 0 && (text.left < box.left - 0.5 || text.right > box.right + 0.5));
+  });
+  if (stack) nav.setAttribute("data-stacked", "");
+}
+function fitLayout(root: HTMLElement | null, compact: boolean) { fitMasthead(root, compact); fitSections(root); }
 function zoomOf(element: Element | null) { const z = element ? parseFloat(getComputedStyle(element).zoom) : 1; return z > 0 ? z : 1; }
 // Layout follows the space actually available: CSS zoom shrinks the room for content without
 // changing what width/height media queries see, so these use the viewport divided by the zoom.
@@ -114,10 +131,10 @@ function useLayout(root: RefObject<HTMLDivElement | null>, id: string | undefine
       return next;
     };
     let frame = 0;
-    const resized = () => fitMasthead(element, measure().compact);
-    // A CSS zoom or text-size change fires no resize event but does resize these boxes. The header is
-    // refit on the next frame, outside observer delivery, so its own change cannot loop the observer.
-    const observed = () => { const { compact } = measure(); cancelAnimationFrame(frame); frame = requestAnimationFrame(() => fitMasthead(element, compact)); };
+    const resized = () => fitLayout(element, measure().compact);
+    // A CSS zoom or text-size change fires no resize event but does resize these boxes. The header and
+    // section buttons are refit on the next frame, outside observer delivery, so their own change cannot loop the observer.
+    const observed = () => { const { compact } = measure(); cancelAnimationFrame(frame); frame = requestAnimationFrame(() => fitLayout(element, compact)); };
     resized();
     addEventListener("resize", resized);
     const observer = typeof ResizeObserver === "function" ? new ResizeObserver(observed) : null;
@@ -125,7 +142,7 @@ function useLayout(root: RefObject<HTMLDivElement | null>, id: string | undefine
     return () => { removeEventListener("resize", resized); observer?.disconnect(); cancelAnimationFrame(frame); };
   }, [root, id]);
   // Every render (a score or name change) refits synchronously, before paint.
-  useLayoutEffect(() => fitMasthead(root.current, layout.compact));
+  useLayoutEffect(() => fitLayout(root.current, layout.compact));
   return layout;
 }
 
@@ -188,10 +205,10 @@ export function GameScreen({ game, loading, board, scopeError, backLabel, sectio
       const top = context.getBoundingClientRect().bottom + scrollY - (bar?.offsetHeight || 0);
       if (scrollY > top) scrollTo(0, top);
     }
-    if (pending.focus) document.getElementById(section === "players" ? "players-h" : "team-h")?.focus({ preventScroll: true });
+    if (pending.focus) document.getElementById(`${section}-h`)?.focus({ preventScroll: true });
   }, [section]);
   const changeSection = (next: Section, focusHeading = false) => {
-    if (next === section) { if (focusHeading) document.getElementById(next === "players" ? "players-h" : "team-h")?.focus({ preventScroll: true }); return; }
+    if (next === section) { if (focusHeading) document.getElementById(`${next}-h`)?.focus({ preventScroll: true }); return; }
     change.current = { focus: focusHeading };
     onSection(next);
   };

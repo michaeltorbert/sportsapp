@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Game } from "./football";
+import { normalizeScoring, scoringSchema, type Scoring } from "./game-scoring";
 
 // Enable gate for started-game stats. Enabled on a genuine IN_PROGRESS capture
 // plus an actual browser → local workerd → real ESPN probe; see docs/game-stats.md.
@@ -69,6 +70,8 @@ export type GameStats = {
   v: 1; eventId: string; teamIds: [string, string]; sourceDate: string | null; sourcePhase: SourcePhase;
   sourceStatus: { state: string; name: string; detail: string | null; period: number | null; displayClock: string | null };
   checkedAt: string; team: TeamSection; players: PlayersSection;
+  // Sent only to clients that ask for it (`scoring=1`); absent means unavailable.
+  scoring?: Scoring;
 };
 
 export class StatsSourceError extends Error {}
@@ -227,6 +230,14 @@ export function normalizeGameStats(raw: unknown, eventId: string, checkedAt: str
   // Valid team data survives an oversized Players section, which is omitted whole.
   if (snapshotBytes(stats) > STATS_MAX_BYTES) stats.players = { unavailable: "too-large" };
   if (snapshotBytes(stats) > STATS_MAX_BYTES) throw new StatsSourceError("Summary snapshot is too large");
+  // Scoring is additive: Team and Players are decided above exactly as before, and scoring
+  // only uses what remains of the same bound. It is never what pushes Players out.
+  if (sourcePhase === "started" || sourcePhase === "final") {
+    const scoring = normalizeScoring(body, [awayEntries[0], homeEntries[0]], [away, home]);
+    if (scoring) for (const candidate of [scoring, { unavailable: "too-large" } as const]) {
+      if (snapshotBytes({ ...stats, scoring: candidate }) <= STATS_MAX_BYTES) { stats.scoring = candidate; break; }
+    }
+  }
   return stats;
 }
 
@@ -245,7 +256,16 @@ const statsSchema = z.object({
   checkedAt: z.string().max(40).refine(value => Number.isFinite(Date.parse(value))),
   team: z.union([z.object({ kind: z.enum(["game", "season"]), rows: z.record(z.string().max(32), z.tuple([cell, cell])) }).strict(), unavailable]),
   players: z.union([z.object({ teams: z.tuple([playerTeamSchema, playerTeamSchema]) }).strict(), unavailable]),
+  // Optional: a Worker from before scoring sends none, and that response stays valid.
+  scoring: scoringSchema.optional(),
 }).strict();
+/** The response for a client that did not ask for scoring: the released v1 body, unchanged. */
+export function withoutScoring(stats: GameStats): GameStats {
+  if (!("scoring" in stats)) return stats;
+  const base = { ...stats };
+  delete base.scoring;
+  return base;
+}
 export function parseGameStats(value: unknown): GameStats | null {
   const parsed = statsSchema.safeParse(value);
   return parsed.success ? parsed.data as GameStats : null;

@@ -1,0 +1,48 @@
+{
+  "header": {
+    "id": "401862800",
+    "season": {
+      "year": 2026,
+      "current": true,
+      "type": 2
+    },
+    "week": 7,
+    "competitions": [
+      {
+        "id": "401862800",
+        "date": "2026-10-15T23:30Z",
+        "status": {
+          "type": {
+            "id": "1",
+            "name": "STATUS_SCHEDULED",
+            "state": "pre",
+            "completed": false,
+            "description": "Scheduled",
+            "detail": "Thu, October 15th at 7:30 PM EDT",
+            "shortDetail": "10/15 - 7:30 PM EDT"
+          }
+        },
+        "competitors": [
+          {
+            "id": "5",
+            "homeAway": "home",
+            "team": {
+              "id": "5",
+              "displayName": "UAB Blazers",
+              "abbreviation": "UAB"
+            }
+          },
+          {
+            "id": "151",
+            "homeAway": "away",
+            "team": {
+              "id": "151",
+              "displayName": "East Carolina Pirates",
+              "abbreviation": "ECU"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

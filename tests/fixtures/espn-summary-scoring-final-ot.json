@@ -1,0 +1,423 @@
+{
+  "header": {
+    "id": "401856715",
+    "season": {
+      "year": 2026,
+      "current": true,
+      "type": 2
+    },
+    "week": 6,
+    "competitions": [
+      {
+        "id": "401856715",
+        "date": "2026-10-10T23:00Z",
+        "status": {
+          "type": {
+            "id": "3",
+            "name": "STATUS_FINAL",
+            "state": "post",
+            "completed": true,
+            "description": "Final",
+            "detail": "Final/OT",
+            "shortDetail": "Final/OT",
+            "altDetail": "OT"
+          }
+        },
+        "competitors": [
+          {
+            "id": "96",
+            "homeAway": "home",
+            "score": "35",
+            "linescores": [
+              {
+                "displayValue": "7"
+              },
+              {
+                "displayValue": "14"
+              },
+              {
+                "displayValue": "0"
+              },
+              {
+                "displayValue": "6"
+              },
+              {
+                "displayValue": "8"
+              }
+            ],
+            "team": {
+              "id": "96",
+              "displayName": "Kentucky Wildcats",
+              "abbreviation": "UK"
+            }
+          },
+          {
+            "id": "99",
+            "homeAway": "away",
+            "score": "34",
+            "linescores": [
+              {
+                "displayValue": "10"
+              },
+              {
+                "displayValue": "7"
+              },
+              {
+                "displayValue": "3"
+              },
+              {
+                "displayValue": "7"
+              },
+              {
+                "displayValue": "7"
+              }
+            ],
+            "team": {
+              "id": "99",
+              "displayName": "LSU Tigers",
+              "abbreviation": "LSU"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scoringPlays": [
+    {
+      "id": "40185671571",
+      "type": {
+        "id": "59",
+        "text": "Field Goal Good",
+        "abbreviation": "FG"
+      },
+      "text": "Scott Starzyk 24 Yd Field Goal  ",
+      "awayScore": 3,
+      "homeScore": 0,
+      "period": {
+        "number": 1
+      },
+      "clock": {
+        "value": 525.0,
+        "displayValue": "8:45"
+      },
+      "scoringType": {
+        "name": "field-goal",
+        "displayName": "Field Goal",
+        "abbreviation": "FG"
+      },
+      "team": {
+        "id": "99",
+        "displayName": "LSU Tigers",
+        "abbreviation": "LSU"
+      }
+    },
+    {
+      "id": "40185671583",
+      "type": {
+        "id": "68",
+        "text": "Rushing Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "CJ Baxter 3 Yd Run (Adam Zouagui Kick)",
+      "awayScore": 3,
+      "homeScore": 7,
+      "period": {
+        "number": 1
+      },
+      "clock": {
+        "value": 489.0,
+        "displayValue": "8:09"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "96",
+        "displayName": "Kentucky Wildcats",
+        "abbreviation": "UK"
+      }
+    },
+    {
+      "id": "401856715154",
+      "type": {
+        "id": "67",
+        "text": "Passing Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "Zach Grace 22 Yd pass from Sam Leavitt (Scott Starzyk Kick)",
+      "awayScore": 10,
+      "homeScore": 7,
+      "period": {
+        "number": 1
+      },
+      "clock": {
+        "value": 99.0,
+        "displayValue": "1:39"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "99",
+        "displayName": "LSU Tigers",
+        "abbreviation": "LSU"
+      }
+    },
+    {
+      "id": "401856715224",
+      "type": {
+        "id": "34",
+        "text": "Punt Return Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "Brock Coffman 55 Yd Punt Return (Adam Zouagui Kick)",
+      "awayScore": 10,
+      "homeScore": 14,
+      "period": {
+        "number": 2
+      },
+      "clock": {
+        "value": 786.0,
+        "displayValue": "13:06"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "96",
+        "displayName": "Kentucky Wildcats",
+        "abbreviation": "UK"
+      }
+    },
+    {
+      "id": "401856715295",
+      "type": {
+        "id": "67",
+        "text": "Passing Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "Jackson Harris 10 Yd pass from Sam Leavitt (Scott Starzyk Kick)",
+      "awayScore": 17,
+      "homeScore": 14,
+      "period": {
+        "number": 2
+      },
+      "clock": {
+        "value": 371.0,
+        "displayValue": "6:11"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "99",
+        "displayName": "LSU Tigers",
+        "abbreviation": "LSU"
+      }
+    },
+    {
+      "id": "401856715373",
+      "type": {
+        "id": "68",
+        "text": "Rushing Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "Kenny Minchey 1 Yd Run (Adam Zouagui Kick)",
+      "awayScore": 17,
+      "homeScore": 21,
+      "period": {
+        "number": 2
+      },
+      "clock": {
+        "value": 0.0,
+        "displayValue": "0:00"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "96",
+        "displayName": "Kentucky Wildcats",
+        "abbreviation": "UK"
+      }
+    },
+    {
+      "id": "401856715529",
+      "type": {
+        "id": "59",
+        "text": "Field Goal Good",
+        "abbreviation": "FG"
+      },
+      "text": "Scott Starzyk 24 Yd Field Goal  ",
+      "awayScore": 20,
+      "homeScore": 21,
+      "period": {
+        "number": 3
+      },
+      "clock": {
+        "value": 133.0,
+        "displayValue": "2:13"
+      },
+      "scoringType": {
+        "name": "field-goal",
+        "displayName": "Field Goal",
+        "abbreviation": "FG"
+      },
+      "team": {
+        "id": "99",
+        "displayName": "LSU Tigers",
+        "abbreviation": "LSU"
+      }
+    },
+    {
+      "id": "401856715586",
+      "type": {
+        "id": "59",
+        "text": "Field Goal Good",
+        "abbreviation": "FG"
+      },
+      "text": "Adam Zouagui 28 Yd Field Goal  ",
+      "awayScore": 20,
+      "homeScore": 24,
+      "period": {
+        "number": 4
+      },
+      "clock": {
+        "value": 714.0,
+        "displayValue": "11:54"
+      },
+      "scoringType": {
+        "name": "field-goal",
+        "displayName": "Field Goal",
+        "abbreviation": "FG"
+      },
+      "team": {
+        "id": "96",
+        "displayName": "Kentucky Wildcats",
+        "abbreviation": "UK"
+      }
+    },
+    {
+      "id": "401856715614",
+      "type": {
+        "id": "67",
+        "text": "Passing Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "Roman Mothershed 41 Yd pass from Jackson Harris (Scott Starzyk Kick)",
+      "awayScore": 27,
+      "homeScore": 24,
+      "period": {
+        "number": 4
+      },
+      "clock": {
+        "value": 582.0,
+        "displayValue": "9:42"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "99",
+        "displayName": "LSU Tigers",
+        "abbreviation": "LSU"
+      }
+    },
+    {
+      "id": "401856715767",
+      "type": {
+        "id": "59",
+        "text": "Field Goal Good",
+        "abbreviation": "FG"
+      },
+      "text": "Adam Zouagui 33 Yd Field Goal  ",
+      "awayScore": 27,
+      "homeScore": 27,
+      "period": {
+        "number": 4
+      },
+      "clock": {
+        "value": 12.0,
+        "displayValue": "0:12"
+      },
+      "scoringType": {
+        "name": "field-goal",
+        "displayName": "Field Goal",
+        "abbreviation": "FG"
+      },
+      "team": {
+        "id": "96",
+        "displayName": "Kentucky Wildcats",
+        "abbreviation": "UK"
+      }
+    },
+    {
+      "id": "401856715792",
+      "type": {
+        "id": "68",
+        "text": "Rushing Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "Sam Leavitt 15 Yd Run (Scott Starzyk Kick)",
+      "awayScore": 34,
+      "homeScore": 27,
+      "period": {
+        "number": 5
+      },
+      "clock": {
+        "value": 0.0,
+        "displayValue": "0:00"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "99",
+        "displayName": "LSU Tigers",
+        "abbreviation": "LSU"
+      }
+    },
+    {
+      "id": "401856715816",
+      "type": {
+        "id": "68",
+        "text": "Rushing Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "CJ Baxter 1 Yd Run (Kenny Minchey Run for Two-Point Conversion)",
+      "awayScore": 34,
+      "homeScore": 35,
+      "period": {
+        "number": 5
+      },
+      "clock": {
+        "value": 0.0,
+        "displayValue": "0:00"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "96",
+        "displayName": "Kentucky Wildcats",
+        "abbreviation": "UK"
+      }
+    }
+  ]
+}

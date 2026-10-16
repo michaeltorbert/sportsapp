@@ -51,7 +51,7 @@ test("first tap opens the dedicated screen with the final team comparison; Playe
   await expect(screen(page).locator("table.compare-table tbody tr")).toHaveCount(15);
   await expect(screen(page).getByRole("row", { name: /Fourth-down conversions/ })).toBeVisible();
   await expect(screen(page).getByText("Stats checked at")).toBeVisible();
-  expect(harness.state.statsRequests).toEqual([`?event=${FINAL.id}&phase=final&refresh=0`]);
+  expect(harness.state.statsRequests).toEqual([`?event=${FINAL.id}&phase=final&refresh=0&scoring=1`]);
   // Game details stay in the app: score and status, with no external Gamecast link (user request).
   await expect(screen(page).locator(".mh-score")).toHaveText(["20", "17"]);
   await expect(screen(page).getByRole("link")).toHaveCount(0);
@@ -89,7 +89,7 @@ test("pregame season averages are labeled per game and Player stats waits for ki
   await view(page, "Player stats").tap();
   await expect(screen(page).getByText("Player stats start after kickoff")).toBeVisible();
   await expect(screen(page).locator(".player-table")).toHaveCount(0);
-  expect(harness.state.statsRequests).toEqual([`?event=${PREGAME.id}&phase=pregame&refresh=0`]);
+  expect(harness.state.statsRequests).toEqual([`?event=${PREGAME.id}&phase=pregame&refresh=0&scoring=1`]);
 });
 
 test("live stats: opening loads started totals, the source status shows separately, it polls every 30s while open and stops on Back", async ({ page, harness }) => {
@@ -101,7 +101,7 @@ test("live stats: opening loads started totals, the source status shows separate
   await expect(screen(page).getByRole("row", { name: /Total yards/ })).toContainText("235");
   await expect(screen(page).getByText("Source reports 3:48 - 3rd")).toBeVisible();
   await expect(screen(page).locator("a.gamecast, a[target=\"_blank\"]")).toHaveCount(0);
-  expect(harness.state.statsRequests).toEqual([`?event=${LIVE.id}&phase=started&refresh=0`]);
+  expect(harness.state.statsRequests).toEqual([`?event=${LIVE.id}&phase=started&refresh=0&scoring=1`]);
   await page.clock.fastForward(31_000);
   await expect.poll(() => harness.state.statsRequests.length).toBe(2);
   // Leaving the screen stops polling.

@@ -3,10 +3,13 @@ import { validDate } from "./football";
 import { normalizeSelection, type Period, type Selection } from "./scoreboard-views";
 
 // The dedicated game screen lives on the same root as the scoreboard:
-// `/?event=<id>[&section=players]`, plus the scoreboard's own date/cats/period.
+// `/?event=<id>[&section=scoring|players]`, plus the scoreboard's own date/cats/period.
+// Team is the default and has no section parameter.
 // History entries carry a versioned `ss` record merged into the framework's
 // state. It holds UI state and IDs only, never game content.
-export type Section = "team" | "players";
+export type Section = "team" | "scoring" | "players";
+const SECTIONS: readonly Section[] = ["team", "scoring", "players"];
+export function isSection(value: unknown): value is Section { return typeof value === "string" && (SECTIONS as readonly string[]).includes(value); }
 export type GameRoute = { id: string; section: Section };
 export type BoardView = { date: string | null; selection: Selection; period: Period; hideFinals: boolean };
 export type BoardSnapshot = BoardView & { scrollY: number; origin: string };
@@ -21,7 +24,8 @@ const MAX_SCROLL = 10_000_000;
 
 export function parseGameRoute(search: string | null): GameRoute | null {
   const params = new URLSearchParams(search || ""), id = gameId(params.get("event"));
-  return id ? { id, section: params.get("section") === "players" ? "players" : "team" } : null;
+  const section = params.get("section");
+  return id ? { id, section: section !== "team" && isSection(section) ? section : "team" } : null;
 }
 function applyView(url: URL, view: UrlView) {
   if (view.followToday) url.searchParams.delete("date");
@@ -33,7 +37,7 @@ export function gameUrl(href: string, route: GameRoute, view: UrlView): string {
   const url = new URL(href);
   for (const key of ["event", "section", ...TRANSIENT]) url.searchParams.delete(key);
   applyView(url, view);
-  const params = new URLSearchParams({ event: route.id, ...(route.section === "players" ? { section: "players" } : {}) });
+  const params = new URLSearchParams({ event: route.id, ...(route.section !== "team" ? { section: route.section } : {}) });
   for (const [key, value] of url.searchParams) params.append(key, value);
   url.search = params.toString();
   if (/^#game-/.test(url.hash)) url.hash = "";
@@ -46,7 +50,7 @@ export function gameHref(route: GameRoute, view: UrlView): string {
 }
 export function sectionUrl(href: string, section: Section): string {
   const url = new URL(href);
-  if (section === "players") url.searchParams.set("section", "players"); else url.searchParams.delete("section");
+  if (section !== "team") url.searchParams.set("section", section); else url.searchParams.delete("section");
   return url.href;
 }
 /** The scoreboard fallback for a game entry with no scoreboard entry of ours behind it. */
@@ -82,7 +86,7 @@ export function readEntry(state: unknown): RouteEntry | null {
   }
   if (e.kind === "game") {
     const id = gameId(typeof e.id === "string" ? e.id : null);
-    if (!id || (e.section !== "team" && e.section !== "players") || typeof e.from !== "boolean") return null;
+    if (!id || !isSection(e.section) || typeof e.from !== "boolean") return null;
     return { v: 1, kind: "game", key: e.key, id, section: e.section, from: e.from };
   }
   return null;

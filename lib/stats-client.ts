@@ -42,7 +42,8 @@ function identity(stats: GameStats, request: StatsRequest): StatsOutcome {
 export async function loadGameStats(request: StatsRequest, deadline: number, signal: AbortSignal, fetcher: Fetcher = fetch, now = () => Date.now(), fallback = DIRECT_STATS_FALLBACK): Promise<StatsOutcome> {
   let remaining = deadline - now();
   if (remaining < MIN_ATTEMPT_MS) return { kind: "failed", reason: "expired" };
-  const query = new URLSearchParams({ event: request.eventId, phase: request.phase, refresh: request.refresh ? "1" : "0" });
+  // `scoring=1` asks for the additive scoring summary; a Worker from before it ignores the parameter.
+  const query = new URLSearchParams({ event: request.eventId, phase: request.phase, refresh: request.refresh ? "1" : "0", scoring: "1" });
   let fallbackEligible: StatsOutcome;
   try {
     const result = await bounded(signal, Math.min(STATS_WORKER_BUDGET_MS, remaining), async inner => {

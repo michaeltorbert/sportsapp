@@ -7,20 +7,22 @@ Selecting a scoreboard game opens its dedicated game screen (user-approved r1 de
 | Path | Role |
 |---|---|
 | `lib/game-stats.ts` | Pure normalizer, public `GameStats` contract and validator, phase rules, tuning constants and enable gates |
+| `lib/game-scoring.ts` | Scoring (issue #149): period scores and scoring plays from the same summary, their contract schema and the Scoring display decision |
 | `lib/stats-server.ts` | Per-isolate Worker service: fixed ESPN summary URL, admission, deadline, completed-snapshot LRU cache |
-| `app/api/stats/route.ts` | `GET /api/stats?event=<6–12 digits>&phase=pregame\|started\|final&refresh=0\|1`. Anything else gets a 400 before any upstream call. Responses are `no-store` and `nosniff` |
+| `app/api/stats/route.ts` | `GET /api/stats?event=<6–12 digits>&phase=pregame\|started\|final&refresh=0\|1[&scoring=0\|1]`. Anything else gets a 400 before any upstream call. Without `scoring=1` the response is the released body with no `scoring` key. Responses are `no-store` and `nosniff` |
 | `lib/stats-client.ts` | Worker-first load inside the absolute deadline, plus the optional direct fallback (same normalizer) |
 | `lib/stats-scheduler.ts` | Shared FIFO queue: two active loads, one entry per card, deadline counted from enqueue |
 | `lib/use-game-stats.ts` | `StatsController` (generation, polling, backoff, cancellation) and the React hook, owned by the open game screen |
-| `components/game-stats.tsx` | `GameStatsScreen` (hook wrapper) and the pure `GameStatsView`: section navigation, Team stats and Player stats |
+| `components/game-stats.tsx` | `GameStatsScreen` (hook wrapper) and the pure `GameStatsView`: section navigation, Team stats, Scoring and Player stats |
+| `components/game-scoring.tsx` | The Scoring section body: score by quarter and scoring plays |
 | `components/game-screen.tsx` | The game screen: slim bar, masthead, context row and the stats view |
-| `lib/game-route.ts` | Same-root URL (`/?event=<id>[&section=players]`), validated history records and the owned-history controller |
+| `lib/game-route.ts` | Same-root URL (`/?event=<id>[&section=scoring\|players]`), validated history records and the owned-history controller |
 
 `app/page.tsx` keeps the scoreboard mounted (one score poller, its state and DOM) inside a hidden wrapper while a game is open, and renders `GameScreen` beside it. Only the open, eligible game mounts `GameStatsScreen`, so the scoreboard itself never does stats work and at most one controller is active.
 
 ## Navigation
 
-- **Destination.** `/?event=<id>`, plus the scoreboard's own `date` (only when not following Today), `cats` and `period`, so the view the scoreboard derives from the URL is unchanged. Player stats adds `section=players`; switching sections replaces the entry, so Back returns straight to the scoreboard. Unrelated parameters survive; a legacy `#game-` hash does not. The static homepage serves this URL like any other root query.
+- **Destination.** `/?event=<id>`, plus the scoreboard's own `date` (only when not following Today), `cats` and `period`, so the view the scoreboard derives from the URL is unchanged. Scoring adds `section=scoring` and Player stats adds `section=players`; Team stats has no parameter. Switching sections replaces the entry, so Back returns straight to the scoreboard. Unrelated parameters survive; a legacy `#game-` hash does not. The static homepage serves this URL like any other root query.
 - **History records.** Entries carry a versioned `ss` record merged into the framework's state: a scoreboard snapshot (date or Today, categories, Day/Week, Hide finals, absolute scroll, origin game ID) or a game entry (ID, section, whether our scoreboard entry is directly behind it). UI state and IDs only, never game content. Anything that fails validation is not ours.
 - **Opening.** The current entry is replaced with the scoreboard snapshot, then the game entry is pushed, so Back always has a safe scoreboard behind it.
 - **Back.** On-screen Back uses `history.back()` when our scoreboard entry is behind; otherwise (a direct link, an update reload) it replaces the entry with the scoreboard for the carried view and focuses the game's card, never leaving the app.
@@ -56,6 +58,24 @@ Selecting a scoreboard game opens its dedicated game screen (user-approved r1 de
   - No ranking, truncation or Show all control.
 - **Betting.** The contract has no betting fields, and odds, pickcenter, predictor, win probability and ATS are never read. The validator rejects unknown keys. The only line shown is the existing validated `game.pregameLine`.
 - **Freshness.** "Stats checked at" is the retrieval time. A Worker cache hit keeps its original `checkedAt`. The source's own status text appears separately as "Source reports …". No provider timestamp is claimed.
+
+## Scoring (issue #149)
+
+The screen's sections are **Team stats** (default), **Scoring** and **Player stats**. Scoring shows the score by quarter and the source's scoring plays from the same ESPN summary as the stats.
+
+- **One stream.** The client sends `scoring=1` on its ordinary stats request, so there is no separate endpoint, fetch, cache, poll or retry path. The Worker caches one normalized snapshot per event and removes `scoring` for requests that don't ask for it, so older clients get the released body byte for byte. The client's strict validator accepts `scoring` as an optional, strictly validated key. A response without it, from a Worker that predates scoring, is valid and shows Scoring as unavailable.
+- **Availability.** Scoring is read only from started or final sources, and is omitted when the source supplies neither linescores nor `scoringPlays`. It is shown when the source phase matches the scoreboard's expected phase. It is independent of the Team stats metric family and of Players: valid started scoring shows even when Team stats is empty, and Team/Player behavior is unchanged. A mismatched phase shows "Scoring catching up". Before kickoff, Scoring says it starts after kickoff. Freshness, failed-refresh, offline and paused notices are the shared ones. The masthead score is never changed by scoring data.
+- **Budget.** Team and Players are decided exactly as before, without scoring. Players is still dropped whole only when the snapshot without scoring exceeds 64 KB. Scoring is then added only if the whole snapshot still fits. Otherwise it becomes `{ unavailable: "too-large" }`, or is omitted if even that marker doesn't fit. Scoring never displaces data that fit before.
+- **Periods.** One column per supplied index, labeled Q1–Q4, then OT, 2OT and so on (at most 20), plus the source's own total (T). Cells are 0–999 digit strings; a supplied 0 stays 0, and anything else is unavailable (—). Unequal away/home arrays keep their known cells and pad the gap as unavailable; no future quarter is filled and no total is calculated. The table is then marked incomplete: "Quarter scores are incomplete and may not align correctly." When every period is known but they don't sum to the total, the table keeps its values and adds a catching-up note.
+- **Plays.** Source order is kept as supplied, with no sort by ID or clock, so equal OT 0:00 clocks keep their order. Each play has a period (1–20), a clock (m:ss, with 0:00 kept as 0:00), the source's type text, its public description (at most 512 characters; longer text is unavailable, never shortened) and away/home running scores (0–999). Any of these may be missing and is then shown as unavailable.
+  - The team is the event's away or home team by ID. A play naming any other or an unreadable team is omitted and counted ("isn't shown"), never attributed. A play naming no team is shown without a team.
+  - Repeated IDs with identical content are one play. Disagreeing copies are all omitted and counted.
+  - A known period or clock that runs backwards against source order makes the list unavailable rather than re-sorted.
+  - More than 256 plays makes the list unavailable.
+  - Scores that go down within the list (a source correction), or a last play that doesn't match the source total, keep the list and add a note. Corrections between polls replace the whole snapshot.
+  - Supplied `[]` reads "No scoring plays supplied yet", with the same note if the total isn't 0–0. An absent list is unavailable.
+  - A matching last play does not prove the list is complete, and nothing claims every scoring play is shown.
+- **Layout.** The three section buttons share one row. Labels wrap only between words. After each render and size change, `game-screen.tsx` measures whether any label word fits its button, as it does for the score header. If one doesn't (narrow width, CSS zoom or larger text), it sets `data-stacked` and the buttons stack, which the existing sticky-height measurement then accounts for. The quarter table scrolls sideways only inside its own focusable region.
 
 ## Transport, cache and timing (starting parameters)
 
@@ -108,6 +128,10 @@ Changing any tuning value requires re-review.
 
 ## Evidence and limits
 
+- **Scoring fixtures.** `tests/fixtures/espn-summary-scoring-{live,final,final-ot,pregame}.json` are byte-identical minimized excerpts of genuine public summaries: historical live 401856717 (2026-10-10, 3rd quarter); final 401858481 and Final/OT 401856715 (both retrieved 2026-10-15); scheduled 401862800 (2026-10-15), which has no scoring fields. `espn-summary-scoring-provenance.json` records their source URLs, hashes and time basis, including the uncertainty about the historical metadata.
+  - Tests label as COMPOSED any summary that joins a scoring header and plays to an existing boxscore fixture; it is not a raw capture.
+  - Multiple overtimes, corrections, missing, malformed, unequal and oversized scoring are synthetic and labeled.
+  - The provider supplied these fields for these games. That is not a guarantee for every game or live moment.
 - **Fixtures.** `tests/fixtures/espn-summary-{live,final,pregame}.json` are minimized, anonymized genuine public captures from 2026-10-10. `espn-summary-provenance.json` records the original SHA-256 of each.
   - Live is a real IN_PROGRESS 3rd-quarter capture, with passing at 6 keys / 5 labels.
   - Halftime, overtime, delay, suspension, exceptional, correction, malformed and oversized cases are synthetic and labeled in the tests. Halftime behavior is not observed.
