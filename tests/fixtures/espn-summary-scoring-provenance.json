@@ -1,0 +1,63 @@
+{
+ "generatedBy": "Issue #149 scoring fixtures. Each file is a minimized public ESPN summary excerpt, byte-identical to the excerpt recorded in output/issue-149-scoring-20261015/provider-manifest.json: exact game header (identity, date, status, competitor IDs/homeAway/score/linescores, team displayName/abbreviation) and scoringPlays values, unchanged.",
+ "fixtures": {
+  "espn-summary-scoring-live.json": {
+   "eventId": "401856717",
+   "status": "STATUS_IN_PROGRESS (3:48 - 3rd)",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=401856717",
+   "capture": "output/issue-115-20261010/espn-live-401856717.json",
+   "captureSha256": "7f8d5a6eb253cf119f366e8676880b94d200c9787be87f656a6f5f48a758155a",
+   "captureBytes": 385391,
+   "fixtureSha256": "1366d26a7bdfac5c01962b0f29f1217f79675b3a744dbd30f2bec57dcfd2cb9b",
+   "fixtureBytes": 4987,
+   "retrievedUtc": "2026-10-10T22:22:32.915717+00:00",
+   "timeBasis": "Source file mtime of a historical capture; original HTTP metadata not verified. Same capture as espn-summary-live.json."
+  },
+  "espn-summary-scoring-final.json": {
+   "eventId": "401858481",
+   "status": "STATUS_FINAL",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=401858481",
+   "capture": "output/issue-149-scoring-20261015/espn-final-401858481.json",
+   "captureSha256": "dba1f44f73b47d326fd16fe638a6139b6d97200d80c5eca66bef0c03c7032caf",
+   "captureBytes": 442443,
+   "fixtureSha256": "7d39860e7798fa0135d12938b4540b26d212936e3f5504d135fd77eab7d142ca",
+   "fixtureBytes": 6156,
+   "retrievedUtc": "2026-10-15T23:10:30.509726+00:00",
+   "timeBasis": "Source file mtime; curl --fail succeeded, exact headers not retained. A later retrieval than espn-summary-final.json (2026-10-10 capture)."
+  },
+  "espn-summary-scoring-final-ot.json": {
+   "eventId": "401856715",
+   "status": "STATUS_FINAL (Final/OT, five periods)",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=401856715",
+   "capture": "output/issue-149-scoring-20261015/espn-final-ot-401856715.json",
+   "captureSha256": "b1950d7d2f22b5065ba3a69f18e5a2e6edc3e84f18b27e1b2b56e4b194cf27c3",
+   "captureBytes": 532103,
+   "fixtureSha256": "fc4341dcb0ae8e8d0fc2d04f1798eab4b57668e7faceab7966ce33ef1331d96a",
+   "fixtureBytes": 9459,
+   "retrievedUtc": "2026-10-15T23:12:30.263368+00:00",
+   "timeBasis": "Source file mtime; curl --fail succeeded, exact headers not retained."
+  },
+  "espn-summary-scoring-pregame.json": {
+   "eventId": "401862800",
+   "status": "STATUS_SCHEDULED (no score, linescores or scoringPlays supplied)",
+   "url": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=401862800",
+   "capture": "output/issue-149-scoring-20261015/espn-pregame-401862800.json",
+   "captureSha256": "361d1c8802cb6e6b4e40bdb1eeaea25539a0c78f859983e40e534de7de95e072",
+   "captureBytes": 104509,
+   "fixtureSha256": "fc42d20e9e7df096ae4e936cbbbc08ff2c4d014a70e3be376b6312e0e2c0e912",
+   "fixtureBytes": 1072,
+   "retrievedUtc": "2026-10-15T23:11:56.632349+00:00",
+   "timeBasis": "Source file mtime; curl --fail succeeded, exact headers not retained."
+  }
+ },
+ "composition": [
+  "Tests label as COMPOSED any summary that joins a scoring fixture's header and scoringPlays to the boxscore of the existing espn-summary-live.json or espn-summary-final.json fixture for the same event.",
+  "Live: both come from the same 2026-10-10 capture. Final: boxscore from the 2026-10-10 capture, header/scoring from the 2026-10-15 retrieval. A composed summary is not a raw capture.",
+  "No box-score fixture exists for 401856715 (final) or 401862800; those are used header-and-scoring only.",
+  "Existing espn-summary-*.json fixtures and espn-summary-provenance.json are unchanged."
+ ],
+ "limits": [
+  "These show the fields were supplied for these games; they do not guarantee every game or every live moment supplies them.",
+  "No genuine multi-overtime, halftime, correction, missing or malformed scoring sample exists; tests of those cases are synthetic and labeled."
+ ]
+}

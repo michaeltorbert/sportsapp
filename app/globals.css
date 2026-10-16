@@ -427,8 +427,10 @@ body:has(.game-screen)::before { background: #0d1626; }
 .game-screen .gamecast:hover { background: rgba(255, 255, 255, .05); }
 .game-screen .game-feed { margin: 0 0 12px; padding: 10px 12px; border: 1px solid rgba(242, 178, 87, .45); border-radius: 12px; background: rgba(242, 178, 87, .08); color: var(--amber); font-size: .875rem; }
 .game-screen .view-nav { z-index: 20; border-bottom: 1px solid var(--line); }
-.game-screen .view-switch { display: grid; grid-template-columns: 1fr 1fr; max-width: 920px; margin: 0 auto; }
-.game-screen .view-switch button { min-height: 48px; padding: 8px 6px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; color: var(--muted); font-size: .9375rem; font-weight: 650; }
+.game-screen .view-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 920px; margin: 0 auto; }
+/* Labels wrap only between words; game-screen.tsx stacks the buttons when a single word can't fit. */
+.game-screen .view-switch[data-stacked] { grid-template-columns: minmax(0, 1fr); }
+.game-screen .view-switch button { min-height: 48px; padding: 8px 6px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; color: var(--muted); font-size: .9375rem; font-weight: 650; overflow-wrap: normal; }
 .game-screen .view-switch button:hover, .game-screen .view-switch button[aria-pressed="true"] { color: var(--text); }
 .game-screen .view-switch button[aria-pressed="true"] { border-bottom-color: var(--lime); }
 .game-screen .view-switch button:focus-visible { outline-offset: -3px; }
@@ -441,7 +443,7 @@ body:has(.game-screen)::before { background: #0d1626; }
 .game-screen.can-stick .view-nav { position: sticky; top: var(--bar-h); }
 .game-screen .game-body { max-width: 920px; margin: 0 auto; }
 .game-screen .panel { padding-top: 18px; }
-.game-screen #panel-team { max-width: 720px; margin: 0 auto; }
+.game-screen #panel-team, .game-screen #panel-scoring { max-width: 720px; margin: 0 auto; }
 .game-screen .panel-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .game-screen .panel-head h2 { font-size: 1.25rem; font-weight: 750; letter-spacing: -.01em; }
 .game-screen .panel-head h2:focus { outline: none; }
@@ -491,6 +493,28 @@ body:has(.game-screen)::before { background: #0d1626; }
 .game-screen .next-view span { font-size: .9375rem; font-weight: 700; }
 .game-screen .next-view small { flex: 1; color: var(--muted); font-size: .8125rem; }
 .game-screen .next-view:hover { background: var(--surface-2); }
+/* Scoring: scores by quarter (plain rows and dividers, like the comparison) and the source's
+   scoring plays in its order. The quarter table scrolls only inside its own region. */
+.game-screen #panel-scoring .group-title:first-of-type { margin-top: 14px; }
+.game-screen .scoring-table-wrap { width: 100%; min-width: 0; overflow-x: auto; }
+.game-screen .scoring-periods { width: 100%; border-collapse: collapse; }
+.game-screen .scoring-periods thead th { padding: 6px 0 6px 8px; color: var(--dim); font-size: .75rem; font-weight: 650; letter-spacing: .04em; text-align: right; white-space: nowrap; }
+.game-screen .scoring-periods tbody tr { border-top: 1px solid var(--line); }
+.game-screen .scoring-periods th.scoring-team { padding: 9px 8px 9px 0; text-align: left; white-space: nowrap; }
+.game-screen .scoring-periods tbody th.scoring-team > span:first-child { display: block; font-size: .9375rem; font-weight: 750; }
+.game-screen .scoring-periods tbody th.scoring-team small { display: block; color: var(--dim); font-size: .6875rem; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
+.game-screen .scoring-periods td { width: 3rem; padding: 9px 0 9px 8px; color: var(--muted); font-size: 1rem; font-weight: 600; text-align: right; white-space: nowrap; }
+.game-screen .scoring-periods td.scoring-total { color: var(--text); font-weight: 750; }
+.game-screen #panel-scoring .legend { margin: 0 0 6px; }
+.game-screen .scoring-plays { margin: 0; padding: 0; list-style: none; }
+.game-screen .scoring-play { display: grid; grid-template-columns: 3.25rem minmax(0, 1fr) auto; align-items: start; gap: 2px 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+.game-screen .scoring-when { display: flex; flex-direction: column; color: var(--dim); font-size: .8125rem; font-weight: 600; line-height: 1.35; white-space: nowrap; }
+.game-screen .scoring-what { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.game-screen .scoring-head { font-size: .9375rem; font-weight: 600; }
+.game-screen .scoring-head b { font-weight: 750; }
+.game-screen .scoring-text { color: var(--muted); font-size: .8125rem; overflow-wrap: anywhere; }
+.game-screen .scoring-score { color: var(--muted); font-size: 1rem; font-weight: 700; white-space: nowrap; }
+.game-screen .scoring-score .scoring-scorer { color: var(--text); }
 /* Players: one continuous document with every supplied row. */
 .game-screen .category { margin-top: 22px; }
 .game-screen .category-head h3 { font-size: 1.125rem; font-weight: 750; }
@@ -535,6 +559,11 @@ body:has(.game-screen)::before { background: #0d1626; }
 .game-screen.is-compact .compare-table .c-away, .game-screen.is-compact .compare-table .c-home { width: 30%; }
 .game-screen.is-compact .compare-table tbody td { font-size: 1rem; }
 .game-screen.is-compact .player-table thead th, .game-screen.is-compact .player-table tbody th, .game-screen.is-compact .player-table tbody td { padding-left: 8px; padding-right: 8px; }
+.game-screen.is-compact .scoring-periods td { width: auto; padding-left: 10px; }
+/* Compact: when and score share the first line; the play text gets the full width below. */
+.game-screen.is-compact .scoring-play { grid-template-columns: minmax(0, 1fr) auto; }
+.game-screen.is-compact .scoring-when { flex-direction: row; gap: 8px; }
+.game-screen.is-compact .scoring-what { grid-column: 1 / -1; grid-row: 2; }
 @media (forced-colors: active) {
   .game-screen [aria-pressed="true"], .game-screen .jump-links button[aria-current="true"] { outline: 2px solid CanvasText; outline-offset: -2px; }
   .game-screen .share span { background: CanvasText; }

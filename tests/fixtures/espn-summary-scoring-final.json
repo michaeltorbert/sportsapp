@@ -1,0 +1,276 @@
+{
+  "header": {
+    "id": "401858481",
+    "season": {
+      "year": 2026,
+      "current": true,
+      "type": 2
+    },
+    "week": 6,
+    "competitions": [
+      {
+        "id": "401858481",
+        "date": "2026-10-10T16:00Z",
+        "status": {
+          "type": {
+            "id": "3",
+            "name": "STATUS_FINAL",
+            "state": "post",
+            "completed": true,
+            "description": "Final",
+            "detail": "Final",
+            "shortDetail": "Final"
+          }
+        },
+        "competitors": [
+          {
+            "id": "158",
+            "homeAway": "home",
+            "score": "17",
+            "linescores": [
+              {
+                "displayValue": "10"
+              },
+              {
+                "displayValue": "0"
+              },
+              {
+                "displayValue": "0"
+              },
+              {
+                "displayValue": "7"
+              }
+            ],
+            "team": {
+              "id": "158",
+              "displayName": "Nebraska Cornhuskers",
+              "abbreviation": "NEB"
+            }
+          },
+          {
+            "id": "84",
+            "homeAway": "away",
+            "score": "20",
+            "linescores": [
+              {
+                "displayValue": "3"
+              },
+              {
+                "displayValue": "0"
+              },
+              {
+                "displayValue": "3"
+              },
+              {
+                "displayValue": "14"
+              }
+            ],
+            "team": {
+              "id": "84",
+              "displayName": "Indiana Hoosiers",
+              "abbreviation": "IU"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scoringPlays": [
+    {
+      "id": "40185848161",
+      "type": {
+        "id": "59",
+        "text": "Field Goal Good",
+        "abbreviation": "FG"
+      },
+      "text": "Kyle Cunanan 28 Yd Field Goal  ",
+      "awayScore": 0,
+      "homeScore": 3,
+      "period": {
+        "number": 1
+      },
+      "clock": {
+        "value": 537.0,
+        "displayValue": "8:57"
+      },
+      "scoringType": {
+        "name": "field-goal",
+        "displayName": "Field Goal",
+        "abbreviation": "FG"
+      },
+      "team": {
+        "id": "158",
+        "displayName": "Nebraska Cornhuskers",
+        "abbreviation": "NEB"
+      }
+    },
+    {
+      "id": "40185848187",
+      "type": {
+        "id": "59",
+        "text": "Field Goal Good",
+        "abbreviation": "FG"
+      },
+      "text": "Nico Radicic 42 Yd Field Goal  ",
+      "awayScore": 3,
+      "homeScore": 3,
+      "period": {
+        "number": 1
+      },
+      "clock": {
+        "value": 381.0,
+        "displayValue": "6:21"
+      },
+      "scoringType": {
+        "name": "field-goal",
+        "displayName": "Field Goal",
+        "abbreviation": "FG"
+      },
+      "team": {
+        "id": "84",
+        "displayName": "Indiana Hoosiers",
+        "abbreviation": "IU"
+      }
+    },
+    {
+      "id": "401858481138",
+      "type": {
+        "id": "68",
+        "text": "Rushing Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "Nyziah Hunter 10 Yd Run (Kyle Cunanan Kick)",
+      "awayScore": 3,
+      "homeScore": 10,
+      "period": {
+        "number": 1
+      },
+      "clock": {
+        "value": 61.0,
+        "displayValue": "1:01"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "158",
+        "displayName": "Nebraska Cornhuskers",
+        "abbreviation": "NEB"
+      }
+    },
+    {
+      "id": "401858481368",
+      "type": {
+        "id": "59",
+        "text": "Field Goal Good",
+        "abbreviation": "FG"
+      },
+      "text": "Nico Radicic 35 Yd Field Goal  ",
+      "awayScore": 6,
+      "homeScore": 10,
+      "period": {
+        "number": 3
+      },
+      "clock": {
+        "value": 626.0,
+        "displayValue": "10:26"
+      },
+      "scoringType": {
+        "name": "field-goal",
+        "displayName": "Field Goal",
+        "abbreviation": "FG"
+      },
+      "team": {
+        "id": "84",
+        "displayName": "Indiana Hoosiers",
+        "abbreviation": "IU"
+      }
+    },
+    {
+      "id": "401858481515",
+      "type": {
+        "id": "68",
+        "text": "Rushing Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "Anthony Colandrea 39 Yd Run (Kyle Cunanan Kick)",
+      "awayScore": 6,
+      "homeScore": 17,
+      "period": {
+        "number": 4
+      },
+      "clock": {
+        "value": 721.0,
+        "displayValue": "12:01"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "158",
+        "displayName": "Nebraska Cornhuskers",
+        "abbreviation": "NEB"
+      }
+    },
+    {
+      "id": "401858481525",
+      "type": {
+        "id": "67",
+        "text": "Passing Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "Nick Marsh 75 Yd pass from Josh Hoover (Nico Radicic Kick)",
+      "awayScore": 13,
+      "homeScore": 17,
+      "period": {
+        "number": 4
+      },
+      "clock": {
+        "value": 711.0,
+        "displayValue": "11:51"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "84",
+        "displayName": "Indiana Hoosiers",
+        "abbreviation": "IU"
+      }
+    },
+    {
+      "id": "401858481582",
+      "type": {
+        "id": "67",
+        "text": "Passing Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "Nick Marsh 44 Yd pass from Josh Hoover (Nico Radicic Kick)",
+      "awayScore": 20,
+      "homeScore": 17,
+      "period": {
+        "number": 4
+      },
+      "clock": {
+        "value": 433.0,
+        "displayValue": "7:13"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "84",
+        "displayName": "Indiana Hoosiers",
+        "abbreviation": "IU"
+      }
+    }
+  ]
+}

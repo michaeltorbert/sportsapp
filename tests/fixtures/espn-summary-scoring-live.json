@@ -1,0 +1,219 @@
+{
+  "header": {
+    "id": "401856717",
+    "season": {
+      "year": 2026,
+      "current": true,
+      "type": 2
+    },
+    "week": 6,
+    "competitions": [
+      {
+        "id": "401856717",
+        "date": "2026-10-10T19:30Z",
+        "status": {
+          "displayClock": "3:48",
+          "period": 3,
+          "type": {
+            "id": "2",
+            "name": "STATUS_IN_PROGRESS",
+            "state": "in",
+            "completed": false,
+            "description": "In Progress",
+            "detail": "3:48 - 3rd Quarter",
+            "shortDetail": "3:48 - 3rd",
+            "statusPrimary": "3:48",
+            "statusSecondary": "3rd"
+          },
+          "displayPeriod": "3rd"
+        },
+        "competitors": [
+          {
+            "id": "201",
+            "homeAway": "home",
+            "score": "10",
+            "linescores": [
+              {
+                "displayValue": "0"
+              },
+              {
+                "displayValue": "7"
+              },
+              {
+                "displayValue": "3"
+              }
+            ],
+            "team": {
+              "id": "201",
+              "displayName": "Oklahoma Sooners",
+              "abbreviation": "OU"
+            }
+          },
+          {
+            "id": "251",
+            "homeAway": "away",
+            "score": "17",
+            "linescores": [
+              {
+                "displayValue": "7"
+              },
+              {
+                "displayValue": "10"
+              },
+              {
+                "displayValue": "0"
+              }
+            ],
+            "team": {
+              "id": "251",
+              "displayName": "Texas Longhorns",
+              "abbreviation": "TEX"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scoringPlays": [
+    {
+      "id": "401856717106",
+      "type": {
+        "id": "67",
+        "text": "Passing Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "A. Manning pass to C. Coleman for 41 yds, for a TD (G. Spetic KICK)",
+      "awayScore": 7,
+      "homeScore": 0,
+      "period": {
+        "number": 1
+      },
+      "clock": {
+        "value": 416.0,
+        "displayValue": "6:56"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "251",
+        "displayName": "Texas Longhorns",
+        "abbreviation": "TEX"
+      }
+    },
+    {
+      "id": "401856717199",
+      "type": {
+        "id": "37",
+        "text": "Blocked Punt Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "Punt blocked by D. Okoye, recovered by D. Fields for a TD (T. Sandell KICK)",
+      "awayScore": 7,
+      "homeScore": 7,
+      "period": {
+        "number": 2
+      },
+      "clock": {
+        "value": 851.0,
+        "displayValue": "14:11"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "201",
+        "displayName": "Oklahoma Sooners",
+        "abbreviation": "OU"
+      }
+    },
+    {
+      "id": "401856717251",
+      "type": {
+        "id": "67",
+        "text": "Passing Touchdown",
+        "abbreviation": "TD"
+      },
+      "text": "A. Manning pass to R. Wingo for 34 yds, for a TD (G. Spetic KICK)",
+      "awayScore": 14,
+      "homeScore": 7,
+      "period": {
+        "number": 2
+      },
+      "clock": {
+        "value": 609.0,
+        "displayValue": "10:09"
+      },
+      "scoringType": {
+        "name": "touchdown",
+        "displayName": "Touchdown",
+        "abbreviation": "TD"
+      },
+      "team": {
+        "id": "251",
+        "displayName": "Texas Longhorns",
+        "abbreviation": "TEX"
+      }
+    },
+    {
+      "id": "401856717370",
+      "type": {
+        "id": "59",
+        "text": "Field Goal Good",
+        "abbreviation": "FG"
+      },
+      "text": "G. Spetic 23 yd FG GOOD",
+      "awayScore": 17,
+      "homeScore": 7,
+      "period": {
+        "number": 2
+      },
+      "clock": {
+        "value": 12.0,
+        "displayValue": "0:12"
+      },
+      "scoringType": {
+        "name": "field-goal",
+        "displayName": "Field Goal",
+        "abbreviation": "FG"
+      },
+      "team": {
+        "id": "251",
+        "displayName": "Texas Longhorns",
+        "abbreviation": "TEX"
+      }
+    },
+    {
+      "id": "401856717439",
+      "type": {
+        "id": "59",
+        "text": "Field Goal Good",
+        "abbreviation": "FG"
+      },
+      "text": "T. Sandell 53 yd FG GOOD",
+      "awayScore": 17,
+      "homeScore": 10,
+      "period": {
+        "number": 3
+      },
+      "clock": {
+        "value": 656.0,
+        "displayValue": "10:56"
+      },
+      "scoringType": {
+        "name": "field-goal",
+        "displayName": "Field Goal",
+        "abbreviation": "FG"
+      },
+      "team": {
+        "id": "201",
+        "displayName": "Oklahoma Sooners",
+        "abbreviation": "OU"
+      }
+    }
+  ]
+}

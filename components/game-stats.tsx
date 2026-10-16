@@ -5,6 +5,9 @@ import type { Game } from "@/lib/football";
 import type { Section } from "@/lib/game-route";
 import { expectedPhase, GAME_CORE, GAME_DETAILS, LIVE_STATS_ENABLED, PLAYER_CATEGORIES, playerColumns, SEASON_ROWS, statsDisplay, statsTtl, type GameStats, type Pair, type PlayerCategory, type StatsPhase } from "@/lib/game-stats";
 import { statsGeneration, useGameStats, type StatsState } from "@/lib/use-game-stats";
+import { scoringDisplay } from "@/lib/game-scoring";
+// Relative, like the stats view in game-screen.tsx, so page tests bundle the real component.
+import { ScoringSummary } from "./game-scoring";
 
 type Rows = readonly (readonly [string, string])[];
 export const CATEGORY: Record<PlayerCategory, { title: string; columns: [string, string][] }> = {
@@ -107,7 +110,7 @@ export function GameStatsScreen({ game, section, onSection, jump, onJump }: { ga
 }
 
 type ViewProps = { game: Game; state: StatsState | null; now: number; online: boolean; retry: () => void; section: Section; onSection?: (section: Section, focusHeading?: boolean) => void; jump?: PlayerCategory; onJump?: (category: PlayerCategory) => void };
-/** Pure rendering of one game's stats state: section navigation, Team stats and Player stats. */
+/** Pure rendering of one game's stats state: section navigation, Team stats, Scoring and Player stats. */
 export function GameStatsView({ game, state, now, online, retry, section, onSection = () => {}, jump = "passing", onJump = () => {} }: ViewProps) {
   const expected = expectedPhase(game), [away, home] = game.teams, matchup = `${away.name} vs ${home.name}`;
   // Exceptional states are status-first and make no stats request.
@@ -117,7 +120,7 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
   }
   const heading = expected === "pregame" ? "Season averages" : "Team stats";
   const phaseLabel = expected === "pregame" ? "Pregame" : expected === "final" ? "Final" : "This game";
-  const players = section === "players";
+  const players = section === "players", scoring = section === "scoring", onTeam = section === "team";
   // The controller owns the gate; before its first state the constant decides, so no spinner flashes.
   // Rendered state must belong to this game's full generation; a snapshot must also match its identity.
   const current = state?.generation === statsGeneration(game) ? state : null;
@@ -137,8 +140,10 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
   else if (!snapshot) {
     if (!online) status = <Notice title="You’re offline" warning live>Stats will load when you reconnect. The score and game details are still available.</Notice>;
     else if (failure && !pending) status = <Notice title="Stats could not be loaded" warning live retry={retryState}>The score and game details are still available. Try again.</Notice>;
-    else status = <div className="stats-loading" role="status"><p>{pending === "waiting" ? "Waiting to load team stats…" : "Loading team stats…"}</p>{Array.from({ length: 8 }, (_, i) => <div className="skeleton-row" aria-hidden="true" key={i}><span /><span /><span /></div>)}</div>;
-  } else status = <StatsStatus game={game} stats={snapshot} expected={expected} now={now} online={online} failure={!!failure} retry={retryState} />;
+    else { const what = scoring ? "scoring" : "team stats"; status = <div className="stats-loading" role="status"><p>{pending === "waiting" ? `Waiting to load ${what}…` : `Loading ${what}…`}</p>{Array.from({ length: 8 }, (_, i) => <div className="skeleton-row" aria-hidden="true" key={i}><span /><span /><span /></div>)}</div>; }
+  } else status = <StatsStatus game={game} stats={snapshot} expected={expected} now={now} online={online} failure={!!failure} retry={retryState} scope={scoring ? "scoring" : "stats"} />;
+  // Scoring has its own availability: it never depends on the Team stats family or on Players.
+  const scored = !disabled && snapshot && expected !== "pregame" ? scoringDisplay(snapshot, expected) : null;
 
   const head = (id: string, title: string) => <div className="panel-head"><h2 id={id} tabIndex={-1}>{title}</h2><span className="stats-phase">{phaseLabel}</span></div>;
   const team = hasBody && "kind" in snapshot!.team ? snapshot!.team : null;
@@ -146,14 +151,15 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
   return <>
     <nav className="view-nav" id="view-nav" aria-label="Game sections">
       <div className="view-switch">
-        <button type="button" data-focus-key="view-team" aria-controls="panel-team" aria-pressed={!players} onClick={() => onSection("team")}>Team stats</button>
+        <button type="button" data-focus-key="view-team" aria-controls="panel-team" aria-pressed={onTeam} onClick={() => onSection("team")}>Team stats</button>
+        <button type="button" data-focus-key="view-scoring" aria-controls="panel-scoring" aria-pressed={scoring} onClick={() => onSection("scoring")}>Scoring</button>
         <button type="button" data-focus-key="view-players" aria-controls="panel-players" aria-pressed={players} onClick={() => onSection("players")}>Player stats</button>
       </div>
       {showJumps && <div className="jump-links" role="group" aria-label="Jump to player category">{PLAYER_CATEGORIES.map(c => <button type="button" key={c} data-jump={c} data-focus-key={`jump-${c}`} aria-current={jump === c ? "true" : undefined} onClick={() => onJump(c)}>{CATEGORY[c].title}</button>)}</div>}
     </nav>
     <div className="game-body">
-      <section className="panel" id="panel-team" aria-labelledby={players ? undefined : "team-h"} aria-label={players ? heading : undefined} hidden={players}>
-        {!players && <>
+      <section className="panel" id="panel-team" aria-labelledby={onTeam ? "team-h" : undefined} aria-label={onTeam ? undefined : heading} hidden={!onTeam}>
+        {onTeam && <>
           {head("team-h", heading)}
           {status}
           {hasBody && (team ? <>
@@ -170,6 +176,19 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
           </> : <Notice title="Team stats unavailable" action={<button type="button" data-focus-key="notice-players" onClick={() => onSection("players", true)}>View player stats</button>}>Player stats remain available.</Notice>)}
         </>}
       </section>
+      <section className="panel" id="panel-scoring" aria-labelledby={scoring ? "scoring-h" : undefined} aria-label={scoring ? undefined : "Scoring"} hidden={!scoring}>
+        {scoring && <>
+          {head("scoring-h", "Scoring")}
+          {expected === "pregame"
+            ? <div className="stats-empty"><h3>Scoring starts after kickoff</h3><p>Scores by quarter and scoring plays appear here once the game starts.</p></div>
+            : <>
+              {status}
+              {scored?.mode === "catching-up" && <Notice title="Scoring catching up" live>{scored.reason === "season-only" ? "Scoring isn’t available yet. The source is still reporting pregame information." : "The scoring source has not caught up with the current game status yet."}</Notice>}
+              {scored?.mode === "unavailable" && <Notice title="Scoring unavailable">{scored.reason === "too-large" ? "The scoring summary is too large to show here. Team stats and Player stats remain available." : "Scoring was not supplied for this game. Team stats and Player stats remain available."}</Notice>}
+              {scored?.mode === "scoring" && <ScoringSummary game={game} scoring={scored.scoring} />}
+            </>}
+        </>}
+      </section>
       <section className="panel" id="panel-players" aria-labelledby={players ? "players-h" : undefined} aria-label={players ? undefined : "Player stats"} hidden={!players}>
         {players && <>
           {head("players-h", "Player stats")}
@@ -182,8 +201,9 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
   </>;
 }
 
-// Notices first, then retrieval time and the source's own status, shared by both sections.
-function StatsStatus({ game, stats, expected, now, online, failure, retry }: { game: Game; stats: GameStats; expected: StatsPhase; now: number; online: boolean; failure: boolean; retry: Retry }) {
+// Notices first, then retrieval time and the source's own status, shared by every section.
+// Scoring decides its own availability, so for it only the shared notices and freshness apply.
+function StatsStatus({ game, stats, expected, now, online, failure, retry, scope }: { game: Game; stats: GameStats; expected: StatsPhase; now: number; online: boolean; failure: boolean; retry: Retry; scope: "stats" | "scoring" }) {
   const pending = retry.pending;
   const display = statsDisplay(stats, expected), age = Math.max(0, (now || Date.parse(stats.checkedAt)) - Date.parse(stats.checkedAt));
   const pastTtl = age > statsTtl(expected);
@@ -193,8 +213,8 @@ function StatsStatus({ game, stats, expected, now, online, failure, retry }: { g
   </>;
   // Retrieval time is the only timestamp shown; the source's own status is reported separately.
   const freshness = <p className="stats-freshness"><span>Stats checked at {checkedTime(stats.checkedAt)}</span>{expected !== "pregame" && stats.sourceStatus.detail && <span>Source reports {stats.sourceStatus.detail}</span>}{pastTtl && !failure && online && <span className="stats-age">Checked {ago(age)}</span>}{pastTtl && !failure && online && expected !== "started" && <button type="button" className="stats-refresh" data-focus-key="stats-refresh" onClick={retry.onRetry} disabled={pending || retry.waitMs !== 0}>{pending ? "Checking…" : "Check again"}</button>}</p>;
-  if (display.mode === "catching-up") return <>{warnings}<Notice title="Stats catching up" live>{display.reason === "season-only" ? "Game stats are not available yet. The source is still reporting pregame information." : "The stats source has not caught up with the current game status yet."}</Notice>{freshness}</>;
-  if (display.mode === "empty") return <>{warnings}<div className="stats-empty" role="status"><h3>No stats available yet</h3><p>The source has not supplied stats for this game yet.</p></div>{freshness}</>;
+  if (scope === "stats" && display.mode === "catching-up") return <>{warnings}<Notice title="Stats catching up" live>{display.reason === "season-only" ? "Game stats are not available yet. The source is still reporting pregame information." : "The stats source has not caught up with the current game status yet."}</Notice>{freshness}</>;
+  if (scope === "stats" && display.mode === "empty") return <>{warnings}<div className="stats-empty" role="status"><h3>No stats available yet</h3><p>The source has not supplied stats for this game yet.</p></div>{freshness}</>;
   const paused = game.state === "delayed" && game.started;
   return <>
     {warnings}

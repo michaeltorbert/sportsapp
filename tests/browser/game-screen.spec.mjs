@@ -438,7 +438,7 @@ test("switching from game A to game B never shows A's stats on B's screen", asyn
   await expect(screen(page)).not.toContainText("235");
   release();
   await expect(screen(page).getByRole("row", { name: /Total yards/ })).toContainText("328");
-  expect(harness.state.statsRequests).toEqual([`?event=${LIVE.id}&phase=started&refresh=0`, `?event=${FINAL.id}&phase=final&refresh=0`]);
+  expect(harness.state.statsRequests).toEqual([`?event=${LIVE.id}&phase=started&refresh=0&scoring=1`, `?event=${FINAL.id}&phase=final&refresh=0&scoring=1`]);
 });
 
 test("hiding a Duke game while its screen is open leaves only the generic screen and stops its stats work", async ({ page, harness }, info) => {
@@ -454,7 +454,7 @@ test("hiding a Duke game while its screen is open leaves only the generic screen
   await expect(screen(page).locator("h1.game-title")).toContainText("Duke");
   // The retained snapshot is on screen before the hide.
   await expect(screen(page).getByRole("row", { name: /Total yards/ })).toContainText("235");
-  expect(harness.state.statsRequests).toEqual([`?event=${DUKE.id}&phase=started&refresh=0`]);
+  expect(harness.state.statsRequests).toEqual([`?event=${DUKE.id}&phase=started&refresh=0&scoring=1`]);
   const requests = harness.state.statsRequests.length;
   // Another tab hides it (the Settings sheet is on the scoreboard).
   await page.evaluate(id => {

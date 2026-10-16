@@ -34,9 +34,30 @@ test("game URLs round-trip the event and section and keep the scoreboard view an
   assert.equal(new URL(gameUrl("https://example.test/#other", { id: "g1", section: "team" }, view())).hash, "#other");
 });
 
+test("the Scoring section round-trips through the URL and history records; Team stays the parameter-free default", () => {
+  const href = gameUrl("https://example.test/?keep=yes", { id: "401856717", section: "scoring" }, view());
+  const url = new URL(href);
+  assert.deepEqual([...url.searchParams.keys()].slice(0, 2), ["event", "section"]);
+  assert.equal(url.searchParams.get("section"), "scoring");
+  assert.deepEqual(parseGameRoute(url.search), { id: "401856717", section: "scoring" });
+  assert.equal(gameHref({ id: "g1", section: "scoring" }, view({ followToday: true, selection: [] })), "/?event=g1&section=scoring");
+  assert.equal(new URL(sectionUrl("https://example.test/?event=g1&date=2026-09-05", "scoring")).searchParams.get("section"), "scoring");
+  for (const from of ["scoring", "players"]) {
+    assert.equal(new URL(sectionUrl(`https://example.test/?event=g1&section=${from}`, "team")).searchParams.has("section"), false);
+    assert.equal(new URL(sectionUrl(`https://example.test/?event=g1&section=${from}`, from === "scoring" ? "players" : "scoring")).searchParams.get("section"), from === "scoring" ? "players" : "scoring");
+  }
+  assert.deepEqual(parseGameRoute("?event=401856717&section=team"), { id: "401856717", section: "team" });
+  const entry = { v: 1, kind: "game", key: "k3", id: "401856717", section: "scoring", from: false };
+  assert.deepEqual(readEntry({ ss: entry }), entry);
+  for (const section of ["Scoring", "score", "", null, 1]) assert.equal(readEntry({ ss: { ...entry, section } }), null, String(section));
+  assert.equal(boardUrl("https://example.test/?event=g1&section=scoring", view()).includes("section"), false);
+});
+
 test("bad event IDs and sections fall back safely", () => {
   for (const search of ["", "?event=", "?event=%3Cscript%3E", `?event=${"a".repeat(129)}`, "?event=a/b"]) assert.equal(parseGameRoute(search), null, search);
   assert.deepEqual(parseGameRoute("?event=401858481&section=bogus"), { id: "401858481", section: "team" });
+  assert.deepEqual(parseGameRoute("?event=401858481&section=SCORING"), { id: "401858481", section: "team" });
+  assert.deepEqual(parseGameRoute("?event=401858481&section=__proto__"), { id: "401858481", section: "team" });
   assert.equal(parseGameRoute(null), null);
 });
 
