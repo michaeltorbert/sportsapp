@@ -3,11 +3,12 @@ import "./globals.css";
 import { EARLY_POPSTATE_SCRIPT } from "@/lib/game-route";
 
 export const metadata: Metadata = {
-  title: "Saturday Signal | College Football Watchlist",
+  title: "Saturday Signal Scores | College Football Watchlist",
   description: "Your live college football watchlist. ACC games, one-score games, and Top 25 upset watch, refreshed every 30 seconds.",
-  applicationName: "Saturday Signal",
+  // Install name only (#112), matching the manifest; the in-app wordmark stays "Saturday Signal".
+  applicationName: "Saturday Signal Scores",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Saturday Signal", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Saturday Signal Scores", statusBarStyle: "black-translucent" },
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
