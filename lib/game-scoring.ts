@@ -81,15 +81,16 @@ function playsOf(value: unknown, teamIds: [string, string], totals: [Points, Poi
   }
   // Source order is kept (equal OT 0:00 clocks included); a known period or clock that runs
   // backwards contradicts it, and no order is invented in its place.
-  type Anchor = { period: number; clock: number | null };
-  let last: Anchor | null = null;
+  let lastPeriod: number | null = null, lastClock: number | null = null;
   for (const play of items) {
     if (play.period === null) continue;
-    const clock = play.clock === null ? null : seconds(play.clock), previous: Anchor | null = last;
-    const same = previous !== null && play.period === previous.period;
-    if (previous && (play.period < previous.period || (same && clock !== null && previous.clock !== null && clock > previous.clock))) return { unavailable: "order" };
-    // A missing clock keeps the period's last known clock for the next comparison.
-    last = { period: play.period, clock: previous && same && clock === null ? previous.clock : clock };
+    const period: number = play.period, clock: number | null = play.clock === null ? null : seconds(play.clock);
+    const same: boolean = lastPeriod !== null && period === lastPeriod;
+    if (lastPeriod !== null && period < lastPeriod) return { unavailable: "order" };
+    if (same && clock !== null && lastClock !== null && clock > lastClock) return { unavailable: "order" };
+    // A new period starts from its own clock; within a period a missing clock keeps the last known one.
+    if (!same || clock !== null) lastClock = clock;
+    lastPeriod = period;
   }
   const plays: ScoringPlays = { items };
   if (omitted) plays.omitted = omitted;
