@@ -1,6 +1,6 @@
 # Install name and iPhone Search
 
-Issue [#112](https://github.com/michaeltorbert/sportsapp/issues/112) asks for the installed app to be findable by typing "scores" (or "sports") in iPhone Search, and whether the app can offer Search keywords beyond its title. The approved install name is **Saturday Signal — Sports Scores & Stats**.
+Issue [#112](https://github.com/michaeltorbert/sportsapp/issues/112) asks for the installed app to be findable by typing "scores" (or "sports") in iPhone Search, and whether the app can offer Search keywords beyond its title. The approved install name is **Saturday Signal — Sports Scores & Stats**. This issue remains open for existing-install behavior and physical-iPhone confirmation.
 
 ## What the app supplies
 
@@ -27,9 +27,9 @@ None of these say whether an app already on the Home Screen picks up a changed n
 
 No extra keywords are added. The reviewed sources describe no field a web app can use to give iPhone Search words beyond its name. Core Spotlight, Apple's indexing API, is a native app framework; the reviewed sources describe no way for a web app to use it, and this app doesn't. The app doesn't add `<meta name="keywords">` or other keyword fields, and nothing here promises that Search uses any text other than what is observed below.
 
-## Simulator observations
+## Historical 1.16.1 Simulator observations
 
-Observed on October 16, 2026, on a newly created iPhone 18 Pro Simulator running iOS 27.0, not on a physical iPhone, using local HTTP origins. The tests were run and recorded through the native Simulator interface. The records and screenshots are kept outside the repository, in `output/issue-112-search-20261016/native/` next to the checkout. These results describe that Simulator only. They don't show how every iPhone, iOS version or production install behaves.
+Observed on October 16, 2026, on a newly created iPhone 18 Pro Simulator running iOS 27.0, not on a physical iPhone, using local HTTP origins. The tests were run and recorded through the native Simulator interface. The records and screenshots are kept in the workspace output directory outside the checkout, at `output/issue-112-search-20261016/native/`. These results describe that Simulator only. They don't show how every iPhone, iOS version or production install behaves.
 
 **Existing install** (`http://127.0.0.1:4198`; added from 1.16.0 at `d72b941`, then updated to the 1.16.1 candidate at `c8ed38a`):
 
@@ -55,12 +55,22 @@ Observed on October 16, 2026, on a newly created iPhone 18 Pro Simulator running
 
 No apps were removed, re-added at the same origin or reset, and no subscriptions were changed. The fresh install is a separate test app on its own origin.
 
+## 1.16.2 candidate Simulator observations
+
+The exact candidate commit `ebb8620129929ba0a3ad9cb7ddef10c0970a576f` was served from a fresh local origin (`http://127.0.0.1:4200`) on October 16, 2026, in the dedicated iPhone 18 Pro Simulator running iOS 27.0. Through native Safari, Add to Home Screen suggested the complete **Saturday Signal — Sports Scores & Stats** name with Open as Web App on. It was added without editing the name, and the installed Home Screen item's accessibility name matched the full name; the icon label itself was visually shortened by iOS.
+
+Native Search showed the installed app for each of **sports**, **scores**, and **stats**, as an app result distinct from website and App Store results. For each search, tapping the result opened the full-name app in standalone mode with version 1.16.2 visible and the existing in-app brand and layout. The `scores` search displayed the new app alongside the earlier **Saturday Signal Scores** app. The native screenshots and observation record are stored outside the repository in `output/issue-112-keywords-20261016/native/`.
+
+The first Home Screen launch also produced a white standalone screen. The local server returned the expected candidate successfully, and subsequent launches from all three Search results worked on the same unchanged candidate. The cause of the first-launch failure is unknown; the later successes do not explain or erase it.
+
+This is Simulator evidence for a fresh local-origin install. It does not establish behavior on a physical iPhone or production origin, automatic renaming of an existing install, or preference and alert carryover after deleting and re-adding an app. No existing app was removed or re-added, and no push or subscription operation was performed.
+
 ## Status
 
-The 1.16.1 observations above are historical evidence for the shorter name only. The longer 1.16.2 candidate name has not yet been checked in the Simulator: its complete Add to Home Screen suggestion, searches for "sports", "scores" and "stats", and tap launch are pending. Physical-iPhone and production-origin behavior are also unverified.
+The 1.16.2 candidate's exact Add suggestion, installed accessibility name, Search results for all three terms, and standalone launches were observed on the Simulator above. Physical-iPhone and production-origin behavior remain unverified. The unexplained white first Home Screen launch remains an observed failure with unknown cause.
 
 The user authorized the bounded 1.16.2 naming release and accepted that existing installs may keep their old name. No automatic migration, safe rename, or delete-and-re-add step is established; preference and alert carryover after re-adding remains unverified. Issue #112 stays open for the current-install benefit and safe-step questions. The change does not recommend deletion, reinstall, duplicate installation or reset.
 
 ## What to tell users
 
-No user step is established. On the Simulator, an app already on the Home Screen kept its old name after updating, so this release by itself may not rename an existing install; whether it does on a real iPhone is unverified. Don't advise removing and re-adding the app, adding a second copy, or resetting anything; the effect of those on saved preferences and alerts is unverified. Update this section only with steps that have been observed to be safe.
+On the Simulator, a fresh install used the full new name and Search found it with "sports", "scores" and "stats". An existing app kept its old name after the earlier 1.16.1 update, so an update may not rename an existing install; behavior on a physical iPhone is unverified. No safe delete-and-re-add step is established, and preference or alert carryover after re-adding has not been tested. Do not remove or reset an existing app to change its name.
