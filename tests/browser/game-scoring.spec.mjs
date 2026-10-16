@@ -30,9 +30,20 @@ function serve(harness, { legacy = false } = {}) {
     return route.fulfill({ status: 200, contentType: "application/json", headers: { "Cache-Control": "no-store" }, body: JSON.stringify(body) });
   };
 }
+// Genuine team identities from the scoring fixtures' own headers. The harness event() supplies
+// generic labels (AWAY/HOME); scores, status, rank and conference stay the synthetic scoreboard's.
+const HEADERS = { [LIVE.id]: read("scoring-live").header, [OT.id]: read("scoring-final-ot").header, [PREGAME.id]: read("scoring-pregame").header };
 function matchup({ id, teams }, options) {
-  const e = event(id, options);
-  e.competitions[0].competitors.forEach((c, i) => { c.id = teams[i]; c.team.id = teams[i]; });
+  const e = event(id, options), header = HEADERS[id];
+  e.competitions[0].competitors.forEach((c, i) => {
+    c.id = teams[i]; c.team.id = teams[i];
+    const source = header?.competitions[0].competitors.find(s => s.homeAway === c.homeAway);
+    if (!source) return;
+    // The fixture's home/away team must be the one this side was given, never matched by position alone.
+    if (source.team.id !== teams[i]) throw new Error(`Fixture ${id} ${c.homeAway} team ${source.team.id} is not ${teams[i]}`);
+    c.team.abbreviation = source.team.abbreviation;
+    c.team.shortDisplayName = source.team.displayName.replace(/\s+\S+$/, "");
+  });
   return e;
 }
 const screen = page => page.locator(".game-screen");
