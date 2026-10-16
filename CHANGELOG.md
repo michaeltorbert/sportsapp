@@ -5,7 +5,7 @@
 - The install name is now Saturday Signal Scores in the web app manifest (`name` and `short_name`), the `application-name` and `apple-mobile-web-app-title` metadata, and the page title, `Saturday Signal Scores | College Football Watchlist`, on Scores and the Guide (#112). The in-app wordmark, layout, icons, colors and descriptions are unchanged.
 - The manifest `id`, `start_url` and `scope` stay `/`, with the same origin, standalone display and status bar style. Storage, service worker, alert and subscription code is unchanged.
 - No extra Search keywords are added. The reviewed web and Apple sources describe no web-app field for them; see `docs/install-search.md`.
-- Not yet confirmed on iPhone: the suggested install name, whether an existing Home Screen app shows the new name, and whether Search finds it by “scores”.
+- On one iOS 27 Simulator, an app installed from 1.16.0 updated in place to 1.16.1 through Refresh and kept its saved Week and Hide finals choices. Its Home Screen label stayed Saturday Signal, and Add to Home Screen from the same address still suggested Saturday Signal. Search results there were inconclusive. Not confirmed on a physical iPhone. A fresh install's suggested name, Search by “scores” and a safe way to rename an existing app are unverified (`docs/install-search.md`).
 
 ## 1.16.0 · 2026-10-15
 
