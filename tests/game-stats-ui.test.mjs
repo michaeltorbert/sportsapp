@@ -372,6 +372,17 @@ test("SYNTHETIC partial scoring: unequal quarters get the whole-table warning, u
   assert.match(html, /— means this value is unavailable\. Supplied zeros remain zero\./);
   // The unmatched copy is not attributed to either team: its text appears once.
   assert.equal(plays(html).filter(p => p.includes("pass to R. Wingo")).length, 1);
+  // The shared legend follows any rendered dash: one missing play field with a complete table is enough;
+  // an unavailable list with a complete table shows none. Every unavailable reason except order reads the same.
+  const live = scoringCard(composed("live", "live"), { state: "live" }), complete = live.stats.scoring;
+  const oneMissing = { ...complete, plays: { items: complete.plays.items.map((p, i) => i === 2 ? { ...p, clock: null } : p) } };
+  assert.match(render(live.g, state("started", { ...live.stats, scoring: oneMissing }), { section: "scoring" }), /— means this value is unavailable/);
+  for (const reason of ["too-many", "missing", "malformed"]) {
+    const out = render(live.g, state("started", { ...live.stats, scoring: { ...complete, plays: { unavailable: reason } } }), { section: "scoring" });
+    assert.match(out, /Scoring plays are unavailable for this game\./, reason);
+    assert.doesNotMatch(out, /— means this value is unavailable|too many/, reason);
+  }
+  assert.match(render(live.g, state("started", { ...live.stats, scoring: { ...complete, plays: { unavailable: "order" } } }), { section: "scoring" }), /source’s order couldn’t be confirmed/);
 });
 
 test("a remounted screen's first paint shows the remembered failed-refresh warning and backoff wait", async () => {

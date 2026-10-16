@@ -11,7 +11,10 @@ const value = (v: number | null) => v === null ? missing() : v;
 export function ScoringSummary({ game, scoring }: { game: Game; scoring: Shown }) {
   const [away, home] = game.teams, teams = [away, home], label = (i: number) => teams[i].abbreviation || teams[i].name;
   const { periods, plays } = scoring;
-  let dash = false;
+  // The shared legend appears when any rendered cell or play field shows a dash.
+  const tableDash = !("unavailable" in periods) && periods.away.length > 0 && [periods.away, periods.home].some((cells, i) => periods.totals[i] === null || cells.includes(null));
+  const playDash = !("unavailable" in plays) && plays.items.some(play => play.period === null || play.clock === null || play.away === null || play.home === null || play.team === null);
+  const dash = tableDash || playDash;
 
   let table: ReactNode;
   if ("unavailable" in periods) table = <p className="stats-footnote">Scores by quarter are unavailable for this game.</p>;
@@ -19,7 +22,6 @@ export function ScoringSummary({ game, scoring }: { game: Game; scoring: Shown }
   else {
     const labels = periods.away.map((_, i) => i + 1);
     const rows = [periods.away, periods.home].map((cells, i) => {
-      if (periods.totals[i] === null || cells.includes(null)) dash = true;
       return <tr key={i}>
         <th scope="row" className="scoring-team"><span>{label(i)}</span><small>{i ? "home" : "away"}</small><span className="sr-only"> · {teams[i].name}</span></th>
         {cells.map((cell, p) => <td key={p}>{value(cell)}</td>)}
@@ -40,7 +42,7 @@ export function ScoringSummary({ game, scoring }: { game: Game; scoring: Shown }
   }
 
   let list: ReactNode;
-  if ("unavailable" in plays) list = <p className="stats-footnote">{plays.unavailable === "too-many" ? "There are too many scoring plays to show here." : plays.unavailable === "order" ? "Scoring plays can’t be shown because the source’s order couldn’t be confirmed." : "Scoring plays aren’t available for this game."}</p>;
+  if ("unavailable" in plays) list = <p className="stats-footnote">{plays.unavailable === "order" ? "Scoring plays can’t be shown because the source’s order couldn’t be confirmed." : "Scoring plays are unavailable for this game."}</p>;
   else {
     const omitted = plays.omitted ?? 0;
     list = <>
@@ -48,7 +50,6 @@ export function ScoringSummary({ game, scoring }: { game: Game; scoring: Shown }
       {plays.items.length > 0 && <>
         <p className="legend">Score after each play: {label(0)}–{label(1)}</p>
         <ol className="scoring-plays" aria-labelledby="scoring-plays-h">{plays.items.map((play, i) => {
-          if (play.period === null || play.clock === null || play.away === null || play.home === null || play.team === null) dash = true;
           const team = play.team === null ? null : teams[play.team];
           return <li className="scoring-play" key={i}>
             <span className="scoring-when"><span>{play.period === null ? missing("Period unavailable") : <abbr title={periodName(play.period)}>{periodLabel(play.period)}</abbr>}</span><span>{play.clock ?? missing("Clock unavailable")}</span></span>

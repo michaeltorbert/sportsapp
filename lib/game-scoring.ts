@@ -81,14 +81,15 @@ function playsOf(value: unknown, teamIds: [string, string], totals: [Points, Poi
   }
   // Source order is kept (equal OT 0:00 clocks included); a known period or clock that runs
   // backwards contradicts it, and no order is invented in its place.
-  let last: { period: number; clock: number | null } | null = null;
+  type Anchor = { period: number; clock: number | null };
+  let last: Anchor | null = null;
   for (const play of items) {
     if (play.period === null) continue;
-    const clock = play.clock === null ? null : seconds(play.clock);
-    const same = last !== null && play.period === last.period;
-    if (last && (play.period < last.period || (same && clock !== null && last.clock !== null && clock > last.clock))) return { unavailable: "order" };
+    const clock = play.clock === null ? null : seconds(play.clock), previous: Anchor | null = last;
+    const same = previous !== null && play.period === previous.period;
+    if (previous && (play.period < previous.period || (same && clock !== null && previous.clock !== null && clock > previous.clock))) return { unavailable: "order" };
     // A missing clock keeps the period's last known clock for the next comparison.
-    last = { period: play.period, clock: same && clock === null ? last!.clock : clock };
+    last = { period: play.period, clock: previous && same && clock === null ? previous.clock : clock };
   }
   const plays: ScoringPlays = { items };
   if (omitted) plays.omitted = omitted;
