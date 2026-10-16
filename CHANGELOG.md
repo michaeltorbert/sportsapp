@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.16.1 · 2026-10-16
+
+- The install name is now Saturday Signal Scores in the web app manifest (`name` and `short_name`), the `application-name` and `apple-mobile-web-app-title` metadata, and the page title, `Saturday Signal Scores | College Football Watchlist`, on Scores and the Guide (#112). The in-app wordmark, layout, icons, colors and descriptions are unchanged.
+- The manifest `id`, `start_url` and `scope` stay `/`, with the same origin, standalone display and status bar style. Storage, service worker, alert and subscription code is unchanged.
+- No extra Search keywords are added. The reviewed web and Apple sources describe no web-app field for them; see `docs/install-search.md`.
+- On a simulated iPhone, adding the app fresh suggested Saturday Signal Scores, and Search found it by “scores”. An app already on the Home Screen updated and kept its saved choices, but kept the name Saturday Signal; no safe way to give it the new name is established. “Sports” didn't find either app there. Not confirmed on a physical iPhone; details and limits are in `docs/install-search.md`.
+
 ## 1.16.0 · 2026-10-15
 
 - The game screen has a third section, Scoring, between Team stats and Player stats; Team stats stays the default (#149). Scoring shows the score by quarter for the periods ESPN supplies, with overtime as OT, 2OT and so on and the source's total. Below that are ESPN's scoring plays, in its order, each with the quarter, clock, team, its short public description and the away–home score after the play. Overtime plays at 0:00 keep their order.

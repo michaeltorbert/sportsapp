@@ -2,11 +2,61 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 const packageVersion = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+const installName = "Saturday Signal Scores";
+const meta = (name, content) => new RegExp(`<meta(?=[^>]*name="${name}")(?=[^>]*content="${content}")[^>]*>`);
+
+// Install metadata (#112) on Scores and Guide, rendered or packaged. Only the install name changes; the
+// remaining installed-app chrome is pinned as it was. None of this shows how iOS names an existing
+// Home Screen install or what native Search matches.
+function assertInstallMetadata(html, route) {
+  assert.equal(html.match(/<title>([^<]*)<\/title>/)?.[1], `${installName} | College Football Watchlist`, route);
+  assert.match(html, meta("application-name", installName), route);
+  assert.match(html, meta("apple-mobile-web-app-title", installName), route);
+  assert.equal(html.match(/name="(?:application-name|apple-mobile-web-app-title)"/g)?.length, 2, `${route} has one of each name element`);
+  assert.match(html, meta("apple-mobile-web-app-status-bar-style", "black-translucent"), route);
+  assert.match(html, meta("mobile-web-app-capable", "yes"), route);
+  assert.match(html, meta("theme-color", "#0a0e16"), route);
+  const viewports = html.match(/<meta[^>]*name="viewport"[^>]*>/g) ?? [];
+  assert.equal(viewports.length, 1, `${route} has one viewport element`);
+  assert.match(viewports[0], /width=device-width/); assert.match(viewports[0], /viewport-fit=cover/);
+  for (const link of ['rel="manifest" href="/manifest.webmanifest"', 'rel="apple-touch-icon" href="/apple-touch-icon.png"', 'rel="icon" href="/favicon.svg"']) {
+    assert.ok(html.includes(`<link ${link}`), `${route}: ${link}`);
+  }
+  assert.match(html, /aria-label="Saturday Signal home"/, `${route} keeps the in-app wordmark`);
+}
+
+test("serves the install name with unchanged manifest identity, colors and icons", () => {
+  const source = readFileSync(new URL("../public/manifest.webmanifest", import.meta.url), "utf8");
+  assert.equal(readFileSync(new URL("../dist/client/manifest.webmanifest", import.meta.url), "utf8"), source, "compiled asset matches source");
+  assert.deepEqual(JSON.parse(source), {
+    id: "/", name: installName, short_name: installName,
+    description: "ACC scores, one-score games, and Top 25 upset watch.",
+    start_url: "/", scope: "/", display: "standalone", background_color: "#0a0e16", theme_color: "#0a0e16",
+    icons: [
+      { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+    ],
+  });
+});
+
+test("packages Scores and Guide with the install metadata", () => {
+  for (const file of ["index.html", "guide.html"]) {
+    const html = readFileSync(new URL(`../dist/client/${file}`, import.meta.url), "utf8");
+    assert.ok(html.startsWith(`<!-- saturday-signal-static ${packageVersion} `), `${file} is the current packaged build`);
+    assertInstallMetadata(html, file);
+  }
+});
 
 test("renders the mobile scoreboard shell and app metadata", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
+
+  const guide = await worker.fetch(new Request("http://localhost/guide", { headers: { accept: "text/html" } }), { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } }, { waitUntil() {}, passThroughOnException() {} });
+  assert.equal(guide.status, 200);
+  const guideHtml = await guide.text();
+  assert.match(guideHtml, /All times Eastern/);
+  assertInstallMetadata(guideHtml, "/guide");
 
   const response = await worker.fetch(
     new Request("http://localhost/", {
@@ -29,15 +79,8 @@ test("renders the mobile scoreboard shell and app metadata", async () => {
     /^text\/html\b/i,
   );
   const html = await response.text();
-  assert.match(html, /Saturday Signal/);
-  assert.match(html, /viewport-fit=cover/);
-  // Scope contract through 1.13.5 (#116): the layout changes leave installed-app chrome metadata as it was.
-  // This does not show whether a metadata change would reach existing Home Screen installs.
-  const viewports = html.match(/<meta[^>]*name="viewport"[^>]*>/g) ?? [];
-  assert.equal(viewports.length, 1, "one viewport element");
-  assert.match(viewports[0], /width=device-width/); assert.match(viewports[0], /viewport-fit=cover/);
-  assert.match(html, /<meta(?=[^>]*name="apple-mobile-web-app-status-bar-style")(?=[^>]*content="black-translucent")[^>]*>/);
-  assert.match(html, /manifest.webmanifest/);
+  // Scope contract through 1.13.5 (#116), extended by #112: only the install name changed.
+  assertInstallMetadata(html, "/");
   assert.match(html, /Your watchlist/);
   assert.match(html, /Connecting to ESPN/);
   assert.doesNotMatch(html, /Starter Project/);
