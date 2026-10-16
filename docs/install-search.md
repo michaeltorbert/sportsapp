@@ -29,26 +29,38 @@ No extra keywords are added. The reviewed sources describe no field a web app ca
 
 ## Simulator observations
 
-Observed on October 16, 2026, on a newly created iPhone 18 Pro Simulator running iOS 27.0, not on a physical iPhone. Both builds were served from the same local origin, `http://127.0.0.1:4198`: first 1.16.0 (`d72b941`), then the 1.16.1 candidate (`c8ed38a`). Screenshots are kept outside the repository, in `output/issue-112-search-20261016/native/` next to the checkout. These results describe that Simulator only. They don't show how every iPhone, iOS version or production install behaves.
+Observed on October 16, 2026, on a newly created iPhone 18 Pro Simulator running iOS 27.0, not on a physical iPhone, using local HTTP origins. The tests were run and recorded through the native Simulator interface. The records and screenshots are kept outside the repository, in `output/issue-112-search-20261016/native/` next to the checkout. These results describe that Simulator only. They don't show how every iPhone, iOS version or production install behaves.
 
-**Existing install (added from 1.16.0, then updated to 1.16.1):**
+**Existing install** (`http://127.0.0.1:4198`; added from 1.16.0 at `d72b941`, then updated to the 1.16.1 candidate at `c8ed38a`):
 
 - With 1.16.0, Add to Home Screen suggested **Saturday Signal**, with Open as Web App on. The icon was installed and opened standalone. Week and Hide finals were then saved through the normal controls.
 - After the server switched to 1.16.1, the app's normal Refresh updated it: the footer showed 1.16.1, and Week and Hide finals were still set. (Day was chosen afterwards only to read the footer.)
 - The Home Screen label stayed **Saturday Signal**.
 - The icon's context menu offered Edit Home Screen, Share Bookmark and Delete Bookmark, with no rename action. Other system screens weren't checked.
 - In Safari, the candidate's page title read Saturday Signal Scores. Add to Home Screen from that same origin still suggested **Saturday Signal**. The cause wasn't determined. One possibility is that iOS keeps earlier install metadata for the origin, but that wasn't tested.
+- Shortly after installing 1.16.0, Search for "scores" or "Saturday Signal" showed no installed app; no indexing interval was recorded, so those early results were inconclusive. About 14 hours after that install, Search for "signal" listed this app. Search for "scores" listed only the fresh install below, not this one.
 
-**Search:** with the 1.16.0 install, searching "scores" or "Saturday Signal" showed no installed web app result. The full "Saturday Signal" search showed only a Safari visited page as Top Hit. As a control, Search did show native apps. No established indexing interval was recorded, and the origin was an isolated local address, so these negative results are inconclusive. They don't show how Search treats installed web apps in general. Search wasn't repeated after the 1.16.1 update.
+**Fresh install** (`http://127.0.0.1:4199`, an origin with no earlier install; 1.16.1 candidate at `49da100`):
 
-**Not exercised (unverified):**
+- Add to Home Screen suggested **Saturday Signal Scores**, with Open as Web App on. It was added without editing the name, and the Home Screen icon's full accessibility name was Saturday Signal Scores. The original Saturday Signal icon from 4198 stayed in place.
+- The icon opened standalone, without Safari controls, with the 1.16.1 footer. The scores feed showed Offline there; this run didn't test the feed, which is covered by separate source and browser checks.
+- About a minute after adding and opening it, Search for "scores" showed **Saturday Signal Scores** as an app-icon Top Hit, separate from Safari website results. Tapping it opened the standalone 1.16.1 app.
+- Search for "signal" listed both apps, Saturday Signal and Saturday Signal Scores.
+- Search for "sports" showed neither app, only Apple Sports in the App Store and web results. "Sports" isn't part of the install name and isn't promised.
 
-- A fresh install of 1.16.1 from an origin with no earlier install: the suggested name, how it looks on the Home Screen, and Search for "scores", "signal" and "sports". The candidate was healthy on a second origin, `http://127.0.0.1:4199`, but the native steps couldn't be run because the Mac was locked. This was a test limitation, not a product failure.
-- Search after an indexing wait, on any build.
+**Not tested:**
+
 - Any physical iPhone, the production origin, and push subscriptions or delivery.
+- Re-adding at the existing install's origin, renaming the existing install, or carrying its storage over. A second Add to Home Screen at 4198 was considered and declined: it would test a duplicate install, not a safe step for existing users.
 
-No apps were removed, re-added or duplicated, and no storage was reset.
+No apps were removed, re-added at the same origin or reset, and no subscriptions were changed. The fresh install is a separate test app on its own origin.
+
+## Status
+
+On this Simulator, a fresh install gets the new name and is found by "scores". An existing install keeps its old name after updating, and no safe step to give it the new name has been established. That leaves R1 (benefit to the user's current install) and R5 (a safe step for existing users) unverified.
+
+A narrowed 1.16.1 delivery has been proposed but **not accepted by the user**. It would change only the supported naming metadata and keep issue #112 open. It would add no automatic migration or workaround for existing installs, and recommend no deletion, reinstall, duplicate or reset. It needs a fresh independent review of the exact candidate and this exception, and explicit user acceptance, before any merge, tag or deployment. Nothing here means the issue is complete or the release is approved.
 
 ## What to tell users
 
-No user step is established yet. In the Simulator, an existing install kept its old label after updating, so this release by itself may not rename an app already on someone's Home Screen; whether it does on a real iPhone is unverified. Don't advise removing and re-adding the app, adding a second copy, or resetting anything; the effect of re-adding on saved preferences and alerts is unverified. Update this section only with steps that have been observed to be safe.
+No user step is established. On the Simulator, an app already on the Home Screen kept its old name after updating, so this release by itself may not rename an existing install; whether it does on a real iPhone is unverified. Don't advise removing and re-adding the app, adding a second copy, or resetting anything; the effect of those on saved preferences and alerts is unverified. Update this section only with steps that have been observed to be safe.
