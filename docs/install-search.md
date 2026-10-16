@@ -1,17 +1,17 @@
 # Install name and iPhone Search
 
-Issue [#112](https://github.com/michaeltorbert/sportsapp/issues/112) asks for the installed app to be findable by typing "scores" (or "sports") in iPhone Search, and whether the app can offer Search keywords beyond its title. The user approved the install name **Saturday Signal Scores**.
+Issue [#112](https://github.com/michaeltorbert/sportsapp/issues/112) asks for the installed app to be findable by typing "scores" (or "sports") in iPhone Search, and whether the app can offer Search keywords beyond its title. The approved install name is **Saturday Signal — Sports Scores & Stats**.
 
 ## What the app supplies
 
-From 1.16.1, every page (Scores and the Guide, rendered or packaged) carries the same install name in each field the reviewed sources describe:
+The 1.16.2 candidate supplies the approved install name on every page (Scores and the Guide, rendered or packaged) in each field the reviewed sources describe:
 
 | Field | Value |
 |---|---|
-| Manifest `name` and `short_name` | `Saturday Signal Scores` |
-| `<meta name="apple-mobile-web-app-title">` | `Saturday Signal Scores` |
-| `<meta name="application-name">` | `Saturday Signal Scores` |
-| Document title | `Saturday Signal Scores \| College Football Watchlist` |
+| Manifest `name` and `short_name` | `Saturday Signal — Sports Scores & Stats` |
+| `<meta name="apple-mobile-web-app-title">` | `Saturday Signal — Sports Scores & Stats` |
+| `<meta name="application-name">` | `Saturday Signal — Sports Scores & Stats` |
+| Document title | `Saturday Signal — Sports Scores & Stats \| College Football Watchlist` |
 
 Everything else about the installation stays as it was: manifest `id`, `start_url` and `scope` are `/` on the same origin, with standalone display, the same colors, icons, `black-translucent` status bar and viewport. The in-app wordmark, layout and alert content still say Saturday Signal. Storage, service worker, alert and subscription code is unchanged. `tests/rendered-html.test.mjs` checks these fields on the built and packaged pages and the compiled manifest.
 
@@ -57,9 +57,9 @@ No apps were removed, re-added at the same origin or reset, and no subscriptions
 
 ## Status
 
-On this Simulator, a fresh install gets the new name and is found by "scores". An existing install keeps its old name after updating, and no safe step to give it the new name has been established. That leaves R1 (benefit to the user's current install) and R5 (a safe step for existing users) unverified.
+The 1.16.1 observations above are historical evidence for the shorter name only. The longer 1.16.2 candidate name has not yet been checked in the Simulator: its complete Add to Home Screen suggestion, searches for "sports", "scores" and "stats", and tap launch are pending. Physical-iPhone and production-origin behavior are also unverified.
 
-A narrowed 1.16.1 delivery has been proposed but **not accepted by the user**. It would change only the supported naming metadata and keep issue #112 open. It would add no automatic migration or workaround for existing installs, and recommend no deletion, reinstall, duplicate or reset. It needs a fresh independent review of the exact candidate and this exception, and explicit user acceptance, before any merge, tag or deployment. Nothing here means the issue is complete or the release is approved.
+The user authorized the bounded 1.16.2 naming release and accepted that existing installs may keep their old name. No automatic migration, safe rename, or delete-and-re-add step is established; preference and alert carryover after re-adding remains unverified. Issue #112 stays open for the current-install benefit and safe-step questions. The change does not recommend deletion, reinstall, duplicate installation or reset.
 
 ## What to tell users
 
