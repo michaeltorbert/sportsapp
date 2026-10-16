@@ -2,16 +2,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 const packageVersion = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
-const installName = "Saturday Signal Scores";
-const meta = (name, content) => new RegExp(`<meta(?=[^>]*name="${name}")(?=[^>]*content="${content}")[^>]*>`);
+const installName = "Saturday Signal — Sports Scores & Stats";
+const escapeHtml = (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#x27;");
+const decodeHtml = (value) => value.replaceAll("&amp;", "&").replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&quot;", '"').replaceAll("&#x27;", "'");
+const meta = (name, content) => new RegExp(`<meta(?=[^>]*name="${name}")(?=[^>]*content="([^"]*)")${content === undefined ? "" : `(?=[^>]*content="${escapeHtml(content)}")`}[^>]*>`);
+const metaValue = (html, name) => decodeHtml(html.match(meta(name))?.[1] ?? "");
 
 // Install metadata (#112) on Scores and Guide, rendered or packaged. Only the install name changes; the
 // remaining installed-app chrome is pinned as it was. None of this shows how iOS names an existing
 // Home Screen install or what native Search matches.
 function assertInstallMetadata(html, route) {
-  assert.equal(html.match(/<title>([^<]*)<\/title>/)?.[1], `${installName} | College Football Watchlist`, route);
-  assert.match(html, meta("application-name", installName), route);
-  assert.match(html, meta("apple-mobile-web-app-title", installName), route);
+  const rawTitle = html.match(/<title>([^<]*)<\/title>/)?.[1];
+  assert.equal(rawTitle, `${escapeHtml(installName)} | College Football Watchlist`, route);
+  assert.equal(decodeHtml(rawTitle ?? ""), `${installName} | College Football Watchlist`, route);
+  for (const name of ["application-name", "apple-mobile-web-app-title"]) {
+    assert.match(html, meta(name), route);
+    assert.equal(metaValue(html, name), installName, `${route} ${name} has the exact semantic name`);
+    assert.match(html, new RegExp(`name="${name}" content="${escapeHtml(installName)}"`), route);
+  }
   assert.equal(html.match(/name="(?:application-name|apple-mobile-web-app-title)"/g)?.length, 2, `${route} has one of each name element`);
   assert.match(html, meta("apple-mobile-web-app-status-bar-style", "black-translucent"), route);
   assert.match(html, meta("mobile-web-app-capable", "yes"), route);

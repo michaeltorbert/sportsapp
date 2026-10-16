@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.16.2 · 2026-10-16
+
+- The suggested install name is Saturday Signal — Sports Scores & Stats in the web app manifest (`name` and `short_name`), the `application-name` and `apple-mobile-web-app-title` metadata, and the page title, Saturday Signal — Sports Scores & Stats | College Football Watchlist, on Scores and the Guide (#112). The in-app wordmark, layout, icons, colors and descriptions are unchanged.
+- The manifest `id`, `start_url` and `scope` stay `/`, with the same origin, standalone display and status bar style. Storage, service worker, alert and subscription code is unchanged.
+- In a fresh local-origin iPhone 18 Pro Simulator install on iOS 27.0, Add to Home Screen suggested the full name; Search found the installed app for “sports”, “scores” and “stats”, and each result opened it in standalone mode. A first Home Screen launch showed a white screen; later launches succeeded on the same candidate, and the cause is unknown. Existing-install renaming, physical-iPhone behavior, and preference or alert carryover after re-adding remain unverified. Issue #112 remains open; details are in `docs/install-search.md`.
+
 ## 1.16.1 · 2026-10-16
 
 - The install name is now Saturday Signal Scores in the web app manifest (`name` and `short_name`), the `application-name` and `apple-mobile-web-app-title` metadata, and the page title, `Saturday Signal Scores | College Football Watchlist`, on Scores and the Guide (#112). The in-app wordmark, layout, icons, colors and descriptions are unchanged.
