@@ -142,7 +142,7 @@ test("Scoring: genuine Final/OT via a direct link, current pregame via its direc
   serve(harness, { legacy: true });
   await page.goto(`/?event=${OT.id}&section=scoring&date=2026-09-05`);
   await expect(panel(page).getByText("Scoring unavailable")).toBeVisible();
-  await expect(panel(page).getByText("Scoring was not supplied for this game. Team stats and Player stats remain available.")).toBeVisible();
+  await expect(panel(page).getByText("Scoring isn’t available for this game. Team stats and Player stats remain available.")).toBeVisible();
 });
 
 test("hiding a Duke game while Scoring is open leaves only the generic screen and stops its stats work", async ({ page, harness }) => {

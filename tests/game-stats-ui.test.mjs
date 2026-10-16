@@ -326,7 +326,7 @@ test("Scoring section: pregame waits for kickoff; a started source without scori
   const { g, stats } = card("live", { state: "live" });
   assert.equal(stats.scoring, undefined);
   const legacy = render(g, state("started", stats), { section: "scoring" });
-  assert.match(legacy, /Scoring unavailable/); assert.match(legacy, /Scoring was not supplied for this game\. Team stats and Player stats remain available\./);
+  assert.match(legacy, /Scoring unavailable/); assert.match(legacy, /Scoring isn’t available for this game\. Team stats and Player stats remain available\./);
   assert.match(legacy, /Source reports 3:48 - 3rd/);
   // The scoreboard has started but the source still reports pregame: catching up, not "no scoring".
   const behind = card("pregame", { state: "live", started: true });

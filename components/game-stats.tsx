@@ -184,7 +184,7 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
             : <>
               {status}
               {scored?.mode === "catching-up" && <Notice title="Scoring catching up" live>{scored.reason === "season-only" ? "Scoring isn’t available yet. The source is still reporting pregame information." : "The scoring source has not caught up with the current game status yet."}</Notice>}
-              {scored?.mode === "unavailable" && <Notice title="Scoring unavailable">{scored.reason === "too-large" ? "The scoring summary is too large to show here. Team stats and Player stats remain available." : "Scoring was not supplied for this game. Team stats and Player stats remain available."}</Notice>}
+              {scored?.mode === "unavailable" && <Notice title="Scoring unavailable">{scored.reason === "too-large" ? "The scoring summary is too large to show here. Team stats and Player stats remain available." : "Scoring isn’t available for this game. Team stats and Player stats remain available."}</Notice>}
               {scored?.mode === "scoring" && <ScoringSummary game={game} scoring={scored.scoring} />}
             </>}
         </>}
