@@ -104,9 +104,15 @@ export function AppPanelContent({ title, description, bodyLabel, bodyClassName, 
   // A heading taller than its cap (very large text) scrolls on its own. Only then is it a named,
   // focusable region, so the keyboard can reach and scroll it. Rechecked whenever the heading or
   // its title and description resize: rotation, viewport changes, text size or content.
+  // A focused heading that comes to fit loses its tab stop, so focus first moves to Close, its next
+  // stop; otherwise the browser drops focus outside the dialog. Focus anywhere else is left alone.
   const heading = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
-    const observer = new ResizeObserver(() => setHeadingScrolls(node.scrollHeight > node.clientHeight + 1));
+    const observer = new ResizeObserver(() => {
+      const scrolls = node.scrollHeight > node.clientHeight + 1;
+      if (!scrolls && document.activeElement === node) close.current?.focus({ preventScroll: true });
+      setHeadingScrolls(scrolls);
+    });
     observer.observe(node); for (const child of node.children) observer.observe(child);
     const release = leaveEdgeTouchToBrowser(node);
     return () => { observer.disconnect(); release(); };

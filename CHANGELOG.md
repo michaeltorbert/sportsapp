@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.16.5 · 2026-10-17
+
+- In Help, Alerts and Settings, when a focused large-text heading comes to fit because its text gets smaller, focus moves to Close before the heading's tab stop is removed, instead of falling to the page body (#126). Keyboard Close, body scrolling, End, Escape and reduced motion are unchanged, as is the heading's appearance; no new scroll cue is added.
+- The local Worker runtime check now waits for readiness reported by the process it started, over its own IPC channel with port 0, rather than accepting any plausible health response on the port. An occupied port and other startup failures are reported separately, the first startup failure is kept, and a failed start is not retried (#120).
+- The local updater check handles an interrupted proxied response or request error without sending headers twice or failing uncaught, keeps the first failing result with safe partial diagnostics, and cleans up the whole owned process group, including descendants left after the leader exits. The existing updater checks are preserved (#132).
+- No app data, alert, subscription or external service behavior changes.
+
 ## 1.16.4 · 2026-10-17
 
 - Keep Scores header controls visible at 200% zoom on narrow screens, without overlap or smaller text (#151).
