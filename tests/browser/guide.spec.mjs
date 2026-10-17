@@ -108,6 +108,41 @@ async function openGuide(page, harness, options = {}) {
   await expect(page.getByTestId("guide-count")).toContainText("games listed");
 }
 
+const GUIDE_WIDE_FONT = "*, *::before, *::after { font-family: Verdana, 'DejaVu Sans', sans-serif !important; }";
+for (const [font, fontRule] of [["normal", ""], ["wide", GUIDE_WIDE_FONT]]) test(`Guide 200% ${font} layout stays in the page while its timeline still pans`, async ({ page, harness }, testInfo) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await openGuide(page, harness);
+  await page.addStyleTag({ content: `html { zoom: 2; } ${fontRule}` });
+  await page.evaluate(() => document.fonts.ready);
+  await expectArchiveListed(page);
+  const measure = () => page.evaluate(() => {
+    const rect = element => { const box = element.getBoundingClientRect(); return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height }; };
+    const selectors = [".wordmark", ".date-navigation", ".date-navigation button", ".date-picker", ".today-button", ".destination-nav a", ".guide-modes button", ".header-actions button"];
+    const elements = selectors.flatMap(selector => [...document.querySelectorAll(selector)].map(element => ({ selector, text: element.innerText, rect: rect(element), fontSize: getComputedStyle(element).fontSize, minHeight: getComputedStyle(element).minHeight })));
+    const viewport = document.querySelector(".guide-viewport");
+    return { clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth, elements, timeline: { clientWidth: viewport.clientWidth, scrollWidth: viewport.scrollWidth, scrollLeft: viewport.scrollLeft } };
+  });
+  const initial = await measure();
+  expect(initial.scrollWidth, "the Guide page fits the viewport at 200% zoom").toBeLessThanOrEqual(initial.clientWidth);
+  for (const element of initial.elements) {
+    expect(element.rect.left, `${element.selector} left edge`).toBeGreaterThanOrEqual(0);
+    expect(element.rect.right, `${element.selector} right edge`).toBeLessThanOrEqual(initial.clientWidth);
+    if (![".wordmark", ".date-navigation"].includes(element.selector)) {
+      expect(element.rect.width / 2, `${element.selector} keeps 44 CSS px of width at 200% zoom`).toBeGreaterThanOrEqual(44);
+      expect(element.rect.height / 2, `${element.selector} keeps 44 CSS px of height at 200% zoom`).toBeGreaterThanOrEqual(44);
+    }
+  }
+  expect(initial.elements.find(element => element.selector === ".today-button").fontSize).toBe("14px");
+  expect(initial.timeline.scrollWidth).toBeGreaterThan(initial.timeline.clientWidth);
+  await testInfo.attach(`guide-200-${font}-contained`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+  await page.locator(".guide-viewport").evaluate(element => { element.scrollLeft = 0; });
+  const left = await page.locator(".guide-viewport").evaluate(element => element.scrollLeft);
+  await page.locator(".guide-viewport").evaluate(element => { element.scrollLeft = Math.min(180, element.scrollWidth - element.clientWidth); });
+  const panned = await page.locator(".guide-viewport").evaluate(element => element.scrollLeft);
+  expect(panned).toBeGreaterThan(left);
+  await testInfo.attach(`guide-200-${font}-panned`, { body: await page.screenshot(), contentType: "image/png" });
+});
+
 test("ORD-019 archive Duke away game is listed before play and leaves the Guide once a confirmed away game starts", async ({ page, harness }) => {
   const source = archive.events.filter(e => e.competitions[0].competitors.some(c => c.team.id === "150"));
   expect(source.map(e => e.id)).toEqual([ARCHIVE_DUKE]);

@@ -30,6 +30,9 @@ button:focus-visible, a:focus-visible, .date-picker:focus-within { outline: 2px 
 .brand-icon { background: var(--primary); color: #172308; border-radius: 9px; width: 36px; height: 36px; display: grid; place-items: center; }
 .sport-label { display: block; color: #91a0b8; font-size: 12px; letter-spacing: 1.85px; font-weight: 600; margin-top: 8px; }
 .header-actions { display: flex; align-items: center; }
+/* Let the existing icon row wrap only when the available shell width requires it. At ordinary
+   sizes its four controls keep their current row; enlarged pages can share the width in rows. */
+.compact-scoreboard .app-header .header-actions { flex-wrap: wrap; min-width: 0; max-width: 100%; flex-shrink: 1; justify-content: flex-end; }
 .icon-button { flex: 0 0 44px; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 50%; color: #a6b3c8; }
 .icon-button:hover { background: #1f2b3e; color: #fff; }.refreshing svg { animation: spin 1.3s linear infinite; }
 .date-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-height: 76px; padding: 8px 0; }
@@ -158,7 +161,8 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .guide-shell .brand-icon { width: 30px; height: 30px; border-radius: 7px; }
 .guide-shell .destination-nav { padding: 3px 0; }
 .guide-controls, .guide-heading { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
-.guide-controls { min-height: 48px; }.guide-controls .today-button { padding: 0 12px; }
+.guide-controls { min-height: 48px; flex-wrap: wrap; }.guide-controls .today-button { padding: 0 12px; }
+.guide-shell .wordmark > span:not(.brand-icon) { min-width: 0; }
 .guide-heading h1 { font-size: 22px; letter-spacing: -.6px; }
 .guide-modes { display: flex; background: #182235; padding: 2px; border-radius: 9px; }
 .guide-modes button { min-height: 44px; font-size: 12px; font-weight: 650; padding: 0 12px; border: 0; border-radius: 7px; color: #c5d0e0; }
@@ -273,6 +277,7 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .compact-scoreboard { padding-top: max(12px, calc(var(--safe-top) + min(var(--safe-top), 18px))); }
 .compact-scoreboard .app-header { padding: 0 0 4px; gap: 4px; }
 .compact-scoreboard .wordmark { font-size: 1.05rem; gap: 6px; letter-spacing: -.045em; min-width: 0; }
+.compact-scoreboard .wordmark > span:not(.brand-icon) { min-width: 0; }
 .compact-scoreboard .brand-icon { width: 26px; height: 28px; flex-shrink: 0; border-radius: 6px; }
 .compact-scoreboard .brand-icon svg { width: 18px; }
 .compact-scoreboard .sport-label { font-size: .5rem; letter-spacing: .1em; margin-top: 5px; }
