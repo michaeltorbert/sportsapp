@@ -11,6 +11,17 @@ export function readAlertConfig(source = readFileSync(new URL("services/alerts/w
   assert.equal(errors.length, 0, `Invalid alert configuration: ${errors.map(error => printParseErrorCode(error.error)).join(", ")}`);
   assert.equal(typeof config?.vars?.SITE_ORIGIN, "string", "Alert SITE_ORIGIN is required");
   assert.equal(new URL(config.vars.SITE_ORIGIN).origin, config.vars.SITE_ORIGIN, "SITE_ORIGIN must be an exact origin");
+  // Shape check only, split and trimmed like the Worker; it never decides which origins are allowed.
+  // Messages name the entry index, never its value, so a malformed entry or credential is not echoed.
+  const additional = config.vars.ADDITIONAL_SITE_ORIGINS;
+  if (additional !== undefined) {
+    assert.ok(typeof additional === "string", "Alert ADDITIONAL_SITE_ORIGINS must be a comma-separated string");
+    if (additional.trim()) additional.split(",").map(entry => entry.trim()).forEach((entry, index) => {
+      let exact = false;
+      try { exact = !entry.includes("*") && new URL(entry).origin === entry; } catch {}
+      assert.ok(exact, `ADDITIONAL_SITE_ORIGINS[${index}] must be an exact origin`);
+    });
+  }
   return config;
 }
 export async function verifyDeployment({ origin, commit, version, fetcher = fetch, alertsUrl, alertOrigins = [] }) {

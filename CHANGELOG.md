@@ -296,8 +296,9 @@
 - Improve favorite lookup fairness and failure backoff, retain known lines through feed omissions, and keep started-delay upset watches through comeback finals.
 - Add scenario and rendered regression coverage. Track nonblocking continuity and refinement work separately in issues #13 and #14.
 
-## 1.2.0 · 2026-09-06 · prepared, not deployed
+## 1.2.0 · 2026-09-06 · deployed locally; release workflow prepared
 
+- Status corrected October 17, 2026 (#9): this entry previously said "prepared, not deployed". On September 6, 2026 an authorized local Wrangler session made this version's initial Cloudflare deployment while the GitHub release workflow was still being set up. Automated paired releases were recorded later in #9.
 - Prepare the website for Cloudflare Workers at its provider address, with GitHub PR tests, optional preview deployment, and a tagged-release production workflow.
 - Verify each deployed website against its exact source commit and version, static assets, score API, and alert readiness. Preserve the existing alert Worker, database, cron and VAPID identity; allow both old and new production origins during migration.
 - Add a guarded current-week CDN fallback for the server score API when Cloudflare cannot reach ESPN’s date-specific endpoint. Reject unproven date coverage rather than show the wrong week.
