@@ -556,6 +556,100 @@ for (const layout of panelLayouts) for (const name of Object.keys(panels)) test(
   expect(await storedPrefs(page)).toBe(before);
 });
 
+// Issue #126: the keyboard holds the overflowing heading when it comes to fit, so its region role and tab
+// stop go away while it is focused. Focus must stay in the dialog, on Close, its next stop, and
+// Close -> body must still work; the test itself never refocuses anything. Rotation to portrait has not
+// made the doubled heading fit at these sizes, so those cases cover only continued overflow after resize.
+// Real keyboard input in desktop engines; not native iPhone behavior.
+const panelHeading = (page, name) => panel(page, name).getByRole('region', { name: 'Title and description', exact: true });
+const panelHeadingOverflows = (page, name) => panel(page, name).locator('.app-panel-heading').evaluate(el => el.scrollHeight > el.clientHeight + 1);
+const panelFocus = (page, name) => panel(page, name).evaluate(dialog => {
+  const el = document.activeElement;
+  return { inDialog: dialog.contains(el), onClose: el === dialog.querySelector('.app-panel-close'), element: el === document.body ? 'body' : `${el.tagName.toLowerCase()}.${el.className}` };
+});
+async function focusHeadingEnd(page, name) {
+  await page.keyboard.press('Shift+Tab');
+  await expect(panelHeading(page, name)).toBeFocused();
+  await page.keyboard.press('End');
+  await expect.poll(() => panelHeading(page, name).evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThanOrEqual(1);
+}
+async function expectHeadingEndCloseBody(page, name) {
+  await focusHeadingEnd(page, name);
+  await page.keyboard.press('Tab');
+  await expect(panelClose(page, name)).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(panelBody(page, name)).toBeFocused();
+}
+async function expectPanelUsable(page, name) {
+  const geometry = await panelGeometry(page, name);
+  expectBottomSheet(geometry);
+  expect(geometry.panelScrolls).toBe(false);
+  expect(geometry.body.overflowY).toBe('auto');
+  expect(geometry.close).toMatchObject({ hit: true, inViewport: true });
+}
+const headingChanges = {
+  'rotation to portrait': { title: 'keeps focus in the dialog after rotation to portrait', apply: page => page.setViewportSize({ width: 393, height: 852 }) },
+  'text back to normal': { title: 'that fits after text back to normal leaves focus in the dialog', apply: (page, name) => panel(page, name).evaluate(root => { for (const node of [root, ...root.querySelectorAll('*')]) node.style.fontSize = ''; }) },
+};
+for (const [change, { title, apply }] of Object.entries(headingChanges)) for (const name of ['Alerts', 'Help']) test(`${name}: a focused overflowing heading ${title}`, async ({ page, harness }, testInfo) => {
+  harness.state.events = [...harness.state.events, ...manyDuke()];
+  await page.setViewportSize({ width: 844, height: 390 });
+  await openRoute(page, harness, 'Scores');
+  const before = await settledPrefs(page);
+  await openPanel(page, name);
+  await panel(page, name).evaluate(root => {
+    const nodes = [root, ...root.querySelectorAll('*')], sizes = nodes.map(node => parseFloat(getComputedStyle(node).fontSize));
+    nodes.forEach((node, i) => { node.style.fontSize = `${sizes[i] * 2}px`; });
+  });
+  await expectHeadingSettled(panel(page, name));
+  expect(await panelHeadingOverflows(page, name)).toBe(true);
+  await expect(panelClose(page, name)).toBeFocused();
+  await focusHeadingEnd(page, name);
+  await apply(page, name);
+  await expectHeadingSettled(panel(page, name));
+  // Branch on measured overflow: rotation may leave the doubled heading overflowing. Record that rather
+  // than force a fit. Normal text fits in both layouts at the current baseline.
+  const stillOverflows = await panelHeadingOverflows(page, name);
+  if (change === 'text back to normal') expect(stillOverflows).toBe(false);
+  if (stillOverflows) {
+    testInfo.annotations.push({ type: 'heading still overflows', description: `${name} doubled text after ${change}; the fitting case is not reached here` });
+    await expect(panelHeading(page, name)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(panelClose(page, name)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(panelBody(page, name)).toBeFocused();
+  } else {
+    await expect(panelHeading(page, name)).toHaveCount(0);
+    expect(await panel(page, name).locator('.app-panel-heading').getAttribute('tabindex')).toBeNull();
+    const focus = await panelFocus(page, name);
+    expect(focus.inDialog, `focus after the heading fits is on ${focus.element}`).toBe(true);
+    expect(focus.onClose, `focus after the heading fits is on ${focus.element}`).toBe(true);
+    await expect(panelClose(page, name)).toBeFocused();
+    await testInfo.attach(`${name} heading fits after ${change}, Close focused`, { body: await page.screenshot(), contentType: 'image/png' });
+    // Close leads to the body; back from the body reaches Close with no heading stop.
+    await page.keyboard.press('Tab');
+    await expect(panelBody(page, name)).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(panelClose(page, name)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(panelBody(page, name)).toBeFocused();
+    if (change === 'rotation to portrait') {
+      // Round trip: back in short landscape the heading overflows again and is the stop before Close.
+      await page.setViewportSize({ width: 844, height: 390 });
+      await expectHeadingSettled(panel(page, name));
+      expect(await panelHeadingOverflows(page, name)).toBe(true);
+      await page.keyboard.press('Shift+Tab');
+      await expect(panelClose(page, name)).toBeFocused();
+      await expectHeadingEndCloseBody(page, name);
+    }
+  }
+  await expectPanelUsable(page, name);
+  await page.keyboard.press('Escape');
+  await expectPanelClosed(page, name);
+  expect(nonGetAlertRequests(harness)).toEqual([]);
+  expect(await storedPrefs(page)).toBe(before);
+});
+
 for (const name of ['Alerts', 'Help']) test(`${name}: Escape and the backdrop dismiss repeatedly without changing anything`, async ({ page, harness }) => {
   await page.setViewportSize({ width: 844, height: 600 });
   await openRoute(page, harness, 'Scores');
