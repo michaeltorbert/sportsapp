@@ -1,5 +1,6 @@
-export const VERSION = "1.16.4";
+export const VERSION = "1.16.5";
 export const releases = [
+  { version: "1.16.5", date: "October 17, 2026", changes: "In Help, Alerts and Settings, keyboard focus now stays inside the panel when a large-text heading fits again, moving to Close. Improve the reliability of local update and app-startup checks." },
   { version: "1.16.4", date: "October 17, 2026", changes: "Keep Scores header controls and the Guide date and wordmark on screen at 200% zoom, while preserving normal layouts and Guide timeline scrolling. Clarify update and local development instructions." },
   { version: "1.16.3", date: "October 17, 2026", changes: "Keep the known pregame spread beside the favored team after kickoff and in the final result. Upset watch, game details and alerts keep their existing behavior." },
   { version: "1.16.2", date: "October 16, 2026", changes: "The suggested install name now includes Sports, Scores and Stats. The browser tab title starts with the same name, followed by College Football Watchlist. Inside the app it still says Saturday Signal, with the same look and icon. In a fresh iPhone Simulator install, Search found the app for “sports”, “scores” and “stats”. Existing installs may keep their earlier name; no safe rename or reinstall step is established. Results on a physical iPhone may differ." },
