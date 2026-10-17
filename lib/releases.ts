@@ -1,5 +1,6 @@
-export const VERSION = "1.16.5";
+export const VERSION = "1.16.6";
 export const releases = [
+  { version: "1.16.6", date: "October 17, 2026", changes: "Maintenance update." },
   { version: "1.16.5", date: "October 17, 2026", changes: "In Help, Alerts and Settings, keyboard focus now stays inside the panel when a large-text heading fits again, moving to Close. Improve the reliability of local update and app-startup checks." },
   { version: "1.16.4", date: "October 17, 2026", changes: "Keep Scores header controls and the Guide date and wordmark on screen at 200% zoom, while preserving normal layouts and Guide timeline scrolling. Clarify update and local development instructions." },
   { version: "1.16.3", date: "October 17, 2026", changes: "Keep the known pregame spread beside the favored team after kickoff and in the final result. Upset watch, game details and alerts keep their existing behavior." },
