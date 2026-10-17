@@ -54,7 +54,11 @@ async function readJson(url: string, parent: AbortSignal, fetcher: Fetcher): Pro
   }
 }
 
-export async function loadScores(date: string, signal: AbortSignal, fetcher: Fetcher = fetch, endDate = date, accOnly = false): Promise<Scoreboard> {
+/** Scores plus the halftime generation and epoch captured before the score request. */
+export type ScoreRequest = { board: Scoreboard; generation: number; epoch: number };
+
+/** Scores only, with the unchanged direct/CDN/hosted fallback. Optional summaries wait for enrichScores. */
+export async function requestScores(date: string, signal: AbortSignal, fetcher: Fetcher = fetch, endDate = date, accOnly = false): Promise<ScoreRequest> {
   const generation = nextHalftimeGeneration(), epoch = halftimeEpoch();
   let board: Scoreboard;
   try {
@@ -68,5 +72,14 @@ export async function loadScores(date: string, signal: AbortSignal, fetcher: Fet
       throw new Error("Invalid score response");
     board = stripHalftimeTiming(data);
   }
-  return enrichPregameLines(board, signal, fetcher, generation, epoch);
+  return { board, generation, epoch };
+}
+
+/** Deferred enrichment observes with the original request's generation and epoch, never fresh ones. */
+export function enrichScores(request: ScoreRequest, signal: AbortSignal, fetcher: Fetcher = fetch): Promise<Scoreboard> {
+  return enrichPregameLines(request.board, signal, fetcher, request.generation, request.epoch);
+}
+
+export async function loadScores(date: string, signal: AbortSignal, fetcher: Fetcher = fetch, endDate = date, accOnly = false): Promise<Scoreboard> {
+  return enrichScores(await requestScores(date, signal, fetcher, endDate, accOnly), signal, fetcher);
 }

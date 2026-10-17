@@ -424,6 +424,28 @@ test("ORD-007 Duke and Virginia Tech lead each state group without crossing grou
     "both favorites share a tier; chronology breaks their upcoming tie");
 });
 
+test("FABLE-016 equal-kickoff upcoming games order by team relevance, then event ID, within state and pin tiers", () => {
+  // Documents the imported comparator; no new ordering rule.
+  const kickoff = "2026-09-12T16:00:00Z";
+  const upcoming = (id, extra = {}) => match(id, { state: "upcoming", started: false, period: 0, clock: 0, score: null, otherScore: null, date: kickoff, ...extra });
+  const pinnedPlain = upcoming("a-pinned-plain"); pinnedPlain.teams[0].id = "150";
+  const pinnedRanked = upcoming("z-pinned-ranked", { rank: 3 }); pinnedRanked.teams[1].id = "259";
+  const games = [
+    match("0-live", { date: kickoff }), pinnedPlain, pinnedRanked,
+    upcoming("z-ranked", { rank: 5 }), upcoming("m-acc", { acc: true }), upcoming("b-acc", { acc: true }), upcoming("a-plain"),
+    upcoming("0-top-later", { rank: 1, date: "2026-09-12T19:30:00Z" }),
+    match("z-final-ranked", { state: "final", rank: 1, date: kickoff }), match("a-final-plain", { state: "final", bothAcc: true, date: kickoff }),
+  ];
+  const expected = ["0-live", "z-pinned-ranked", "a-pinned-plain", "z-ranked", "b-acc", "m-acc", "a-plain", "0-top-later", "a-final-plain", "z-final-ranked"];
+  for (const input of [games, [...games].reverse(), [...games.slice(5), ...games.slice(0, 5)]]) {
+    assert.deepEqual(sortGames(input).map(g => g.id), expected);
+    for (const selection of [[], ["acc"], ["top25"]]) {
+      const subset = viewGames(scoreboard(input), selection).map(g => g.id);
+      assert.deepEqual(subset, expected.filter(id => subset.includes(id)), `shared order for ${selection}`);
+    }
+  }
+});
+
 test("ORD-006 ranked ties retain interest below comparable ranked upsets", () => {
   for (const period of [1, 2, 3, 4, 5]) {
     const losing = match("losing", { sec: true, rank: 11, period, clock: 120, score: 21, otherScore: 24 });

@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.16.7 · 2026-10-17
+
+- After kickoff, a game keeps the pregame line this device saved for it before kickoff, instead of being replaced by a line found later from ESPN's game summary. A current pregame line, including a pick'em, still replaces a saved one, and a changed kickoff or matchup still discards it. Without a saved line, the line is still looked up from the summary. The saved line may not be the closing line, and the Day and Week views keep separate saved lines (#14).
+- Yesterday's scores, which decide whether overnight games are still in progress, are loaded without extra game details unless that day is the one shown. The Guide's overnight check never loads them (#14).
+- Upset watch, the line display, halftime timing, alerts and settings are unchanged.
+
 ## 1.16.6 · 2026-10-17
 
 - The local deployment preflight now checks every configured additional alert origin, not only the main site origin. An entirely empty value still means none; an empty, malformed, wildcard or non-exact entry fails with its position rather than its value (#9). The Worker's origin matching and the configured origins are unchanged.
