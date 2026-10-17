@@ -1,37 +1,25 @@
 import assert from "node:assert/strict";
-import { spawn, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { createServer } from "node:net";
-import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 import { readAlertConfig } from "./verify-deployment.mjs";
+import { keepFirstFailure } from "./owned-process-group.mjs";
+import { startWorkerRuntime } from "./worker-runtime-start.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 // Validate the same configuration used by post-deploy checks before any upload.
 readAlertConfig();
-const socket = createServer();
-socket.listen(0, "127.0.0.1");
-await once(socket, "listening");
-const { port } = socket.address();
-await new Promise(resolve => socket.close(resolve));
-const child = spawn(process.execPath, ["node_modules/wrangler/bin/wrangler.js", "dev", "--config", "dist/server/wrangler.json", "--local", "--ip", "127.0.0.1", "--port", String(port)], {
-  cwd: root, detached: true, stdio: ["ignore", "pipe", "pipe"],
+// One attempt; only this child's own IPC readiness names the endpoint we check.
+const runtime = startWorkerRuntime({
+  cwd: root,
   env: { ...process.env, WRANGLER_SEND_METRICS: "false", WRANGLER_LOG_PATH: ".wrangler/logs", BROWSER: "none" },
 });
-let output = "";
-child.stdout.on("data", data => { output = (output + data).slice(-12000); });
-child.stderr.on("data", data => { output = (output + data).slice(-12000); });
-const exited = once(child, "exit");
-const origin = `http://127.0.0.1:${port}`;
-const fetchLocal = path => fetch(origin + path, { signal: AbortSignal.timeout(1500), redirect: "error" });
-try {
-  let health;
-  for (let i = 0; i < 60; i++) {
-    if (child.exitCode !== null) throw new Error(`Worker runtime exited before startup:\n${output}`);
-    try { health = await fetchLocal("/api/health"); if (health.ok) break; } catch { /* Wait for local startup. */ }
-    await new Promise(resolve => setTimeout(resolve, 250));
-  }
-  assert.ok(health?.ok, `Worker did not start:\n${output}`);
+const identity = await keepFirstFailure(async () => {
+  const { port } = await runtime.during(runtime.ready);
+  const origin = `http://127.0.0.1:${port}`;
+  const fetchLocal = (path, timeout = 1500) => runtime.during(fetch(origin + path, { signal: AbortSignal.timeout(timeout), redirect: "error" }));
+  const health = await fetchLocal("/api/health", 10000);
+  assert.ok(health.ok, `Worker health returned ${health.status}`);
   const metadata = await health.json();
   const version = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
   const commit = process.env.SOURCE_COMMIT || execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
@@ -51,11 +39,14 @@ try {
   const stats = await fetchLocal("/api/stats?event=invalid&phase=final");
   assert.equal(stats.status, 400);
   assert.equal(stats.headers.get("cache-control"), "no-store");
-  console.log(JSON.stringify({ ...metadata, runtime: "workerd", checks: ["health", "home", "manifest", "service-worker", "icon", "score-route", "stats-route"], externalRequests: 0 }));
-} finally {
-  const kill = signal => { try { process.kill(-child.pid, signal); } catch (error) { if (error.code !== "ESRCH") throw error; } };
-  kill("SIGTERM");
-  const timer = setTimeout(() => kill("SIGKILL"), 3000);
-  await exited;
-  clearTimeout(timer);
-}
+  runtime.assertAlive();
+  return metadata;
+}, {
+  capture: () => { console.error(`Worker runtime output tail:\n${runtime.output()}`); },
+  cleanup: async () => {
+    const cleanup = await runtime.stop();
+    console.error(`Worker runtime attempt: ${JSON.stringify(runtime.attempt)}`);
+    if (!cleanup.gone) throw new Error(`Worker runtime process group was not cleaned up: ${cleanup.error?.message}`);
+  },
+});
+console.log(JSON.stringify({ ...identity, runtime: "workerd", checks: ["health", "home", "manifest", "service-worker", "icon", "score-route", "stats-route"], externalRequests: 0 }));
