@@ -57,11 +57,12 @@ test('approved bare spread stays with Georgia through live and final', async ({ 
   const [georgia, texas] = matchup.competitions[0].competitors;
   georgia.team.shortDisplayName = 'Georgia'; georgia.team.displayName = 'Georgia'; georgia.team.name = 'Georgia';
   texas.team.shortDisplayName = 'Texas'; texas.team.displayName = 'Texas'; texas.team.name = 'Texas';
+  georgia.team.abbreviation = 'UGA'; texas.team.abbreviation = 'TEX';
   georgia.curatedRank = { current: 4 }; texas.curatedRank = { current: 7 };
-  georgia.records = [{ type: 'total', summary: '6-1 (4-1 SEC)' }];
-  texas.records = [{ type: 'total', summary: '6-1 (3-1 SEC)' }];
+  georgia.records = [{ type: 'total', summary: '6-1' }];
+  texas.records = [{ type: 'total', summary: '6-1' }];
   matchup.competitions[0].broadcasts = [{ names: ['ABC'] }];
-  matchup.competitions[0].odds = [{ spread: -6.5, provider: { name: 'ESPN' },
+  matchup.competitions[0].odds = [{ spread: 6.5, provider: { name: 'ESPN' },
     awayTeamOdds: { favorite: true, team: { id: georgia.team.id } },
     homeTeamOdds: { favorite: false, team: { id: texas.team.id } } }];
   harness.state.events = [matchup];
@@ -74,8 +75,9 @@ test('approved bare spread stays with Georgia through live and final', async ({ 
   const live = harness.state.events[0], [liveGeorgia, liveTexas] = live.competitions[0].competitors;
   liveGeorgia.team.shortDisplayName = 'Georgia'; liveGeorgia.team.displayName = 'Georgia'; liveGeorgia.team.name = 'Georgia';
   liveTexas.team.shortDisplayName = 'Texas'; liveTexas.team.displayName = 'Texas'; liveTexas.team.name = 'Texas';
+  liveGeorgia.team.abbreviation = 'UGA'; liveTexas.team.abbreviation = 'TEX';
   liveGeorgia.curatedRank = { current: 4 }; liveTexas.curatedRank = { current: 7 };
-  liveGeorgia.records = [{ type: 'total', summary: '6-1 (4-1 SEC)' }]; liveTexas.records = [{ type: 'total', summary: '6-1 (3-1 SEC)' }];
+  liveGeorgia.records = [{ type: 'total', summary: '6-1' }]; liveTexas.records = [{ type: 'total', summary: '6-1' }];
   live.competitions[0].broadcasts = [{ names: ['ABC'] }];
   live.status.period = 2; live.status.clock = 138; live.status.type.shortDetail = '2nd - 2:18';
   await page.getByRole('button', { name: 'Refresh scores' }).click();
@@ -93,8 +95,9 @@ test('approved bare spread stays with Georgia through live and final', async ({ 
   const final = harness.state.events[0], [finalGeorgia, finalTexas] = final.competitions[0].competitors;
   finalGeorgia.team.shortDisplayName = 'Georgia'; finalGeorgia.team.displayName = 'Georgia'; finalGeorgia.team.name = 'Georgia';
   finalTexas.team.shortDisplayName = 'Texas'; finalTexas.team.displayName = 'Texas'; finalTexas.team.name = 'Texas';
+  finalGeorgia.team.abbreviation = 'UGA'; finalTexas.team.abbreviation = 'TEX';
   finalGeorgia.curatedRank = { current: 4 }; finalTexas.curatedRank = { current: 7 };
-  finalGeorgia.records = [{ type: 'total', summary: '6-1 (4-1 SEC)' }]; finalTexas.records = [{ type: 'total', summary: '6-1 (3-1 SEC)' }];
+  finalGeorgia.records = [{ type: 'total', summary: '6-1' }]; finalTexas.records = [{ type: 'total', summary: '6-1' }];
   final.competitions[0].broadcasts = [{ names: ['ABC'] }];
   await page.clock.fastForward(31_000);
   await expect(row.locator('.game-status')).toHaveText('Final');
