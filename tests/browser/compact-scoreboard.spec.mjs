@@ -443,6 +443,76 @@ test.describe('device time distinct from Eastern date', () => {
 });
 
 
+// Issue #152: vinext 0.0.50 Links prefetch their RSC payload on idle. A prefetch fetch() that an old document
+// calls after the next goto has started is reported by WebKit as "Fetch API cannot load … due to access control
+// checks", which the strict runtime-error guard rightly fails. This document's framework Links are the wordmark
+// (static '/') and the Scores/Guide links, whose hrefs gain the date once it settles (read from the DOM, since the
+// board may be hidden). Before each cross-document goto below, prefetch those four destinations through the
+// public router, which shares Link's URL, cache key and dedup Set (navigation.js prefetch, link.js prefetchUrl),
+// so a seeded entry stops any queued Link prefetch of it from fetching again. prefetch() returns nothing, so
+// completion is read from the framework cache itself, read-only: each entry is matched by its response URL with
+// only the _rsc cache-busting parameter ignored. Other cache entries, pending or not, never block.
+const PREFETCH_DATE = '2026-09-05';
+const PREFETCH_DESTINATIONS = ['/', '/guide', `/?date=${PREFETCH_DATE}`, `/guide?date=${PREFETCH_DATE}`];
+const readPrefetchState = () => {
+  const cache = window.__VINEXT_RSC_PREFETCH_CACHE__, prefetched = window.__VINEXT_RSC_PREFETCHED_URLS__, now = Date.now();
+  return {
+    pathname: location.pathname, date: new URLSearchParams(location.search).get('date'),
+    slots: window[Symbol.for('vinext.mountedSlotsHeader')] ?? null,
+    wordmark: document.querySelector('.app-header a.wordmark')?.getAttribute('href') ?? null,
+    nav: [...document.querySelectorAll('.destination-nav a')].map(a => a.getAttribute('href')),
+    refreshEnabled: document.querySelector('button[aria-label="Refresh scores"]')?.disabled === false,
+    cacheIsMap: cache instanceof Map, prefetchedIsSet: prefetched instanceof Set,
+    entries: cache instanceof Map ? [...cache].filter(([, entry]) => entry?.snapshot).map(([key, entry]) => ({
+      url: entry.snapshot.url, outcome: entry.outcome, ownPending: !!entry.pending, ageMs: now - entry.timestamp,
+      body: entry.snapshot.buffer instanceof ArrayBuffer, slots: entry.snapshot.mountedSlotsHeader ?? null, keyInSet: prefetched instanceof Set && prefetched.has(key),
+    })) : [],
+  };
+};
+// The prefetch context: pathname '/', the manual date, settled dated links and Refresh, unchanged mounted slots.
+function prefetchContextFailures(state, slots) {
+  const failures = [];
+  if (state.pathname !== '/') failures.push(`pathname ${state.pathname}`);
+  if (state.date !== PREFETCH_DATE) failures.push(`date ${state.date}`);
+  if (state.wordmark !== '/') failures.push(`wordmark href ${state.wordmark}`);
+  for (const href of PREFETCH_DESTINATIONS.slice(2)) if (!state.nav.includes(href)) failures.push(`no ${href} link`);
+  if (!state.refreshEnabled) failures.push('Refresh not settled');
+  if (slots !== undefined && state.slots !== slots) failures.push('mounted slots changed');
+  return failures;
+}
+// One named failure per required route that lacks exactly one fresh, fully seeded entry still in the dedup Set.
+function prefetchCacheFailures(state, origin, slots) {
+  if (!state.cacheIsMap || !state.prefetchedIsSet) return ['vinext prefetch cache unavailable'];
+  return PREFETCH_DESTINATIONS.flatMap(dest => {
+    const want = new URL(dest, origin), path = want.pathname === '/' ? '/.rsc' : `${want.pathname}.rsc`;
+    const hits = state.entries.filter(entry => {
+      const url = entry.url ? new URL(entry.url) : null;
+      return !!url && url.origin === origin && url.pathname === path && JSON.stringify([...url.searchParams].filter(([name]) => name !== '_rsc')) === JSON.stringify([...want.searchParams]);
+    });
+    if (hits.length !== 1) return [`${dest}: ${hits.length} cached responses`];
+    const [entry] = hits;
+    const why = [entry.outcome !== 'cache-seeded' && `outcome ${entry.outcome}`, entry.ownPending && 'pending', !entry.body && 'no body',
+      !(entry.ageMs >= 0 && entry.ageMs < 30_000) && `age ${entry.ageMs} ms`, !entry.keyInSet && 'key not in prefetched set', entry.slots !== slots && 'mounted slots differ'].filter(Boolean);
+    return why.length ? [`${dest}: ${why.join(', ')}`] : [];
+  });
+}
+async function settleLegacyPrefetches(page, label) {
+  await expect.poll(async () => prefetchContextFailures(await page.evaluate(readPrefetchState)), `${label}: date, links and Refresh settled`).toEqual([]);
+  const { slots } = await page.evaluate(readPrefetchState), origin = new URL(page.url()).origin;
+  expect(await page.evaluate(destinations => {
+    if (typeof window.next?.router?.prefetch !== 'function') return 'window.next.router.prefetch unavailable';
+    for (const href of destinations) window.next.router.prefetch(href);
+    return 'requested';
+  }, PREFETCH_DESTINATIONS), `${label}: public prefetch`).toBe('requested');
+  await expect.poll(async () => {
+    const state = await page.evaluate(readPrefetchState);
+    return [...prefetchContextFailures(state, slots), ...prefetchCacheFailures(state, origin, slots)];
+  }, { message: `${label}: required route prefetches seeded`, timeout: 10_000 }).toEqual([]);
+  // Re-read immediately before the caller's goto: nothing consumed, expired or changed context since.
+  const state = await page.evaluate(readPrefetchState);
+  expect([...prefetchContextFailures(state, slots), ...prefetchCacheFailures(state, origin, slots)], `${label}: still seeded at goto`).toEqual([]);
+}
+
 test('a legacy update link opens its game once while hidden Duke focus stays protected', async ({ page, harness }) => {
   // ORD-019 hides only a started game with Duke as the confirmed away team. event() is live and
   // started but omits neutralSite (unknown venue, which stays visible), so confirm the venue here.
@@ -455,15 +525,18 @@ test('a legacy update link opens its game once while hidden Duke focus stays pro
   await harness.open({ path: '/?date=2026-09-05&_ss_update=' + 'a'.repeat(40) + '&_ss_hide_finals=0&_ss_focus=ranked-live', waitForScores: false });
   await expect(page.locator('.game-screen h1.game-title')).toContainText('ranked-live away');
   expect(page.url()).not.toContain('_ss_');
+  await settleLegacyPrefetches(page, 'update-link document');
   await page.goto('/?date=2026-09-05#game-duke-hidden');
   await expect(page.getByRole('button', { name: 'Refresh scores' })).toBeEnabled();
   await expect(page.locator('#game-duke-hidden')).toHaveCount(0);
   await page.clock.fastForward(1_000);
   await expect(page.locator('.game-screen')).toHaveCount(0);
+  await settleLegacyPrefetches(page, 'hash-focus document');
   // The same protected game by direct link is the generic screen.
   await page.goto('/?date=2026-09-05&event=duke-hidden');
   await expect(page.locator('.game-screen').getByRole('heading', { name: 'This game isn’t available' })).toBeVisible();
   await expect(page.locator('.game-screen')).not.toContainText('Duke');
+  await settleLegacyPrefetches(page, 'protected direct-link document');
   await page.goto('/?date=2026-09-05');
   await expect(page.getByRole('button', { name: 'Refresh scores' })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Show Duke game on Sep 5', exact: true })).toBeVisible();
