@@ -1,5 +1,9 @@
 # Saturday Signal releases
 
+## 1.16.3 · 2026-10-17
+
+- Keep the known pregame spread beside the favored team after kickoff and in the final result. Upset watch, game details and alerts keep their existing behavior.
+
 ## 1.16.2 · 2026-10-16
 
 - The suggested install name is Saturday Signal — Sports Scores & Stats in the web app manifest (`name` and `short_name`), the `application-name` and `apple-mobile-web-app-title` metadata, and the page title, Saturday Signal — Sports Scores & Stats | College Football Watchlist, on Scores and the Guide (#112). The in-app wordmark, layout, icons, colors and descriptions are unchanged.
