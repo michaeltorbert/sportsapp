@@ -219,7 +219,7 @@ test("unranked SEC upset cards explain the favorite without inventing a ranking"
   for (const out of [html, screen]) assert.doesNotMatch(out, /No\. (null|undefined)/);
 });
 
-test("validated lines sit on the row before kickoff and on the game screen throughout", () => {
+test("validated lines stay with their favorite on the row and game screen", () => {
   // The scoreboard row is the whole card now; game details live on the game screen.
   const summaryOf = html => html.match(/<article id="game-[\s\S]*?<\/article>/)?.[0] || "";
   const favorite = game({ id: "favorite-line", state: "upcoming", started: false, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } });
@@ -248,25 +248,32 @@ test("validated lines sit on the row before kickoff and on the game screen throu
     const gameWithLine = game({ id: `${state}-line`, state, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } });
     boards.daily = scoreboard([gameWithLine]);
     const liveOrFinal = render([], { boards }).html;
-    assert.doesNotMatch(summaryOf(liveOrFinal), /class="(?:team-line|pickem-line|detail-line)"/);
+    assert.match(summaryOf(liveOrFinal), /class="team-line"/);
     assert.match(screenOf(`${state}-line`, { boards }), /class="detail-line"><span class="sr-only">Pregame betting line: Team b favored by 7\.5 points<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">Team b −7\.5<\/strong><\/p>/);
+    for (const [suffix, pregameLine] of [["missing", undefined], ["unknown-favorite", { favoriteId: "not-a-team", spread: 7.5, source: "ESPN" }]]) {
+      boards.daily = scoreboard([game({ id: `${state}-${suffix}`, state, pregameLine })]);
+      const unavailable = render([], { boards }).html;
+      assert.doesNotMatch(summaryOf(unavailable), /class="team-line"/);
+    }
+    boards.daily = scoreboard([game({ id: `${state}-pickem`, state, pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
+    assert.match(summaryOf(render([], { boards }).html), /class="pickem-line"[^>]*>.*?PK/);
   }
   boards.daily = scoreboard([game({ id: "live-pickem", pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
   const livePickem = render([], { boards }).html;
-  assert.doesNotMatch(summaryOf(livePickem), /class="(?:team-line|pickem-line)"/);
+  assert.match(summaryOf(livePickem), /class="pickem-line"/);
   assert.match(screenOf("live-pickem", { boards }), /class="detail-line"><span class="sr-only">Pregame pick’em line<\/span><span aria-hidden="true">Line<\/span><strong aria-hidden="true">PK<\/strong><\/p>/);
   boards.daily = scoreboard([game({ id: "live-before-clock", state: "live", started: false, period: 0, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } })]);
   const liveBeforeClock = render([], { boards }).html;
-  assert.doesNotMatch(summaryOf(liveBeforeClock), /class="team-line"/);
+  assert.match(summaryOf(liveBeforeClock), /class="team-line"/);
   assert.match(screenOf("live-before-clock", { boards }), /class="detail-line"[^>]*>.*?Team b −7\.5/);
   boards.daily = scoreboard([game({ id: "live-pickem-before-clock", state: "live", started: false, period: 0, pregameLine: { favoriteId: null, spread: 0, source: "ESPN" } })]);
   const pickemBeforeClock = render([], { boards }).html;
-  assert.doesNotMatch(summaryOf(pickemBeforeClock), /class="pickem-line"/);
+  assert.match(summaryOf(pickemBeforeClock), /class="pickem-line"/);
   assert.match(screenOf("live-pickem-before-clock", { boards }), /class="detail-line"[^>]*>.*?<strong aria-hidden="true">PK<\/strong>/);
   for (const started of [true, false]) {
     boards.daily = scoreboard([game({ id: `delayed-${started}`, state: "delayed", started, pregameLine: { favoriteId: "b", spread: 7.5, source: "ESPN" } })]);
     const delayed = render([], { boards }).html;
-    assert.equal(summaryOf(delayed).includes('class="team-line"'), !started);
+    assert.equal(summaryOf(delayed).includes('class="team-line"'), true);
     assert.equal(screenOf(`delayed-${started}`, { boards }).includes('class="detail-line"'), true);
   }
   boards.daily = scoreboard([game({ id: "away-favorite", state: "upcoming", started: false, pregameLine: { favoriteId: "a", spread: 3.5, source: "ESPN" } })]);

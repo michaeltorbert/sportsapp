@@ -52,6 +52,58 @@ test('320px row keeps records, betting line, and score readable together', async
   await page.screenshot({ path: info.outputPath('records-line-320.png'), fullPage: true, animations: 'disabled' });
 });
 
+test('approved bare spread stays with Georgia through live and final', async ({ page, harness }, info) => {
+  const matchup = event('approved-bare-spread', { state: 'upcoming', rank: null, scores: [17, 21] });
+  const [georgia, texas] = matchup.competitions[0].competitors;
+  georgia.team.shortDisplayName = 'Georgia'; georgia.team.displayName = 'Georgia'; georgia.team.name = 'Georgia';
+  texas.team.shortDisplayName = 'Texas'; texas.team.displayName = 'Texas'; texas.team.name = 'Texas';
+  georgia.curatedRank = { current: 4 }; texas.curatedRank = { current: 7 };
+  georgia.records = [{ type: 'total', summary: '6-1 (4-1 SEC)' }];
+  texas.records = [{ type: 'total', summary: '6-1 (3-1 SEC)' }];
+  matchup.competitions[0].broadcasts = [{ names: ['ABC'] }];
+  matchup.competitions[0].odds = [{ spread: -6.5, provider: { name: 'ESPN' },
+    awayTeamOdds: { favorite: true, team: { id: georgia.team.id } },
+    homeTeamOdds: { favorite: false, team: { id: texas.team.id } } }];
+  harness.state.events = [matchup];
+  await page.setViewportSize({ width: 390, height: 844 });
+  await harness.open({ path: '/?date=2026-09-05' });
+  const row = page.locator('#game-approved-bare-spread');
+  await expect(row.locator('.team-line-visible')).toHaveText('−6.5');
+
+  harness.state.events = [event('approved-bare-spread', { state: 'live', scores: [17, 21] })];
+  const live = harness.state.events[0], [liveGeorgia, liveTexas] = live.competitions[0].competitors;
+  liveGeorgia.team.shortDisplayName = 'Georgia'; liveGeorgia.team.displayName = 'Georgia'; liveGeorgia.team.name = 'Georgia';
+  liveTexas.team.shortDisplayName = 'Texas'; liveTexas.team.displayName = 'Texas'; liveTexas.team.name = 'Texas';
+  liveGeorgia.curatedRank = { current: 4 }; liveTexas.curatedRank = { current: 7 };
+  liveGeorgia.records = [{ type: 'total', summary: '6-1 (4-1 SEC)' }]; liveTexas.records = [{ type: 'total', summary: '6-1 (3-1 SEC)' }];
+  live.competitions[0].broadcasts = [{ names: ['ABC'] }];
+  live.status.period = 2; live.status.clock = 138; live.status.type.shortDetail = '2nd - 2:18';
+  await page.getByRole('button', { name: 'Refresh scores' }).click();
+  await expect(row.locator('.game-status')).toContainText('2nd');
+  await page.screenshot({ path: info.outputPath('approved-bare-spread-live.png'), fullPage: true, animations: 'disabled' });
+  await expect(row.locator('.team-line-visible')).toHaveText('−6.5');
+  await expect(row.locator('.team-label').first()).toContainText('Georgia');
+  await expect(row.locator('.team-label').last()).toContainText('Texas');
+  await expect(row.locator('.compact-upset')).toHaveText('Upset watch');
+  await expect(row).toContainText('ABC');
+  await expect(row.locator('.team-line-visible')).not.toContainText(/Pregame|ESPN/);
+  await rowFits(page, row);
+
+  harness.state.events = [event('approved-bare-spread', { state: 'final', scores: [17, 21] })];
+  const final = harness.state.events[0], [finalGeorgia, finalTexas] = final.competitions[0].competitors;
+  finalGeorgia.team.shortDisplayName = 'Georgia'; finalGeorgia.team.displayName = 'Georgia'; finalGeorgia.team.name = 'Georgia';
+  finalTexas.team.shortDisplayName = 'Texas'; finalTexas.team.displayName = 'Texas'; finalTexas.team.name = 'Texas';
+  finalGeorgia.curatedRank = { current: 4 }; finalTexas.curatedRank = { current: 7 };
+  finalGeorgia.records = [{ type: 'total', summary: '6-1 (4-1 SEC)' }]; finalTexas.records = [{ type: 'total', summary: '6-1 (3-1 SEC)' }];
+  final.competitions[0].broadcasts = [{ names: ['ABC'] }];
+  await page.clock.fastForward(31_000);
+  await expect(row.locator('.game-status')).toHaveText('Final');
+  await expect(row.locator('.team-line-visible')).toHaveText('−6.5');
+  await expect(row.locator('.compact-upset')).toHaveText('Upset final');
+  await rowFits(page, row);
+  await page.screenshot({ path: info.outputPath('approved-bare-spread-final.png'), fullPage: true, animations: 'disabled' });
+});
+
 test('text logo fallbacks stay inside their boxes at 200 percent text', async ({ page, harness }, info) => {
   const live = event('fallback-live', { state: 'live', rank: 5 });
   const upcoming = event('fallback-upcoming', { state: 'upcoming', rank: 12 });
@@ -153,7 +205,7 @@ test('touch users can open upcoming games to read favorite and pickem sources', 
   await page.screenshot({ path: info.outputPath('touch-sources-320-large-text.png'), fullPage: true, animations: 'disabled' });
 });
 
-test('after kickoff the line leaves the score row and stays on the game screen', async ({ page, harness }, info) => {
+test('after kickoff the original line stays beside the favorite and on the game screen', async ({ page, harness }, info) => {
   const withRecords = game => {
     const [away, home] = game.competitions[0].competitors;
     away.team.shortDisplayName = 'Mississippi State';
@@ -176,7 +228,7 @@ test('after kickoff the line leaves the score row and stays on the game screen',
   harness.state.events = [withRecords(event('line-transition', { state: 'live', rank: 5 }))];
   await page.getByRole('button', { name: 'Refresh scores' }).click();
   await expect(row.locator('.game-status')).toContainText('4th');
-  await expect(row.locator('a.game-summary .team-line, a.game-summary .pickem-line')).toHaveCount(0);
+  await expect(row.locator('a.game-summary .team-line-visible')).toHaveText('−7.5');
   await expect(row.locator('a.game-summary .team-record')).toHaveText(['3-1', '2-2']);
   await expect(row.locator('.detail-line')).toHaveCount(0);
   await row.locator('a.game-summary').click();
@@ -194,7 +246,7 @@ test('after kickoff the line leaves the score row and stays on the game screen',
   await screenFits(page);
   await closeScreen(page);
   await expect(row.locator('.game-status')).toHaveText('Final');
-  await expect(row.locator('a.game-summary .team-line, a.game-summary .pickem-line')).toHaveCount(0);
+  await expect(row.locator('a.game-summary .team-line-visible')).toHaveText('−7.5');
   await geometry(page);
 });
 
@@ -241,7 +293,7 @@ for (const state of ['live', 'delayed', 'final']) test(`${state} game screen lin
   harness.state.events = [matchup(true)];
   await page.getByRole('button', { name: 'Refresh scores' }).click();
   await expect(row.locator('.game-status')).toHaveText(state === 'final' ? 'Final' : state === 'delayed' ? 'Delayed' : /4th/);
-  await expect(summary.locator('.team-line, .pickem-line')).toHaveCount(0);
+  await expect(summary.locator('.team-line-visible')).toHaveText('−14.5');
   await expect(summary.locator('.team-record')).toHaveText(['10-2', '12-12-1']);
   await expect(summary.getByLabel('Possession')).toHaveCount(state === 'live' ? 1 : 0);
   await rowFits(page, row);
