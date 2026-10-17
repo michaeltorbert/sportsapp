@@ -1,5 +1,6 @@
-export const VERSION = "1.16.5";
+export const VERSION = "1.16.6";
 export const releases = [
+  { version: "1.16.6", date: "October 17, 2026", changes: "Maintenance update." },
   { version: "1.16.5", date: "October 17, 2026", changes: "In Help, Alerts and Settings, keyboard focus now stays inside the panel when a large-text heading fits again, moving to Close. Improve the reliability of local update and app-startup checks." },
   { version: "1.16.4", date: "October 17, 2026", changes: "Keep Scores header controls and the Guide date and wordmark on screen at 200% zoom, while preserving normal layouts and Guide timeline scrolling. Clarify update and local development instructions." },
   { version: "1.16.3", date: "October 17, 2026", changes: "Keep the known pregame spread beside the favored team after kickoff and in the final result. Upset watch, game details and alerts keep their existing behavior." },
@@ -45,7 +46,7 @@ export const releases = [
   { version: "1.3.2", date: "September 7, 2026", changes: "Improved alert-feed coverage checks and preserved one-score game history across delays and reloads. Repaired the standalone TypeScript check." },
   { version: "1.3.1", date: "September 6, 2026", changes: "Added a secure single-device notification test for support checks, with duplicate protection. Expanded automated checks for mobile navigation, overnight rollover, alert recovery, and notification handling." },
   { version: "1.3.0", date: "September 6, 2026", changes: "Prioritized games by team relevance, live drama, and upset significance. Added meaningful unranked ACC/SEC upset watches and improved favorite-data recovery and paused-game history. Existing phone-alert rules are preserved." },
-  { version: "1.2.0", date: "September 6, 2026", changes: "Prepared Cloudflare hosting with automated release checks and support for alerts at the new address. Added upcoming Top 25 games across the football week." },
+  { version: "1.2.0", date: "September 6, 2026", changes: "Moved the app to Cloudflare hosting, with support for alerts at the new address. Prepared automated release checks. Added upcoming Top 25 games across the football week." },
   { version: "1.1.5", date: "September 6, 2026", changes: "Kept daily and weekly ACC tab counts available when switching views. Clarified retained finals and limited the overnight Today notice to daily views." },
   { version: "1.1.4", date: "September 6, 2026", changes: "Restored background score polling through ESPN's complete CDN feed, with the prior score API retained as a fallback." },
   { version: "1.1.3", date: "September 5, 2026", changes: "Fixed inclusive score-feed date ranges. Prepared overtime alerts, first-seen live-game catch-up, and clearer service diagnostics. Cloudflare update pending." },

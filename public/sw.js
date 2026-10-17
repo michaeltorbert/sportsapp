@@ -1,4 +1,4 @@
-/* Saturday Signal v1.1.0. Live scores deliberately bypass service-worker caches. */
+/* Saturday Signal. Live scores deliberately bypass service-worker caches. */
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", event => event.waitUntil(self.clients.claim()));
 self.addEventListener("push", event => {

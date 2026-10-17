@@ -1,5 +1,13 @@
 # Saturday Signal releases
 
+## 1.16.6 · 2026-10-17
+
+- The local deployment preflight now checks every configured additional alert origin, not only the main site origin. An entirely empty value still means none; an empty, malformed, wildcard or non-exact entry fails with its position rather than its value (#9). The Worker's origin matching and the configured origins are unchanged.
+- When a release tag's commit isn't reachable from `origin/main`, the release check now says so and still stops the release. Other Git failures, such as a missing `origin/main`, still fail with their original error (#9).
+- The workflow artifact uploads are pinned to the official `actions/upload-artifact` v7.0.2 commit, which runs on Node 24, with the same artifact names, paths, hidden files and retention (#9).
+- Release history and alerts hosting notes now say v1.2.0 was first deployed from an authorized local Wrangler session while the automated release workflow was still being prepared, and label the stored deployment receipt as historical. The rollback guide adds that restoring an older alerts Worker would also restore its old-only origin list; the ban on restoring alert code that doesn't understand saved preferences is unchanged. The service worker's header comment no longer names a version (#9).
+- No app data, alert, subscription or external service behavior changes.
+
 ## 1.16.5 · 2026-10-17
 
 - In Help, Alerts and Settings, when a focused large-text heading comes to fit because its text gets smaller, focus moves to Close before the heading's tab stop is removed, instead of falling to the page body (#126). Keyboard Close, body scrolling, End, Escape and reduced motion are unchanged, as is the heading's appearance; no new scroll cue is added.
@@ -296,8 +304,9 @@
 - Improve favorite lookup fairness and failure backoff, retain known lines through feed omissions, and keep started-delay upset watches through comeback finals.
 - Add scenario and rendered regression coverage. Track nonblocking continuity and refinement work separately in issues #13 and #14.
 
-## 1.2.0 · 2026-09-06 · prepared, not deployed
+## 1.2.0 · 2026-09-06 · deployed locally; release workflow prepared
 
+- Status corrected October 17, 2026 (#9): this entry previously said "prepared, not deployed". On September 6, 2026 an authorized local Wrangler session made this version's initial Cloudflare deployment while the GitHub release workflow was still being set up. Automated paired releases were recorded later in #9.
 - Prepare the website for Cloudflare Workers at its provider address, with GitHub PR tests, optional preview deployment, and a tagged-release production workflow.
 - Verify each deployed website against its exact source commit and version, static assets, score API, and alert readiness. Preserve the existing alert Worker, database, cron and VAPID identity; allow both old and new production origins during migration.
 - Add a guarded current-week CDN fallback for the server score API when Cloudflare cannot reach ESPN’s date-specific endpoint. Reject unproven date coverage rather than show the wrong week.

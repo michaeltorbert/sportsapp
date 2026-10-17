@@ -1,6 +1,6 @@
 {
   "name": "saturday-signal",
-  "version": "1.16.5",
+  "version": "1.16.6",
   "private": true,
   "engines": {
     "node": ">=22.13.0"

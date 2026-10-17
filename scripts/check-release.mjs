@@ -9,7 +9,11 @@ export function checkRelease(tag, cwd = process.cwd()) {
   const git = (...args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   const head = git("rev-parse", "HEAD");
   if (git("rev-parse", `refs/tags/${tag}^{commit}`) !== head) throw new Error("Checkout does not match the release tag.");
-  git("merge-base", "--is-ancestor", head, "refs/remotes/origin/main");
+  try { git("merge-base", "--is-ancestor", head, "refs/remotes/origin/main"); } catch (error) {
+    // Status 1 is Git's "not an ancestor" answer; a missing ref or other Git failure is rethrown unchanged.
+    if (error.status === 1) throw new Error("Tagged commit is not reachable from origin/main. Merge it into main and fetch origin before releasing.");
+    throw error;
+  }
   if (git("status", "--porcelain", "--untracked-files=normal")) throw new Error("Release source must be clean.");
   const version = tag.slice(1);
   const pkg = JSON.parse(readFileSync(resolve(cwd, "package.json"), "utf8"));

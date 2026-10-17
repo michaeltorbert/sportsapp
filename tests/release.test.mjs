@@ -28,6 +28,24 @@ test("release configuration accepts JSONC comments and trailing commas but rejec
   assert.ok(readAlertConfig().vars.SITE_ORIGIN);
 });
 
+test("release configuration checks every additional alert origin without echoing it or changing the config", () => {
+  const source = additional => JSON.stringify({ vars: { SITE_ORIGIN: "https://old.test", ADDITIONAL_SITE_ORIGINS: additional }, compatibility_date: "2026-09-01" });
+  // Absent or blank means no additional origins. Members are trimmed like the Worker; HTTP and duplicates stay allowed.
+  for (const valid of [undefined, "", "   ", "https://new.test", " https://new.test , https://other.test ", "http://localhost:8787", "https://new.test,https://new.test"])
+    assert.deepEqual(readAlertConfig(source(valid)), JSON.parse(source(valid)));
+  const invalid = [
+    "https://new.test,https://other.test/path", "https://new.test,,https://other.test", "https://new.test,", ",https://new.test",
+    "https://new.test/", "https://new.test?x=1", "https://new.test#x", "https://user:secret-value@new.test",
+    "https://*.new.test", "*", "not a url", "https://NEW.test", "https://new.test:443",
+  ];
+  for (const value of invalid)
+    assert.throws(() => readAlertConfig(source(value)), error => /^ADDITIONAL_SITE_ORIGINS\[\d+\] must be an exact origin$/.test(error.message) &&
+      !error.message.includes("new.test") && !error.message.includes("secret") && !error.message.includes("not a url"));
+  assert.throws(() => readAlertConfig(source("https://new.test,https://other.test/path")), /ADDITIONAL_SITE_ORIGINS\[1\]/);
+  for (const value of [null, 42, true, ["https://new.test"], {}])
+    assert.throws(() => readAlertConfig(source(value)), /ADDITIONAL_SITE_ORIGINS must be a comma-separated string/);
+});
+
 function repository(t) {
   const cwd = mkdtempSync(join(tmpdir(), "release-test-"));
   t.after(() => rmSync(cwd, { recursive: true, force: true }));
@@ -51,9 +69,15 @@ test("release gate accepts only the clean tagged version reachable from main", t
   assert.throws(() => checkRelease("v1.2.0", cwd), /clean/);
   git("add", "."); git("commit", "-m", "unmerged change"); git("tag", "v1.2.1");
   assert.throws(() => checkRelease("v1.2.0", cwd), /Checkout/);
-  assert.throws(() => checkRelease("v1.2.1", cwd));
+  assert.throws(() => checkRelease("v1.2.1", cwd), /Tagged commit is not reachable from origin\/main/);
   git("update-ref", "refs/remotes/origin/main", "HEAD");
   assert.throws(() => checkRelease("v1.2.1", cwd), /versions disagree/);
+});
+
+test("release gate fails closed without claiming non-ancestry when origin/main is missing", t => {
+  const { cwd, git } = repository(t);
+  git("update-ref", "-d", "refs/remotes/origin/main");
+  assert.throws(() => checkRelease("v1.2.0", cwd), error => error.status !== 1 && !/not reachable/.test(error.message));
 });
 
 test("deployment verification detects wrong code, broken assets, stale scores and rejected alert origins", async () => {
