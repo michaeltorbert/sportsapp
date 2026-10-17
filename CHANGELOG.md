@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.16.4 · 2026-10-17
+
+- Keep Scores header controls visible at 200% zoom on narrow screens, without overlap or smaller text (#151).
+- Keep the Guide date, Today button and wordmark on screen at 200% zoom while preserving timeline scrolling and normal layouts (#145).
+- Clarify update and local development instructions; ordinary updates keep existing installations and alert subscriptions (#133).
+
 ## 1.16.3 · 2026-10-17
 
 - Keep the known pregame spread beside the favored team after kickoff and in the final result. Upset watch, game details and alerts keep their existing behavior.

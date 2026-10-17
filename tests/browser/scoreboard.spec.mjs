@@ -273,12 +273,6 @@ function chipLayout(page) {
       documentFits: document.documentElement.scrollWidth <= innerWidth,
       groupFits: group.scrollWidth <= group.clientWidth,
       groupInViewport: !outsideViewport(groupBox),
-      // Every visible element outside the Scores header that extends past the viewport.
-      overflowOutsideHeader: [...document.body.querySelectorAll("*")].filter(el => {
-        if (el.closest("[hidden], .app-header")) return false;
-        const style = getComputedStyle(el), box = el.getBoundingClientRect();
-        return style.display !== "none" && style.visibility !== "hidden" && (box.width > 0 || box.height > 0) && outsideViewport(box);
-      }).map(el => `${el.tagName.toLowerCase()}.${el.getAttribute("class") || ""}`),
       chips: [...group.querySelectorAll(".filter-tab")].map(button => {
         const [label, count] = button.children, total = count.querySelector(".count-total, .upset-total");
         const box = button.getBoundingClientRect(), labelBox = label.getBoundingClientRect(), countBox = count.getBoundingClientRect();
@@ -298,12 +292,9 @@ function chipLayout(page) {
 
 // At normal text sizes the five chips share one row. Enlarged text or zoom may wrap whole chips,
 // but never shrinks, clips or splits a label or count pair, or overflows the row, viewport or page.
-// headerOverflowControl is used only where the documented base control shows the Scores header
-// itself overflowing; the page check then covers everything outside that header.
-async function expectCompactChips(page, expected, { oneRow = true, labelSize = "12px", countSize = "11px", headerOverflowControl = false } = {}) {
+async function expectCompactChips(page, expected, { oneRow = true, labelSize = "12px", countSize = "11px" } = {}) {
   const layout = await chipLayout(page);
-  if (headerOverflowControl) expect(layout.overflowOutsideHeader, "nothing outside the Scores header extends past the viewport").toEqual([]);
-  else expect(layout.documentFits, "no document overflow").toBe(true);
+  expect(layout.documentFits, "no document overflow").toBe(true);
   expect(layout.groupInViewport, "the category row stays inside the viewport").toBe(true);
   expect(layout.groupFits, "no category row overflow").toBe(true);
   expect(layout.chips.map(chip => [chip.label, chip.count])).toEqual(expected);
@@ -355,20 +346,11 @@ for (const width of [320, 390, 1280]) test(`category chips keep one row of one-l
 // fallback fonts (Linux CI WebKit's wider metrics), on a busy week's multidigit counts.
 const BUSY_CHIPS = [["All", "18 (196)"], ["ACC", "4 (64)"], ["Top 25", "12 (130)"], ["One score", "10 (68)"], ["Upsets", "4 (12)"]];
 const WIDE_FONT = "*, *::before, *::after { font-family: Verdana, 'DejaVu Sans', sans-serif !important; }";
-// Base control (4a666106, identical external diagnostic harness, WebKit): with actual 2x CSS zoom the
-// Scores header's four 44px controls (88px each when zoomed) already extend past the viewport: Settings
-// ends at 376px of 320 (busy week, normal and wide fonts), at 392px of 375 (busy week, normal and wide
-// fonts) and at 392px of 390 (Day, Week and busy week, normal and wide fonts), whether or not the category
-// row is shown or reset; hiding only the header removes the page overflow, and the candidate measures
-// the same in all 10 cases. That existing header overflow is a separate follow-up, so only WebKit's zoom cases below 393px
-// replace the whole-page check with: nothing outside the header may extend past the viewport, and the
-// category row stays inside it. Chromium, doubled root text, 393px and 430px keep the whole-page check.
 for (const width of [320, 375, 390, 393, 430]) for (const [mode, style, sizes] of [
   ["text", "html { font-size: 200%; }", { labelSize: "24px", countSize: "22px" }],
   ["zoom", "html { zoom: 2; }", {}],
   ["zoom-wide", `html { zoom: 2; } ${WIDE_FONT}`, {}],
 ]) test(`enlarged ${mode} at ${width}px wraps whole category chips without overflow, clipping or smaller text`, async ({ page, harness, browserName }, testInfo) => {
-  const headerOverflowControl = browserName === "webkit" && mode !== "text" && width < 393;
   await page.setViewportSize({ width, height: 844 });
   await harness.open();
   await period(page, "Week").click();
@@ -378,7 +360,26 @@ for (const width of [320, 375, 390, 393, 430]) for (const [mode, style, sizes] o
   await expectCompactChips(page, BUSY_CHIPS);
   await page.addStyleTag({ content: style });
   if (mode !== "text") expect(await page.evaluate(() => getComputedStyle(document.documentElement).zoom)).toBe("2");
-  await expectCompactChips(page, BUSY_CHIPS, { oneRow: false, ...sizes, headerOverflowControl });
+  await expectCompactChips(page, BUSY_CHIPS, { oneRow: false, ...sizes });
+  const header = await page.evaluate(() => {
+    const controls = [...document.querySelectorAll(".header-actions button")];
+    const rects = controls.map(button => {
+      const rect = button.getBoundingClientRect(), style = getComputedStyle(button);
+      return { name: button.getAttribute("aria-label"), left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: Number.parseFloat(style.width), height: Number.parseFloat(style.height) };
+    });
+    return { clientWidth: document.documentElement.clientWidth, rects };
+  });
+  expect(header.rects.map(control => control.name)).toEqual(["Alerts off", "Refresh scores", "How this scoreboard works", "Settings"]);
+  for (const control of header.rects) {
+    expect(control.left, `${control.name} left edge`).toBeGreaterThanOrEqual(0);
+    expect(control.right, `${control.name} right edge`).toBeLessThanOrEqual(header.clientWidth);
+    expect(control.width, `${control.name} CSS width`).toBeGreaterThanOrEqual(44);
+    expect(control.height, `${control.name} CSS height`).toBeGreaterThanOrEqual(44);
+  }
+  for (let i = 0; i < header.rects.length; i++) for (let j = i + 1; j < header.rects.length; j++) {
+    const a = header.rects[i], b = header.rects[j];
+    expect(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top, `${a.name} does not overlap ${b.name}`).toBe(true);
+  }
   // Counts and their spoken meaning are unchanged by the enlarged layout.
   await expectCount(page, "All", 18, 196); await expectUpsetCount(page, 4, 12);
   await attachScreenshot(page, testInfo, `chips-enlarged-${mode}-${width}`);
