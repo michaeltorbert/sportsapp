@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { bundle, game, scoreboard } from "./helpers.mjs";
 const { parsePregameLine, classifyPregameEvidence, summaryPregameLine, enrichPregameLines } = await bundle("lib/pregame-lines.ts");
 const { normalizeScoreboard } = await bundle("lib/espn-data.ts");
-const { loadScores } = await bundle("lib/score-client.ts");
+const { loadScores, requestScores, enrichScores } = await bundle("lib/score-client.ts");
 const { gamePriority } = await bundle("lib/watch-priority.ts");
 const { classify } = await bundle("lib/football.ts");
 const { upsetCounts } = await bundle("lib/scoreboard-views.ts");
@@ -123,6 +123,28 @@ test("first visit after kickoff obtains a pregame line without losing scores; co
   assert.equal(summaries, 1);
   const failed = await loadScores("2026-09-06", signal, async url => url.includes("/summary?") ? Promise.reject(new Error("offline")) : Response.json({ events: [live] }));
   assert.equal(failed.games[0].pregameLine, undefined); assert.deepEqual(failed.games[0].teams.map(t => t.score), [21, 7]);
+});
+
+test("scores-only requests defer summaries until the same request is enriched", async () => {
+  const live = event({ status: { period: 4, clock: 120, type: { name: "STATUS_IN_PROGRESS", state: "in" } } });
+  delete live.competitions[0].odds; live.competitions[0].competitors[0].score = "21"; live.competitions[0].competitors[1].score = "7";
+  const normalized = normalizeScoreboard({ events: [live] }, "2026-09-06").games[0];
+  let summaries = 0;
+  const fetcher = async url => {
+    if (url.includes("/summary?")) { summaries++; return Response.json(summary(normalized)); }
+    return Response.json({ events: [live] });
+  };
+  const signal = new AbortController().signal;
+  const request = await requestScores("2026-09-06", signal, fetcher);
+  assert.equal(summaries, 0, "the score request does no optional summary work");
+  assert.equal(request.board.games[0].pregameLine, undefined);
+  assert.ok(Number.isInteger(request.generation) && Number.isInteger(request.epoch));
+  const later = await requestScores("2026-09-06", signal, fetcher);
+  assert.ok(later.generation > request.generation, "each score request captures its own start generation");
+  const enriched = await enrichScores(request, signal, fetcher);
+  assert.equal(summaries, 1);
+  assert.equal(enriched.games[0].pregameLine.favoriteId, "b");
+  assert.deepEqual(enriched.games[0].teams.map(t => t.score), [21, 7]);
 });
 
 test("ORD-015 first visit after kickoff recovers an unranked non-ACC/SEC favorite", async () => {

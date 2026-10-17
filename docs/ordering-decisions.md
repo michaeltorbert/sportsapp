@@ -33,6 +33,12 @@ This is the cumulative product contract and conflict log. The numeric implementa
 
 ## Conflict and supersession history
 
+### 2026-10-17 — FABLE-016 equal-kickoff upcoming relevance (clarification only)
+
+- Source: issue #14 follow-up FABLE-016 from the issue #10 review. This documents imported comparator behavior; it is not a new or superseding user instruction, and it adds no ORD ID. ORD-016 keeps its meaning (final Upsets membership).
+- Behavior: within each state group, the ORD-007 pin tier comes first, then ORD-017's final tiers or live priority, then kickoff. Upcoming games with the same kickoff then order by team relevance, then event ID. Other states fall through to event ID. No comparator, weight, urgency or filter change; ORD-001 and ORD-011 shared relative order remain active.
+- Regression: `FABLE-016 equal-kickoff upcoming games order by team relevance, then event ID, within state and pin tiers` in `tests/watch-priority.test.mjs`, with reversed and rotated inputs and shared category order. The complete ordering tests and full suite are required before handoff.
+
 ### 2026-10-15 — ORD-020 hide Duke away games only during play
 
 - Source: [issue #155](https://github.com/michaeltorbert/sportsapp/issues/155), exact wording: “Football math is still hiding Duke at the wrong times Home games should never be hidden unless I specify. In a way, games only during the game by default”. The user accepted this interpretation without objection: under the automatic default, home games are always visible, an away game is hidden only while it is being played, and neutral-site games stay visible. A separate suggestion about other teams was withdrawn and is not part of this rule.

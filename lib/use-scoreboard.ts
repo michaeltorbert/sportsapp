@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { accWeek, easternDate, gameDay, retainFinalCategories, shiftDate, validDate, type Scoreboard, type Team } from "./football";
 import { retainHalftimeEnvironment } from "./halftime-clock";
 import { stripHalftimeTiming } from "./halftime";
-import { loadScores } from "./score-client";
+import { enrichScores, requestScores, type ScoreRequest } from "./score-client";
 import { boardKey, expiredBoardKey, matchingBoard, type BoardScope } from "./scoreboard-views";
 
 import { useInitialSearch, useOnline, useTimezone } from "./browser-state";
@@ -51,14 +51,16 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
     const timeout = window.setTimeout(() => c.abort(), 40000);
     try {
       const clock = new Date(), calendar = easternDate(clock), yesterday = shiftDate(calendar, -1);
-      let prior: Scoreboard | null = null, overnightWarning = "";
+      let prior: ScoreRequest | null = null, overnightWarning = "";
       const manualGuide = dailyOnly && selection !== null;
-      try { if (!manualGuide) prior = await loadScores(yesterday, c.signal); }
+      // The probe is scores-only: enrichment cannot change the game-day decision,
+      // and a discarded prior board needs no optional summary work.
+      try { if (!manualGuide) prior = await requestScores(yesterday, c.signal); }
       catch (e) {
         if (c.signal.aborted) throw e;
         overnightWarning = "Could not verify overnight games. Checking again shortly.";
       }
-      const effective = gameDay(clock, prior, held.current);
+      const effective = gameDay(clock, prior?.board ?? null, held.current);
       if (controller.current !== c) return;
       held.current = effective; setToday(effective);
       try { localStorage.setItem("ss:game-day", effective); } catch { /* Optional. */ }
@@ -72,11 +74,16 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
         // Daily history and the full-FBS weekly cache are stored separately.
         const key = boardKey(boardScope, range.start, range.end);
         try {
-          const raw = boardScope === "daily" && prior?.date === activeDate ? prior : await loadScores(range.start, c.signal, fetch, range.end);
+          // A displayed prior board is enriched here, once, with its original request's generation and epoch.
+          const request = boardScope === "daily" && prior?.board.date === activeDate ? prior : await requestScores(range.start, c.signal, fetch, range.end);
           if (controller.current !== c) return;
-          // The weekly board's pre-1.9 key keeps retained final categories across the upgrade.
+          // Read this scope's history once. The weekly board's pre-1.9 key keeps retained final categories across the upgrade.
           const old = cache.current.get(key) || readBoard(key) || (boardScope === "week" ? readBoard(boardKey(boardScope, range.start, range.end, true)) : null);
-          const next = retainFinalCategories(raw, old);
+          // Retain the matching saved baseline before optional recovery: summary or cached
+          // lines fill only absence, while a current pre-kickoff line or pick'em still wins.
+          const next = await enrichScores({ ...request, board: retainFinalCategories(request.board, old) }, c.signal, fetch);
+          // Late canceled or superseded enrichment writes nothing.
+          if (controller.current !== c || c.signal.aborted) return;
           next.games = next.games.map(g => ({ ...g, teams: g.teams.map(t => ({ ...t, changed: !!old?.games.some(p => p.id === g.id && p.teams.some(o => o.id === t.id && o.score !== null && o.score !== t.score)) })) as [Team, Team] }));
           cache.current.set(key, next);
           if (cache.current.size > 8) cache.current.delete(cache.current.keys().next().value!);
@@ -96,7 +103,8 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
       const week = accWeek(effective);
       const checkOvernight = async () => {
         try {
-          const overnight = await loadScores(yesterday, c.signal);
+          // Informational only: the selected Guide board owns any enrichment.
+          const { board: overnight } = await requestScores(yesterday, c.signal);
           if (controller.current !== c) return;
           const effective = gameDay(clock, overnight, held.current);
           held.current = effective; setToday(effective); setOvernightError("");
