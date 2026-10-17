@@ -300,6 +300,7 @@ for (const state of ['live', 'delayed', 'final']) test(`${state} game screen lin
   await expect(summary.locator('.team-record')).toHaveText(['10-2', '12-12-1']);
   await expect(summary.getByLabel('Possession')).toHaveCount(state === 'live' ? 1 : 0);
   await rowFits(page, row);
+  await row.screenshot({ path: info.outputPath(`${state}-retained-card-320.png`), animations: 'disabled' });
   await summary.focus(); await summary.press('Enter');
   await expect(line).toBeVisible();
   await expect(line).toContainText('Northern Appalachian State Mountaineers −14.5');
