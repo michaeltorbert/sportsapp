@@ -281,7 +281,8 @@ for (const [width, height, zoom, wide] of [[375, 812, false], [1440, 1000, false
     await harness.open({ path: "/?team=150", waitForScores: false });
     if (zoom) await page.addStyleTag({ content: ZOOM + (wide ? WIDE_FONT : "") });
     await expect(teamScreen(page).locator("a.sched-row")).toHaveCount(12);
-    // The fixture's logo is failed before the network by the harness; the abbreviation tile stands in.
+    // The harness answers the fixture's logo with an HTTP 503 before the network: a real image error, so the
+    // product's own onError fallback shows the abbreviation in every engine.
     await expect(teamScreen(page).locator(".team-head .mh-logo")).toHaveText("DUKE");
     expect(harness.state.logoRequests).toContain("/i/teamlogos/ncaa/500/150.png");
     expect(await noOverflow(page)).toBe(true);

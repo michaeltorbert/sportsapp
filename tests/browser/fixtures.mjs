@@ -163,11 +163,13 @@ export const test = base.extend({
         }
         return route.continue();
       }
-      // Team logos named by the genuine team-season fixtures (#166). Expected, recorded and failed before
-      // the network, so the app's abbreviation fallback shows; any other image or host stays unexpected.
+      // Team logos named by the genuine team-season fixtures (#166). Expected and recorded, then answered
+      // here, before the network, by an ordinary HTTP failure (503, empty body). That is a real image load
+      // error in every engine, as an unavailable logo would be; an aborted load is not: WebKit reports it as
+      // cancelled and fires no image error. Any other image or host stays unexpected.
       if (url.hostname === "a.espncdn.com" && /^\/i\/teamlogos\/ncaa\/500\/\d{1,6}\.png$/.test(url.pathname) && req.resourceType() === "image") {
         state.logoRequests.push(url.pathname);
-        return route.abort("blockedbyclient");
+        return route.fulfill({ status: 503, contentType: "text/plain", headers: { "Cache-Control": "no-store" }, body: "" });
       }
       state.unexpectedExternal.push(req.url());
       return route.abort();
