@@ -272,6 +272,18 @@ test("an unavailable team says so, offers Retry and returns to Scores", async ({
   await expect(scores(page)).toBeVisible();
 });
 
+// The painted text boxes (line boxes) of each displayed element, for separation checks on actual layout.
+// Elements not displayed have no boxes; 1px boxes (visually hidden accessible text) are ignored.
+const textBoxes = locator => locator.evaluateAll(els => els.filter(el => el.getClientRects().length && getComputedStyle(el).visibility !== "hidden").map(el => {
+  const range = document.createRange(); range.selectNodeContents(el);
+  return { text: el.textContent.trim(), rects: [...range.getClientRects()].filter(b => b.width > 1 && b.height > 1).map(b => ({ l: b.left, r: b.right, t: b.top, b: b.bottom })) };
+}));
+function overlaps(items) {
+  const found = [];
+  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++)
+    if (items[i].rects.some(a => items[j].rects.some(b => Math.min(a.r, b.r) - Math.max(a.l, b.l) > 0.5 && Math.min(a.b, b.b) - Math.max(a.t, b.t) > 0.5))) found.push([items[i].text, items[j].text]);
+  return found;
+}
 const ZOOM = "html { zoom: 2; }";
 const WIDE_FONT = "*, *::before, *::after { font-family: Verdana, 'DejaVu Sans', sans-serif !important; }";
 for (const [width, height, zoom, wide] of [[375, 812, false], [1440, 1000, false], [375, 812, true], [375, 812, true, true]]) {
@@ -291,6 +303,38 @@ for (const [width, height, zoom, wide] of [[375, 812, false], [1440, 1000, false
     expect(small).toEqual([]);
     const clipped = await teamScreen(page).locator(".s-name, .team-title").evaluateAll(els => els.filter(el => el.scrollWidth > el.clientWidth + 1).length);
     expect(clipped).toBe(0);
+    // All eight averages are shown, each on one line, and no figure or label touches another: the table where
+    // its columns fit, otherwise the labeled list (200% zoom). Exactly one of the two is displayed.
+    await expect(teamScreen(page).locator(zoom ? ".team-averages-list" : ".team-averages")).toBeVisible();
+    await expect(teamScreen(page).locator(zoom ? ".team-averages" : ".team-averages-list")).toBeHidden();
+    const values = await textBoxes(teamScreen(page).locator(".team-averages td, .avg-stat dd b"));
+    expect(values.map(v => v.text)).toEqual(["31.7", "16.0", "442.7", "292.7", "233.2", "200.2", "209.5", "92.5"]);
+    for (const value of values) expect(value.rects.length, `${value.text} on one line`).toBe(1);
+    expect(overlaps([...values, ...await textBoxes(teamScreen(page).locator(".team-averages th, .avg-stat dt, .avg-side"))])).toEqual([]);
+    // The real upcoming Next game with TV: date, time, Next, TV and the full name never touch.
+    const next = teamScreen(page).locator("a.sched-row:has(.s-next)");
+    await expect(next).toHaveCount(1);
+    await expect(next.locator(".s-tv")).toHaveCount(1);
+    const parts = await textBoxes(next.locator(".s-date, .s-time, .s-next, .s-tv, .s-ha, .s-name"));
+    expect(parts.length).toBe(6);
+    expect(overlaps(parts)).toEqual([]);
+    // Full names keep meaningful width: no word of any opponent's name is broken across lines.
+    const broken = await teamScreen(page).locator(".s-name").evaluateAll(els => els.flatMap(el => {
+      const node = el.firstChild, out = [];
+      if (node?.nodeType !== Node.TEXT_NODE) return out;
+      for (const m of node.data.matchAll(/\S+/g)) {
+        const range = document.createRange(); range.setStart(node, m.index); range.setEnd(node, m.index + m[0].length);
+        if (new Set([...range.getClientRects()].filter(b => b.width > 1).map(b => Math.round(b.top))).size > 1) out.push(`${node.data}: ${m[0]}`);
+      }
+      return out;
+    }));
+    expect(broken).toEqual([]);
+    // The bar's redundant abbreviation is one line or omitted, never stacked letter by letter.
+    const bar = await teamScreen(page).locator(".team-bar-title").evaluate(el => {
+      const range = document.createRange(); range.selectNodeContents(el);
+      return { hidden: getComputedStyle(el).visibility === "hidden", lines: new Set([...range.getClientRects()].filter(b => b.width > 1).map(b => Math.round(b.top))).size };
+    });
+    expect(bar.hidden || bar.lines <= 1, JSON.stringify(bar)).toBe(true);
     const [side, main] = await Promise.all([".team-side", ".team-main"].map(s => teamScreen(page).locator(s).boundingBox()));
     if (width >= 1440 && !zoom) expect(main.x, "two columns on a wide screen").toBeGreaterThan(side.x + side.width);
     else expect(main.y, "one column on a phone or with large text").toBeGreaterThanOrEqual(side.y + side.height - 1);

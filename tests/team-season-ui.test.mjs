@@ -48,6 +48,10 @@ test("a complete Duke page: season, source record, four labeled pairs and all 12
   assert.match(html, /<th scope="col" class="c-team">Duke<span class="sr-only"> \(Duke Blue Devils\)<\/span><\/th><th scope="col" class="c-opp">Opponents<\/th>/);
   const rows = [...html.matchAll(/<tr><th scope="row">([^<]+)<\/th><td class="c-team">([^<]+)<\/td><td class="c-opp">([^<]+)<\/td><\/tr>/g)].map(m => m.slice(1));
   assert.deepEqual(rows, [["Points", "31.7", "16.0"], ["Total yards", "442.7", "292.7"], ["Passing yards", "233.2", "200.2"], ["Rushing yards", "209.5", "92.5"]]);
+  // The narrow presentation carries the same values, each labeled with its side (CSS displays one of the two).
+  const items = [...html.matchAll(/<div class="avg-stat"><dt>([^<]+)<\/dt><dd class="c-team"><span class="avg-side">Duke<\/span> <b>([^<]+)<\/b><\/dd><dd class="c-opp"><span class="avg-side">Opponents<\/span> <b>([^<]+)<\/b><\/dd><\/div>/g)].map(m => m.slice(1));
+  assert.deepEqual(items, rows);
+  assert.match(html, /<p class="team-averages-basis">Regular season · per game<\/p>/);
   assert.match(text(html), /Opponents shows what Duke allowed per game\./);
   // Every schedule game, and nothing else, is a same-root link carrying the team as context.
   const hrefs = links(html);

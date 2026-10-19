@@ -112,14 +112,25 @@ export function TeamScreen({ teamId, season, pending, failed, online, prefs, bac
   else if (!season.stats) averages = <Notice title="Season averages unavailable" action={<button type="button" data-focus-key="retry-stats" onClick={onRetry} disabled={pending}><RefreshCw size={13} aria-hidden="true" />{pending ? "Retrying…" : "Retry"}</button>}>They couldn’t be loaded. The record and schedule are still available.</Notice>;
   else {
     const stats = season.stats, missing = Object.values(stats).some(([a, b]) => a === null || b === null);
-    averages = <>
+    // One of two presentations is displayed, by the space actually available (a container query): the
+    // comparison table, or, where its three columns can't fit (large text, 200% zoom), the same eight
+    // values as a list with each value under its statistic and labeled. The other is display:none, so
+    // assistive technology reads exactly one.
+    averages = <div className="team-averages-wrap">
       <table className="stats-table team-averages">
         <caption>Regular season · per game</caption>
         <thead><tr><th scope="col"><span className="sr-only">Statistic</span></th><th scope="col" className="c-team">{team.shortName}<span className="sr-only"> ({team.name})</span></th><th scope="col" className="c-opp">Opponents</th></tr></thead>
         <tbody>{TEAM_STAT_ROWS.map(([key, label]) => <tr key={key}><th scope="row">{label}</th><td className="c-team"><Value value={stats[key][0]} /></td><td className="c-opp"><Value value={stats[key][1]} /></td></tr>)}</tbody>
       </table>
+      <div className="team-averages-list">
+        <p className="team-averages-basis">Regular season · per game</p>
+        <dl>{TEAM_STAT_ROWS.map(([key, label]) => <div className="avg-stat" key={key}><dt>{label}</dt>
+          <dd className="c-team"><span className="avg-side">{team.shortName}</span> <b><Value value={stats[key][0]} /></b></dd>
+          <dd className="c-opp"><span className="avg-side">Opponents</span> <b><Value value={stats[key][1]} /></b></dd>
+        </div>)}</dl>
+      </div>
       <p className="stats-footnote">Opponents shows what {team.shortName} allowed per game.{missing && " — means a value is unavailable."}</p>
-    </>;
+    </div>;
   }
   const refreshFailed = failed || season.stale;
   return <div className="game-screen team-screen">{bar}{notice}
