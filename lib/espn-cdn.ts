@@ -7,6 +7,8 @@ const metadata = z.object({ content: z.object({ sbData: z.object({
   season: z.object({ year: z.number().int(), type: z.number().int() }), week: z.object({ number: z.number().int() }),
   leagues: z.array(z.object({ calendar: z.array(z.object({ value: z.string(), entries: z.array(entry) })) })), events: z.array(z.unknown()),
 }) }) });
+/** Structural CDN admission only: identity, calendar and event checks still belong to each consumer's range. */
+export const isCdnDocument = (raw: unknown) => metadata.safeParse(raw).success;
 
 // A single selected week cannot prove an entire boundary day. Fetch all
 // intersecting weeks and accept only an identity-checked, continuous union.
