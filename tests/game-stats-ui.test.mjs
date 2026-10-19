@@ -126,7 +126,8 @@ test("started scoreboard with season-only source: catching up, averages removed"
 test("live gate: enabled live games render game stats; the off path still shows a static message with no spinner; exceptional states are status-first", () => {
   const { g, stats } = card("live", { state: "live" });
   const live = render(g, state("started", stats));
-  assert.match(live, /<h2 id="team-h" tabindex="-1">Team stats<\/h2><span class="stats-phase">This game<\/span>/);
+  assert.match(live, /<h2 id="team-h" tabindex="-1">Team stats<\/h2><\/div>/);
+  assert.doesNotMatch(live.match(/<div class="panel-head">.*?<\/div>/)?.[0] || "", /stats-phase/);
   assert.match(live, /Source reports 3:48 - 3rd/);
   assert.deepEqual(teamRows(live)[0], ["Total yards", "235", "142"]);
   assert.match(render(g, null), /Loading team stats…/, "enabled: the first open loads");

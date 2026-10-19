@@ -98,6 +98,7 @@ test("live stats: opening loads started totals, the source status shows separate
   await harness.open();
   await openGame(page, LIVE.id);
   await expect(screen(page).getByRole("heading", { name: "Team stats", level: 2 })).toBeVisible();
+  await expect(screen(page).locator("#panel-team .panel-head .stats-phase")).toHaveCount(0);
   await expect(screen(page).getByRole("row", { name: /Total yards/ })).toContainText("235");
   await expect(screen(page).getByText("Source reports 3:48 - 3rd")).toBeVisible();
   await expect(screen(page).locator("a.gamecast, a[target=\"_blank\"]")).toHaveCount(0);
@@ -109,6 +110,35 @@ test("live stats: opening loads started totals, the source status shows separate
   await expect(screen(page)).toHaveCount(0);
   await page.clock.fastForward(61_000);
   expect(harness.state.statsRequests).toHaveLength(2);
+});
+
+test("started Team stats keeps its context and comparison at phone size and actual 200% CSS zoom", async ({ page, harness }, info) => {
+  serve(harness);
+  harness.state.events = [matchup(LIVE, { state: "live" })];
+  await page.setViewportSize({ width: 393, height: 852 });
+  await harness.open();
+  await openGame(page, LIVE.id);
+  await expect(screen(page).getByRole("heading", { name: "Team stats", level: 2 })).toBeVisible();
+  await expect(screen(page).locator("#panel-team .panel-head .stats-phase")).toHaveCount(0);
+  await expect(screen(page).getByRole("button", { name: "Team stats", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(screen(page).getByRole("button", { name: "Scoring", exact: true })).toBeVisible();
+  await expect(screen(page).getByRole("button", { name: "Player stats", exact: true })).toBeVisible();
+  await expect(screen(page).locator(".mh-score")).toHaveCount(2);
+  await expect(screen(page).getByRole("row", { name: /Total yards/ })).toContainText("235");
+  await expect(screen(page).getByText("Source reports 3:48 - 3rd")).toBeVisible();
+  expect(await noOverflow(page)).toBe(true);
+  await page.screenshot({ path: info.outputPath("started-team-phone-393x852.png"), fullPage: true, animations: "disabled" });
+  await page.addStyleTag({ content: ZOOM });
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).zoom)).toBe("2");
+  await expect(screen(page).getByRole("heading", { name: "Team stats", level: 2 })).toBeVisible();
+  await expect(screen(page).locator("#panel-team .panel-head .stats-phase")).toHaveCount(0);
+  await expect(screen(page).getByRole("row", { name: /Total yards/ })).toContainText("235");
+  expect(await noOverflow(page)).toBe(true);
+  await page.screenshot({ path: info.outputPath("started-team-phone-393x852-zoom200.png"), fullPage: true, animations: "disabled" });
+  await view(page, "Player stats").tap();
+  await expect(screen(page).locator("#panel-players .panel-head .stats-phase")).toHaveText("This game");
+  await view(page, "Scoring").tap();
+  await expect(screen(page).locator("#panel-scoring .panel-head .stats-phase")).toHaveText("This game");
 });
 
 test("a stats failure stays explicit on the screen; Retry waits for backoff, then one attempt loads stats", async ({ page, harness }) => {

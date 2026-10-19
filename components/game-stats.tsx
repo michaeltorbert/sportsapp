@@ -145,7 +145,7 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
   // Scoring has its own availability: it never depends on the Team stats family or on Players.
   const scored = !disabled && snapshot && expected !== "pregame" ? scoringDisplay(snapshot, expected) : null;
 
-  const head = (id: string, title: string) => <div className="panel-head"><h2 id={id} tabIndex={-1}>{title}</h2><span className="stats-phase">{phaseLabel}</span></div>;
+  const head = (id: string, title: string, showPhase = true) => <div className="panel-head"><h2 id={id} tabIndex={-1}>{title}</h2>{showPhase && <span className="stats-phase">{phaseLabel}</span>}</div>;
   const team = hasBody && "kind" in snapshot!.team ? snapshot!.team : null;
   const partial = !!team && Object.values(team.rows).some(pair => pair[0] === null || pair[1] === null);
   return <>
@@ -160,7 +160,7 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
     <div className="game-body">
       <section className="panel" id="panel-team" aria-labelledby={onTeam ? "team-h" : undefined} aria-label={onTeam ? undefined : heading} hidden={!onTeam}>
         {onTeam && <>
-          {head("team-h", heading)}
+          {head("team-h", heading, expected !== "started")}
           {status}
           {hasBody && (team ? <>
             {team.kind === "season"

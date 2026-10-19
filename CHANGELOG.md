@@ -1,5 +1,9 @@
 # Saturday Signal releases
 
+## 1.16.8 · 2026-10-19
+
+- Started Team stats no longer repeats “This game” beside its heading. The comparison, tabs, matchup, source status, and the labels on Scoring and Player stats are unchanged (#165).
+
 ## 1.16.7 · 2026-10-17
 
 - After kickoff, a game keeps the pregame line this device saved for it before kickoff, instead of being replaced by a line found later from ESPN's game summary. A current pregame line, including a pick'em, still replaces a saved one, and a changed kickoff or matchup still discards it. Without a saved line, the line is still looked up from the summary. The saved line may not be the closing line, and the Day and Week views keep separate saved lines (#14).
