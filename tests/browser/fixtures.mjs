@@ -91,7 +91,7 @@ export const test = base.extend({
     appendEvidence(serverDiagnosticsDir, "test-timeline.jsonl", { event: "start", utc: startedAt, title: testInfo.title, file: testInfo.file, workerIndex: testInfo.workerIndex });
     const state = {
       events: standardEvents(), failScores: false, ready: true, failConfig: false,
-      active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 0, preferencesVersion: 1, sampleVersion: 1, failSave: false, conflict: false, alertRequests: [], scoreRequests: [], cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], statsRequests: [], teamRequests: [], logoRequests: [], unexpectedExternal: [], errors: [],
+      active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 0, preferencesVersion: 1, sampleVersion: 1, failSave: false, conflict: false, alertRequests: [], scoreRequests: [], scoreRequestCount: 0, holdAfterInitialProbe: false, failAfterInitialProbe: false, heldScoreReleases: [], releaseScores() { this.holdAfterInitialProbe = false; for (const release of this.heldScoreReleases.splice(0)) release(); }, cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], hostedScoreResponse: null, statsRequests: [], teamRequests: [], logoRequests: [], unexpectedExternal: [], errors: [],
     };
     const lifecycle = [];
     const recordLifecycle = event => {
@@ -133,9 +133,11 @@ export const test = base.extend({
       if (url.hostname === "site.api.espn.com") {
         if (url.pathname.endsWith("/summary")) { state.summaryRequests = (state.summaryRequests || 0) + 1; return json(state.summary || {}, state.failSummary ? 503 : 200); }
         if (url.pathname.endsWith("/scoreboard")) {
+          state.scoreRequestCount++;
+          if (state.holdAfterInitialProbe && state.scoreRequestCount > 1) await new Promise(resolve => state.heldScoreReleases.push(resolve));
           state.scoreRequests.push(url.search);
           const events = url.searchParams.get("groups") === "1" ? state.events.filter(e => e.competitions[0].competitors.some(c => c.team.conferenceId === "1")) : state.events;
-          return json({ events }, state.failScores ? 503 : 200);
+          return json({ events }, state.failScores || (state.failAfterInitialProbe && state.scoreRequestCount > 1) ? 503 : 200);
         }
       }
       if (url.hostname === "cdn.espn.com") {
@@ -148,6 +150,7 @@ export const test = base.extend({
         // Intercept here so the local Worker can never query a real score feed.
         if (url.pathname === "/api/scores") {
           state.hostedScoreRequests.push(url.search);
+          if (state.hostedScoreResponse) return json(typeof state.hostedScoreResponse === "function" ? state.hostedScoreResponse(url) : state.hostedScoreResponse);
           return json({ error: "simulated feed unavailable" }, 503);
         }
         // Stats are intercepted too, so the local Worker never queries real ESPN.

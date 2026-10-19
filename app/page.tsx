@@ -135,10 +135,13 @@ export default function Home() {
   const search = useInitialSearch();
   const [selectedCategories, setSelection] = useState<Selection | null>(null);
   const [selectedPeriod, setPeriod] = useState<Period | null>(null);
+  // A fresh, ordinary Today entry may choose Week once after its real daily feed arrives.
+  // User navigation and restored views cancel this pending choice synchronously.
+  const automaticWeekPending = useRef<boolean | null>(null);
   const initial = useMemo(() => initialView(search), [search]);
   const selection = selectedCategories ?? initial.selection, period = selectedPeriod ?? initial.period;
   const scope = scoreboardScope(period), weekly = period === "week";
-  const { date, today, data, boards, error, scopeError, refreshing, online, now, timezone, refresh, setDate, followToday } = useScoreboard(scope);
+  const { date, today, data, boards, error, scopeError, dailyError, overnightError, refreshing, online, now, timezone, refresh, setDate, followToday } = useScoreboard(scope);
   const dukeGames = useMemo(() => Object.values(boards).flatMap(board => board?.games || []), [boards]);
   const duke = useDukeVisibility(dukeGames);
   const protectedBoards = useMemo(() => ({ daily: protectDukeBoard(boards.daily, duke.prefs), week: protectDukeBoard(boards.week, duke.prefs) }), [boards, duke.prefs]);
@@ -159,6 +162,20 @@ export default function Home() {
   const teamSeason = useTeamSeason(teamPage ?? route?.team ?? null);
   const focusedOnce = useRef(false);
   const initialRestore = useRef<ReturnType<typeof updateRestoration> | undefined>(undefined);
+  const cancelAutomaticWeek = () => { automaticWeekPending.current = false; };
+  const choosePeriod = (next: Period) => { cancelAutomaticWeek(); setPeriod(next); };
+  const chooseDate = (next: string | null) => { cancelAutomaticWeek(); setDate(next); };
+  useEffect(() => {
+    if (search === null || automaticWeekPending.current !== null) return;
+    const params = new URLSearchParams(search), tab = params.get("tab");
+    const legacyTab = tab === "acc" || tab === "top25" || tab === "close" || tab === "upset";
+    const entry = readEntry(history.state);
+    automaticWeekPending.current = initial.period === "day"
+      && !params.has("date") && !params.has("period") && !legacyTab
+      && !parseGameRoute(search) && !parseTeamRoute(search)
+      && !updateRestoration(search) && !/^#game-[A-Za-z0-9_-]+$/.test(location.hash)
+      && !initialRestore.current && !(entry?.kind === "board" && (entry.snapshot || entry.consumed));
+  }, [search, initial.period]);
   useEffect(() => {
     if (initialRestore.current === undefined) initialRestore.current = updateRestoration(location.search);
     const restore = initialRestore.current;
@@ -195,6 +212,7 @@ export default function Home() {
   // read from the URL being left (a reloaded game URL carries them); the scoreboard entry's URL may not,
   // so equal values are still pinned as explicit state rather than left to the URL.
   const applyView = (view: BoardView) => {
+    cancelAutomaticWeek();
     setSelection(sameSelection(view.selection, selection) ? selection : view.selection);
     setPeriod(view.period);
     if (view.hideFinals !== hideFinals) setHideFinals(view.hideFinals);
@@ -367,6 +385,21 @@ export default function Home() {
   // The displayed board has loaded, or this period's refresh has failed. Until then a notification waits,
   // so the landing scroll above sees its card first whichever board arrives first; a failure still opens it.
   const boardSettled = !!data || !!scopeError || (!refreshing && !!error);
+  useEffect(() => {
+    if (automaticWeekPending.current !== true) return;
+    const daily = boards.daily, fetchedAt = daily ? Date.parse(daily.fetchedAt) : NaN;
+    const dailyAge = Number.isFinite(fetchedAt) ? Math.max(0, now - fetchedAt) : Infinity;
+    const healthyToday = !!daily && !!today && followToday && date === today && daily.date === today
+      && (daily.endDate === undefined || daily.endDate === today)
+      && !daily.stale && !daily.warnings?.length && !dailyError && !overnightError && online
+      // Match the existing feed/count freshness boundary: older scores are already shown as stale.
+      && dailyAge <= 90_000;
+    if (!healthyToday) return;
+    // The first healthy daily result consumes the decision. Later polls, filters and failures
+    // cannot switch the view; emptiness is measured before display/category filtering.
+    automaticWeekPending.current = false;
+    if (daily.games.length === 0) setPeriod("week");
+  }, [boards.daily, today, followToday, date, dailyError, overnightError, online, now]);
   // Auto-open once: an explicit event wins; real input before the game appears cancels the request.
   useEffect(() => {
     if (!openIntent) return;
@@ -426,9 +459,9 @@ export default function Home() {
   return <>
   <main className="app-shell compact-scoreboard" data-app-commit={LOADED_COMMIT}>
     <div className="scores-view" hidden={!!route || !!teamPage}>
-    <header className="app-header"><Link className="wordmark" href="/" onClick={() => { setDate(null); setSelection([]); setPeriod("day"); setFocusedGame(""); }} aria-label="Saturday Signal home"><span className="brand-icon"><Signal size={22} strokeWidth={3} /></span><span>saturday<wbr /><span className="brand-light">signal</span><span className="sport-label">COLLEGE FOOTBALL</span></span></Link><div className="header-actions"><Alerts iconOnly /><button className={`icon-button ${refreshing ? "refreshing" : ""}`} aria-label="Refresh scores" onClick={refresh} disabled={refreshing || !date}><RefreshCw size={20} /></button><Help update={update} /><DukeSettings games={data?.games || []} visibility={duke} /></div></header>
+    <header className="app-header"><Link className="wordmark" href="/" onClick={() => { cancelAutomaticWeek(); setDate(null); setSelection([]); setPeriod("day"); setFocusedGame(""); }} aria-label="Saturday Signal home"><span className="brand-icon"><Signal size={22} strokeWidth={3} /></span><span>saturday<wbr /><span className="brand-light">signal</span><span className="sport-label">COLLEGE FOOTBALL</span></span></Link><div className="header-actions"><Alerts iconOnly /><button className={`icon-button ${refreshing ? "refreshing" : ""}`} aria-label="Refresh scores" onClick={refresh} disabled={refreshing || !date}><RefreshCw size={20} /></button><Help update={update} /><DukeSettings games={data?.games || []} visibility={duke} /></div></header>
     <AppNavigation active="scores" date={date} followToday={followToday} />
-    <div className="date-bar">{weekly ? <div className="week-label"><CalendarDays size={16} /><span>{week ? `${shortDate(week.start)} – ${shortDate(week.end)}` : "This football week"}</span><span className="week-note">THU–MON</span></div> : <><div className="date-navigation"><button className="icon-button" aria-label="Previous day" disabled={!date} onClick={() => setDate(shiftDate(date, -1))}><ChevronLeft size={19} /></button><label className="date-picker"><CalendarDays size={15} /><span>{dateText}</span><input type="date" value={date} onChange={e => { if (e.target.value) setDate(e.target.value); }} aria-label="Scoreboard date, Eastern time" /></label><button className="icon-button" aria-label="Next day" disabled={!date} onClick={() => setDate(shiftDate(date, 1))}><ChevronRight size={19} /></button></div><button className={`today-button ${followToday ? "is-today" : ""}`} onClick={() => { setDate(null); if (followToday) refresh(); }} disabled={!today}>Today</button></>}<div className="period-modes" role="group" aria-label="Scoreboard period"><button aria-pressed={!weekly} onClick={() => setPeriod("day")}>Day</button><button aria-pressed={weekly} onClick={() => setPeriod("week")}>Week</button></div></div>
+    <div className="date-bar">{weekly ? <div className="week-label"><CalendarDays size={16} /><span>{week ? `${shortDate(week.start)} – ${shortDate(week.end)}` : "This football week"}</span><span className="week-note">THU–MON</span></div> : <><div className="date-navigation"><button className="icon-button" aria-label="Previous day" disabled={!date} onClick={() => chooseDate(shiftDate(date, -1))}><ChevronLeft size={19} /></button><label className="date-picker"><CalendarDays size={15} /><span>{dateText}</span><input type="date" value={date} onChange={e => { if (e.target.value) chooseDate(e.target.value); }} aria-label="Scoreboard date, Eastern time" /></label><button className="icon-button" aria-label="Next day" disabled={!date} onClick={() => chooseDate(shiftDate(date, 1))}><ChevronRight size={19} /></button></div><button className={`today-button ${followToday ? "is-today" : ""}`} onClick={() => { chooseDate(null); if (followToday) refresh(); }} disabled={!today}>Today</button></>}<div className="period-modes" role="group" aria-label="Scoreboard period"><button aria-pressed={!weekly} onClick={() => choosePeriod("day")}>Day</button><button aria-pressed={weekly} onClick={() => choosePeriod("week")}>Week</button></div></div>
     <p className="timezone-cue">Dates ET · Kickoffs {timezone}</p>
     {overnight && !weekly && <p className="overnight-note">Late games are still on. Today is staying on {shortDate(today)}.</p>}
     <div className="score-tabs">
