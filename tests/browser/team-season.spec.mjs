@@ -50,13 +50,36 @@ function recordNavigation(page) {
   page.on("request", request => { const url = new URL(request.url()); if (request.resourceType() === "document" || url.pathname.endsWith(".rsc") || request.headers().rsc === "1") seen.push(`${request.resourceType()} ${url.pathname}${url.search}`); });
   return seen;
 }
+// After load, vinext's Link shim (node_modules/vinext/dist/shims/link.js) prefetches each visible framework
+// Link's RSC payload once, on idle: here the Scores wordmark/nav link and Guide link (/.rsc, /guide.rsc).
+// That startup prefetch is not a navigation, so it must finish before the no-navigation record starts, as
+// tests/browser/game-screen.spec.mjs does. Every RSC or document request after that still counts.
+function trackFinished(page) {
+  const finished = [];
+  page.on("requestfinished", request => finished.push(new URL(request.url())));
+  return finished;
+}
+async function settleStartupPrefetches(page, finished) {
+  const expected = await page.evaluate(() => {
+    if (!window.__VINEXT_LINK_PREFETCH_ROUTES__) return [];
+    return [...new Set([...document.querySelectorAll(".app-header a.wordmark, .destination-nav a")].filter(a => {
+      const box = a.getBoundingClientRect();
+      return box.width > 0 && box.height > 0 && box.bottom >= -250 && box.top <= innerHeight + 250 && box.right >= -250 && box.left <= innerWidth + 250;
+    }).map(a => { const url = new URL(a.href); return `${url.pathname === "/" ? "/.rsc" : `${url.pathname}.rsc`}${url.search}`; }))];
+  });
+  const done = path => finished.some(url => { const search = new URLSearchParams(url.search); search.delete("_rsc"); const q = search.toString(); return `${url.pathname}${q ? `?${q}` : ""}` === path; });
+  await expect.poll(() => expected.filter(path => !done(path)), "startup Link prefetches finished before recording").toEqual([]);
+  return expected;
+}
 
 test("board → game → team → schedule game: in-app links, owned Back and Forward with focus and scroll, and no framework navigation", async ({ page, harness }, info) => {
   serveTeams(harness); board(harness);
   await page.setViewportSize({ width: 393, height: 852 });
+  const finished = trackFinished(page);
   await harness.open();
   expect(harness.state.teamRequests, "the scoreboard does no team work").toEqual([]);
   await page.evaluate(() => { window.__main = document.querySelector("main"); });
+  await info.attach("startup-prefetches", { contentType: "application/json", body: JSON.stringify(await settleStartupPrefetches(page, finished)) });
   const navigation = recordNavigation(page);
   await page.locator(`#game-${TULANE_GAME} a.game-summary`).tap();
   await expect(gameScreen(page)).toBeVisible();
@@ -273,15 +296,31 @@ test("an unavailable team says so, offers Retry and returns to Scores", async ({
 });
 
 // The painted text boxes (line boxes) of each displayed element, for separation checks on actual layout.
-// Elements not displayed have no boxes; 1px boxes (visually hidden accessible text) are ignored.
+// A Range over an element also reports glyph boxes of descendants that are never painted: visually hidden
+// accessible text (.sr-only) lays out its glyphs at full size inside a clipped 1px box. Such text is
+// excluded by its actual clipping (an ancestor clipped to at most 1px, or a clip/clip-path), not by class.
+// Every other visible glyph is measured, aria-hidden or not. Undisplayed elements have no boxes.
 const textBoxes = locator => locator.evaluateAll(els => els.filter(el => el.getClientRects().length && getComputedStyle(el).visibility !== "hidden").map(el => {
-  const range = document.createRange(); range.selectNodeContents(el);
-  return { text: el.textContent.trim(), rects: [...range.getClientRects()].filter(b => b.width > 1 && b.height > 1).map(b => ({ l: b.left, r: b.right, t: b.top, b: b.bottom })) };
+  const unpainted = node => {
+    for (let a = node.parentElement; a; a = a === el ? null : a.parentElement) {
+      const style = getComputedStyle(a), box = a.getBoundingClientRect();
+      if ((style.clip !== "auto" && style.clip !== "") || style.clipPath !== "none" || ((box.width <= 1 || box.height <= 1) && style.overflow !== "visible")) return true;
+    }
+    return false;
+  };
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), rects = [], painted = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!node.data.trim() || unpainted(node)) continue;
+    painted.push(node.data);
+    const range = document.createRange(); range.selectNodeContents(node);
+    rects.push(...[...range.getClientRects()].filter(b => b.width > 1 && b.height > 1).map(b => ({ l: b.left, r: b.right, t: b.top, b: b.bottom })));
+  }
+  return { text: el.textContent.trim(), painted: painted.join("").replace(/\s+/g, " ").trim(), rects };
 }));
 function overlaps(items) {
   const found = [];
   for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++)
-    if (items[i].rects.some(a => items[j].rects.some(b => Math.min(a.r, b.r) - Math.max(a.l, b.l) > 0.5 && Math.min(a.b, b.b) - Math.max(a.t, b.t) > 0.5))) found.push([items[i].text, items[j].text]);
+    if (items[i].rects.some(a => items[j].rects.some(b => Math.min(a.r, b.r) - Math.max(a.l, b.l) > 0.5 && Math.min(a.b, b.b) - Math.max(a.t, b.t) > 0.5))) found.push([items[i].painted, items[j].painted]);
   return found;
 }
 const ZOOM = "html { zoom: 2; }";
@@ -297,6 +336,8 @@ for (const [width, height, zoom, wide] of [[375, 812, false], [1440, 1000, false
     // product's own onError fallback shows the abbreviation in every engine.
     await expect(teamScreen(page).locator(".team-head .mh-logo")).toHaveText("DUKE");
     expect(harness.state.logoRequests).toContain("/i/teamlogos/ncaa/500/150.png");
+    // The whole prepared page is captured before any layout assertion, so a failure leaves its full pixels.
+    await page.screenshot({ path: info.outputPath(`team-${width}x${height}${zoom ? "-zoom200" : ""}${wide ? "-wide" : ""}.png`), fullPage: true, animations: "disabled" });
     expect(await noOverflow(page)).toBe(true);
     // Every control is at least 44 CSS px tall; full names wrap inside their row.
     const small = await teamScreen(page).locator("a, button").evaluateAll(els => els.filter(el => el.getBoundingClientRect().height < 44).map(el => el.outerHTML.slice(0, 80)));
@@ -317,6 +358,9 @@ for (const [width, height, zoom, wide] of [[375, 812, false], [1440, 1000, false
     await expect(next.locator(".s-tv")).toHaveCount(1);
     const parts = await textBoxes(next.locator(".s-date, .s-time, .s-next, .s-tv, .s-ha, .s-name"));
     expect(parts.length).toBe(6);
+    // Each part really paints text (the TV's spoken "on" prefix is visually hidden; its network name is not).
+    for (const part of parts) expect(part.painted, part.text).not.toBe("");
+    expect(parts.find(part => part.text.startsWith("on ")).painted).not.toMatch(/^on /);
     expect(overlaps(parts)).toEqual([]);
     // Full names keep meaningful width: no word of any opponent's name is broken across lines.
     const broken = await teamScreen(page).locator(".s-name").evaluateAll(els => els.flatMap(el => {
@@ -338,6 +382,5 @@ for (const [width, height, zoom, wide] of [[375, 812, false], [1440, 1000, false
     const [side, main] = await Promise.all([".team-side", ".team-main"].map(s => teamScreen(page).locator(s).boundingBox()));
     if (width >= 1440 && !zoom) expect(main.x, "two columns on a wide screen").toBeGreaterThan(side.x + side.width);
     else expect(main.y, "one column on a phone or with large text").toBeGreaterThanOrEqual(side.y + side.height - 1);
-    await page.screenshot({ path: info.outputPath(`team-${width}x${height}${zoom ? "-zoom200" : ""}${wide ? "-wide" : ""}.png`), fullPage: true, animations: "disabled" });
   });
 }
