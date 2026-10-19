@@ -19,8 +19,7 @@ const output = await build({
       if (args.path === "react") return { contents: "export const useMemo=fn=>fn(),useState=(...a)=>globalThis.scorePageTest.useState(...a),useRef=v=>({current:v}),useEffect=fn=>globalThis.scorePageTest.effect(fn),useLayoutEffect=()=>{},useSyncExternalStore=()=>null;" };
       if (args.path === "react/jsx-runtime") return { contents: "export const jsx=(...a)=>globalThis.scorePageTest.jsx(...a),jsxs=(...a)=>globalThis.scorePageTest.jsxs(...a),Fragment=globalThis.scorePageTest.Fragment;" };
       if (args.path === "@/lib/use-duke-visibility") return { contents: "export const useDukeVisibility=()=>({prefs:null,storageWarning:'',setHidden(){},setMode(){}});" };
-      // Controlled like the other data hooks: no team page or team context in these scoreboard cases,
-      // and the effect order the replay tests index (restoration first) stays the page's own.
+      // Controlled like the other data hooks: no team page or team context in these scoreboard cases.
       if (args.path === "@/lib/use-team-season") return { contents: "export const useTeamSeason=()=>({season:null,pending:false,failure:null,online:true,retry(){}});" };
       if (args.path === "@/lib/use-app-update") return { contents: "export const LOADED_COMMIT=undefined,useAppUpdate=()=>({target:null,status:'',refreshing:false,check(){},refresh(){},dismiss(){}});" };
       if (args.path === "@/lib/use-scoreboard") return { contents: "export const useScoreboard=scope=>globalThis.scorePageTest.scoreboard(scope);" };
@@ -516,13 +515,15 @@ test("counts use the Duke-protected board, so a hidden Duke game is never counte
 test("restoration effect replay uses its captured snapshot after transient URL cleanup", () => {
   const effects = [], changes = [];
   render([], { effects, changes });
+  const restorationEffect = effects.find(effect => effect.toString().includes('"_ss_update"'));
+  assert.ok(restorationEffect, "the captured transient-update restoration effect is present");
   const original = new Map(["location", "history", "localStorage"].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   const url = new URL(`https://example.test/?_ss_update=${"b".repeat(40)}&_ss_hide_finals=1&_ss_focus=focused`);
   Object.defineProperty(globalThis, "location", { configurable: true, value: url });
   Object.defineProperty(globalThis, "history", { configurable: true, value: { state: { retained: true }, replaceState(state, title, next) { assert.deepEqual(state, { retained: true }); url.href = String(next); } } });
   Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem() { throw Error("Restoration must not read stored preference"); } } });
   try {
-    effects[0](); assert.equal(url.search, ""); effects[0]();
+    restorationEffect(); assert.equal(url.search, ""); restorationEffect();
     // A 1.14.0 update link (no _ss_open) keeps its membership and opens that game once.
     const once = [{ slot: 2, value: true }, { slot: 3, value: "focused" }, { slot: 5, value: "focused" }];
     assert.deepEqual(changes, [...once, ...once]);

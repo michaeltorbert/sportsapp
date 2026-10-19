@@ -387,13 +387,10 @@ export default function Home() {
   const boardSettled = !!data || !!scopeError || (!refreshing && !!error);
   useEffect(() => {
     if (automaticWeekPending.current !== true) return;
-    const daily = boards.daily, fetchedAt = daily ? Date.parse(daily.fetchedAt) : NaN;
-    const dailyAge = Number.isFinite(fetchedAt) ? Math.max(0, now - fetchedAt) : Infinity;
+    const daily = boards.daily;
     const healthyToday = !!daily && !!today && followToday && date === today && daily.date === today
       && (daily.endDate === undefined || daily.endDate === today)
-      && !daily.stale && !daily.warnings?.length && !dailyError && !overnightError && online
-      // Match the existing feed/count freshness boundary: older scores are already shown as stale.
-      && dailyAge <= 90_000;
+      && !daily.stale && !daily.warnings?.length && !dailyError && !overnightError && online;
     if (!healthyToday) return;
     // The first healthy daily result consumes the decision. Later polls, filters and failures
     // cannot switch the view; emptiness is measured before display/category filtering.
