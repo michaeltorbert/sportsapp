@@ -54,7 +54,10 @@ test("first tap opens the dedicated screen with the final team comparison; Playe
   expect(harness.state.statsRequests).toEqual([`?event=${FINAL.id}&phase=final&refresh=0&scoring=1`]);
   // Game details stay in the app: score and status, with no external Gamecast link (user request).
   await expect(screen(page).locator(".mh-score")).toHaveText(["20", "17"]);
-  await expect(screen(page).getByRole("link")).toHaveCount(0);
+  // The only links are the in-app team pages (issue #166), outside the score header.
+  const links = screen(page).getByRole("link");
+  await expect(links).toHaveCount(2);
+  expect(await links.evaluateAll(anchors => anchors.map(a => [new URL(a.href).origin === location.origin, new URL(a.href).search, a.target, !!a.closest('[aria-hidden="true"], .masthead')]))).toEqual([[true, `?team=${FINAL.teams[0]}`, "", false], [true, `?team=${FINAL.teams[1]}`, "", false]]);
   await expect(screen(page).getByText("Gamecast")).toHaveCount(0);
   const team = view(page, "Team stats"), players = view(page, "Player stats");
   for (const control of [team, players]) expect((await control.boundingBox()).height).toBeGreaterThanOrEqual(44);

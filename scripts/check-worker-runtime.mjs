@@ -39,6 +39,12 @@ const identity = await keepFirstFailure(async () => {
   const stats = await fetchLocal("/api/stats?event=invalid&phase=final");
   assert.equal(stats.status, 400);
   assert.equal(stats.headers.get("cache-control"), "no-store");
+  // Invalid team input is rejected the same way, with no upstream work.
+  for (const query of ["", "?team=", "?team=abc", "?team=1234567", "?team=150&team=153"]) {
+    const team = await fetchLocal(`/api/team${query}`);
+    assert.equal(team.status, 400, `team${query}`);
+    assert.equal(team.headers.get("cache-control"), "no-store");
+  }
   runtime.assertAlive();
   return metadata;
 }, {
@@ -49,4 +55,4 @@ const identity = await keepFirstFailure(async () => {
     if (!cleanup.gone) throw new Error(`Worker runtime process group was not cleaned up: ${cleanup.error?.message}`);
   },
 });
-console.log(JSON.stringify({ ...identity, runtime: "workerd", checks: ["health", "home", "manifest", "service-worker", "icon", "score-route", "stats-route"], externalRequests: 0 }));
+console.log(JSON.stringify({ ...identity, runtime: "workerd", checks: ["health", "home", "manifest", "service-worker", "icon", "score-route", "stats-route", "team-route"], externalRequests: 0 }));

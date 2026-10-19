@@ -1,0 +1,71 @@
+{
+  "description": "Minimized genuine public ESPN team API captures for issue #166. Every retained value is copied unchanged from the named source; nothing is synthetic. Tests that need a variation construct it in the test and label it SYNTHETIC there.",
+  "captured": "2026-10-19 (UTC), ordinary public team schedule and statistics responses fetched by the coordinator with local curl; see sourceTimestamp per file.",
+  "generator": "prepare-fixtures.mjs (operational, outside the repository): node prepare-fixtures.mjs <inputDir> <repoDir>",
+  "minimization": {
+    "schedule": "Kept timestamp, status, season, requestedSeason; team id/abbreviation/location/name/displayName/logo/recordSummary; per event id, date, name, shortName, season, seasonType, week, timeValid and competitions[] with id, date, timeValid, neutralSite, status, broadcasts[].media.shortName, competitors[] id/homeAway/winner/score and team id/location/nickname/abbreviation/displayName/shortDisplayName plus only the logo whose rel includes \"default\". Dropped leaders, links, venue, notes, per-competitor records and rankings, tickets and other unread fields.",
+    "statistics": "Kept status, season, requestedSeason, team (as above), and the complete passing, rushing and scoring categories of results.stats.categories and results.opponent. Other categories dropped."
+  },
+  "files": {
+    "espn-team-season-duke-2026.json": {
+      "default": {
+        "file": "schedule-default-body.json",
+        "bytes": 342890,
+        "sha256": "cb5b7452731786d44b0ec8546478ae8d2d715b0eb3373faffb8750856bbfee38",
+        "sourceTimestamp": "2026-10-19T05:14:30Z"
+      },
+      "regular": {
+        "file": "schedule-regular-body.json",
+        "bytes": 342890,
+        "sha256": "fafefc319ca00470a27ee3e51cd9fe6e516d78383ec3bb1aa1ecae4f424ebfb7",
+        "sourceTimestamp": "2026-10-19T05:04:44Z"
+      },
+      "postseason": {
+        "file": "schedule-postseason-body.json",
+        "bytes": 565,
+        "sha256": "ab02bfb5f57e67331b958faf65e592f208f2899ee25bea681148fab78da6bcbc",
+        "sourceTimestamp": "2026-10-19T05:04:44Z"
+      },
+      "stats": {
+        "file": "team-stats-regular-body.json",
+        "bytes": 75635,
+        "sha256": "4f7fefdc252d005a96fcc60ff815d8f6eaaff1b263c365779c6b43c0e4196b09",
+        "sourceTimestamp": null
+      }
+    },
+    "espn-team-season-unc-2026.json": {
+      "schedule": {
+        "file": "unc-schedule-body.json",
+        "bytes": 362914,
+        "sha256": "7f032aa525d86d690b616f70e3d9d396d08ff53bb6830a10885e122b3078fad4",
+        "sourceTimestamp": "2026-10-19T05:10:41Z"
+      },
+      "stats": {
+        "file": "unc-stats-body.json",
+        "bytes": 75627,
+        "sha256": "7009496fa9a41f44930587e346395f83ca84b7456774c41911885b055a98b5e8",
+        "sourceTimestamp": null
+      }
+    },
+    "espn-team-season-postseason-2025.json": {
+      "file": "schedule-2025-postseason-body.json",
+      "bytes": 46877,
+      "sha256": "4076ae076a7725d51dfb978822c743f9ffb0d5baef1eb4b3b16164c95e8ed11c",
+      "sourceTimestamp": "2026-10-19T04:51:26Z"
+    }
+  },
+  "outputs": {
+    "espn-team-season-duke-2026.json": {
+      "bytes": 109008,
+      "sha256": "0deff3f313021005cc88694b047bdf4b89b3b8bddd359c8b75dd9ce71793cd81"
+    },
+    "espn-team-season-unc-2026.json": {
+      "bytes": 74284,
+      "sha256": "7ebb2b6186e0baadb66fa60ea88f250c42c63eb77103d751f81c3a33cbb26fd2"
+    },
+    "espn-team-season-postseason-2025.json": {
+      "bytes": 3380,
+      "sha256": "a0a29612da459a2489a201d3aee4128165aaca299fb679afc7bf91f0509e9e0b"
+    }
+  }
+}

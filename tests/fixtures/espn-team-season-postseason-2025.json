@@ -1,0 +1,132 @@
+{
+  "timestamp": "2026-10-19T04:51:26Z",
+  "status": "success",
+  "season": {
+    "year": 2026,
+    "type": 2,
+    "name": "Regular Season",
+    "displayName": "2026",
+    "half": 1
+  },
+  "team": {
+    "id": "150",
+    "abbreviation": "DUKE",
+    "location": "Duke",
+    "name": "Blue Devils",
+    "displayName": "Duke Blue Devils",
+    "logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+    "recordSummary": "4-2"
+  },
+  "events": [
+    {
+      "id": "401778329",
+      "date": "2025-12-31T19:00Z",
+      "name": "Arizona State Sun Devils at Duke Blue Devils",
+      "shortName": "ASU VS DUKE",
+      "season": {
+        "year": 2025,
+        "displayName": "2025"
+      },
+      "seasonType": {
+        "id": "3",
+        "type": 3,
+        "name": "Postseason",
+        "abbreviation": "post"
+      },
+      "week": {
+        "number": 1,
+        "text": "Bowls"
+      },
+      "timeValid": true,
+      "competitions": [
+        {
+          "id": "401778329",
+          "date": "2025-12-31T19:00Z",
+          "timeValid": true,
+          "neutralSite": true,
+          "competitors": [
+            {
+              "id": "150",
+              "homeAway": "home",
+              "winner": true,
+              "score": {
+                "value": 42,
+                "displayValue": "42"
+              },
+              "team": {
+                "id": "150",
+                "location": "Duke",
+                "nickname": "Duke",
+                "abbreviation": "DUKE",
+                "displayName": "Duke Blue Devils",
+                "shortDisplayName": "Duke",
+                "logos": [
+                  {
+                    "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                    "rel": [
+                      "full",
+                      "default"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "9",
+              "homeAway": "away",
+              "winner": false,
+              "score": {
+                "value": 39,
+                "displayValue": "39"
+              },
+              "team": {
+                "id": "9",
+                "location": "Arizona State",
+                "nickname": "Arizona St",
+                "abbreviation": "ASU",
+                "displayName": "Arizona State Sun Devils",
+                "shortDisplayName": "Arizona St",
+                "logos": [
+                  {
+                    "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/9.png",
+                    "rel": [
+                      "full",
+                      "default"
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "broadcasts": [
+            {
+              "media": {
+                "shortName": "CBS"
+              }
+            }
+          ],
+          "status": {
+            "clock": 0,
+            "displayClock": "0:00",
+            "period": 4,
+            "type": {
+              "id": "3",
+              "name": "STATUS_FINAL",
+              "state": "post",
+              "completed": true,
+              "description": "Final",
+              "detail": "Final",
+              "shortDetail": "Final"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "requestedSeason": {
+    "year": 2025,
+    "type": 3,
+    "name": "Postseason",
+    "displayName": "2025"
+  }
+}

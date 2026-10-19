@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { ChevronLeft, CloudOff, Signal, TriangleAlert, Tv, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, CloudOff, Signal, TriangleAlert, Tv, Zap } from "lucide-react";
 import { classify, type Game, type Scoreboard, type Team } from "@/lib/football";
 import { upsetExplanation, upsetWatch } from "@/lib/upset";
 import { PLAYER_CATEGORIES, type PlayerCategory } from "@/lib/game-stats";
@@ -73,6 +73,14 @@ function Context({ game }: { game: Game }) {
     <div className="badges">{tags.acc && <span className="badge acc-badge">ACC</span>}{tags.top25 && <span className="badge top25-badge">Top 25</span>}{tags.close && <span className="badge close-badge">{margin === 0 ? "Tied" : margin !== null && margin <= 8 ? `${margin}-point game` : "One-score watch"}</span>}{tags.upset && <span className="badge upset-badge">{upsetLabel}</span>}</div>
     {/* No external Gamecast link: the user wants the game kept in this app (2026-10-13). */}
   </div>;
+}
+export type TeamLink = { id: string; name: string; href: string };
+// Quiet in-app entry to each team's season, outside the aria-hidden score grid. A plain activation
+// opens it in place; a modified click or middle click keeps the browser's own link behavior.
+function TeamLinks({ links, onOpen }: { links: TeamLink[]; onOpen: (id: string) => void }) {
+  return <nav className="team-links" aria-label="Team seasons"><span className="team-links-label" aria-hidden="true">Season &amp; schedule</span>
+    {links.map(link => <a key={link.id} href={link.href} data-focus-key={`team-${link.id}`} aria-label={`${link.name} season and schedule`} onClick={event => { if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); onOpen(link.id); }}><span>{link.name}</span><ChevronRight size={16} aria-hidden="true" /></a>)}
+  </nav>;
 }
 
 type Layout = { compact: boolean; wide: boolean; stick: boolean };
@@ -150,9 +158,12 @@ export type GameScreenProps = {
   game: Game | null; loading: boolean; board: Scoreboard | null; scopeError: boolean; backLabel: string;
   section: Section; onSection: (section: Section) => void; onBack: () => void;
   warning?: string; onRetryScores?: () => void; refreshing?: boolean; notice?: ReactNode;
+  // Where Back goes when it is not the scoreboard (a team's schedule). Defaults to Scores.
+  back?: { title: string; detail: string; label: string };
+  teamLinks?: TeamLink[]; onOpenTeam?: (id: string) => void;
 };
-/** The dedicated game screen. It renders nothing about a game until that game is eligible on the protected boards. */
-export function GameScreen({ game, loading, board, scopeError, backLabel, section, onSection, onBack, warning, onRetryScores, refreshing = false, notice }: GameScreenProps) {
+/** The dedicated game screen. It renders nothing about a game until that game is eligible on the protected boards or a validated team schedule. */
+export function GameScreen({ game, loading, board, scopeError, backLabel, section, onSection, onBack, warning, onRetryScores, refreshing = false, notice, back: target, teamLinks, onOpenTeam }: GameScreenProps) {
   const root = useRef<HTMLDivElement>(null);
   const id = game?.id;
   const layout = useLayout(root, id);
@@ -222,7 +233,7 @@ export function GameScreen({ game, loading, board, scopeError, backLabel, sectio
   };
 
   const classes = `game-screen ${layout.compact ? "is-compact" : ""} ${layout.wide ? "is-wide" : ""} ${layout.stick ? "can-stick" : ""}`;
-  const back = <button type="button" className="back-button" data-focus-key="back" aria-label={`Back to scores, ${backLabel}`} onClick={onBack}><ChevronLeft size={22} aria-hidden="true" /><span className="back-text" aria-hidden="true"><span>Scores</span><small>{backLabel}</small></span></button>;
+  const back = <button type="button" className="back-button" data-focus-key="back" aria-label={target?.label ?? `Back to scores, ${backLabel}`} onClick={onBack}><ChevronLeft size={22} aria-hidden="true" /><span className="back-text" aria-hidden="true"><span>{target?.title ?? "Scores"}</span><small>{target?.detail ?? backLabel}</small></span></button>;
   const brand = <span className="bar-brand" aria-hidden="true"><span className="brand-icon"><Signal size={17} strokeWidth={3} /></span></span>;
   let content: ReactNode;
   if (!game) {
@@ -232,7 +243,7 @@ export function GameScreen({ game, loading, board, scopeError, backLabel, sectio
       {notice}
       <div className="game-body">{loading
         ? <div className="stats-loading unavailable" role="status"><p>Loading game…</p></div>
-        : <div className="stats-empty unavailable"><h2>This game isn’t available</h2><p>It isn’t on the scoreboard, or it’s hidden by your settings.</p><button type="button" className="notice-button" data-focus-key="back-2" onClick={onBack}>Back to scores</button></div>}</div>
+        : <div className="stats-empty unavailable"><h2>This game isn’t available</h2><p>{target ? "It isn’t on this team’s schedule, or it’s hidden by your settings." : "It isn’t on the scoreboard, or it’s hidden by your settings."}</p><button type="button" className="notice-button" data-focus-key="back-2" onClick={onBack}>{target ? `Back to ${target.title}` : "Back to scores"}</button></div>}</div>
     </>;
   } else {
     const [away, home] = game.teams, scored = game.started && away.score !== null && home.score !== null;
@@ -248,6 +259,7 @@ export function GameScreen({ game, loading, board, scopeError, backLabel, sectio
       </header>
       <Masthead game={game} board={board} scopeError={scopeError} />
       <Context game={game} />
+      {teamLinks && teamLinks.length > 0 && onOpenTeam && <TeamLinks links={teamLinks} onOpen={onOpenTeam} />}
       {notice}
       {warning && <div className="feed-banner game-feed" role="alert"><CloudOff size={18} aria-hidden="true" /><span>{warning} Displayed scores may be out of date.</span>{onRetryScores && <button type="button" onClick={onRetryScores} disabled={refreshing}>Retry</button>}</div>}
       <GameStatsScreen key={game.id} game={game} section={section} onSection={changeSection} jump={jump} onJump={toCategory} />
