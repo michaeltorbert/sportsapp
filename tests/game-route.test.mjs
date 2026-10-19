@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bundle } from "./helpers.mjs";
-const { parseGameRoute, gameUrl, gameHref, sectionUrl, boardUrl, readEntry, withEntry, ownedTraversal, createRouteHistory, EARLY_POPSTATE_SCRIPT } = await bundle("lib/game-route.ts");
+const { parseGameRoute, parseTeamRoute, gameUrl, gameHref, teamUrl, teamHref, sectionUrl, boardUrl, readEntry, withEntry, ownedTraversal, createRouteHistory, EARLY_POPSTATE_SCRIPT } = await bundle("lib/game-route.ts");
 const { initialView } = await bundle("lib/app-update.ts");
 
 const view = (changes = {}) => ({ date: "2026-09-05", followToday: false, selection: ["acc", "upset"], period: "day", ...changes });
@@ -186,5 +186,64 @@ test("framework pushes and fragments invalidate ownership; traversals are judged
   const traverse = new Event("currententrychange"); Object.defineProperty(traverse, "navigationType", { value: "traverse" });
   win.navigation.dispatchEvent(traverse);
   assert.equal(routes.current(), board);
+  routes.dispose();
+});
+
+test("team pages and schedule games: `?team=<id>`, and `?event=<id>&team=<id>` as context, never data", () => {
+  assert.deepEqual(parseTeamRoute("?team=150"), { team: "150" });
+  assert.deepEqual(parseTeamRoute("?team=150&date=2026-09-05&cats=acc"), { team: "150" });
+  // An event always makes it a game route; the team is that game's schedule context.
+  assert.equal(parseTeamRoute("?event=401858266&team=150"), null);
+  assert.deepEqual(parseGameRoute("?event=401858266&team=150"), { id: "401858266", section: "team", team: "150" });
+  assert.deepEqual(parseGameRoute("?event=401858266&section=players&team=153"), { id: "401858266", section: "players", team: "153" });
+  for (const bad of ["", "?team=", "?team=abc", "?team=1234567", "?team=-1", "?team=150&team=153", "?team=%3Cx%3E", "?team=1.5"]) {
+    assert.equal(parseTeamRoute(bad), null, bad);
+    assert.deepEqual(parseGameRoute(`?event=401858266${bad.replace("?", "&")}`), { id: "401858266", section: "team" }, `context ${bad}`);
+  }
+  // Destinations keep the scoreboard view and unrelated data, and drop the other screen's parameters.
+  const team = new URL(teamUrl("https://example.test/?event=g1&section=players&keep=yes&_ss_open=0#game-g1", "150", view()));
+  assert.deepEqual([...team.searchParams.keys()][0], "team");
+  assert.equal(team.searchParams.get("team"), "150");
+  for (const key of ["event", "section", "_ss_open"]) assert.equal(team.searchParams.has(key), false, key);
+  assert.equal(team.searchParams.get("keep"), "yes"); assert.equal(team.hash, "");
+  assert.deepEqual(initialView(team.search), { selection: ["acc", "upset"], period: "day" });
+  assert.equal(teamHref("150", view({ followToday: true, selection: [] })), "/?team=150");
+  const game = new URL(gameUrl(team.href, { id: "401858266", section: "team", team: "150" }, view()));
+  assert.deepEqual([...game.searchParams.keys()].slice(0, 2), ["event", "team"]);
+  assert.deepEqual(parseGameRoute(game.search), { id: "401858266", section: "team", team: "150" });
+  assert.equal(gameHref({ id: "401858266", section: "scoring", team: "150" }, view({ followToday: true, selection: [] })), "/?event=401858266&section=scoring&team=150");
+  // A plain game destination never inherits a team context, and the section switch keeps it.
+  assert.equal(new URL(gameUrl(game.href, { id: "g2", section: "team" }, view())).searchParams.has("team"), false);
+  assert.equal(new URL(sectionUrl(game.href, "players")).searchParams.get("team"), "150");
+  assert.equal(new URL(boardUrl(game.href, view())).searchParams.has("team"), false);
+  assert.equal(new URL(boardUrl(team.href, view())).searchParams.has("team"), false);
+});
+
+test("team and schedule-game history records validate strictly", () => {
+  const team = { v: 1, kind: "team", key: "t1", team: "150", from: true, origin: "401858481" };
+  assert.deepEqual(readEntry({ ss: team }), team);
+  assert.deepEqual(readEntry({ ss: { v: 1, kind: "team", key: "t2", team: "153", from: false } }), { v: 1, kind: "team", key: "t2", team: "153", from: false });
+  const game = { v: 1, kind: "game", key: "g1", id: "401858266", section: "team", from: true, team: "150" };
+  assert.deepEqual(readEntry({ ss: game }), game);
+  for (const bad of [{ ...team, team: "abc" }, { ...team, team: 150 }, { ...team, from: "yes" }, { ...team, origin: "<x>" }, { ...team, key: "NOT valid" }, { ...game, team: "x" }, { ...game, team: "" }]) assert.equal(readEntry({ ss: bad }), null, JSON.stringify(bad));
+  assert.equal(ownedTraversal("/", game, team), true);
+  assert.equal(ownedTraversal("/", team, { v: 1, kind: "board", key: "b" }), true);
+});
+
+test("board → game → team → schedule game: each Back and Forward is an owned traversal between genuine entries", () => {
+  const { win } = fakeWindow(), seen = [];
+  const routes = createRouteHistory(win, traversal => seen.push(traversal));
+  routes.install();
+  const board = { v: 1, kind: "board", key: "a" }, game = { v: 1, kind: "game", key: "b", id: "401858481", section: "team", from: true };
+  const team = { v: 1, kind: "team", key: "c", team: "150", from: true, origin: "401858481" };
+  const scheduled = { v: 1, kind: "game", key: "d", id: "401858266", section: "team", from: true, team: "150" };
+  routes.replace(board, "https://example.test/");
+  routes.push(game, "https://example.test/?event=401858481");
+  routes.push(team, "https://example.test/?team=150");
+  routes.push(scheduled, "https://example.test/?event=401858266&team=150");
+  for (const [state, source] of [[team, scheduled], [game, team], [board, game], [game, board], [team, game], [scheduled, team]]) {
+    assert.equal(pop(win, withEntry(null, state, 0)), 0, `${source.kind} → ${state.kind}`);
+    assert.deepEqual(seen.at(-1), { target: state, source, owned: true });
+  }
   routes.dispose();
 });

@@ -1,0 +1,2254 @@
+{
+  "schedule": {
+    "timestamp": "2026-10-19T05:10:41Z",
+    "status": "success",
+    "season": {
+      "year": 2026,
+      "type": 2,
+      "name": "Regular Season",
+      "displayName": "2026",
+      "half": 1
+    },
+    "team": {
+      "id": "153",
+      "abbreviation": "UNC",
+      "location": "North Carolina",
+      "name": "Tar Heels",
+      "displayName": "North Carolina Tar Heels",
+      "logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+      "recordSummary": "4-2"
+    },
+    "events": [
+      {
+        "id": "401856766",
+        "date": "2026-08-29T16:00Z",
+        "name": "North Carolina Tar Heels at TCU Horned Frogs",
+        "shortName": "UNC VS TCU",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 1,
+          "text": "Week 1"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401856766",
+            "date": "2026-08-29T16:00Z",
+            "timeValid": true,
+            "neutralSite": true,
+            "competitors": [
+              {
+                "id": "2628",
+                "homeAway": "home",
+                "winner": false,
+                "score": {
+                  "value": 10,
+                  "displayValue": "10"
+                },
+                "team": {
+                  "id": "2628",
+                  "location": "TCU",
+                  "nickname": "TCU",
+                  "abbreviation": "TCU",
+                  "displayName": "TCU Horned Frogs",
+                  "shortDisplayName": "TCU",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/2628.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "153",
+                "homeAway": "away",
+                "winner": true,
+                "score": {
+                  "value": 15,
+                  "displayValue": "15"
+                },
+                "team": {
+                  "id": "153",
+                  "location": "North Carolina",
+                  "nickname": "North Carolina",
+                  "abbreviation": "UNC",
+                  "displayName": "North Carolina Tar Heels",
+                  "shortDisplayName": "North Carolina",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ESPN"
+                }
+              },
+              {
+                "media": {
+                  "shortName": "Disney+"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858218",
+        "date": "2026-09-12T16:00Z",
+        "name": "East Tennessee State Buccaneers at North Carolina Tar Heels",
+        "shortName": "ETSU @ UNC",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 2,
+          "text": "Week 2"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858218",
+            "date": "2026-09-12T16:00Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "153",
+                "homeAway": "home",
+                "winner": true,
+                "score": {
+                  "value": 35,
+                  "displayValue": "35"
+                },
+                "team": {
+                  "id": "153",
+                  "location": "North Carolina",
+                  "nickname": "North Carolina",
+                  "abbreviation": "UNC",
+                  "displayName": "North Carolina Tar Heels",
+                  "shortDisplayName": "North Carolina",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "2193",
+                "homeAway": "away",
+                "winner": false,
+                "score": {
+                  "value": 3,
+                  "displayValue": "3"
+                },
+                "team": {
+                  "id": "2193",
+                  "location": "East Tennessee State",
+                  "nickname": "ETSU",
+                  "abbreviation": "ETSU",
+                  "displayName": "East Tennessee State Buccaneers",
+                  "shortDisplayName": "ETSU",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/2193.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ACCNX"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858229",
+        "date": "2026-09-19T16:00Z",
+        "name": "North Carolina Tar Heels at Clemson Tigers",
+        "shortName": "UNC @ CLEM",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 3,
+          "text": "Week 3"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858229",
+            "date": "2026-09-19T16:00Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "228",
+                "homeAway": "home",
+                "winner": true,
+                "score": {
+                  "value": 28,
+                  "displayValue": "28"
+                },
+                "team": {
+                  "id": "228",
+                  "location": "Clemson",
+                  "nickname": "Clemson",
+                  "abbreviation": "CLEM",
+                  "displayName": "Clemson Tigers",
+                  "shortDisplayName": "Clemson",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/228.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "153",
+                "homeAway": "away",
+                "winner": false,
+                "score": {
+                  "value": 20,
+                  "displayValue": "20"
+                },
+                "team": {
+                  "id": "153",
+                  "location": "North Carolina",
+                  "nickname": "North Carolina",
+                  "abbreviation": "UNC",
+                  "displayName": "North Carolina Tar Heels",
+                  "shortDisplayName": "North Carolina",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ESPNEWS"
+                }
+              },
+              {
+                "media": {
+                  "shortName": "Disney+"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858250",
+        "date": "2026-10-03T16:00Z",
+        "name": "Notre Dame Fighting Irish at North Carolina Tar Heels",
+        "shortName": "ND @ UNC",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 5,
+          "text": "Week 5"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858250",
+            "date": "2026-10-03T16:00Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "153",
+                "homeAway": "home",
+                "winner": false,
+                "score": {
+                  "value": 26,
+                  "displayValue": "26"
+                },
+                "team": {
+                  "id": "153",
+                  "location": "North Carolina",
+                  "nickname": "North Carolina",
+                  "abbreviation": "UNC",
+                  "displayName": "North Carolina Tar Heels",
+                  "shortDisplayName": "North Carolina",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "87",
+                "homeAway": "away",
+                "winner": true,
+                "score": {
+                  "value": 37,
+                  "displayValue": "37"
+                },
+                "team": {
+                  "id": "87",
+                  "location": "Notre Dame",
+                  "nickname": "Notre Dame",
+                  "abbreviation": "ND",
+                  "displayName": "Notre Dame Fighting Irish",
+                  "shortDisplayName": "Notre Dame",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/87.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ESPN"
+                }
+              },
+              {
+                "media": {
+                  "shortName": "Disney+"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858256",
+        "date": "2026-10-10T16:00Z",
+        "name": "North Carolina Tar Heels at Pittsburgh Panthers",
+        "shortName": "UNC @ PITT",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 6,
+          "text": "Week 6"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858256",
+            "date": "2026-10-10T16:00Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "221",
+                "homeAway": "home",
+                "winner": false,
+                "score": {
+                  "value": 17,
+                  "displayValue": "17"
+                },
+                "team": {
+                  "id": "221",
+                  "location": "Pittsburgh",
+                  "nickname": "Pitt",
+                  "abbreviation": "PITT",
+                  "displayName": "Pittsburgh Panthers",
+                  "shortDisplayName": "Pitt",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/221.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "153",
+                "homeAway": "away",
+                "winner": true,
+                "score": {
+                  "value": 21,
+                  "displayValue": "21"
+                },
+                "team": {
+                  "id": "153",
+                  "location": "North Carolina",
+                  "nickname": "North Carolina",
+                  "abbreviation": "UNC",
+                  "displayName": "North Carolina Tar Heels",
+                  "shortDisplayName": "North Carolina",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ESPN"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858266",
+        "date": "2026-10-17T19:30Z",
+        "name": "North Carolina Tar Heels at Duke Blue Devils",
+        "shortName": "UNC @ DUKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 7,
+          "text": "Week 7"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858266",
+            "date": "2026-10-17T19:30Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "150",
+                "homeAway": "home",
+                "winner": false,
+                "score": {
+                  "value": 20,
+                  "displayValue": "20"
+                },
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "153",
+                "homeAway": "away",
+                "winner": true,
+                "score": {
+                  "value": 24,
+                  "displayValue": "24"
+                },
+                "team": {
+                  "id": "153",
+                  "location": "North Carolina",
+                  "nickname": "North Carolina",
+                  "abbreviation": "UNC",
+                  "displayName": "North Carolina Tar Heels",
+                  "shortDisplayName": "North Carolina",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ESPN2"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858275",
+        "date": "2026-10-24T23:30Z",
+        "name": "Syracuse Orange at North Carolina Tar Heels",
+        "shortName": "SYR @ UNC",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 8,
+          "text": "Week 8"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858275",
+            "date": "2026-10-24T23:30Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "153",
+                "homeAway": "home",
+                "team": {
+                  "id": "153",
+                  "location": "North Carolina",
+                  "nickname": "North Carolina",
+                  "abbreviation": "UNC",
+                  "displayName": "North Carolina Tar Heels",
+                  "shortDisplayName": "North Carolina",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "183",
+                "homeAway": "away",
+                "team": {
+                  "id": "183",
+                  "location": "Syracuse",
+                  "nickname": "Syracuse",
+                  "abbreviation": "SYR",
+                  "displayName": "Syracuse Orange",
+                  "shortDisplayName": "Syracuse",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/183.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ACC Network"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "Sat, October 24th at 7:30 PM EDT",
+                "shortDetail": "10/24 - 7:30 PM EDT"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858282",
+        "date": "2026-10-31T04:00Z",
+        "name": "Miami Hurricanes at North Carolina Tar Heels",
+        "shortName": "MIA @ UNC",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 9,
+          "text": "Week 9"
+        },
+        "timeValid": false,
+        "competitions": [
+          {
+            "id": "401858282",
+            "date": "2026-10-31T04:00Z",
+            "timeValid": false,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "153",
+                "homeAway": "home",
+                "team": {
+                  "id": "153",
+                  "location": "North Carolina",
+                  "nickname": "North Carolina",
+                  "abbreviation": "UNC",
+                  "displayName": "North Carolina Tar Heels",
+                  "shortDisplayName": "North Carolina",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "2390",
+                "homeAway": "away",
+                "team": {
+                  "id": "2390",
+                  "location": "Miami",
+                  "nickname": "Miami",
+                  "abbreviation": "MIA",
+                  "displayName": "Miami Hurricanes",
+                  "shortDisplayName": "Miami",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/2390.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "10/31 - TBD",
+                "shortDetail": "TBD"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858292",
+        "date": "2026-11-07T17:00Z",
+        "name": "North Carolina Tar Heels at UConn Huskies",
+        "shortName": "UNC @ CONN",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 10,
+          "text": "Week 10"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858292",
+            "date": "2026-11-07T17:00Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "41",
+                "homeAway": "home",
+                "team": {
+                  "id": "41",
+                  "location": "UConn",
+                  "nickname": "UConn",
+                  "abbreviation": "CONN",
+                  "displayName": "UConn Huskies",
+                  "shortDisplayName": "UConn",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/41.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "153",
+                "homeAway": "away",
+                "team": {
+                  "id": "153",
+                  "location": "North Carolina",
+                  "nickname": "North Carolina",
+                  "abbreviation": "UNC",
+                  "displayName": "North Carolina Tar Heels",
+                  "shortDisplayName": "North Carolina",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "CBSSN"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "Sat, November 7th at 12:00 PM EST",
+                "shortDetail": "11/7 - 12:00 PM EST"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858298",
+        "date": "2026-11-14T05:00Z",
+        "name": "Louisville Cardinals at North Carolina Tar Heels",
+        "shortName": "LOU @ UNC",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 11,
+          "text": "Week 11"
+        },
+        "timeValid": false,
+        "competitions": [
+          {
+            "id": "401858298",
+            "date": "2026-11-14T05:00Z",
+            "timeValid": false,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "153",
+                "homeAway": "home",
+                "team": {
+                  "id": "153",
+                  "location": "North Carolina",
+                  "nickname": "North Carolina",
+                  "abbreviation": "UNC",
+                  "displayName": "North Carolina Tar Heels",
+                  "shortDisplayName": "North Carolina",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "97",
+                "homeAway": "away",
+                "team": {
+                  "id": "97",
+                  "location": "Louisville",
+                  "nickname": "Louisville",
+                  "abbreviation": "LOU",
+                  "displayName": "Louisville Cardinals",
+                  "shortDisplayName": "Louisville",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/97.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "11/14 - TBD",
+                "shortDetail": "TBD"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858305",
+        "date": "2026-11-21T05:00Z",
+        "name": "North Carolina Tar Heels at Virginia Cavaliers",
+        "shortName": "UNC @ UVA",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 12,
+          "text": "Week 12"
+        },
+        "timeValid": false,
+        "competitions": [
+          {
+            "id": "401858305",
+            "date": "2026-11-21T05:00Z",
+            "timeValid": false,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "258",
+                "homeAway": "home",
+                "team": {
+                  "id": "258",
+                  "location": "Virginia",
+                  "nickname": "Virginia",
+                  "abbreviation": "UVA",
+                  "displayName": "Virginia Cavaliers",
+                  "shortDisplayName": "Virginia",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/258.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "153",
+                "homeAway": "away",
+                "team": {
+                  "id": "153",
+                  "location": "North Carolina",
+                  "nickname": "North Carolina",
+                  "abbreviation": "UNC",
+                  "displayName": "North Carolina Tar Heels",
+                  "shortDisplayName": "North Carolina",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "11/21 - TBD",
+                "shortDetail": "TBD"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858313",
+        "date": "2026-11-28T05:00Z",
+        "name": "NC State Wolfpack at North Carolina Tar Heels",
+        "shortName": "NCSU @ UNC",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 13,
+          "text": "Week 13"
+        },
+        "timeValid": false,
+        "competitions": [
+          {
+            "id": "401858313",
+            "date": "2026-11-28T05:00Z",
+            "timeValid": false,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "153",
+                "homeAway": "home",
+                "team": {
+                  "id": "153",
+                  "location": "North Carolina",
+                  "nickname": "North Carolina",
+                  "abbreviation": "UNC",
+                  "displayName": "North Carolina Tar Heels",
+                  "shortDisplayName": "North Carolina",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "152",
+                "homeAway": "away",
+                "team": {
+                  "id": "152",
+                  "location": "NC State",
+                  "nickname": "NC State",
+                  "abbreviation": "NCSU",
+                  "displayName": "NC State Wolfpack",
+                  "shortDisplayName": "NC State",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/152.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "11/28 - TBD",
+                "shortDetail": "TBD"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "requestedSeason": {
+      "year": 2026,
+      "type": 2,
+      "name": "Regular Season",
+      "displayName": "2026"
+    }
+  },
+  "stats": {
+    "status": "success",
+    "results": {
+      "stats": {
+        "id": "0",
+        "name": "Season",
+        "categories": [
+          {
+            "name": "passing",
+            "displayName": "Passing",
+            "abbreviation": "pass",
+            "stats": [
+              {
+                "name": "completionPct",
+                "displayName": "Completion Percentage",
+                "shortDisplayName": "CMP%",
+                "description": "The percentage of completed passes.",
+                "abbreviation": "CMP%",
+                "value": 59.5,
+                "displayValue": "59.5"
+              },
+              {
+                "name": "completions",
+                "displayName": "Completions",
+                "shortDisplayName": "CMP",
+                "description": "The times a player completes a pass to another player who is eligible to catch a pass.",
+                "abbreviation": "CMP",
+                "value": 97,
+                "displayValue": "97"
+              },
+              {
+                "name": "interceptionPct",
+                "displayName": "Interception Percentage",
+                "shortDisplayName": "INT%",
+                "description": "The percentage of passes thrown that were intercepted by the opposing team.",
+                "abbreviation": "INT%",
+                "value": 3.1,
+                "displayValue": "3.10"
+              },
+              {
+                "name": "interceptions",
+                "displayName": "Interceptions",
+                "shortDisplayName": "INT",
+                "description": "The number of passes thrown that were intercepted by the opposing team.",
+                "abbreviation": "INT",
+                "value": 5,
+                "displayValue": "5"
+              },
+              {
+                "name": "longPassing",
+                "displayName": "Longest Pass",
+                "shortDisplayName": "LONG",
+                "description": "The longest pass play completed in terms of yards.",
+                "abbreviation": "LNG",
+                "value": 75,
+                "displayValue": "75"
+              },
+              {
+                "name": "netPassingYards",
+                "displayName": "Net Passing Yards",
+                "shortDisplayName": "NYDS",
+                "description": "The amount of net passing yards.",
+                "abbreviation": "NYDS",
+                "value": 1282,
+                "displayValue": "1,282"
+              },
+              {
+                "name": "netPassingYardsPerGame",
+                "displayName": "Net Passing Yards Per Game",
+                "shortDisplayName": "NYDS/G",
+                "description": "The amount of net passing yards per game.",
+                "abbreviation": "NYDS/G",
+                "value": 213.66667,
+                "displayValue": "213.7"
+              },
+              {
+                "name": "passingAttempts",
+                "displayName": "Passing Attempts",
+                "shortDisplayName": "ATT",
+                "description": "The number of times a pass is attempted.",
+                "abbreviation": "ATT",
+                "value": 163,
+                "displayValue": "163"
+              },
+              {
+                "name": "passingTouchdownPct",
+                "displayName": "Passing Touchdown %",
+                "shortDisplayName": "TD%",
+                "description": "The percentage of passes that result in a touchdown.",
+                "abbreviation": "TD%",
+                "value": 5.5,
+                "displayValue": "5.50"
+              },
+              {
+                "name": "passingTouchdowns",
+                "displayName": "Passing Touchdowns",
+                "shortDisplayName": "Touchdowns",
+                "description": "The total number of passing touchdowns.",
+                "abbreviation": "TD",
+                "value": 9,
+                "displayValue": "9"
+              },
+              {
+                "name": "QBRating",
+                "displayName": "Passer Rating",
+                "shortDisplayName": "RTG",
+                "description": "Passer Rating",
+                "abbreviation": "RTG",
+                "value": 137.88086,
+                "displayValue": "137.9"
+              },
+              {
+                "name": "sacks",
+                "displayName": "Total Sacks",
+                "shortDisplayName": "Sacks",
+                "description": "The total number of sacks.",
+                "abbreviation": "SACK",
+                "value": 13,
+                "displayValue": "13"
+              },
+              {
+                "name": "sackYardsLost",
+                "displayName": "Sack Yards Lost",
+                "shortDisplayName": "SYL",
+                "description": "The amount of yards lost due to sacks.",
+                "abbreviation": "SYL",
+                "value": 84,
+                "displayValue": "84"
+              },
+              {
+                "name": "yardsPerPassAttempt",
+                "displayName": "Yards Per Pass Attempt",
+                "shortDisplayName": "AVG",
+                "description": "The average number yards per pass attempt.",
+                "abbreviation": "AVG",
+                "value": 7.9,
+                "displayValue": "7.9"
+              },
+              {
+                "name": "passingYards",
+                "displayName": "Passing Yards",
+                "shortDisplayName": "Pass Yards",
+                "description": "The total passing yards.",
+                "abbreviation": "YDS",
+                "value": 1282,
+                "displayValue": "1,282"
+              },
+              {
+                "name": "passingFumblesLost",
+                "displayName": "Passing Fumbles Lost",
+                "shortDisplayName": "FL",
+                "description": "The number of times the ball has been fumbled and lost to the opposing team after a completed pass.",
+                "abbreviation": "FL",
+                "value": 0,
+                "displayValue": "0"
+              },
+              {
+                "name": "teamGamesPlayed",
+                "displayName": "Team Games Played",
+                "shortDisplayName": "TGP",
+                "description": "The amount of games played.",
+                "abbreviation": "TGP",
+                "value": 6,
+                "displayValue": "6"
+              },
+              {
+                "name": "yardsPerGame",
+                "displayName": "Yards Per Game",
+                "shortDisplayName": "YDS/G",
+                "description": "The average number of yards per game.",
+                "abbreviation": "YDS/G",
+                "value": 329.8,
+                "displayValue": "329.8"
+              },
+              {
+                "name": "totalPointsPerGame",
+                "displayName": "Total Points Per Game",
+                "shortDisplayName": "TP/G",
+                "description": "The number of points scored per game.",
+                "abbreviation": "TP",
+                "value": 23.5,
+                "displayValue": "23.5"
+              },
+              {
+                "name": "totalPoints",
+                "displayName": "Total Points",
+                "shortDisplayName": "TP",
+                "description": "The number of total points scored.",
+                "abbreviation": "PTS",
+                "value": 141,
+                "displayValue": "141"
+              },
+              {
+                "name": "totalTouchdowns",
+                "displayName": "Total Touchdowns",
+                "shortDisplayName": "TTD",
+                "description": "The number of touchdowns scored in total.",
+                "abbreviation": "TD",
+                "value": 18,
+                "displayValue": "18"
+              },
+              {
+                "name": "passingYardsPerGame",
+                "displayName": "Passing Yards Per Game",
+                "shortDisplayName": "PYDS/G",
+                "description": "The number of passing yards per game.",
+                "abbreviation": "YDS/G",
+                "value": 213.7,
+                "displayValue": "213.7"
+              },
+              {
+                "name": "completionAttempts",
+                "displayName": "Comp-Att",
+                "description": "Comp-Att",
+                "abbreviation": "CMP-ATT",
+                "displayValue": "97-163"
+              },
+              {
+                "name": "sacksYardsLost",
+                "displayName": "Sacks-Yards Lost",
+                "description": "Sacks-Yards Lost",
+                "abbreviation": "SYL",
+                "displayValue": "13-84"
+              }
+            ]
+          },
+          {
+            "name": "rushing",
+            "displayName": "Rushing",
+            "abbreviation": "rush",
+            "stats": [
+              {
+                "name": "rushingAttempts",
+                "displayName": "Rushing Attempts",
+                "shortDisplayName": "Rushing Attempts",
+                "description": "The total number of attempted rushes.",
+                "abbreviation": "CAR",
+                "value": 182,
+                "displayValue": "182"
+              },
+              {
+                "name": "rushingYards",
+                "displayName": "Rushing Yards",
+                "shortDisplayName": "Rush Yards",
+                "description": "The total rushing yards.",
+                "abbreviation": "YDS",
+                "value": 697,
+                "displayValue": "697"
+              },
+              {
+                "name": "yardsPerRushAttempt",
+                "displayName": "Yards Per Rush Attempt",
+                "shortDisplayName": "YDS/RA",
+                "description": "The average number of yards per rush attempt.",
+                "abbreviation": "AVG",
+                "value": 3.8,
+                "displayValue": "3.8"
+              },
+              {
+                "name": "longRushing",
+                "displayName": "Long Rushing",
+                "shortDisplayName": "LONG",
+                "description": "The amount of yards for the longest run.",
+                "abbreviation": "LNG",
+                "value": 25,
+                "displayValue": "25"
+              },
+              {
+                "name": "rushingBigPlays",
+                "displayName": "20+ Yard Rushing Plays",
+                "shortDisplayName": "BIG",
+                "description": "The number of rushing big plays gained.",
+                "abbreviation": "BIG",
+                "value": 0,
+                "displayValue": "0"
+              },
+              {
+                "name": "rushingTouchdowns",
+                "displayName": "Rushing Touchdowns",
+                "shortDisplayName": "Rushing Touchdowns",
+                "description": "The total number of rushing touchdowns.",
+                "abbreviation": "TD",
+                "value": 8,
+                "displayValue": "8"
+              },
+              {
+                "name": "rushingYardsPerGame",
+                "displayName": "Rushing Yards Per Game",
+                "shortDisplayName": "YDS/G",
+                "description": "The average number of rushing yards per game.",
+                "abbreviation": "YDS/G",
+                "value": 116.2,
+                "displayValue": "116.2"
+              },
+              {
+                "name": "rushingFumbles",
+                "displayName": "Rushing Fumbles",
+                "shortDisplayName": "F",
+                "description": "The number of times there is a run and then the ball is fumbled.",
+                "abbreviation": "FUM",
+                "value": 0,
+                "displayValue": "0"
+              },
+              {
+                "name": "rushingFumblesLost",
+                "displayName": "Rushing Fumbles Lost",
+                "shortDisplayName": "FL",
+                "description": "The number of times there is a run and then the ball is fumbled.",
+                "abbreviation": "LST",
+                "value": 0,
+                "displayValue": "0"
+              },
+              {
+                "name": "rushingFirstDowns",
+                "displayName": "Rushing 1st downs",
+                "shortDisplayName": "FIRST",
+                "description": "The number of times a first down is picked up by a run.",
+                "abbreviation": "FD",
+                "value": 43,
+                "displayValue": "43"
+              },
+              {
+                "name": "teamGamesPlayed",
+                "displayName": "Team Games Played",
+                "shortDisplayName": "GP",
+                "description": "The numbers of team games played.",
+                "abbreviation": "GP",
+                "value": 6,
+                "displayValue": "6"
+              },
+              {
+                "name": "totalYards",
+                "displayName": "Total Yards",
+                "shortDisplayName": "TYDS",
+                "description": "The number of total yards gained.",
+                "abbreviation": "TYDS",
+                "value": 1979,
+                "displayValue": "1,979"
+              },
+              {
+                "name": "totalOffensivePlays",
+                "displayName": "Total Offensive Plays",
+                "shortDisplayName": "OP",
+                "description": "The number of offenseive plays run.",
+                "abbreviation": "OP",
+                "value": 358,
+                "displayValue": "358"
+              },
+              {
+                "name": "totalPointsPerGame",
+                "displayName": "Total Points Per Game",
+                "shortDisplayName": "TP/G",
+                "description": "The average number of points scored per game.",
+                "abbreviation": "TP/G",
+                "value": 23.5,
+                "displayValue": "23.5"
+              },
+              {
+                "name": "totalPoints",
+                "displayName": "Total Points",
+                "shortDisplayName": "TP",
+                "description": "The number of total points earned.",
+                "abbreviation": "PTS",
+                "value": 141,
+                "displayValue": "141"
+              },
+              {
+                "name": "totalTouchdowns",
+                "displayName": "Total Touchdowns",
+                "shortDisplayName": "TTD",
+                "description": "The number of total Touchdowns scored.",
+                "abbreviation": "TD",
+                "value": 18,
+                "displayValue": "18"
+              }
+            ]
+          },
+          {
+            "name": "scoring",
+            "displayName": "Scoring",
+            "abbreviation": "s",
+            "stats": [
+              {
+                "name": "rushingTouchdowns",
+                "displayName": "Rushing Touchdowns",
+                "shortDisplayName": "RUSTD",
+                "description": "The total number of rushing touchdowns.",
+                "abbreviation": "RUSH",
+                "value": 8,
+                "displayValue": "8"
+              },
+              {
+                "name": "receivingTouchdowns",
+                "displayName": "Receiving Touchdowns",
+                "shortDisplayName": "RECTD",
+                "description": "The total number of receiving touchdowns.",
+                "abbreviation": "REC",
+                "value": 9,
+                "displayValue": "9"
+              },
+              {
+                "name": "returnTouchdowns",
+                "displayName": "Return Touchdowns",
+                "shortDisplayName": "RETTD",
+                "description": "The total number of return touchdowns.",
+                "abbreviation": "RET",
+                "value": 1,
+                "displayValue": "1"
+              },
+              {
+                "name": "totalTouchdowns",
+                "displayName": "Total Touchdowns",
+                "shortDisplayName": "TTD",
+                "description": "The number of touchdowns scored in total.",
+                "abbreviation": "TD",
+                "value": 18,
+                "displayValue": "18"
+              },
+              {
+                "name": "fieldGoals",
+                "displayName": "Field Goals",
+                "shortDisplayName": "FG",
+                "description": "The number of field goals made.",
+                "abbreviation": "FG",
+                "value": 5,
+                "displayValue": "5"
+              },
+              {
+                "name": "kickExtraPoints",
+                "displayName": "Kick Extra Points",
+                "shortDisplayName": "XP",
+                "description": "The number of extra points made.",
+                "abbreviation": "PAT",
+                "value": 16,
+                "displayValue": "16"
+              },
+              {
+                "name": "totalTwoPointConvs",
+                "displayName": "Total Two Point Conversions",
+                "shortDisplayName": "2PTC",
+                "description": "The number of times a 2-point conversion is successful.",
+                "abbreviation": "2PT",
+                "value": 0,
+                "displayValue": "0"
+              },
+              {
+                "name": "totalPoints",
+                "displayName": "Total Points",
+                "shortDisplayName": "TP",
+                "description": "The number of total points scored.",
+                "abbreviation": "PTS",
+                "value": 141,
+                "displayValue": "141"
+              },
+              {
+                "name": "totalPointsPerGame",
+                "displayName": "Total Points Per Game",
+                "shortDisplayName": "TP/G",
+                "description": "The number of points scored per game.",
+                "abbreviation": "TP/G",
+                "value": 23.5,
+                "displayValue": "23.5"
+              }
+            ]
+          }
+        ]
+      },
+      "opponent": [
+        {
+          "name": "passing",
+          "displayName": "Passing",
+          "abbreviation": "pass",
+          "stats": [
+            {
+              "name": "completionPct",
+              "displayName": "Completion Percentage",
+              "shortDisplayName": "CMP%",
+              "description": "The percentage of completed passes.",
+              "abbreviation": "CMP%",
+              "value": 64.904,
+              "displayValue": "64.9",
+              "rank": 109,
+              "rankDisplayValue": "109th"
+            },
+            {
+              "name": "completions",
+              "displayName": "Completions",
+              "shortDisplayName": "CMP",
+              "description": "The times a player completes a pass to another player who is eligible to catch a pass.",
+              "abbreviation": "CMP",
+              "value": 135,
+              "displayValue": "135",
+              "rank": 107,
+              "rankDisplayValue": "Tied-107th"
+            },
+            {
+              "name": "interceptionPct",
+              "displayName": "Interception Percentage",
+              "shortDisplayName": "INT%",
+              "description": "The percentage of passes thrown that were intercepted by the opposing team.",
+              "abbreviation": "INT%",
+              "value": 2.404,
+              "displayValue": "2.40",
+              "rank": 67,
+              "rankDisplayValue": "67th"
+            },
+            {
+              "name": "interceptions",
+              "displayName": "Interceptions",
+              "shortDisplayName": "INT",
+              "description": "The number of passes thrown that were intercepted by the opposing team.",
+              "abbreviation": "INT",
+              "value": 5,
+              "displayValue": "5",
+              "rank": 49,
+              "rankDisplayValue": "Tied-49th"
+            },
+            {
+              "name": "longPassing",
+              "displayName": "Longest Pass",
+              "shortDisplayName": "LONG",
+              "description": "The longest pass play completed in terms of yards.",
+              "abbreviation": "LNG",
+              "value": 44,
+              "displayValue": "44",
+              "rank": 11,
+              "rankDisplayValue": "Tied-11th"
+            },
+            {
+              "name": "netPassingYards",
+              "displayName": "Net Passing Yards",
+              "shortDisplayName": "NYDS",
+              "description": "The amount of net passing yards.",
+              "abbreviation": "NYDS",
+              "value": 1270,
+              "displayValue": "1,270",
+              "rank": 45,
+              "rankDisplayValue": "45th"
+            },
+            {
+              "name": "netPassingYardsPerGame",
+              "displayName": "Net Passing Yards Per Game",
+              "shortDisplayName": "NYDS/G",
+              "description": "The amount of net passing yards per game.",
+              "abbreviation": "NYDS/G",
+              "value": 211.66667,
+              "displayValue": "211.7",
+              "rank": 143,
+              "rankDisplayValue": "143rd"
+            },
+            {
+              "name": "passingAttempts",
+              "displayName": "Passing Attempts",
+              "shortDisplayName": "ATT",
+              "description": "The number of times a pass is attempted.",
+              "abbreviation": "ATT",
+              "value": 208,
+              "displayValue": "208",
+              "rank": 96,
+              "rankDisplayValue": "Tied-96th"
+            },
+            {
+              "name": "passingTouchdownPct",
+              "displayName": "Passing Touchdown %",
+              "shortDisplayName": "TD%",
+              "description": "The percentage of passes that result in a touchdown.",
+              "abbreviation": "TD%",
+              "value": 2.885,
+              "displayValue": "2.89",
+              "rank": 25,
+              "rankDisplayValue": "25th"
+            },
+            {
+              "name": "passingTouchdowns",
+              "displayName": "Passing Touchdowns",
+              "shortDisplayName": "Touchdowns",
+              "description": "The total number of passing touchdowns.",
+              "abbreviation": "TD",
+              "value": 6,
+              "displayValue": "6",
+              "rank": 22,
+              "rankDisplayValue": "Tied-22nd"
+            },
+            {
+              "name": "QBRating",
+              "displayName": "Passer Rating",
+              "shortDisplayName": "RTG",
+              "description": "Passer Rating",
+              "abbreviation": "RTG",
+              "value": 120.90563,
+              "displayValue": "120.9",
+              "rank": 260,
+              "rankDisplayValue": "260th"
+            },
+            {
+              "name": "sacks",
+              "displayName": "Total Sacks",
+              "shortDisplayName": "Sacks",
+              "description": "The total number of sacks.",
+              "abbreviation": "SACK",
+              "value": 13,
+              "displayValue": "13",
+              "rank": 59,
+              "rankDisplayValue": "Tied-59th"
+            },
+            {
+              "name": "sackYardsLost",
+              "displayName": "Sack Yards Lost",
+              "shortDisplayName": "SYL",
+              "description": "The amount of yards lost due to sacks.",
+              "abbreviation": "SYL",
+              "value": 91,
+              "displayValue": "91",
+              "rank": 59,
+              "rankDisplayValue": "59th"
+            },
+            {
+              "name": "yardsPerPassAttempt",
+              "displayName": "Yards Per Pass Attempt",
+              "shortDisplayName": "AVG",
+              "description": "The average number yards per pass attempt.",
+              "abbreviation": "AVG",
+              "value": 6.106,
+              "displayValue": "6.1",
+              "rank": 25,
+              "rankDisplayValue": "25th"
+            },
+            {
+              "name": "passingYards",
+              "displayName": "Passing Yards",
+              "shortDisplayName": "Pass Yards",
+              "description": "The total passing yards.",
+              "abbreviation": "YDS",
+              "value": 1270,
+              "displayValue": "1,270",
+              "rank": 45,
+              "rankDisplayValue": "45th"
+            },
+            {
+              "name": "passingFumblesLost",
+              "displayName": "Passing Fumbles Lost",
+              "shortDisplayName": "FL",
+              "description": "The number of times the ball has been fumbled and lost to the opposing team after a completed pass.",
+              "abbreviation": "FL",
+              "value": 0,
+              "displayValue": "0",
+              "rank": 1,
+              "rankDisplayValue": "Tied-1st"
+            },
+            {
+              "name": "teamGamesPlayed",
+              "displayName": "Team Games Played",
+              "shortDisplayName": "TGP",
+              "description": "The amount of games played.",
+              "abbreviation": "TGP",
+              "value": 6,
+              "displayValue": "6",
+              "rank": 151,
+              "rankDisplayValue": "Tied-151st"
+            },
+            {
+              "name": "yardsPerGame",
+              "displayName": "Yards Per Game",
+              "shortDisplayName": "YDS/G",
+              "description": "The average number of yards per game.",
+              "abbreviation": "YDS/G",
+              "value": 359,
+              "displayValue": "359.0",
+              "rank": 75,
+              "rankDisplayValue": "75th"
+            },
+            {
+              "name": "totalPointsPerGame",
+              "displayName": "Total Points Per Game",
+              "shortDisplayName": "TP/G",
+              "description": "The number of points scored per game.",
+              "abbreviation": "TP",
+              "value": 19.167,
+              "displayValue": "19.2",
+              "rank": 34,
+              "rankDisplayValue": "34th"
+            },
+            {
+              "name": "totalPoints",
+              "displayName": "Total Points",
+              "shortDisplayName": "TP",
+              "description": "The number of total points scored.",
+              "abbreviation": "PTS",
+              "value": 115,
+              "displayValue": "115",
+              "rank": 29,
+              "rankDisplayValue": "Tied-29th"
+            },
+            {
+              "name": "totalTouchdowns",
+              "displayName": "Total Touchdowns",
+              "shortDisplayName": "TTD",
+              "description": "The number of touchdowns scored in total.",
+              "abbreviation": "TD",
+              "value": 13,
+              "displayValue": "13",
+              "rank": 23,
+              "rankDisplayValue": "Tied-23rd"
+            },
+            {
+              "name": "passingYardsPerGame",
+              "displayName": "Passing Yards Per Game",
+              "shortDisplayName": "PYDS/G",
+              "description": "The number of passing yards per game.",
+              "abbreviation": "YDS/G",
+              "value": 211.667,
+              "displayValue": "211.7",
+              "rank": 69,
+              "rankDisplayValue": "69th"
+            },
+            {
+              "name": "completionAttempts",
+              "displayName": "Comp-Att",
+              "description": "Comp-Att",
+              "abbreviation": "CMP-ATT",
+              "displayValue": "135-208"
+            },
+            {
+              "name": "sacksYardsLost",
+              "displayName": "Sacks-Yards Lost",
+              "description": "Sacks-Yards Lost",
+              "abbreviation": "SYL",
+              "displayValue": "13-91"
+            }
+          ]
+        },
+        {
+          "name": "rushing",
+          "displayName": "Rushing",
+          "abbreviation": "rush",
+          "stats": [
+            {
+              "name": "rushingAttempts",
+              "displayName": "Rushing Attempts",
+              "shortDisplayName": "Rushing Attempts",
+              "description": "The total number of attempted rushes.",
+              "abbreviation": "CAR",
+              "value": 226,
+              "displayValue": "226",
+              "rank": 66,
+              "rankDisplayValue": "66th"
+            },
+            {
+              "name": "rushingYards",
+              "displayName": "Rushing Yards",
+              "shortDisplayName": "Rush Yards",
+              "description": "The total rushing yards.",
+              "abbreviation": "YDS",
+              "value": 884,
+              "displayValue": "884",
+              "rank": 66,
+              "rankDisplayValue": "Tied-66th"
+            },
+            {
+              "name": "yardsPerRushAttempt",
+              "displayName": "Yards Per Rush Attempt",
+              "shortDisplayName": "YDS/RA",
+              "description": "The average number of yards per rush attempt.",
+              "abbreviation": "AVG",
+              "value": 3.912,
+              "displayValue": "3.9",
+              "rank": 61,
+              "rankDisplayValue": "61st"
+            },
+            {
+              "name": "longRushing",
+              "displayName": "Long Rushing",
+              "shortDisplayName": "LONG",
+              "description": "The amount of yards for the longest run.",
+              "abbreviation": "LNG",
+              "value": 48,
+              "displayValue": "48",
+              "rank": 50,
+              "rankDisplayValue": "Tied-50th"
+            },
+            {
+              "name": "rushingBigPlays",
+              "displayName": "20+ Yard Rushing Plays",
+              "shortDisplayName": "BIG",
+              "description": "The number of rushing big plays gained.",
+              "abbreviation": "BIG",
+              "value": 0,
+              "displayValue": "0",
+              "rank": 1,
+              "rankDisplayValue": "Tied-1st"
+            },
+            {
+              "name": "rushingTouchdowns",
+              "displayName": "Rushing Touchdowns",
+              "shortDisplayName": "Rushing Touchdowns",
+              "description": "The total number of rushing touchdowns.",
+              "abbreviation": "TD",
+              "value": 6,
+              "displayValue": "6",
+              "rank": 30,
+              "rankDisplayValue": "Tied-30th"
+            },
+            {
+              "name": "rushingYardsPerGame",
+              "displayName": "Rushing Yards Per Game",
+              "shortDisplayName": "YDS/G",
+              "description": "The average number of rushing yards per game.",
+              "abbreviation": "YDS/G",
+              "value": 147.333,
+              "displayValue": "147.3",
+              "rank": 81,
+              "rankDisplayValue": "81st"
+            },
+            {
+              "name": "rushingFumbles",
+              "displayName": "Rushing Fumbles",
+              "shortDisplayName": "F",
+              "description": "The number of times there is a run and then the ball is fumbled.",
+              "abbreviation": "FUM",
+              "value": 0,
+              "displayValue": "0",
+              "rank": 1,
+              "rankDisplayValue": "Tied-1st"
+            },
+            {
+              "name": "rushingFumblesLost",
+              "displayName": "Rushing Fumbles Lost",
+              "shortDisplayName": "FL",
+              "description": "The number of times there is a run and then the ball is fumbled.",
+              "abbreviation": "LST",
+              "value": 0,
+              "displayValue": "0",
+              "rank": 1,
+              "rankDisplayValue": "Tied-1st"
+            },
+            {
+              "name": "rushingFirstDowns",
+              "displayName": "Rushing 1st downs",
+              "shortDisplayName": "FIRST",
+              "description": "The number of times a first down is picked up by a run.",
+              "abbreviation": "FD",
+              "value": 51,
+              "displayValue": "51",
+              "rank": 78,
+              "rankDisplayValue": "Tied-78th"
+            },
+            {
+              "name": "teamGamesPlayed",
+              "displayName": "Team Games Played",
+              "shortDisplayName": "GP",
+              "description": "The numbers of team games played.",
+              "abbreviation": "GP",
+              "value": 6,
+              "displayValue": "6",
+              "rank": 151,
+              "rankDisplayValue": "Tied-151st"
+            },
+            {
+              "name": "totalYards",
+              "displayName": "Total Yards",
+              "shortDisplayName": "TYDS",
+              "description": "The number of total yards gained.",
+              "abbreviation": "TYDS",
+              "value": 2154,
+              "displayValue": "2,154",
+              "rank": 52,
+              "rankDisplayValue": "52nd"
+            },
+            {
+              "name": "totalOffensivePlays",
+              "displayName": "Total Offensive Plays",
+              "shortDisplayName": "OP",
+              "description": "The number of offenseive plays run.",
+              "abbreviation": "OP",
+              "value": 447,
+              "displayValue": "447",
+              "rank": 89,
+              "rankDisplayValue": "Tied-89th"
+            },
+            {
+              "name": "totalPointsPerGame",
+              "displayName": "Total Points Per Game",
+              "shortDisplayName": "TP/G",
+              "description": "The average number of points scored per game.",
+              "abbreviation": "TP/G",
+              "value": 19.167,
+              "displayValue": "19.2",
+              "rank": 34,
+              "rankDisplayValue": "34th"
+            },
+            {
+              "name": "totalPoints",
+              "displayName": "Total Points",
+              "shortDisplayName": "TP",
+              "description": "The number of total points earned.",
+              "abbreviation": "PTS",
+              "value": 115,
+              "displayValue": "115",
+              "rank": 29,
+              "rankDisplayValue": "Tied-29th"
+            },
+            {
+              "name": "totalTouchdowns",
+              "displayName": "Total Touchdowns",
+              "shortDisplayName": "TTD",
+              "description": "The number of total Touchdowns scored.",
+              "abbreviation": "TD",
+              "value": 13,
+              "displayValue": "13",
+              "rank": 23,
+              "rankDisplayValue": "Tied-23rd"
+            }
+          ]
+        },
+        {
+          "name": "scoring",
+          "displayName": "Scoring",
+          "abbreviation": "s",
+          "stats": [
+            {
+              "name": "rushingTouchdowns",
+              "displayName": "Rushing Touchdowns",
+              "shortDisplayName": "RUSTD",
+              "description": "The total number of rushing touchdowns.",
+              "abbreviation": "RUSH",
+              "value": 6,
+              "displayValue": "6",
+              "rank": 30,
+              "rankDisplayValue": "Tied-30th"
+            },
+            {
+              "name": "receivingTouchdowns",
+              "displayName": "Receiving Touchdowns",
+              "shortDisplayName": "RECTD",
+              "description": "The total number of receiving touchdowns.",
+              "abbreviation": "REC",
+              "value": 6,
+              "displayValue": "6",
+              "rank": 22,
+              "rankDisplayValue": "Tied-22nd"
+            },
+            {
+              "name": "returnTouchdowns",
+              "displayName": "Return Touchdowns",
+              "shortDisplayName": "RETTD",
+              "description": "The total number of return touchdowns.",
+              "abbreviation": "RET",
+              "value": 0,
+              "displayValue": "0",
+              "rank": 1,
+              "rankDisplayValue": "Tied-1st"
+            },
+            {
+              "name": "totalTouchdowns",
+              "displayName": "Total Touchdowns",
+              "shortDisplayName": "TTD",
+              "description": "The number of touchdowns scored in total.",
+              "abbreviation": "TD",
+              "value": 13,
+              "displayValue": "13",
+              "rank": 25,
+              "rankDisplayValue": "Tied-25th"
+            },
+            {
+              "name": "fieldGoals",
+              "displayName": "Field Goals",
+              "shortDisplayName": "FG",
+              "description": "The number of field goals made.",
+              "abbreviation": "FG",
+              "value": 9,
+              "displayValue": "9",
+              "rank": 89,
+              "rankDisplayValue": "Tied-89th"
+            },
+            {
+              "name": "kickExtraPoints",
+              "displayName": "Kick Extra Points",
+              "shortDisplayName": "XP",
+              "description": "The number of extra points made.",
+              "abbreviation": "PAT",
+              "value": 10,
+              "displayValue": "10",
+              "rank": 16,
+              "rankDisplayValue": "Tied-16th"
+            },
+            {
+              "name": "totalTwoPointConvs",
+              "displayName": "Total Two Point Conversions",
+              "shortDisplayName": "2PTC",
+              "description": "The number of times a 2-point conversion is successful.",
+              "abbreviation": "2PT",
+              "value": 0,
+              "displayValue": "0",
+              "rank": 1,
+              "rankDisplayValue": "Tied-1st"
+            },
+            {
+              "name": "totalPoints",
+              "displayName": "Total Points",
+              "shortDisplayName": "TP",
+              "description": "The number of total points scored.",
+              "abbreviation": "PTS",
+              "value": 115,
+              "displayValue": "115",
+              "rank": 29,
+              "rankDisplayValue": "Tied-29th"
+            },
+            {
+              "name": "totalPointsPerGame",
+              "displayName": "Total Points Per Game",
+              "shortDisplayName": "TP/G",
+              "description": "The number of points scored per game.",
+              "abbreviation": "TP/G",
+              "value": 19.167,
+              "displayValue": "19.2",
+              "rank": 34,
+              "rankDisplayValue": "34th"
+            }
+          ]
+        }
+      ]
+    },
+    "season": {
+      "year": 2026,
+      "type": 2,
+      "name": "Regular Season",
+      "displayName": "2026"
+    },
+    "requestedSeason": {
+      "year": 2026,
+      "type": 2,
+      "name": "Regular Season",
+      "displayName": "2026",
+      "qualifiedPostSeason": false
+    },
+    "team": {
+      "id": "153",
+      "abbreviation": "UNC",
+      "location": "North Carolina",
+      "name": "Tar Heels",
+      "displayName": "North Carolina Tar Heels",
+      "logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+      "recordSummary": "4-2"
+    }
+  }
+}

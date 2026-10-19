@@ -1,5 +1,6 @@
-export const VERSION = "1.16.8";
+export const VERSION = "1.17.0";
 export const releases = [
+  { version: "1.17.0", date: "October 19, 2026", changes: "Open a team from any game to see its current season: record, regular-season averages for and against, and the full schedule with results, kickoff times and TV. Every scheduled or completed game opens here in the app. Duke games you hide stay hidden, along with any record or averages that would reveal them." },
   { version: "1.16.8", date: "October 19, 2026", changes: "Remove the redundant This game label from started Team stats while keeping the comparison and other game details intact." },
   { version: "1.16.7", date: "October 17, 2026", changes: "Keep a game’s saved pregame line steady after kickoff, and skip loading extra details for overnight games that aren’t shown." },
   { version: "1.16.6", date: "October 17, 2026", changes: "Maintenance update." },

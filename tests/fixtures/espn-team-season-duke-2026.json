@@ -1,0 +1,3462 @@
+{
+  "default": {
+    "timestamp": "2026-10-19T05:14:30Z",
+    "status": "success",
+    "season": {
+      "year": 2026,
+      "type": 2,
+      "name": "Regular Season",
+      "displayName": "2026",
+      "half": 1
+    },
+    "team": {
+      "id": "150",
+      "abbreviation": "DUKE",
+      "location": "Duke",
+      "name": "Blue Devils",
+      "displayName": "Duke Blue Devils",
+      "logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+      "recordSummary": "4-2"
+    },
+    "events": [
+      {
+        "id": "401858209",
+        "date": "2026-09-05T19:30Z",
+        "name": "Tulane Green Wave at Duke Blue Devils",
+        "shortName": "TULN @ DUKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 1,
+          "text": "Week 1"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858209",
+            "date": "2026-09-05T19:30Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "150",
+                "homeAway": "home",
+                "winner": true,
+                "score": {
+                  "value": 17,
+                  "displayValue": "17"
+                },
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "2655",
+                "homeAway": "away",
+                "winner": false,
+                "score": {
+                  "value": 3,
+                  "displayValue": "3"
+                },
+                "team": {
+                  "id": "2655",
+                  "location": "Tulane",
+                  "nickname": "Tulane",
+                  "abbreviation": "TULN",
+                  "displayName": "Tulane Green Wave",
+                  "shortDisplayName": "Tulane",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/2655.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ACC Network"
+                }
+              },
+              {
+                "media": {
+                  "shortName": "ACCNX"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858217",
+        "date": "2026-09-12T19:30Z",
+        "name": "Duke Blue Devils at Illinois Fighting Illini",
+        "shortName": "DUKE @ ILL",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 2,
+          "text": "Week 2"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858217",
+            "date": "2026-09-12T19:30Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "356",
+                "homeAway": "home",
+                "winner": false,
+                "score": {
+                  "value": 27,
+                  "displayValue": "27"
+                },
+                "team": {
+                  "id": "356",
+                  "location": "Illinois",
+                  "nickname": "Illinois",
+                  "abbreviation": "ILL",
+                  "displayName": "Illinois Fighting Illini",
+                  "shortDisplayName": "Illinois",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/356.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "150",
+                "homeAway": "away",
+                "winner": true,
+                "score": {
+                  "value": 31,
+                  "displayValue": "31"
+                },
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "FS1"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858231",
+        "date": "2026-09-19T20:00Z",
+        "name": "Stanford Cardinal at Duke Blue Devils",
+        "shortName": "STAN @ DUKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 3,
+          "text": "Week 3"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858231",
+            "date": "2026-09-19T20:00Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "150",
+                "homeAway": "home",
+                "winner": true,
+                "score": {
+                  "value": 35,
+                  "displayValue": "35"
+                },
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "24",
+                "homeAway": "away",
+                "winner": false,
+                "score": {
+                  "value": 7,
+                  "displayValue": "7"
+                },
+                "team": {
+                  "id": "24",
+                  "location": "Stanford",
+                  "nickname": "Stanford",
+                  "abbreviation": "STAN",
+                  "displayName": "Stanford Cardinal",
+                  "shortDisplayName": "Stanford",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/24.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "CW"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858244",
+        "date": "2026-09-26T19:30Z",
+        "name": "William & Mary Tribe at Duke Blue Devils",
+        "shortName": "W&M @ DUKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 4,
+          "text": "Week 4"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858244",
+            "date": "2026-09-26T19:30Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "150",
+                "homeAway": "home",
+                "winner": true,
+                "score": {
+                  "value": 62,
+                  "displayValue": "62"
+                },
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "2729",
+                "homeAway": "away",
+                "winner": false,
+                "score": {
+                  "value": 7,
+                  "displayValue": "7"
+                },
+                "team": {
+                  "id": "2729",
+                  "location": "William & Mary",
+                  "nickname": "William & Mary",
+                  "abbreviation": "W&M",
+                  "displayName": "William & Mary Tribe",
+                  "shortDisplayName": "William & Mary",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/2729.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ACCNX"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858255",
+        "date": "2026-10-10T19:30Z",
+        "name": "Duke Blue Devils at Georgia Tech Yellow Jackets",
+        "shortName": "DUKE @ GT",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 6,
+          "text": "Week 6"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858255",
+            "date": "2026-10-10T19:30Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "59",
+                "homeAway": "home",
+                "winner": true,
+                "score": {
+                  "value": 28,
+                  "displayValue": "28"
+                },
+                "team": {
+                  "id": "59",
+                  "location": "Georgia Tech",
+                  "nickname": "Georgia Tech",
+                  "abbreviation": "GT",
+                  "displayName": "Georgia Tech Yellow Jackets",
+                  "shortDisplayName": "Georgia Tech",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/59.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "150",
+                "homeAway": "away",
+                "winner": false,
+                "score": {
+                  "value": 25,
+                  "displayValue": "25"
+                },
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ESPN2"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858266",
+        "date": "2026-10-17T19:30Z",
+        "name": "North Carolina Tar Heels at Duke Blue Devils",
+        "shortName": "UNC @ DUKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 7,
+          "text": "Week 7"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858266",
+            "date": "2026-10-17T19:30Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "150",
+                "homeAway": "home",
+                "winner": false,
+                "score": {
+                  "value": 20,
+                  "displayValue": "20"
+                },
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "153",
+                "homeAway": "away",
+                "winner": true,
+                "score": {
+                  "value": 24,
+                  "displayValue": "24"
+                },
+                "team": {
+                  "id": "153",
+                  "location": "North Carolina",
+                  "nickname": "North Carolina",
+                  "abbreviation": "UNC",
+                  "displayName": "North Carolina Tar Heels",
+                  "shortDisplayName": "North Carolina",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ESPN2"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858271",
+        "date": "2026-10-23T23:00Z",
+        "name": "Duke Blue Devils at Virginia Cavaliers",
+        "shortName": "DUKE @ UVA",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 8,
+          "text": "Week 8"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858271",
+            "date": "2026-10-23T23:00Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "258",
+                "homeAway": "home",
+                "team": {
+                  "id": "258",
+                  "location": "Virginia",
+                  "nickname": "Virginia",
+                  "abbreviation": "UVA",
+                  "displayName": "Virginia Cavaliers",
+                  "shortDisplayName": "Virginia",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/258.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "150",
+                "homeAway": "away",
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ESPN"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "Fri, October 23rd at 7:00 PM EDT",
+                "shortDetail": "10/23 - 7:00 PM EDT"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858279",
+        "date": "2026-10-31T04:00Z",
+        "name": "Boston College Eagles at Duke Blue Devils",
+        "shortName": "BC @ DUKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 9,
+          "text": "Week 9"
+        },
+        "timeValid": false,
+        "competitions": [
+          {
+            "id": "401858279",
+            "date": "2026-10-31T04:00Z",
+            "timeValid": false,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "150",
+                "homeAway": "home",
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "103",
+                "homeAway": "away",
+                "team": {
+                  "id": "103",
+                  "location": "Boston College",
+                  "nickname": "Boston College",
+                  "abbreviation": "BC",
+                  "displayName": "Boston College Eagles",
+                  "shortDisplayName": "Boston College",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/103.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "10/31 - TBD",
+                "shortDetail": "TBD"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858286",
+        "date": "2026-11-07T05:00Z",
+        "name": "Duke Blue Devils at NC State Wolfpack",
+        "shortName": "DUKE @ NCSU",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 10,
+          "text": "Week 10"
+        },
+        "timeValid": false,
+        "competitions": [
+          {
+            "id": "401858286",
+            "date": "2026-11-07T05:00Z",
+            "timeValid": false,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "152",
+                "homeAway": "home",
+                "team": {
+                  "id": "152",
+                  "location": "NC State",
+                  "nickname": "NC State",
+                  "abbreviation": "NCSU",
+                  "displayName": "NC State Wolfpack",
+                  "shortDisplayName": "NC State",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/152.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "150",
+                "homeAway": "away",
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "11/7 - TBD",
+                "shortDetail": "TBD"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858296",
+        "date": "2026-11-14T05:00Z",
+        "name": "Duke Blue Devils at Miami Hurricanes",
+        "shortName": "DUKE @ MIA",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 11,
+          "text": "Week 11"
+        },
+        "timeValid": false,
+        "competitions": [
+          {
+            "id": "401858296",
+            "date": "2026-11-14T05:00Z",
+            "timeValid": false,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "2390",
+                "homeAway": "home",
+                "team": {
+                  "id": "2390",
+                  "location": "Miami",
+                  "nickname": "Miami",
+                  "abbreviation": "MIA",
+                  "displayName": "Miami Hurricanes",
+                  "shortDisplayName": "Miami",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/2390.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "150",
+                "homeAway": "away",
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "11/14 - TBD",
+                "shortDetail": "TBD"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858303",
+        "date": "2026-11-21T00:30Z",
+        "name": "Clemson Tigers at Duke Blue Devils",
+        "shortName": "CLEM @ DUKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 12,
+          "text": "Week 12"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858303",
+            "date": "2026-11-21T00:30Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "150",
+                "homeAway": "home",
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "228",
+                "homeAway": "away",
+                "team": {
+                  "id": "228",
+                  "location": "Clemson",
+                  "nickname": "Clemson",
+                  "abbreviation": "CLEM",
+                  "displayName": "Clemson Tigers",
+                  "shortDisplayName": "Clemson",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/228.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ESPN"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "Fri, November 20th at 7:30 PM EST",
+                "shortDetail": "11/20 - 7:30 PM EST"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858312",
+        "date": "2026-11-28T05:00Z",
+        "name": "Duke Blue Devils at Wake Forest Demon Deacons",
+        "shortName": "DUKE @ WAKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 13,
+          "text": "Week 13"
+        },
+        "timeValid": false,
+        "competitions": [
+          {
+            "id": "401858312",
+            "date": "2026-11-28T05:00Z",
+            "timeValid": false,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "154",
+                "homeAway": "home",
+                "team": {
+                  "id": "154",
+                  "location": "Wake Forest",
+                  "nickname": "Wake Forest",
+                  "abbreviation": "WAKE",
+                  "displayName": "Wake Forest Demon Deacons",
+                  "shortDisplayName": "Wake Forest",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/154.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "150",
+                "homeAway": "away",
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "11/28 - TBD",
+                "shortDetail": "TBD"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "requestedSeason": {
+      "year": 2026,
+      "type": 2,
+      "name": "Regular Season",
+      "displayName": "2026"
+    }
+  },
+  "regular": {
+    "timestamp": "2026-10-19T05:04:44Z",
+    "status": "success",
+    "season": {
+      "year": 2026,
+      "type": 2,
+      "name": "Regular Season",
+      "displayName": "2026",
+      "half": 1
+    },
+    "team": {
+      "id": "150",
+      "abbreviation": "DUKE",
+      "location": "Duke",
+      "name": "Blue Devils",
+      "displayName": "Duke Blue Devils",
+      "logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+      "recordSummary": "4-2"
+    },
+    "events": [
+      {
+        "id": "401858209",
+        "date": "2026-09-05T19:30Z",
+        "name": "Tulane Green Wave at Duke Blue Devils",
+        "shortName": "TULN @ DUKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 1,
+          "text": "Week 1"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858209",
+            "date": "2026-09-05T19:30Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "150",
+                "homeAway": "home",
+                "winner": true,
+                "score": {
+                  "value": 17,
+                  "displayValue": "17"
+                },
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "2655",
+                "homeAway": "away",
+                "winner": false,
+                "score": {
+                  "value": 3,
+                  "displayValue": "3"
+                },
+                "team": {
+                  "id": "2655",
+                  "location": "Tulane",
+                  "nickname": "Tulane",
+                  "abbreviation": "TULN",
+                  "displayName": "Tulane Green Wave",
+                  "shortDisplayName": "Tulane",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/2655.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ACC Network"
+                }
+              },
+              {
+                "media": {
+                  "shortName": "ACCNX"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858217",
+        "date": "2026-09-12T19:30Z",
+        "name": "Duke Blue Devils at Illinois Fighting Illini",
+        "shortName": "DUKE @ ILL",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 2,
+          "text": "Week 2"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858217",
+            "date": "2026-09-12T19:30Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "356",
+                "homeAway": "home",
+                "winner": false,
+                "score": {
+                  "value": 27,
+                  "displayValue": "27"
+                },
+                "team": {
+                  "id": "356",
+                  "location": "Illinois",
+                  "nickname": "Illinois",
+                  "abbreviation": "ILL",
+                  "displayName": "Illinois Fighting Illini",
+                  "shortDisplayName": "Illinois",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/356.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "150",
+                "homeAway": "away",
+                "winner": true,
+                "score": {
+                  "value": 31,
+                  "displayValue": "31"
+                },
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "FS1"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858231",
+        "date": "2026-09-19T20:00Z",
+        "name": "Stanford Cardinal at Duke Blue Devils",
+        "shortName": "STAN @ DUKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 3,
+          "text": "Week 3"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858231",
+            "date": "2026-09-19T20:00Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "150",
+                "homeAway": "home",
+                "winner": true,
+                "score": {
+                  "value": 35,
+                  "displayValue": "35"
+                },
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "24",
+                "homeAway": "away",
+                "winner": false,
+                "score": {
+                  "value": 7,
+                  "displayValue": "7"
+                },
+                "team": {
+                  "id": "24",
+                  "location": "Stanford",
+                  "nickname": "Stanford",
+                  "abbreviation": "STAN",
+                  "displayName": "Stanford Cardinal",
+                  "shortDisplayName": "Stanford",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/24.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "CW"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858244",
+        "date": "2026-09-26T19:30Z",
+        "name": "William & Mary Tribe at Duke Blue Devils",
+        "shortName": "W&M @ DUKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 4,
+          "text": "Week 4"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858244",
+            "date": "2026-09-26T19:30Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "150",
+                "homeAway": "home",
+                "winner": true,
+                "score": {
+                  "value": 62,
+                  "displayValue": "62"
+                },
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "2729",
+                "homeAway": "away",
+                "winner": false,
+                "score": {
+                  "value": 7,
+                  "displayValue": "7"
+                },
+                "team": {
+                  "id": "2729",
+                  "location": "William & Mary",
+                  "nickname": "William & Mary",
+                  "abbreviation": "W&M",
+                  "displayName": "William & Mary Tribe",
+                  "shortDisplayName": "William & Mary",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/2729.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ACCNX"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858255",
+        "date": "2026-10-10T19:30Z",
+        "name": "Duke Blue Devils at Georgia Tech Yellow Jackets",
+        "shortName": "DUKE @ GT",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 6,
+          "text": "Week 6"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858255",
+            "date": "2026-10-10T19:30Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "59",
+                "homeAway": "home",
+                "winner": true,
+                "score": {
+                  "value": 28,
+                  "displayValue": "28"
+                },
+                "team": {
+                  "id": "59",
+                  "location": "Georgia Tech",
+                  "nickname": "Georgia Tech",
+                  "abbreviation": "GT",
+                  "displayName": "Georgia Tech Yellow Jackets",
+                  "shortDisplayName": "Georgia Tech",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/59.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "150",
+                "homeAway": "away",
+                "winner": false,
+                "score": {
+                  "value": 25,
+                  "displayValue": "25"
+                },
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ESPN2"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858266",
+        "date": "2026-10-17T19:30Z",
+        "name": "North Carolina Tar Heels at Duke Blue Devils",
+        "shortName": "UNC @ DUKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 7,
+          "text": "Week 7"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858266",
+            "date": "2026-10-17T19:30Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "150",
+                "homeAway": "home",
+                "winner": false,
+                "score": {
+                  "value": 20,
+                  "displayValue": "20"
+                },
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "153",
+                "homeAway": "away",
+                "winner": true,
+                "score": {
+                  "value": 24,
+                  "displayValue": "24"
+                },
+                "team": {
+                  "id": "153",
+                  "location": "North Carolina",
+                  "nickname": "North Carolina",
+                  "abbreviation": "UNC",
+                  "displayName": "North Carolina Tar Heels",
+                  "shortDisplayName": "North Carolina",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ESPN2"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858271",
+        "date": "2026-10-23T23:00Z",
+        "name": "Duke Blue Devils at Virginia Cavaliers",
+        "shortName": "DUKE @ UVA",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 8,
+          "text": "Week 8"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858271",
+            "date": "2026-10-23T23:00Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "258",
+                "homeAway": "home",
+                "team": {
+                  "id": "258",
+                  "location": "Virginia",
+                  "nickname": "Virginia",
+                  "abbreviation": "UVA",
+                  "displayName": "Virginia Cavaliers",
+                  "shortDisplayName": "Virginia",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/258.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "150",
+                "homeAway": "away",
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ESPN"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "Fri, October 23rd at 7:00 PM EDT",
+                "shortDetail": "10/23 - 7:00 PM EDT"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858279",
+        "date": "2026-10-31T04:00Z",
+        "name": "Boston College Eagles at Duke Blue Devils",
+        "shortName": "BC @ DUKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 9,
+          "text": "Week 9"
+        },
+        "timeValid": false,
+        "competitions": [
+          {
+            "id": "401858279",
+            "date": "2026-10-31T04:00Z",
+            "timeValid": false,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "150",
+                "homeAway": "home",
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "103",
+                "homeAway": "away",
+                "team": {
+                  "id": "103",
+                  "location": "Boston College",
+                  "nickname": "Boston College",
+                  "abbreviation": "BC",
+                  "displayName": "Boston College Eagles",
+                  "shortDisplayName": "Boston College",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/103.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "10/31 - TBD",
+                "shortDetail": "TBD"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858286",
+        "date": "2026-11-07T05:00Z",
+        "name": "Duke Blue Devils at NC State Wolfpack",
+        "shortName": "DUKE @ NCSU",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 10,
+          "text": "Week 10"
+        },
+        "timeValid": false,
+        "competitions": [
+          {
+            "id": "401858286",
+            "date": "2026-11-07T05:00Z",
+            "timeValid": false,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "152",
+                "homeAway": "home",
+                "team": {
+                  "id": "152",
+                  "location": "NC State",
+                  "nickname": "NC State",
+                  "abbreviation": "NCSU",
+                  "displayName": "NC State Wolfpack",
+                  "shortDisplayName": "NC State",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/152.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "150",
+                "homeAway": "away",
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "11/7 - TBD",
+                "shortDetail": "TBD"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858296",
+        "date": "2026-11-14T05:00Z",
+        "name": "Duke Blue Devils at Miami Hurricanes",
+        "shortName": "DUKE @ MIA",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 11,
+          "text": "Week 11"
+        },
+        "timeValid": false,
+        "competitions": [
+          {
+            "id": "401858296",
+            "date": "2026-11-14T05:00Z",
+            "timeValid": false,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "2390",
+                "homeAway": "home",
+                "team": {
+                  "id": "2390",
+                  "location": "Miami",
+                  "nickname": "Miami",
+                  "abbreviation": "MIA",
+                  "displayName": "Miami Hurricanes",
+                  "shortDisplayName": "Miami",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/2390.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "150",
+                "homeAway": "away",
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "11/14 - TBD",
+                "shortDetail": "TBD"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858303",
+        "date": "2026-11-21T00:30Z",
+        "name": "Clemson Tigers at Duke Blue Devils",
+        "shortName": "CLEM @ DUKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 12,
+          "text": "Week 12"
+        },
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401858303",
+            "date": "2026-11-21T00:30Z",
+            "timeValid": true,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "150",
+                "homeAway": "home",
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "228",
+                "homeAway": "away",
+                "team": {
+                  "id": "228",
+                  "location": "Clemson",
+                  "nickname": "Clemson",
+                  "abbreviation": "CLEM",
+                  "displayName": "Clemson Tigers",
+                  "shortDisplayName": "Clemson",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/228.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [
+              {
+                "media": {
+                  "shortName": "ESPN"
+                }
+              }
+            ],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "Fri, November 20th at 7:30 PM EST",
+                "shortDetail": "11/20 - 7:30 PM EST"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "401858312",
+        "date": "2026-11-28T05:00Z",
+        "name": "Duke Blue Devils at Wake Forest Demon Deacons",
+        "shortName": "DUKE @ WAKE",
+        "season": {
+          "year": 2026,
+          "displayName": "2026"
+        },
+        "seasonType": {
+          "id": "2",
+          "type": 2,
+          "name": "Regular Season",
+          "abbreviation": "reg"
+        },
+        "week": {
+          "number": 13,
+          "text": "Week 13"
+        },
+        "timeValid": false,
+        "competitions": [
+          {
+            "id": "401858312",
+            "date": "2026-11-28T05:00Z",
+            "timeValid": false,
+            "neutralSite": false,
+            "competitors": [
+              {
+                "id": "154",
+                "homeAway": "home",
+                "team": {
+                  "id": "154",
+                  "location": "Wake Forest",
+                  "nickname": "Wake Forest",
+                  "abbreviation": "WAKE",
+                  "displayName": "Wake Forest Demon Deacons",
+                  "shortDisplayName": "Wake Forest",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/154.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "150",
+                "homeAway": "away",
+                "team": {
+                  "id": "150",
+                  "location": "Duke",
+                  "nickname": "Duke",
+                  "abbreviation": "DUKE",
+                  "displayName": "Duke Blue Devils",
+                  "shortDisplayName": "Duke",
+                  "logos": [
+                    {
+                      "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+                      "rel": [
+                        "full",
+                        "default"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "broadcasts": [],
+            "status": {
+              "clock": 0,
+              "displayClock": "0:00",
+              "period": 0,
+              "type": {
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false,
+                "description": "Scheduled",
+                "detail": "11/28 - TBD",
+                "shortDetail": "TBD"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "requestedSeason": {
+      "year": 2026,
+      "type": 2,
+      "name": "Regular Season",
+      "displayName": "2026"
+    }
+  },
+  "postseason": {
+    "timestamp": "2026-10-19T05:04:44Z",
+    "status": "success",
+    "season": {
+      "year": 2026,
+      "type": 2,
+      "name": "Regular Season",
+      "displayName": "2026",
+      "half": 1
+    },
+    "team": {
+      "id": "150",
+      "abbreviation": "DUKE",
+      "location": "Duke",
+      "name": "Blue Devils",
+      "displayName": "Duke Blue Devils",
+      "logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+      "recordSummary": "4-2"
+    },
+    "events": []
+  },
+  "stats": {
+    "status": "success",
+    "results": {
+      "stats": {
+        "id": "0",
+        "name": "Season",
+        "categories": [
+          {
+            "name": "passing",
+            "displayName": "Passing",
+            "abbreviation": "pass",
+            "stats": [
+              {
+                "name": "completionPct",
+                "displayName": "Completion Percentage",
+                "shortDisplayName": "CMP%",
+                "description": "The percentage of completed passes.",
+                "abbreviation": "CMP%",
+                "value": 60.7,
+                "displayValue": "60.7"
+              },
+              {
+                "name": "completions",
+                "displayName": "Completions",
+                "shortDisplayName": "CMP",
+                "description": "The times a player completes a pass to another player who is eligible to catch a pass.",
+                "abbreviation": "CMP",
+                "value": 116,
+                "displayValue": "116"
+              },
+              {
+                "name": "interceptionPct",
+                "displayName": "Interception Percentage",
+                "shortDisplayName": "INT%",
+                "description": "The percentage of passes thrown that were intercepted by the opposing team.",
+                "abbreviation": "INT%",
+                "value": 1,
+                "displayValue": "1.00"
+              },
+              {
+                "name": "interceptions",
+                "displayName": "Interceptions",
+                "shortDisplayName": "INT",
+                "description": "The number of passes thrown that were intercepted by the opposing team.",
+                "abbreviation": "INT",
+                "value": 2,
+                "displayValue": "2"
+              },
+              {
+                "name": "longPassing",
+                "displayName": "Longest Pass",
+                "shortDisplayName": "LONG",
+                "description": "The longest pass play completed in terms of yards.",
+                "abbreviation": "LNG",
+                "value": 42,
+                "displayValue": "42"
+              },
+              {
+                "name": "netPassingYards",
+                "displayName": "Net Passing Yards",
+                "shortDisplayName": "NYDS",
+                "description": "The amount of net passing yards.",
+                "abbreviation": "NYDS",
+                "value": 1399,
+                "displayValue": "1,399"
+              },
+              {
+                "name": "netPassingYardsPerGame",
+                "displayName": "Net Passing Yards Per Game",
+                "shortDisplayName": "NYDS/G",
+                "description": "The amount of net passing yards per game.",
+                "abbreviation": "NYDS/G",
+                "value": 233.16667,
+                "displayValue": "233.2"
+              },
+              {
+                "name": "passingAttempts",
+                "displayName": "Passing Attempts",
+                "shortDisplayName": "ATT",
+                "description": "The number of times a pass is attempted.",
+                "abbreviation": "ATT",
+                "value": 191,
+                "displayValue": "191"
+              },
+              {
+                "name": "passingTouchdownPct",
+                "displayName": "Passing Touchdown %",
+                "shortDisplayName": "TD%",
+                "description": "The percentage of passes that result in a touchdown.",
+                "abbreviation": "TD%",
+                "value": 5.8,
+                "displayValue": "5.80"
+              },
+              {
+                "name": "passingTouchdowns",
+                "displayName": "Passing Touchdowns",
+                "shortDisplayName": "Touchdowns",
+                "description": "The total number of passing touchdowns.",
+                "abbreviation": "TD",
+                "value": 11,
+                "displayValue": "11"
+              },
+              {
+                "name": "QBRating",
+                "displayName": "Passer Rating",
+                "shortDisplayName": "RTG",
+                "description": "Passer Rating",
+                "abbreviation": "RTG",
+                "value": 139.02524,
+                "displayValue": "139.0"
+              },
+              {
+                "name": "sacks",
+                "displayName": "Total Sacks",
+                "shortDisplayName": "Sacks",
+                "description": "The total number of sacks.",
+                "abbreviation": "SACK",
+                "value": 2,
+                "displayValue": "2"
+              },
+              {
+                "name": "sackYardsLost",
+                "displayName": "Sack Yards Lost",
+                "shortDisplayName": "SYL",
+                "description": "The amount of yards lost due to sacks.",
+                "abbreviation": "SYL",
+                "value": 16,
+                "displayValue": "16"
+              },
+              {
+                "name": "yardsPerPassAttempt",
+                "displayName": "Yards Per Pass Attempt",
+                "shortDisplayName": "AVG",
+                "description": "The average number yards per pass attempt.",
+                "abbreviation": "AVG",
+                "value": 7.3,
+                "displayValue": "7.3"
+              },
+              {
+                "name": "passingYards",
+                "displayName": "Passing Yards",
+                "shortDisplayName": "Pass Yards",
+                "description": "The total passing yards.",
+                "abbreviation": "YDS",
+                "value": 1399,
+                "displayValue": "1,399"
+              },
+              {
+                "name": "passingFumblesLost",
+                "displayName": "Passing Fumbles Lost",
+                "shortDisplayName": "FL",
+                "description": "The number of times the ball has been fumbled and lost to the opposing team after a completed pass.",
+                "abbreviation": "FL",
+                "value": 0,
+                "displayValue": "0"
+              },
+              {
+                "name": "teamGamesPlayed",
+                "displayName": "Team Games Played",
+                "shortDisplayName": "TGP",
+                "description": "The amount of games played.",
+                "abbreviation": "TGP",
+                "value": 6,
+                "displayValue": "6"
+              },
+              {
+                "name": "yardsPerGame",
+                "displayName": "Yards Per Game",
+                "shortDisplayName": "YDS/G",
+                "description": "The average number of yards per game.",
+                "abbreviation": "YDS/G",
+                "value": 442.7,
+                "displayValue": "442.7"
+              },
+              {
+                "name": "totalPointsPerGame",
+                "displayName": "Total Points Per Game",
+                "shortDisplayName": "TP/G",
+                "description": "The number of points scored per game.",
+                "abbreviation": "TP",
+                "value": 31.67,
+                "displayValue": "31.7"
+              },
+              {
+                "name": "totalPoints",
+                "displayName": "Total Points",
+                "shortDisplayName": "TP",
+                "description": "The number of total points scored.",
+                "abbreviation": "PTS",
+                "value": 190,
+                "displayValue": "190"
+              },
+              {
+                "name": "totalTouchdowns",
+                "displayName": "Total Touchdowns",
+                "shortDisplayName": "TTD",
+                "description": "The number of touchdowns scored in total.",
+                "abbreviation": "TD",
+                "value": 24,
+                "displayValue": "24"
+              },
+              {
+                "name": "passingYardsPerGame",
+                "displayName": "Passing Yards Per Game",
+                "shortDisplayName": "PYDS/G",
+                "description": "The number of passing yards per game.",
+                "abbreviation": "YDS/G",
+                "value": 233.2,
+                "displayValue": "233.2"
+              },
+              {
+                "name": "completionAttempts",
+                "displayName": "Comp-Att",
+                "description": "Comp-Att",
+                "abbreviation": "CMP-ATT",
+                "displayValue": "116-191"
+              },
+              {
+                "name": "sacksYardsLost",
+                "displayName": "Sacks-Yards Lost",
+                "description": "Sacks-Yards Lost",
+                "abbreviation": "SYL",
+                "displayValue": "2-16"
+              }
+            ]
+          },
+          {
+            "name": "rushing",
+            "displayName": "Rushing",
+            "abbreviation": "rush",
+            "stats": [
+              {
+                "name": "rushingAttempts",
+                "displayName": "Rushing Attempts",
+                "shortDisplayName": "Rushing Attempts",
+                "description": "The total number of attempted rushes.",
+                "abbreviation": "CAR",
+                "value": 233,
+                "displayValue": "233"
+              },
+              {
+                "name": "rushingYards",
+                "displayName": "Rushing Yards",
+                "shortDisplayName": "Rush Yards",
+                "description": "The total rushing yards.",
+                "abbreviation": "YDS",
+                "value": 1257,
+                "displayValue": "1,257"
+              },
+              {
+                "name": "yardsPerRushAttempt",
+                "displayName": "Yards Per Rush Attempt",
+                "shortDisplayName": "YDS/RA",
+                "description": "The average number of yards per rush attempt.",
+                "abbreviation": "AVG",
+                "value": 5.4,
+                "displayValue": "5.4"
+              },
+              {
+                "name": "longRushing",
+                "displayName": "Long Rushing",
+                "shortDisplayName": "LONG",
+                "description": "The amount of yards for the longest run.",
+                "abbreviation": "LNG",
+                "value": 47,
+                "displayValue": "47"
+              },
+              {
+                "name": "rushingBigPlays",
+                "displayName": "20+ Yard Rushing Plays",
+                "shortDisplayName": "BIG",
+                "description": "The number of rushing big plays gained.",
+                "abbreviation": "BIG",
+                "value": 0,
+                "displayValue": "0"
+              },
+              {
+                "name": "rushingTouchdowns",
+                "displayName": "Rushing Touchdowns",
+                "shortDisplayName": "Rushing Touchdowns",
+                "description": "The total number of rushing touchdowns.",
+                "abbreviation": "TD",
+                "value": 12,
+                "displayValue": "12"
+              },
+              {
+                "name": "rushingYardsPerGame",
+                "displayName": "Rushing Yards Per Game",
+                "shortDisplayName": "YDS/G",
+                "description": "The average number of rushing yards per game.",
+                "abbreviation": "YDS/G",
+                "value": 209.5,
+                "displayValue": "209.5"
+              },
+              {
+                "name": "rushingFumbles",
+                "displayName": "Rushing Fumbles",
+                "shortDisplayName": "F",
+                "description": "The number of times there is a run and then the ball is fumbled.",
+                "abbreviation": "FUM",
+                "value": 0,
+                "displayValue": "0"
+              },
+              {
+                "name": "rushingFumblesLost",
+                "displayName": "Rushing Fumbles Lost",
+                "shortDisplayName": "FL",
+                "description": "The number of times there is a run and then the ball is fumbled.",
+                "abbreviation": "LST",
+                "value": 0,
+                "displayValue": "0"
+              },
+              {
+                "name": "rushingFirstDowns",
+                "displayName": "Rushing 1st downs",
+                "shortDisplayName": "FIRST",
+                "description": "The number of times a first down is picked up by a run.",
+                "abbreviation": "FD",
+                "value": 56,
+                "displayValue": "56"
+              },
+              {
+                "name": "teamGamesPlayed",
+                "displayName": "Team Games Played",
+                "shortDisplayName": "GP",
+                "description": "The numbers of team games played.",
+                "abbreviation": "GP",
+                "value": 6,
+                "displayValue": "6"
+              },
+              {
+                "name": "totalYards",
+                "displayName": "Total Yards",
+                "shortDisplayName": "TYDS",
+                "description": "The number of total yards gained.",
+                "abbreviation": "TYDS",
+                "value": 2656,
+                "displayValue": "2,656"
+              },
+              {
+                "name": "totalOffensivePlays",
+                "displayName": "Total Offensive Plays",
+                "shortDisplayName": "OP",
+                "description": "The number of offenseive plays run.",
+                "abbreviation": "OP",
+                "value": 426,
+                "displayValue": "426"
+              },
+              {
+                "name": "totalPointsPerGame",
+                "displayName": "Total Points Per Game",
+                "shortDisplayName": "TP/G",
+                "description": "The average number of points scored per game.",
+                "abbreviation": "TP/G",
+                "value": 31.67,
+                "displayValue": "31.7"
+              },
+              {
+                "name": "totalPoints",
+                "displayName": "Total Points",
+                "shortDisplayName": "TP",
+                "description": "The number of total points earned.",
+                "abbreviation": "PTS",
+                "value": 190,
+                "displayValue": "190"
+              },
+              {
+                "name": "totalTouchdowns",
+                "displayName": "Total Touchdowns",
+                "shortDisplayName": "TTD",
+                "description": "The number of total Touchdowns scored.",
+                "abbreviation": "TD",
+                "value": 24,
+                "displayValue": "24"
+              }
+            ]
+          },
+          {
+            "name": "scoring",
+            "displayName": "Scoring",
+            "abbreviation": "s",
+            "stats": [
+              {
+                "name": "rushingTouchdowns",
+                "displayName": "Rushing Touchdowns",
+                "shortDisplayName": "RUSTD",
+                "description": "The total number of rushing touchdowns.",
+                "abbreviation": "RUSH",
+                "value": 12,
+                "displayValue": "12"
+              },
+              {
+                "name": "receivingTouchdowns",
+                "displayName": "Receiving Touchdowns",
+                "shortDisplayName": "RECTD",
+                "description": "The total number of receiving touchdowns.",
+                "abbreviation": "REC",
+                "value": 11,
+                "displayValue": "11"
+              },
+              {
+                "name": "returnTouchdowns",
+                "displayName": "Return Touchdowns",
+                "shortDisplayName": "RETTD",
+                "description": "The total number of return touchdowns.",
+                "abbreviation": "RET",
+                "value": 0,
+                "displayValue": "0"
+              },
+              {
+                "name": "totalTouchdowns",
+                "displayName": "Total Touchdowns",
+                "shortDisplayName": "TTD",
+                "description": "The number of touchdowns scored in total.",
+                "abbreviation": "TD",
+                "value": 24,
+                "displayValue": "24"
+              },
+              {
+                "name": "fieldGoals",
+                "displayName": "Field Goals",
+                "shortDisplayName": "FG",
+                "description": "The number of field goals made.",
+                "abbreviation": "FG",
+                "value": 7,
+                "displayValue": "7"
+              },
+              {
+                "name": "kickExtraPoints",
+                "displayName": "Kick Extra Points",
+                "shortDisplayName": "XP",
+                "description": "The number of extra points made.",
+                "abbreviation": "PAT",
+                "value": 23,
+                "displayValue": "23"
+              },
+              {
+                "name": "totalTwoPointConvs",
+                "displayName": "Total Two Point Conversions",
+                "shortDisplayName": "2PTC",
+                "description": "The number of times a 2-point conversion is successful.",
+                "abbreviation": "2PT",
+                "value": 1,
+                "displayValue": "1"
+              },
+              {
+                "name": "totalPoints",
+                "displayName": "Total Points",
+                "shortDisplayName": "TP",
+                "description": "The number of total points scored.",
+                "abbreviation": "PTS",
+                "value": 190,
+                "displayValue": "190"
+              },
+              {
+                "name": "totalPointsPerGame",
+                "displayName": "Total Points Per Game",
+                "shortDisplayName": "TP/G",
+                "description": "The number of points scored per game.",
+                "abbreviation": "TP/G",
+                "value": 31.667,
+                "displayValue": "31.7"
+              }
+            ]
+          }
+        ]
+      },
+      "opponent": [
+        {
+          "name": "passing",
+          "displayName": "Passing",
+          "abbreviation": "pass",
+          "stats": [
+            {
+              "name": "completionPct",
+              "displayName": "Completion Percentage",
+              "shortDisplayName": "CMP%",
+              "description": "The percentage of completed passes.",
+              "abbreviation": "CMP%",
+              "value": 62.36,
+              "displayValue": "62.4",
+              "rank": 82,
+              "rankDisplayValue": "82nd"
+            },
+            {
+              "name": "completions",
+              "displayName": "Completions",
+              "shortDisplayName": "CMP",
+              "description": "The times a player completes a pass to another player who is eligible to catch a pass.",
+              "abbreviation": "CMP",
+              "value": 111,
+              "displayValue": "111",
+              "rank": 51,
+              "rankDisplayValue": "Tied-51st"
+            },
+            {
+              "name": "interceptionPct",
+              "displayName": "Interception Percentage",
+              "shortDisplayName": "INT%",
+              "description": "The percentage of passes thrown that were intercepted by the opposing team.",
+              "abbreviation": "INT%",
+              "value": 0.562,
+              "displayValue": "0.56",
+              "rank": 138,
+              "rankDisplayValue": "138th"
+            },
+            {
+              "name": "interceptions",
+              "displayName": "Interceptions",
+              "shortDisplayName": "INT",
+              "description": "The number of passes thrown that were intercepted by the opposing team.",
+              "abbreviation": "INT",
+              "value": 1,
+              "displayValue": "1",
+              "rank": 133,
+              "rankDisplayValue": "Tied-133rd"
+            },
+            {
+              "name": "longPassing",
+              "displayName": "Longest Pass",
+              "shortDisplayName": "LONG",
+              "description": "The longest pass play completed in terms of yards.",
+              "abbreviation": "LNG",
+              "value": 63,
+              "displayValue": "63",
+              "rank": 66,
+              "rankDisplayValue": "Tied-66th"
+            },
+            {
+              "name": "netPassingYards",
+              "displayName": "Net Passing Yards",
+              "shortDisplayName": "NYDS",
+              "description": "The amount of net passing yards.",
+              "abbreviation": "NYDS",
+              "value": 1201,
+              "displayValue": "1,201",
+              "rank": 35,
+              "rankDisplayValue": "35th"
+            },
+            {
+              "name": "netPassingYardsPerGame",
+              "displayName": "Net Passing Yards Per Game",
+              "shortDisplayName": "NYDS/G",
+              "description": "The amount of net passing yards per game.",
+              "abbreviation": "NYDS/G",
+              "value": 200.16667,
+              "displayValue": "200.2",
+              "rank": 171,
+              "rankDisplayValue": "171st"
+            },
+            {
+              "name": "passingAttempts",
+              "displayName": "Passing Attempts",
+              "shortDisplayName": "ATT",
+              "description": "The number of times a pass is attempted.",
+              "abbreviation": "ATT",
+              "value": 178,
+              "displayValue": "178",
+              "rank": 42,
+              "rankDisplayValue": "Tied-42nd"
+            },
+            {
+              "name": "passingTouchdownPct",
+              "displayName": "Passing Touchdown %",
+              "shortDisplayName": "TD%",
+              "description": "The percentage of passes that result in a touchdown.",
+              "abbreviation": "TD%",
+              "value": 3.933,
+              "displayValue": "3.93",
+              "rank": 47,
+              "rankDisplayValue": "47th"
+            },
+            {
+              "name": "passingTouchdowns",
+              "displayName": "Passing Touchdowns",
+              "shortDisplayName": "Touchdowns",
+              "description": "The total number of passing touchdowns.",
+              "abbreviation": "TD",
+              "value": 7,
+              "displayValue": "7",
+              "rank": 35,
+              "rankDisplayValue": "Tied-35th"
+            },
+            {
+              "name": "QBRating",
+              "displayName": "Passer Rating",
+              "shortDisplayName": "RTG",
+              "description": "Passer Rating",
+              "abbreviation": "RTG",
+              "value": 130.88834,
+              "displayValue": "130.9",
+              "rank": 551,
+              "rankDisplayValue": "551st"
+            },
+            {
+              "name": "sacks",
+              "displayName": "Total Sacks",
+              "shortDisplayName": "Sacks",
+              "description": "The total number of sacks.",
+              "abbreviation": "SACK",
+              "value": 13,
+              "displayValue": "13",
+              "rank": 59,
+              "rankDisplayValue": "Tied-59th"
+            },
+            {
+              "name": "sackYardsLost",
+              "displayName": "Sack Yards Lost",
+              "shortDisplayName": "SYL",
+              "description": "The amount of yards lost due to sacks.",
+              "abbreviation": "SYL",
+              "value": 87,
+              "displayValue": "87",
+              "rank": 64,
+              "rankDisplayValue": "Tied-64th"
+            },
+            {
+              "name": "yardsPerPassAttempt",
+              "displayName": "Yards Per Pass Attempt",
+              "shortDisplayName": "AVG",
+              "description": "The average number yards per pass attempt.",
+              "abbreviation": "AVG",
+              "value": 6.747,
+              "displayValue": "6.7",
+              "rank": 56,
+              "rankDisplayValue": "56th"
+            },
+            {
+              "name": "passingYards",
+              "displayName": "Passing Yards",
+              "shortDisplayName": "Pass Yards",
+              "description": "The total passing yards.",
+              "abbreviation": "YDS",
+              "value": 1201,
+              "displayValue": "1,201",
+              "rank": 35,
+              "rankDisplayValue": "35th"
+            },
+            {
+              "name": "passingFumblesLost",
+              "displayName": "Passing Fumbles Lost",
+              "shortDisplayName": "FL",
+              "description": "The number of times the ball has been fumbled and lost to the opposing team after a completed pass.",
+              "abbreviation": "FL",
+              "value": 0,
+              "displayValue": "0",
+              "rank": 1,
+              "rankDisplayValue": "Tied-1st"
+            },
+            {
+              "name": "teamGamesPlayed",
+              "displayName": "Team Games Played",
+              "shortDisplayName": "TGP",
+              "description": "The amount of games played.",
+              "abbreviation": "TGP",
+              "value": 6,
+              "displayValue": "6",
+              "rank": 151,
+              "rankDisplayValue": "Tied-151st"
+            },
+            {
+              "name": "yardsPerGame",
+              "displayName": "Yards Per Game",
+              "shortDisplayName": "YDS/G",
+              "description": "The average number of yards per game.",
+              "abbreviation": "YDS/G",
+              "value": 292.667,
+              "displayValue": "292.7",
+              "rank": 21,
+              "rankDisplayValue": "21st"
+            },
+            {
+              "name": "totalPointsPerGame",
+              "displayName": "Total Points Per Game",
+              "shortDisplayName": "TP/G",
+              "description": "The number of points scored per game.",
+              "abbreviation": "TP",
+              "value": 16,
+              "displayValue": "16.0",
+              "rank": 19,
+              "rankDisplayValue": "Tied-19th"
+            },
+            {
+              "name": "totalPoints",
+              "displayName": "Total Points",
+              "shortDisplayName": "TP",
+              "description": "The number of total points scored.",
+              "abbreviation": "PTS",
+              "value": 96,
+              "displayValue": "96",
+              "rank": 14,
+              "rankDisplayValue": "14th"
+            },
+            {
+              "name": "totalTouchdowns",
+              "displayName": "Total Touchdowns",
+              "shortDisplayName": "TTD",
+              "description": "The number of touchdowns scored in total.",
+              "abbreviation": "TD",
+              "value": 12,
+              "displayValue": "12",
+              "rank": 19,
+              "rankDisplayValue": "Tied-19th"
+            },
+            {
+              "name": "passingYardsPerGame",
+              "displayName": "Passing Yards Per Game",
+              "shortDisplayName": "PYDS/G",
+              "description": "The number of passing yards per game.",
+              "abbreviation": "YDS/G",
+              "value": 200.167,
+              "displayValue": "200.2",
+              "rank": 57,
+              "rankDisplayValue": "57th"
+            },
+            {
+              "name": "completionAttempts",
+              "displayName": "Comp-Att",
+              "description": "Comp-Att",
+              "abbreviation": "CMP-ATT",
+              "displayValue": "111-178"
+            },
+            {
+              "name": "sacksYardsLost",
+              "displayName": "Sacks-Yards Lost",
+              "description": "Sacks-Yards Lost",
+              "abbreviation": "SYL",
+              "displayValue": "13-87"
+            }
+          ]
+        },
+        {
+          "name": "rushing",
+          "displayName": "Rushing",
+          "abbreviation": "rush",
+          "stats": [
+            {
+              "name": "rushingAttempts",
+              "displayName": "Rushing Attempts",
+              "shortDisplayName": "Rushing Attempts",
+              "description": "The total number of attempted rushes.",
+              "abbreviation": "CAR",
+              "value": 175,
+              "displayValue": "175",
+              "rank": 8,
+              "rankDisplayValue": "8th"
+            },
+            {
+              "name": "rushingYards",
+              "displayName": "Rushing Yards",
+              "shortDisplayName": "Rush Yards",
+              "description": "The total rushing yards.",
+              "abbreviation": "YDS",
+              "value": 555,
+              "displayValue": "555",
+              "rank": 13,
+              "rankDisplayValue": "13th"
+            },
+            {
+              "name": "yardsPerRushAttempt",
+              "displayName": "Yards Per Rush Attempt",
+              "shortDisplayName": "YDS/RA",
+              "description": "The average number of yards per rush attempt.",
+              "abbreviation": "AVG",
+              "value": 3.171,
+              "displayValue": "3.2",
+              "rank": 22,
+              "rankDisplayValue": "22nd"
+            },
+            {
+              "name": "longRushing",
+              "displayName": "Long Rushing",
+              "shortDisplayName": "LONG",
+              "description": "The amount of yards for the longest run.",
+              "abbreviation": "LNG",
+              "value": 60,
+              "displayValue": "60",
+              "rank": 83,
+              "rankDisplayValue": "Tied-83rd"
+            },
+            {
+              "name": "rushingBigPlays",
+              "displayName": "20+ Yard Rushing Plays",
+              "shortDisplayName": "BIG",
+              "description": "The number of rushing big plays gained.",
+              "abbreviation": "BIG",
+              "value": 0,
+              "displayValue": "0",
+              "rank": 1,
+              "rankDisplayValue": "Tied-1st"
+            },
+            {
+              "name": "rushingTouchdowns",
+              "displayName": "Rushing Touchdowns",
+              "shortDisplayName": "Rushing Touchdowns",
+              "description": "The total number of rushing touchdowns.",
+              "abbreviation": "TD",
+              "value": 5,
+              "displayValue": "5",
+              "rank": 18,
+              "rankDisplayValue": "Tied-18th"
+            },
+            {
+              "name": "rushingYardsPerGame",
+              "displayName": "Rushing Yards Per Game",
+              "shortDisplayName": "YDS/G",
+              "description": "The average number of rushing yards per game.",
+              "abbreviation": "YDS/G",
+              "value": 92.5,
+              "displayValue": "92.5",
+              "rank": 18,
+              "rankDisplayValue": "18th"
+            },
+            {
+              "name": "rushingFumbles",
+              "displayName": "Rushing Fumbles",
+              "shortDisplayName": "F",
+              "description": "The number of times there is a run and then the ball is fumbled.",
+              "abbreviation": "FUM",
+              "value": 0,
+              "displayValue": "0",
+              "rank": 1,
+              "rankDisplayValue": "Tied-1st"
+            },
+            {
+              "name": "rushingFumblesLost",
+              "displayName": "Rushing Fumbles Lost",
+              "shortDisplayName": "FL",
+              "description": "The number of times there is a run and then the ball is fumbled.",
+              "abbreviation": "LST",
+              "value": 0,
+              "displayValue": "0",
+              "rank": 1,
+              "rankDisplayValue": "Tied-1st"
+            },
+            {
+              "name": "rushingFirstDowns",
+              "displayName": "Rushing 1st downs",
+              "shortDisplayName": "FIRST",
+              "description": "The number of times a first down is picked up by a run.",
+              "abbreviation": "FD",
+              "value": 32,
+              "displayValue": "32",
+              "rank": 8,
+              "rankDisplayValue": "Tied-8th"
+            },
+            {
+              "name": "teamGamesPlayed",
+              "displayName": "Team Games Played",
+              "shortDisplayName": "GP",
+              "description": "The numbers of team games played.",
+              "abbreviation": "GP",
+              "value": 6,
+              "displayValue": "6",
+              "rank": 151,
+              "rankDisplayValue": "Tied-151st"
+            },
+            {
+              "name": "totalYards",
+              "displayName": "Total Yards",
+              "shortDisplayName": "TYDS",
+              "description": "The number of total yards gained.",
+              "abbreviation": "TYDS",
+              "value": 1756,
+              "displayValue": "1,756",
+              "rank": 15,
+              "rankDisplayValue": "15th"
+            },
+            {
+              "name": "totalOffensivePlays",
+              "displayName": "Total Offensive Plays",
+              "shortDisplayName": "OP",
+              "description": "The number of offenseive plays run.",
+              "abbreviation": "OP",
+              "value": 366,
+              "displayValue": "366",
+              "rank": 93,
+              "rankDisplayValue": "Tied-93rd"
+            },
+            {
+              "name": "totalPointsPerGame",
+              "displayName": "Total Points Per Game",
+              "shortDisplayName": "TP/G",
+              "description": "The average number of points scored per game.",
+              "abbreviation": "TP/G",
+              "value": 16,
+              "displayValue": "16.0",
+              "rank": 19,
+              "rankDisplayValue": "Tied-19th"
+            },
+            {
+              "name": "totalPoints",
+              "displayName": "Total Points",
+              "shortDisplayName": "TP",
+              "description": "The number of total points earned.",
+              "abbreviation": "PTS",
+              "value": 96,
+              "displayValue": "96",
+              "rank": 14,
+              "rankDisplayValue": "14th"
+            },
+            {
+              "name": "totalTouchdowns",
+              "displayName": "Total Touchdowns",
+              "shortDisplayName": "TTD",
+              "description": "The number of total Touchdowns scored.",
+              "abbreviation": "TD",
+              "value": 12,
+              "displayValue": "12",
+              "rank": 19,
+              "rankDisplayValue": "Tied-19th"
+            }
+          ]
+        },
+        {
+          "name": "scoring",
+          "displayName": "Scoring",
+          "abbreviation": "s",
+          "stats": [
+            {
+              "name": "rushingTouchdowns",
+              "displayName": "Rushing Touchdowns",
+              "shortDisplayName": "RUSTD",
+              "description": "The total number of rushing touchdowns.",
+              "abbreviation": "RUSH",
+              "value": 5,
+              "displayValue": "5",
+              "rank": 18,
+              "rankDisplayValue": "Tied-18th"
+            },
+            {
+              "name": "receivingTouchdowns",
+              "displayName": "Receiving Touchdowns",
+              "shortDisplayName": "RECTD",
+              "description": "The total number of receiving touchdowns.",
+              "abbreviation": "REC",
+              "value": 7,
+              "displayValue": "7",
+              "rank": 35,
+              "rankDisplayValue": "Tied-35th"
+            },
+            {
+              "name": "returnTouchdowns",
+              "displayName": "Return Touchdowns",
+              "shortDisplayName": "RETTD",
+              "description": "The total number of return touchdowns.",
+              "abbreviation": "RET",
+              "value": 0,
+              "displayValue": "0",
+              "rank": 1,
+              "rankDisplayValue": "Tied-1st"
+            },
+            {
+              "name": "totalTouchdowns",
+              "displayName": "Total Touchdowns",
+              "shortDisplayName": "TTD",
+              "description": "The number of touchdowns scored in total.",
+              "abbreviation": "TD",
+              "value": 12,
+              "displayValue": "12",
+              "rank": 19,
+              "rankDisplayValue": "Tied-19th"
+            },
+            {
+              "name": "fieldGoals",
+              "displayName": "Field Goals",
+              "shortDisplayName": "FG",
+              "description": "The number of field goals made.",
+              "abbreviation": "FG",
+              "value": 4,
+              "displayValue": "4",
+              "rank": 10,
+              "rankDisplayValue": "Tied-10th"
+            },
+            {
+              "name": "kickExtraPoints",
+              "displayName": "Kick Extra Points",
+              "shortDisplayName": "XP",
+              "description": "The number of extra points made.",
+              "abbreviation": "PAT",
+              "value": 12,
+              "displayValue": "12",
+              "rank": 27,
+              "rankDisplayValue": "Tied-27th"
+            },
+            {
+              "name": "totalTwoPointConvs",
+              "displayName": "Total Two Point Conversions",
+              "shortDisplayName": "2PTC",
+              "description": "The number of times a 2-point conversion is successful.",
+              "abbreviation": "2PT",
+              "value": 0,
+              "displayValue": "0",
+              "rank": 1,
+              "rankDisplayValue": "Tied-1st"
+            },
+            {
+              "name": "totalPoints",
+              "displayName": "Total Points",
+              "shortDisplayName": "TP",
+              "description": "The number of total points scored.",
+              "abbreviation": "PTS",
+              "value": 96,
+              "displayValue": "96",
+              "rank": 14,
+              "rankDisplayValue": "14th"
+            },
+            {
+              "name": "totalPointsPerGame",
+              "displayName": "Total Points Per Game",
+              "shortDisplayName": "TP/G",
+              "description": "The number of points scored per game.",
+              "abbreviation": "TP/G",
+              "value": 16,
+              "displayValue": "16.0",
+              "rank": 19,
+              "rankDisplayValue": "Tied-19th"
+            }
+          ]
+        }
+      ]
+    },
+    "season": {
+      "year": 2026,
+      "type": 2,
+      "name": "Regular Season",
+      "displayName": "2026"
+    },
+    "requestedSeason": {
+      "year": 2026,
+      "type": 2,
+      "name": "Regular Season",
+      "displayName": "2026",
+      "qualifiedPostSeason": false
+    },
+    "team": {
+      "id": "150",
+      "abbreviation": "DUKE",
+      "location": "Duke",
+      "name": "Blue Devils",
+      "displayName": "Duke Blue Devils",
+      "logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+      "recordSummary": "4-2"
+    }
+  }
+}

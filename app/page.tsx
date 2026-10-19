@@ -15,16 +15,19 @@ import { accWeek, classify, easternDate, shiftDate, validDate, type Game, type S
 import { categories, categoryCounts, scoreboardScope, toggleCategory, upsetCounts, viewGames, type Category, type CategoryCounts, type Period, type Selection } from "@/lib/scoreboard-views";
 
 import { initialView, updateRestoration, gameId } from "@/lib/app-update";
-import { boardUrl, createRouteHistory, gameHref, gameUrl, newKey, parseGameRoute, readEntry, sectionUrl, type BoardSnapshot, type BoardView, type GameRoute, type RouteHistory, type Section, type Traversal } from "@/lib/game-route";
+import { boardUrl, createRouteHistory, gameHref, gameUrl, newKey, parseGameRoute, parseTeamRoute, readEntry, sectionUrl, teamHref, teamParam, teamUrl, type BoardSnapshot, type BoardView, type GameRoute, type RouteHistory, type Section, type Traversal } from "@/lib/game-route";
 import { useInitialSearch } from "@/lib/browser-state";
 import { useAppUpdate, LOADED_COMMIT, type AppUpdate } from "@/lib/use-app-update";
 import { DukeSettings, DukeGameControls } from "@/components/duke-settings";
 import { useDukeVisibility } from "@/lib/use-duke-visibility";
 import { protectDukeBoard } from "@/lib/duke-visibility";
+import { findScheduleGame, scheduleGameHidden, withBoardGames } from "@/lib/team-season";
+import { useTeamSeason } from "@/lib/use-team-season";
 import { AppNavigation } from "@/components/app-navigation";
 import { AppUpdateNotice } from "@/components/app-update";
 // Relative so page tests bundle the real game screen and its stats view.
 import { GameScreen, linePlacement, points } from "../components/game-screen";
+import { TeamScreen } from "../components/team-screen";
 
 const labels: Record<Category, string> = { acc: "ACC", top25: "Top 25", close: "One score", upset: "Upsets" };
 const names: Record<Category, string> = { acc: "ACC", top25: "Top 25", close: "One-score", upset: "Upset watch" };
@@ -110,7 +113,7 @@ function Help({ update }: { update: AppUpdate }) { return <Sheet><SheetTrigger a
 
 // Per-document memory of where each scoreboard entry was left and each game entry's scroll.
 // History entries carry the same scoreboard snapshot for cross-document returns.
-const boardSnapshots = new Map<string, BoardSnapshot>(), gameScroll = new Map<string, number>();
+const boardSnapshots = new Map<string, BoardSnapshot>(), gameScroll = new Map<string, number>(), teamScroll = new Map<string, number>();
 let documentMounted = false;
 // The history entry each document showed when it was left. Arriving on a different entry is a history
 // traversal; arriving on the same one is a reload, which keeps the URL and saved-preference behavior.
@@ -124,7 +127,8 @@ function returnedByHistory(key: string) {
   const left = leftEntry();
   return left !== null ? left !== key : navigationType() === "back_forward";
 }
-type Restore = { kind: "game"; id: string; scrollY: number } | { kind: "board"; scrollY: number; origin: string; fallback?: boolean; waitForData?: boolean };
+// A team page restores focus to the schedule game it was left for (`focus`) when that row is still a link.
+type Restore = { kind: "game"; id: string; scrollY: number } | { kind: "team"; team: string; scrollY: number; focus?: string } | { kind: "board"; scrollY: number; origin: string; fallback?: boolean; waitForData?: boolean };
 const sameSelection = (a: Selection, b: Selection) => a.length === b.length && a.every((c, i) => c === b[i]);
 
 export default function Home() {
@@ -145,6 +149,14 @@ export default function Home() {
   // One-shot request to open a game from a notification link or app update. Membership (focusedGame) never opens anything.
   const [openIntent, setOpenIntent] = useState("");
   const route = chosenRoute === undefined ? parseGameRoute(search) : chosenRoute;
+  // The open team page, chosen together with the game route. `teamOrigin` is the game screen directly
+  // behind it (its Back target), "" when that game is unknown, null when Back leads to the scoreboard.
+  const [chosenTeam, setChosenTeam] = useState<string | null | undefined>(undefined);
+  const [teamOrigin, setTeamOrigin] = useState<string | null>(null);
+  const teamPage = chosenTeam === undefined ? (route ? null : parseTeamRoute(search)?.team ?? null) : chosenTeam;
+  const show = (game: GameRoute | null, team: string | null = null, origin: string | null = null) => { setRoute(game); setChosenTeam(game ? null : team); setTeamOrigin(game ? null : origin); };
+  // The season of the open team page, or of the schedule a game was opened from (its context).
+  const teamSeason = useTeamSeason(teamPage ?? route?.team ?? null);
   const focusedOnce = useRef(false);
   const initialRestore = useRef<ReturnType<typeof updateRestoration> | undefined>(undefined);
   useEffect(() => {
@@ -166,10 +178,10 @@ export default function Home() {
   }, []);
   useEffect(() => {
     if (!data || !focusedGame || focusedOnce.current) return;
-    // A game screen opened by its own URL has no notification landing to scroll to.
-    if (route) { focusedOnce.current = true; return; }
+    // A game screen or team page opened by its own URL has no notification landing to scroll to.
+    if (route || teamPage) { focusedOnce.current = true; return; }
     const card = document.getElementById(`game-${focusedGame}`); if (card) { card.scrollIntoView({ block: "center" }); focusedOnce.current = true; }
-  }, [data, focusedGame, route]);
+  }, [data, focusedGame, route, teamPage]);
   const urlView = { date, followToday, selection, period };
   const update = useAppUpdate({ date, followToday, selection, period, hideFinals, focusedGame, openGame: openIntent });
 
@@ -204,38 +216,79 @@ export default function Home() {
     const consumed = consume ? id : prior?.kind === "board" ? prior.consumed : undefined;
     controller.replace({ v: 1, kind: "board", key, snapshot, ...(consumed ? { consumed } : {}) }, here.href, snapshot.scrollY);
     controller.push({ v: 1, kind: "game", key: newKey(), id, section: "team", from: true }, gameUrl(location.href, { id, section: "team" }, urlView), 0);
-    setRoute({ id, section: "team" });
+    show({ id, section: "team" });
+    restoreJob.current = { kind: "game", id, scrollY: 0 };
+  };
+  // A team link on the game screen pushes a genuine team entry above the genuine game entry.
+  const openTeam = (team: string) => {
+    const controller = routeHistory.current;
+    if (!controller || !route) return;
+    const entry = controller.current();
+    if (entry?.kind === "game") gameScroll.set(entry.key, Math.round(window.scrollY));
+    else controller.replace({ v: 1, kind: "game", key: newKey(), id: route.id, section: route.section, from: false, ...(route.team ? { team: route.team } : {}) }, location.href);
+    controller.push({ v: 1, kind: "team", key: newKey(), team, from: true, origin: route.id }, teamUrl(location.href, team, urlView), 0);
+    show(null, team, route.id);
+    restoreJob.current = { kind: "team", team, scrollY: 0 };
+  };
+  // A schedule row pushes a game entry that carries its team as context, above the team entry.
+  const openScheduleGame = (id: string) => {
+    const controller = routeHistory.current;
+    if (!controller || !teamPage) return;
+    const entry = controller.current();
+    if (entry?.kind === "team") teamScroll.set(entry.key, Math.round(window.scrollY));
+    else controller.replace({ v: 1, kind: "team", key: newKey(), team: teamPage, from: false }, location.href);
+    const next: GameRoute = { id, section: "team", team: teamPage };
+    controller.push({ v: 1, kind: "game", key: newKey(), ...next, from: true }, gameUrl(location.href, next, urlView), 0);
+    show(next);
     restoreJob.current = { kind: "game", id, scrollY: 0 };
   };
   const goBack = () => {
     const controller = routeHistory.current, entry = controller?.current();
     if (entry?.kind === "game" && entry.from) { history.back(); return; }
+    // A schedule game opened directly falls back to its team page, never leaving the app.
+    if (route?.team) {
+      controller?.replace({ v: 1, kind: "team", key: newKey(), team: route.team, from: false }, teamUrl(location.href, route.team, urlView), 0);
+      restoreJob.current = { kind: "team", team: route.team, scrollY: 0, focus: route.id };
+      show(null, route.team);
+      return;
+    }
     // No scoreboard entry of ours behind this one (a direct link): open the scoreboard here, never leaving the app.
     controller?.replace({ v: 1, kind: "board", key: newKey() }, boardUrl(location.href, urlView), 0);
     restoreJob.current = { kind: "board", scrollY: 0, origin: route?.id ?? "", fallback: true };
-    setRoute(null);
+    show(null);
   };
-  // Team/Player switches replace the entry, so Back still returns straight to the scoreboard.
+  const goBackFromTeam = () => {
+    const controller = routeHistory.current, entry = controller?.current();
+    if (entry?.kind === "team" && entry.from) { history.back(); return; }
+    controller?.replace({ v: 1, kind: "board", key: newKey() }, boardUrl(location.href, urlView), 0);
+    restoreJob.current = { kind: "board", scrollY: 0, origin: "", fallback: true };
+    show(null);
+  };
+  // Team/Player switches replace the entry, so Back still returns straight to the scoreboard (or team page).
   const changeSection = (section: Section) => {
     if (!route) return;
     const controller = routeHistory.current, entry = controller?.current();
-    controller?.replace(entry?.kind === "game" ? { ...entry, section } : { v: 1, kind: "game", key: newKey(), id: route.id, section, from: false }, sectionUrl(location.href, section));
-    setRoute({ ...route, section });
+    controller?.replace(entry?.kind === "game" ? { ...entry, section } : { v: 1, kind: "game", key: newKey(), id: route.id, section, from: false, ...(route.team ? { team: route.team } : {}) }, sectionUrl(location.href, section));
+    show({ ...route, section });
   };
   useEffect(() => {
     traverse.current = ({ target, source, owned }) => {
       // Someone else's traversal on this path: the framework handles it; the screen follows the URL.
-      if (!owned || !target) { restoreJob.current = null; setRoute(parseGameRoute(location.search)); return; }
+      if (!owned || !target) { restoreJob.current = null; const game = parseGameRoute(location.search); show(game, game ? null : parseTeamRoute(location.search)?.team ?? null); return; }
       if (source?.kind === "board") boardSnapshots.set(source.key, snapshotNow(target.kind === "game" ? target.id : ""));
       else if (source?.kind === "game") gameScroll.set(source.key, Math.round(window.scrollY));
+      else if (source?.kind === "team") teamScroll.set(source.key, Math.round(window.scrollY));
       if (target.kind === "game") {
         restoreJob.current = { kind: "game", id: target.id, scrollY: gameScroll.get(target.key) ?? 0 };
-        setRoute({ id: target.id, section: target.section });
+        show({ id: target.id, section: target.section, ...(target.team ? { team: target.team } : {}) });
+      } else if (target.kind === "team") {
+        restoreJob.current = { kind: "team", team: target.team, scrollY: teamScroll.get(target.key) ?? 0, focus: source?.kind === "game" ? source.id : undefined };
+        show(null, target.team, target.from ? target.origin ?? "" : null);
       } else {
         const snapshot = boardSnapshots.get(target.key) ?? target.snapshot;
         if (snapshot) applyView(snapshot);
         restoreJob.current = { kind: "board", scrollY: snapshot?.scrollY ?? 0, origin: snapshot?.origin ?? "" };
-        setRoute(null);
+        show(null);
       }
     };
     // A framework push since the last render leaves an entry without our record.
@@ -245,10 +298,16 @@ export default function Home() {
     const controller = createRouteHistory(window, traversal => traverse.current(traversal));
     controller.install();
     routeHistory.current = controller;
-    const entry = readEntry(history.state), initialRoute = parseGameRoute(location.search);
+    const entry = readEntry(history.state), initialRoute = parseGameRoute(location.search), initialTeam = initialRoute ? null : parseTeamRoute(location.search);
     if (initialRoute) {
-      controller.replace({ v: 1, kind: "game", key: entry?.key ?? newKey(), ...initialRoute, from: entry?.kind === "game" && entry.id === initialRoute.id && entry.from }, location.href, 0);
+      controller.replace({ v: 1, kind: "game", key: entry?.key ?? newKey(), ...initialRoute, from: entry?.kind === "game" && entry.id === initialRoute.id && entry.team === initialRoute.team && entry.from }, location.href, 0);
       restoreJob.current = { kind: "game", id: initialRoute.id, scrollY: 0 };
+    } else if (initialTeam) {
+      // A reloaded team page keeps the game behind it; a new tab or direct link has none.
+      const kept = entry?.kind === "team" && entry.team === initialTeam.team && entry.from ? entry : null;
+      controller.replace({ v: 1, kind: "team", key: entry?.key ?? newKey(), team: initialTeam.team, from: !!kept, ...(kept?.origin ? { origin: kept.origin } : {}) }, location.href, 0);
+      if (kept) setTeamOrigin(kept.origin ?? "");
+      restoreJob.current = { kind: "team", team: initialTeam.team, scrollY: 0 };
     } else {
       const board = entry?.kind === "board" ? entry : null, snapshot = board?.snapshot;
       // A cross-document return, such as Back after reloading a game, restores the scoreboard as it was left.
@@ -287,7 +346,18 @@ export default function Home() {
       window.scrollTo(0, job.scrollY);
       return;
     }
-    if (route || (job.waitForData && !data)) return;
+    if (job.kind === "team") {
+      if (route || teamPage !== job.team) return;
+      // Wait for the season (or its unavailable state), so focus lands on the heading that stays.
+      if ((teamSeason.season?.team.id !== job.team || !teamSeason.now) && !teamSeason.failure && teamSeason.online) return;
+      restoreJob.current = null;
+      const row = job.focus ? document.querySelector<HTMLElement>(`.team-screen [data-focus-key="sched-${CSS.escape(job.focus)}"]`) : null;
+      (row ?? document.querySelector<HTMLElement>(".team-screen .team-title"))?.focus({ preventScroll: true });
+      window.scrollTo(0, Math.max(0, Math.min(job.scrollY, document.documentElement.scrollHeight - innerHeight)));
+      if (row && !job.scrollY) row.scrollIntoView({ block: "center" });
+      return;
+    }
+    if (route || teamPage || (job.waitForData && !data)) return;
     restoreJob.current = null;
     const link = job.origin ? document.getElementById(`game-${job.origin}`)?.querySelector<HTMLElement>('[data-focus-key="summary"]') : null;
     (link ?? document.getElementById("scoreboard-heading"))?.focus({ preventScroll: true });
@@ -300,11 +370,11 @@ export default function Home() {
   // Auto-open once: an explicit event wins; real input before the game appears cancels the request.
   useEffect(() => {
     if (!openIntent) return;
-    if (route) { setOpenIntent(""); return; }
+    if (route || teamPage) { setOpenIntent(""); return; }
     if (!boardSettled) return;
     if (Object.values(protectedBoards).some(board => board?.games.some(game => game.id === openIntent))) openGame(openIntent, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openIntent, protectedBoards, route, boardSettled]);
+  }, [openIntent, protectedBoards, route, teamPage, boardSettled]);
   useEffect(() => {
     if (!openIntent) return;
     const cancel = () => setOpenIntent("");
@@ -334,10 +404,26 @@ export default function Home() {
   // The screen's game is looked up on the Duke-protected boards at every render, so a game hidden
   // while open (or never visible) shows only the generic unavailable screen, with no stats work.
   const screen = route ? [protectedBoards[scope], protectedBoards.daily, protectedBoards.week].map(b => ({ board: b, game: b?.games.find(g => g.id === route.id) })).find(found => found.game) : undefined;
-  const screenLoading = !!route && !screen && !error && (duke.prefs === null || !data);
+  // Outside the board, a game opened with team context is found only by exact membership in that
+  // team's validated schedule, and only while the Duke settings show it. The board's copy wins when both exist.
+  const season = teamSeason.season?.team.id === (teamPage ?? route?.team) ? withBoardGames(teamSeason.season, dukeGames) : null;
+  const scheduled = route?.team && !screen ? findScheduleGame(season, route.id) : null;
+  const scheduleGame = scheduled && !scheduleGameHidden(scheduled.game, duke.prefs, teamSeason.now) ? scheduled.game : null;
+  const screenGame = screen?.game ?? scheduleGame;
+  const screenLoading = !!route && !screenGame && (route.team ? duke.prefs === null || !teamSeason.now || (!season && !teamSeason.failure && teamSeason.online) : !error && (duke.prefs === null || !data));
+  const seasonName = season?.team.shortName ?? "Team";
+  const gameBack = route?.team ? { title: seasonName, detail: "Schedule", label: `Back to ${seasonName} schedule` } : undefined;
+  const teamLinks = screenGame ? screenGame.teams.filter(team => teamParam(team.id)).map(team => ({ id: team.id, name: team.name, href: teamHref(team.id, urlView) })) : undefined;
+  const checked = season ? new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }).format(new Date(season.checkedAt)) : "";
+  const scheduleNotice = scheduleGame && <p className="schedule-source">From the {seasonName} schedule, checked {checked} ET. {scheduleGame.state === "live" || scheduleGame.state === "delayed" ? "It updates about once a minute, not as live as Scores." : "It updates every few minutes."}</p>;
+  // The team page's Back target: the game screen behind it, or the scoreboard for a direct link.
+  const originGame = teamOrigin ? [protectedBoards.daily, protectedBoards.week].flatMap(b => b?.games ?? []).find(g => g.id === teamOrigin) ?? (() => { const found = findScheduleGame(season, teamOrigin); return found && !scheduleGameHidden(found.game, duke.prefs, teamSeason.now) ? found.game : null; })() : null;
+  const teamBack = teamOrigin !== null
+    ? { title: "Game", detail: originGame ? `${originGame.teams[0].abbreviation || originGame.teams[0].name} at ${originGame.teams[1].abbreviation || originGame.teams[1].name}` : "Back", label: originGame ? `Back to game, ${originGame.teams[0].name} at ${originGame.teams[1].name}` : "Back to game" }
+    : { title: "Scores", detail: weekly ? "This week" : dateText, label: `Back to scores, ${weekly ? "This week" : dateText}` };
   return <>
   <main className="app-shell compact-scoreboard" data-app-commit={LOADED_COMMIT}>
-    <div className="scores-view" hidden={!!route}>
+    <div className="scores-view" hidden={!!route || !!teamPage}>
     <header className="app-header"><Link className="wordmark" href="/" onClick={() => { setDate(null); setSelection([]); setPeriod("day"); setFocusedGame(""); }} aria-label="Saturday Signal home"><span className="brand-icon"><Signal size={22} strokeWidth={3} /></span><span>saturday<wbr /><span className="brand-light">signal</span><span className="sport-label">COLLEGE FOOTBALL</span></span></Link><div className="header-actions"><Alerts iconOnly /><button className={`icon-button ${refreshing ? "refreshing" : ""}`} aria-label="Refresh scores" onClick={refresh} disabled={refreshing || !date}><RefreshCw size={20} /></button><Help update={update} /><DukeSettings games={data?.games || []} visibility={duke} /></div></header>
     <AppNavigation active="scores" date={date} followToday={followToday} />
     <div className="date-bar">{weekly ? <div className="week-label"><CalendarDays size={16} /><span>{week ? `${shortDate(week.start)} – ${shortDate(week.end)}` : "This football week"}</span><span className="week-note">THU–MON</span></div> : <><div className="date-navigation"><button className="icon-button" aria-label="Previous day" disabled={!date} onClick={() => setDate(shiftDate(date, -1))}><ChevronLeft size={19} /></button><label className="date-picker"><CalendarDays size={15} /><span>{dateText}</span><input type="date" value={date} onChange={e => { if (e.target.value) setDate(e.target.value); }} aria-label="Scoreboard date, Eastern time" /></label><button className="icon-button" aria-label="Next day" disabled={!date} onClick={() => setDate(shiftDate(date, 1))}><ChevronRight size={19} /></button></div><button className={`today-button ${followToday ? "is-today" : ""}`} onClick={() => { setDate(null); if (followToday) refresh(); }} disabled={!today}>Today</button></>}<div className="period-modes" role="group" aria-label="Scoreboard period"><button aria-pressed={!weekly} onClick={() => setPeriod("day")}>Day</button><button aria-pressed={weekly} onClick={() => setPeriod("week")}>Week</button></div></div>
@@ -350,7 +436,7 @@ export default function Home() {
       </div>
       <div className="watch-header"><h1 className="sr-only" id="scoreboard-heading" tabIndex={-1}>{heading(selection, period)}</h1><div className="feed-status" role="status"><span className={`feed-dot ${stale || !online || error ? "feed-warning" : !data ? "feed-loading" : ""}`} />{!online ? "Offline" : error && !data ? "Scores unavailable" : data ? `${stale ? "Last update" : "Updated"} ${age < 15 ? "just now" : age < 60 ? `${age}s ago` : `${Math.floor(age / 60)}m ago`}` : "Connecting to ESPN…"}</div><DukeGameControls games={data?.games || []} visibility={duke} /><label className="toggle-label"><input type="checkbox" checked={hideFinals} onChange={e => toggleFinals(e.target.checked)} /><span>Hide finals</span></label></div>
       {duke.storageWarning && <p className="duke-storage-warning" role="alert">{duke.storageWarning}</p>}
-      {!route && <AppUpdateNotice update={update} />}
+      {!route && !teamPage && <AppUpdateNotice update={update} />}
       {warning && <div className="feed-banner" role="alert"><CloudOff size={18} /><span>{warning}{data && " Displayed scores may be out of date."}</span><button onClick={refresh} disabled={refreshing}>Retry</button></div>}
       <section className="score-content" aria-labelledby="scoreboard-heading">
         {data && <p className="sr-only" role="status">{visible.length} {visible.length === 1 ? "game" : "games"} shown.</p>}
@@ -361,6 +447,11 @@ export default function Home() {
     </div>
     <footer className="app-footer"><div><span className="footer-brand">SS<span> / </span></span><a href="https://www.espn.com/college-football/scoreboard" target="_blank" rel="noopener noreferrer">Scores via ESPN <ArrowUpRight size={12} /></a></div><p className="version-label">v{VERSION}</p></footer>
     </div>
-    {route && <GameScreen game={screen?.game ?? null} board={screen?.board ?? null} loading={screenLoading} scopeError={!!scopeError} backLabel={weekly ? "This week" : dateText} section={route.section} onSection={changeSection} onBack={goBack} warning={warning || undefined} onRetryScores={refresh} refreshing={refreshing} notice={<AppUpdateNotice update={update} />} />}
+    {route && <GameScreen game={screenGame} board={screen?.board ?? null} loading={screenLoading} scopeError={!!scopeError} backLabel={weekly ? "This week" : dateText} section={route.section} onSection={changeSection} onBack={goBack} back={gameBack}
+      warning={screen || !scheduleGame ? warning || undefined : teamSeason.failure || season?.stale ? "Couldn’t refresh this team’s schedule." : undefined}
+      onRetryScores={screen || !scheduleGame ? refresh : teamSeason.retry} refreshing={screen || !scheduleGame ? refreshing : teamSeason.pending}
+      teamLinks={teamLinks} onOpenTeam={openTeam} notice={<>{scheduleNotice}<AppUpdateNotice update={update} /></>} />}
+    {teamPage && <TeamScreen key={teamPage} teamId={teamPage} season={season} pending={teamSeason.pending} failed={!!teamSeason.failure} online={teamSeason.online} prefs={duke.prefs}
+      back={teamBack} onBack={goBackFromTeam} onRetry={teamSeason.retry} gameHref={id => gameHref({ id, section: "team", team: teamPage }, urlView)} onOpenGame={openScheduleGame} timezone={timezone} now={teamSeason.now} notice={<AppUpdateNotice update={update} />} />}
   </main></>;
 }

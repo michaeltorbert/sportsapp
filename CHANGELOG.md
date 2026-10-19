@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.17.0 · 2026-10-19
+
+- A game screen now has quiet links to each team’s season page (`/?team=<id>`), outside the score header. The page shows the team’s current season from ESPN: its overall record, four regular-season per-game averages for the team and its opponents (points, total, passing and rushing yards), and the published regular-season and postseason schedules with results, opponents’ full names, dates, kickoff times in your time zone, unconfirmed times as TBD, and TV where listed. A missing value shows as unavailable, never zero; an empty postseason says none are listed yet (#166).
+- Every schedule game opens the existing game screen in the app, including games outside the scoreboard’s dates. Such a game is found only in that team’s checked schedule (`/?event=<id>&team=<id>`) and refreshes with it, at most about once a minute while live; a scoreboard copy is preferred when present. Back, Forward, reload, deep links and new tabs work; a directly opened schedule game goes back to its team, and a directly opened team page goes back to Scores (#166).
+- Duke spoiler settings apply unchanged. A hidden Duke game shows only its date on any team’s schedule, with no opponent, score, result or link, and opens nothing. A team’s record and averages are withheld while one of its started games is hidden, or while part of its schedule couldn’t be checked. Season schedules never change the Duke settings’ own observations (#166).
+- Scores, the Guide, the header, ordering, Upset watch, the bare pregame line, alerts, subscriptions and configuration are unchanged. No external Gamecast link is added.
+
 ## 1.16.8 · 2026-10-19
 
 - Started Team stats no longer repeats “This game” beside its heading. The comparison, tabs, matchup, source status, and the labels on Scoring and Player stats are unchanged (#165).
