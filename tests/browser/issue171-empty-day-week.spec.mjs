@@ -58,17 +58,23 @@ test("empty Today opens a nonempty existing football week", async ({ page, harne
   await expect(page.locator("#game-sunday-in-week .game-day-label")).toContainText("Sun, Sep 6");
 });
 
-test("explicit empty Day, Week and date links keep their requested period", async ({ page, harness }) => {
+test("an explicit empty Day link keeps Day selected", async ({ page, harness }) => {
   harness.state.events = [];
   await harness.open({ path: "/?period=day" });
   await expect(period(page, "Day")).toHaveAttribute("aria-pressed", "true");
   await expect(emptyTitle(page)).toHaveText("A quiet scoreboard.");
+});
 
-  await page.goto("/?period=week");
+test("an explicit empty Week link keeps Week selected", async ({ page, harness }) => {
+  harness.state.events = [];
+  await harness.open({ path: "/?period=week" });
   await expect(period(page, "Week")).toHaveAttribute("aria-pressed", "true");
   await expect(emptyTitle(page)).toHaveText("A quiet football week.");
+});
 
-  await page.goto("/?date=2026-09-04");
+test("an explicit empty date link keeps its requested date and Day selected", async ({ page, harness }) => {
+  harness.state.events = [];
+  await harness.open({ path: "/?date=2026-09-04" });
   await expect(period(page, "Day")).toHaveAttribute("aria-pressed", "true");
   await expect(dateInput(page)).toHaveValue("2026-09-04");
   await expect(emptyTitle(page)).toHaveText("A quiet scoreboard.");
