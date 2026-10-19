@@ -583,3 +583,172 @@ test("real client: a retained-line halftime game still refreshes timing under it
     assert.equal(real.halftimeLabel(halftimeGame, halftimeBoard, false, Date.now(), true, true), "Halftime", "observed Q3 resumption is terminal");
   });
 });
+
+// Browser CDN fallback: the primary scoreboard is refused, so every scope reads ESPN's backup CDN.
+// ESPN weeks run Tuesday 07:00Z to the next Tuesday 06:59Z; the default document is the selected week.
+const cdnCalendar = [
+  { value: "1", startDate: "2026-08-25T07:00Z", endDate: "2026-09-01T06:59Z" },
+  { value: "2", startDate: "2026-09-01T07:00Z", endDate: "2026-09-08T06:59Z" },
+  { value: "3", startDate: "2026-09-08T07:00Z", endDate: "2026-09-15T06:59Z" },
+];
+const cdnWeek = (week, events) => ({ content: { sbData: { season: { year: 2026, type: 2 }, week: { number: week }, leagues: [{ calendar: [{ value: "2", entries: cdnCalendar }] }], events } } });
+function cdnSource(documents, summaries = new Map()) {
+  const feed = { cdn: [], hosted: [], primary: [], owners: new Map(), hostedStatus: 503, onPrimary() {}, holdPrimary: () => false, held: [], holdCdn: () => false, heldCdn: [] };
+  feed.fetch = async (url, options = {}) => {
+    const text = String(url);
+    if (text.startsWith("/api/scores?")) { feed.hosted.push(text); return new Response(null, { status: feed.hostedStatus }); }
+    const u = new URL(text);
+    if (u.pathname.endsWith("/summary")) { const body = summaries.get(u.searchParams.get("event")); return body ? Response.json(body) : new Response(null, { status: 404 }); }
+    if (u.hostname === "site.api.espn.com") {
+      // Each caller's CDN requests share its direct controller signal, which identifies the scope.
+      const dates = u.searchParams.get("dates"); feed.primary.push(dates); feed.owners.set(options.signal, dates); feed.onPrimary(dates);
+      if (feed.holdPrimary(dates)) await new Promise(resolve => feed.held.push(resolve));
+      return new Response(null, { status: 403 });
+    }
+    const week = u.searchParams.get("week") ?? "default";
+    const owner = feed.owners.get(options.signal);
+    feed.cdn.push({ url: text, week, owner });
+    // Bounded late completion: ignores abort and settles only when the test releases it.
+    if (feed.holdCdn(week, owner)) await new Promise(resolve => feed.heldCdn.push({ resolve, signal: options.signal }));
+    const body = documents(week);
+    return body instanceof Response ? body : Response.json(body);
+  };
+  feed.urls = () => feed.cdn.map(request => request.week);
+  return feed;
+}
+const cdnMount = (t, feed, options = {}) => harness(t, null, {}, { hook: real.useScoreboard, fetch: feed.fetch, ...options });
+const gameIds = board => board.games.map(g => g.id).sort();
+
+test("real client CDN: an interior Saturday downloads the selected week once per refresh, and the next refresh downloads again", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: saturday });
+  let satScores = [21, 7];
+  const docs = week => week === "default" ? cdnWeek(2, [
+    espnGame("fri-final", "2026-09-04T23:00:00Z", { phase: "final" }), espnGame("sat-live", "2026-09-05T19:30:00Z", { scores: satScores }),
+    espnGame("sat-late", "2026-09-05T23:30:00Z", { phase: "pre" }), espnGame("mon-night", "2026-09-08T00:00:00Z", { phase: "pre" }),
+  ]) : new Response(null, { status: 404 });
+  const feed = cdnSource(docs), h = cdnMount(t, feed);
+  h.render(); const v = await h.until(loaded);
+  assert.deepEqual(feed.urls(), ["default"], "probe, Day and Week reuse one completed download");
+  assert.equal(feed.primary.length, 3); assert.deepEqual(feed.hosted, []);
+  assert.equal(v.today, "2026-09-05");
+  assert.deepEqual(gameIds(v.boards.daily), ["sat-late", "sat-live"]);
+  assert.deepEqual(gameIds(v.boards.week), ["fri-final", "mon-night", "sat-late", "sat-live"], "all categories read the one full-FBS week");
+  assert.equal(v.boards.daily.fetchedAt, saturday.toISOString()); assert.equal(v.boards.week.fetchedAt, saturday.toISOString());
+  satScores = [28, 7]; await v.refresh();
+  const next = await h.until(value => loaded(value) && feed.cdn.length === 2);
+  assert.deepEqual(feed.urls(), ["default", "default"], "a later refresh never reuses an earlier refresh's documents");
+  assert.deepEqual(next.boards.daily.games.find(g => g.id === "sat-live").teams.map(team => team.score), [28, 7]);
+  assert.deepEqual(feed.hosted, []);
+});
+
+test("real client CDN: a Tuesday boundary downloads each needed week once and keeps independent Day and Week ranges", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-09-08T20:00:00Z") });
+  const docs = week => ({
+    default: cdnWeek(3, [espnGame("tue", "2026-09-08T23:00:00Z", { phase: "pre" }), espnGame("thu", "2026-09-10T23:30:00Z", { phase: "pre" })]),
+    2: cdnWeek(2, [espnGame("mon-final", "2026-09-08T00:00:00Z", { phase: "final" }), espnGame("overnight", "2026-09-08T05:00:00Z", { phase: "final" })]),
+  })[week] ?? new Response(null, { status: 404 });
+  const feed = cdnSource(docs), h = cdnMount(t, feed);
+  h.render(); const v = await h.until(loaded);
+  assert.deepEqual(feed.urls(), ["default", "2"], "Day reuses the probe's selected and adjacent weeks; Week reuses the selected week");
+  assert.equal(new Set(feed.cdn.map(request => request.url)).size, feed.cdn.length);
+  assert.deepEqual(feed.hosted, []);
+  assert.equal(v.today, "2026-09-08");
+  assert.deepEqual(gameIds(v.boards.daily), ["overnight", "tue"]);
+  assert.equal(v.boards.week.date, "2026-09-10"); assert.deepEqual(gameIds(v.boards.week), ["thu"]);
+});
+
+test("real client CDN: an unfinished overnight board is held and reused while Week reads the same stored week", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-09-08T06:00:00Z") });
+  const docs = week => week === "default" ? cdnWeek(2, [espnGame("mon-live", "2026-09-08T02:30:00Z"), espnGame("sat-final", "2026-09-05T19:30:00Z", { phase: "final" })]) : new Response(null, { status: 404 });
+  const feed = cdnSource(docs), h = cdnMount(t, feed);
+  h.render(); const v = await h.until(loaded);
+  assert.equal(v.today, "2026-09-07"); assert.equal(v.boards.daily.date, "2026-09-07");
+  assert.deepEqual(gameIds(v.boards.daily), ["mon-live"]); assert.deepEqual(gameIds(v.boards.week), ["mon-live", "sat-final"]);
+  assert.deepEqual(feed.urls(), ["default"]); assert.deepEqual(feed.primary, ["20260907", "20260903-20260908"]);
+  assert.deepEqual(feed.hosted, []);
+});
+
+test("real client CDN: a manual Guide date loads while its informational overnight check is still waiting", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: saturday });
+  const docs = week => week === "default" ? cdnWeek(2, [espnGame("thu-final", "2026-09-03T23:30:00Z", { phase: "final" }), espnGame("fri-final", "2026-09-04T23:00:00Z", { phase: "final" })]) : new Response(null, { status: 404 });
+  const feed = cdnSource(docs);
+  feed.holdPrimary = dates => dates === "20260904";
+  const h = cdnMount(t, feed, { dailyOnly: true, controlledDate: "2026-09-03" });
+  h.render();
+  const shown = await h.until(v => v.data?.date === "2026-09-03" && feed.held.length === 1);
+  assert.equal(shown.refreshing, true, "the overnight check is still pending");
+  assert.deepEqual(gameIds(shown.data), ["thu-final"]);
+  feed.held.shift()();
+  const v = await h.until(value => value.data && !value.refreshing);
+  assert.equal(v.today, "2026-09-05"); assert.equal(v.overnightError, "");
+  assert.deepEqual(feed.urls(), ["default"], "the later overnight check reuses the selected board's completed download");
+  assert.deepEqual(feed.hosted, []);
+});
+
+test("real client CDN: a failed adjacent week fails only the scopes needing it while the healthy Week renders", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-09-08T20:00:00Z") });
+  const docs = week => week === "default" ? cdnWeek(3, [espnGame("tue", "2026-09-08T23:00:00Z", { phase: "pre" }), espnGame("thu", "2026-09-10T23:30:00Z", { phase: "pre" })]) : new Response(null, { status: 503 });
+  const feed = cdnSource(docs), h = cdnMount(t, feed);
+  h.render(); const v = await h.until(value => value.boards.week && !value.refreshing);
+  assert.deepEqual(gameIds(v.boards.week), ["thu"]); assert.equal(h.switchTo("week").scopeError, "");
+  const day = h.switchTo("daily");
+  assert.equal(day.boards.daily, null); assert.match(day.scopeError, /Could not refresh/);
+  assert.match(day.overnightError, /Could not verify overnight games/);
+  assert.deepEqual(feed.hosted.map(url => new URL(url, "https://app.test").searchParams.get("date")).sort(), ["2026-09-07", "2026-09-08"], "the healthy Week makes no hosted request");
+  assert.ok(feed.cdn.length <= 5, "never more CDN downloads than the five the same refresh needed before reuse");
+  assert.ok(h.storage["ss:board:week:2026-09-10:2026-09-14"]);
+});
+
+// Board-age provenance only: the mocked Date jumps 95 seconds between the probe and Day, without elapsed timers.
+// This proves how a reused document's age is reported and gated, not real refresh duration or deadlines.
+test("real client CDN: reused documents keep their original acquisition time through enrichment and halftime gating", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: saturday });
+  const T0 = saturday.getTime(), half = espnGame("cdn-half", "2026-09-05T19:30:00Z", { phase: "halftime" });
+  const docs = week => week === "default" ? cdnWeek(2, [half]) : new Response(null, { status: 404 });
+  const feed = cdnSource(docs, new Map([[half.id, espnSummary(half, { halftimeAnchor: T0 - 300000 })]]));
+  // The probe finishes at T0; Day and Week normalize at a Date 95 seconds later from the stored document.
+  let skew = true; feed.onPrimary = dates => { if (skew && dates === "20260905") t.mock.timers.setTime(T0 + 95000); };
+  const h = cdnMount(t, feed);
+  h.render(); const v = await h.until(loaded);
+  assert.deepEqual(feed.urls(), ["default"]);
+  for (const scope of ["daily", "week"]) assert.equal(v.boards[scope].fetchedAt, new Date(T0).toISOString(), scope);
+  const label = value => real.halftimeLabel(value.boards.daily.games[0], value.boards.daily, false, Date.now(), true, true);
+  assert.equal(label(v), "Halftime", "a 95-second-old scoreboard cannot authorize a countdown even though it was normalized just now");
+  skew = false; await v.refresh();
+  const fresh = await h.until(value => loaded(value) && feed.cdn.length === 2);
+  assert.equal(fresh.boards.daily.fetchedAt, new Date(T0 + 95000).toISOString());
+  assert.equal(label(fresh), "Halftime 13:25", "a freshly downloaded document restores the countdown");
+});
+
+test("real client CDN: the unchanged 40-second refresh deadline cancels a late CDN body, which is neither stored nor published", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: saturday });
+  const docs = week => week === "default" ? cdnWeek(2, [espnGame("sat-live", "2026-09-05T19:30:00Z")]) : new Response(null, { status: 404 });
+  const feed = cdnSource(docs);
+  // The probe's CDN response is a bounded late completion: it ignores abort and settles only when released.
+  let holding = true; feed.holdCdn = (week, owner) => holding && owner === "20260904";
+  const h = cdnMount(t, feed);
+  // Controlled refresh deadline: capture the hook's own 40-second timer; every other window timer stays real.
+  const deadlines = [], hookWindow = globalThis.window, realTimeout = hookWindow.setTimeout, realClear = hookWindow.clearTimeout;
+  hookWindow.setTimeout = (callback, milliseconds) => milliseconds === 40000 ? (deadlines.push(callback), -deadlines.length) : realTimeout(callback, milliseconds);
+  hookWindow.clearTimeout = id => { if (id > 0) realClear(id); };
+  h.render();
+  await h.until(() => feed.heldCdn.length === 1);
+  assert.equal(deadlines.length, 1, "one 40-second deadline per refresh");
+  const held = feed.heldCdn.shift();
+  assert.equal(held.signal.aborted, false);
+  deadlines[0](); // The 40-second deadline expires while the probe's CDN body is outstanding.
+  assert.equal(held.signal.aborted, true, "the parent deadline reaches the probe's own direct controller");
+  holding = false; held.resolve(); // The late body now completes despite the abort.
+  const canceled = await h.until(v => !v.refreshing);
+  assert.equal(canceled.boards.daily, null); assert.equal(canceled.boards.week, null);
+  assert.deepEqual(boardKeys(h.storage), [], "no board or history is published from the canceled refresh");
+  assert.deepEqual(feed.hosted, [], "parent cancellation starts no hosted fallback");
+  assert.deepEqual(feed.urls(), ["default"], "no other scope ran after the deadline");
+  assert.match(canceled.error, /Could not refresh/);
+  // The next refresh starts immediately with its own documents and downloads again: the late body was not kept.
+  await canceled.refresh();
+  const next = await h.until(loaded);
+  assert.deepEqual(feed.urls(), ["default", "default"]);
+  assert.deepEqual(gameIds(next.boards.daily), ["sat-live"]); assert.deepEqual(feed.hosted, []);
+  assert.equal(deadlines.length, 2);
+});

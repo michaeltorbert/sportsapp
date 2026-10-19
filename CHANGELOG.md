@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.17.1 · 2026-10-19
+
+- When ESPN’s main score feed is unavailable, one refresh reuses backup score documents it has already finished downloading instead of downloading them again, so there are fewer repeat downloads. Two parts of a refresh that need the same document at the same moment can still each download it. Every refresh starts fresh; nothing is kept for a later one (#53).
+- Each Day, Week and overnight check still validates its own dates, calendar week, season and games, keeps its own time limits and cancellation, and falls back to the hosted feed exactly as before when backup data can’t be used. A board built from reused documents reports when they were actually downloaded, which may be a little earlier than before (#53).
+- Scores, the Guide, ordering, Upset watch, halftime timing, pregame lines, alerts and hosting are unchanged.
+
 ## 1.17.0 · 2026-10-19
 
 - A game screen now has quiet links to each team’s season page (`/?team=<id>`), outside the score header. The page shows the team’s current season from ESPN: its overall record, four regular-season per-game averages for the team and its opponents (points, total, passing and rushing yards), and the published regular-season and postseason schedules with results, opponents’ full names, dates and kickoff times in Eastern Time (each converted on its own date, across the daylight-saving change), unconfirmed times as TBD, and TV where listed. A missing value shows as unavailable, never zero; an empty postseason says none are listed yet (#166).

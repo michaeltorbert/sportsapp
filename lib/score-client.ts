@@ -2,10 +2,11 @@ import { stripHalftimeTiming, nextHalftimeGeneration, halftimeEpoch } from "./ha
 import { enrichPregameLines } from "./pregame-lines";
 import { normalizeScoreboard, scoreboardCdnUrl, scoreboardUrl } from "./espn-data";
 import { completeCdnRange } from "./espn-cdn";
+import { cdnConsumer, type CdnDocuments } from "./cdn-documents";
 import type { Scoreboard } from "./football";
 
 type Fetcher = typeof fetch;
-async function readDirectScores(date: string, endDate: string, accOnly: boolean, parent: AbortSignal, fetcher: Fetcher): Promise<Scoreboard> {
+async function readDirectScores(date: string, endDate: string, accOnly: boolean, parent: AbortSignal, fetcher: Fetcher, documents?: CdnDocuments): Promise<Scoreboard> {
   const controller = new AbortController(), abort = () => controller.abort();
   if (parent.aborted) throw new DOMException("Request canceled", "AbortError");
   parent.addEventListener("abort", abort, { once: true });
@@ -15,8 +16,8 @@ async function readDirectScores(date: string, endDate: string, accOnly: boolean,
     if (controller.signal.aborted) return Promise.reject(new DOMException("Direct score deadline expired", "AbortError"));
     return fetcher(url, { ...options, signal: controller.signal, cache: "no-store", mode: "cors", credentials: "omit" });
   };
-  const read = async (url: string) => {
-    const response = await upstream(url, { headers: { Accept: "application/json" } });
+  const read = async (url: string, via: Fetcher = upstream) => {
+    const response = await via(url, { headers: { Accept: "application/json" } });
     if (!response.ok) throw new Error(`Score request returned ${response.status}`);
     const raw = await response.json();
     if (controller.signal.aborted) throw new DOMException("Direct score deadline expired", "AbortError");
@@ -26,10 +27,20 @@ async function readDirectScores(date: string, endDate: string, accOnly: boolean,
     try { return normalizeScoreboard(await read(scoreboardUrl(date, endDate, accOnly)), date, undefined, endDate); }
     catch (error) {
       if (controller.signal.aborted) throw error;
-      const raw = await read(scoreboardCdnUrl());
-      const board = await completeCdnRange(raw, date, endDate, accOnly, controller.signal, upstream);
-      if (controller.signal.aborted) throw new DOMException("Direct score deadline expired", "AbortError");
-      return board;
+      // Refresh-local reuse covers completed CDN documents only, under this caller's own controller.
+      const consumer = documents && cdnConsumer(documents, parent, fetcher);
+      const cdn = consumer ? consumer.fetch(upstream, controller.signal) : upstream;
+      try {
+        const raw = await read(scoreboardCdnUrl(), cdn);
+        const board = await completeCdnRange(raw, date, endDate, accOnly, controller.signal, cdn);
+        if (controller.signal.aborted) throw new DOMException("Direct score deadline expired", "AbortError");
+        // Shared documents keep their original acquisition rather than this normalization time.
+        return consumer ? { ...board, fetchedAt: consumer.fetchedAt() ?? board.fetchedAt } : board;
+      } catch (failure) {
+        // Cancellation is not evidence about the data; any other CDN failure drops only records this caller used.
+        if (!controller.signal.aborted) consumer?.invalidate();
+        throw failure;
+      }
     }
   } finally { clearTimeout(timeout); parent.removeEventListener("abort", abort); }
 }
@@ -57,14 +68,17 @@ async function readJson(url: string, parent: AbortSignal, fetcher: Fetcher): Pro
 /** Scores plus the halftime generation and epoch captured before the score request. */
 export type ScoreRequest = { board: Scoreboard; generation: number; epoch: number };
 
-/** Scores only, with the unchanged direct/CDN/hosted fallback. Optional summaries wait for enrichScores. */
-export async function requestScores(date: string, signal: AbortSignal, fetcher: Fetcher = fetch, endDate = date, accOnly = false): Promise<ScoreRequest> {
+/**
+ * Scores only, with the unchanged direct/CDN/hosted fallback. Optional summaries wait for enrichScores.
+ * Optional refresh-local documents let callers sharing one parent signal and fetcher reuse completed CDN downloads.
+ */
+export async function requestScores(date: string, signal: AbortSignal, fetcher: Fetcher = fetch, endDate = date, accOnly = false, documents?: CdnDocuments): Promise<ScoreRequest> {
   const generation = nextHalftimeGeneration(), epoch = halftimeEpoch();
   let board: Scoreboard;
   try {
     // ESPN explicitly allows anonymous browser requests with Access-Control-Allow-Origin: *.
     // Direct access also keeps the live scoreboard independent of hosted egress failures.
-    board = await readDirectScores(date, endDate, accOnly, signal, fetcher);
+    board = await readDirectScores(date, endDate, accOnly, signal, fetcher, documents);
   } catch (error) {
     if (signal.aborted) throw error;
     const data = await readJson(`/api/scores?date=${encodeURIComponent(date)}&end=${endDate}&acc=${accOnly ? "1" : "0"}`, signal, fetcher) as Scoreboard;

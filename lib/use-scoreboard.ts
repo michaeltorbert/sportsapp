@@ -4,6 +4,7 @@ import { accWeek, easternDate, gameDay, retainFinalCategories, shiftDate, validD
 import { retainHalftimeEnvironment } from "./halftime-clock";
 import { stripHalftimeTiming } from "./halftime";
 import { enrichScores, requestScores, type ScoreRequest } from "./score-client";
+import { createCdnDocuments } from "./cdn-documents";
 import { boardKey, expiredBoardKey, matchingBoard, type BoardScope } from "./scoreboard-views";
 
 import { useInitialSearch, useOnline, useTimezone } from "./browser-state";
@@ -49,13 +50,15 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
     if (document.hidden || controller.current) return;
     const c = new AbortController(); controller.current = c; setRefreshing(true);
     const timeout = window.setTimeout(() => c.abort(), 40000);
+    // Completed backup CDN documents are reused only within this refresh; the next refresh downloads again.
+    const cdn = createCdnDocuments();
     try {
       const clock = new Date(), calendar = easternDate(clock), yesterday = shiftDate(calendar, -1);
       let prior: ScoreRequest | null = null, overnightWarning = "";
       const manualGuide = dailyOnly && selection !== null;
       // The probe is scores-only: enrichment cannot change the game-day decision,
       // and a discarded prior board needs no optional summary work.
-      try { if (!manualGuide) prior = await requestScores(yesterday, c.signal); }
+      try { if (!manualGuide) prior = await requestScores(yesterday, c.signal, fetch, yesterday, false, cdn); }
       catch (e) {
         if (c.signal.aborted) throw e;
         overnightWarning = "Could not verify overnight games. Checking again shortly.";
@@ -75,7 +78,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
         const key = boardKey(boardScope, range.start, range.end);
         try {
           // A displayed prior board is enriched here, once, with its original request's generation and epoch.
-          const request = boardScope === "daily" && prior?.board.date === activeDate ? prior : await requestScores(range.start, c.signal, fetch, range.end);
+          const request = boardScope === "daily" && prior?.board.date === activeDate ? prior : await requestScores(range.start, c.signal, fetch, range.end, false, cdn);
           if (controller.current !== c) return;
           // Read this scope's history once. The weekly board's pre-1.9 key keeps retained final categories across the upgrade.
           const old = cache.current.get(key) || readBoard(key) || (boardScope === "week" ? readBoard(boardKey(boardScope, range.start, range.end, true)) : null);
@@ -104,7 +107,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
       const checkOvernight = async () => {
         try {
           // Informational only: the selected Guide board owns any enrichment.
-          const { board: overnight } = await requestScores(yesterday, c.signal);
+          const { board: overnight } = await requestScores(yesterday, c.signal, fetch, yesterday, false, cdn);
           if (controller.current !== c) return;
           const effective = gameDay(clock, overnight, held.current);
           held.current = effective; setToday(effective); setOvernightError("");
