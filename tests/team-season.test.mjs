@@ -6,7 +6,7 @@ import { bundle } from "./helpers.mjs";
 // Minimized genuine public captures; see fixtures/team-season-provenance.json. Every variation
 // below is constructed here and labeled SYNTHETIC.
 const { scheduleSection, seasonStats, activeSeason, overallRecord } = await bundle("lib/team-season-server.ts");
-const { seasonAggregates, parseTeamSeason, findScheduleGame, withBoardGames, scheduleGameHidden, TEAM_STAT_ROWS } = await bundle("lib/team-season.ts");
+const { seasonAggregates, parseTeamSeason, findScheduleGame, withBoardGames, TEAM_STAT_ROWS } = await bundle("lib/team-season.ts");
 const { defaultDukePreferences, dukeHidden } = await bundle("lib/duke-visibility.ts");
 const fixture = name => JSON.parse(readFileSync(new URL(`./fixtures/espn-team-season-${name}.json`, import.meta.url), "utf8"));
 const DUKE = fixture("duke-2026"), UNC = fixture("unc-2026"), BOWL = fixture("postseason-2025");
@@ -191,27 +191,25 @@ test("the scoreboard's fresher copy replaces a schedule game only for the same m
   assert.equal(findScheduleGame(merged, upcoming.id).game.state, "live");
   assert.equal(findScheduleGame(merged, upcoming.id).opponent.name, findScheduleGame(duke, upcoming.id).opponent.name);
   // The default setting hides an away Duke game in play: the board copy decides, not the older schedule copy.
-  assert.equal(scheduleGameHidden(findScheduleGame(duke, upcoming.id).game, prefs(), Date.parse(CHECKED)), false);
-  assert.equal(scheduleGameHidden(findScheduleGame(merged, upcoming.id).game, prefs(), Date.parse(CHECKED)), true);
+  assert.equal(dukeHidden(findScheduleGame(duke, upcoming.id).game, prefs()), false);
+  assert.equal(dukeHidden(findScheduleGame(merged, upcoming.id).game, prefs()), true);
+  assert.deepEqual(seasonAggregates(merged, prefs()), { shown: false, reason: "hidden" });
   // A different matchup under the same event id is not the same game.
   const swapped = { ...live, teams: [live.teams[1], live.teams[0]] };
   assert.equal(findScheduleGame(withBoardGames(duke, [swapped]), upcoming.id).game.state, "upcoming");
   assert.deepEqual(withBoardGames({ ...duke, postseason: { status: "unavailable" } }, [live]).postseason, { status: "unavailable" });
 });
 
-test("a schedule copy still upcoming after its kickoff, or before the clock is read, is judged as if under way", () => {
+test("schedule rows use the existing rule on the source's own state only: no prediction from the clock", () => {
   const entries = scheduleSection(DUKE.regular, "150", 2026, 2, CHECKED).entries;
-  const away = entries.find(e => e.game.state === "upcoming" && e.game.teams[0].id === "150" && e.game.neutralSite === false)?.game;
-  const home = entries.find(e => e.game.state === "upcoming" && e.game.teams[1].id === "150")?.game;
-  assert.ok(away && home, "the capture has upcoming away and home Duke games");
-  const kickoff = Date.parse(away.date);
-  assert.equal(scheduleGameHidden(away, prefs(), kickoff - 60_000), false);
-  assert.equal(scheduleGameHidden(away, prefs(), kickoff + 60_000), true);
-  assert.equal(scheduleGameHidden(away, prefs(), 0), true);
-  // Home games stay visible under the default even in play; Show all shows everything.
-  assert.equal(scheduleGameHidden(home, prefs(), Date.parse(home.date) + 60_000), false);
-  assert.equal(scheduleGameHidden(away, prefs({ rules: [{ from: 0, mode: "show" }] }), kickoff + 60_000), false);
-  assert.equal(scheduleGameHidden(away, null, kickoff - 60_000), true);
+  const away = entries.find(e => e.game.id === "401858271").game;
+  assert.deepEqual([away.state, away.teams[0].id, away.date.startsWith("2026-10-23T23:00")], ["upcoming", "150", true]);
+  // Upcoming away games stay visible under the default whatever the time, including unconfirmed (TBD) kickoffs.
+  for (const e of entries.filter(e => e.game.state === "upcoming")) assert.equal(dukeHidden(e.game, prefs()), false, e.game.id);
+  // Only an actual in-play state from the source (or the fresher board) protects it.
+  assert.equal(dukeHidden({ ...away, state: "live", started: true }, prefs()), true);
+  assert.equal(dukeHidden(away, null), true);
+  assert.equal(dukeHidden(away, prefs({ rules: [{ from: 0, mode: "show" }] })), false);
 });
 
 test("the browser validates a team-season response for the requested team only", () => {

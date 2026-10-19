@@ -68,16 +68,6 @@ export function withBoardGames(season: TeamSeason, games: readonly Game[]): Team
   }) };
   return { ...season, regular: fresher(season.regular), postseason: fresher(season.postseason) };
 }
-/**
- * Whether a schedule game is protected. The existing rule decides, unchanged. A schedule copy can trail
- * a kickoff by minutes, so a Duke game past its scheduled start but still listed as upcoming is also
- * judged as if under way: protected whenever the existing rule would protect it in play. Before the
- * clock is read (`now` 0) every upcoming Duke game is judged that way.
- */
-export function scheduleGameHidden(game: Game, prefs: DukePreferences | null, now: number) {
-  if (dukeHidden(game, prefs)) return true;
-  return game.state === "upcoming" && (!now || Date.parse(game.date) <= now) && dukeHidden({ ...game, state: "live", started: true }, prefs);
-}
 export function seasonAggregates(season: TeamSeason, prefs: DukePreferences | null): Aggregates {
   if (seasonEntries(season).some(({ game }) => dukeStarted(game) && dukeHidden(game, prefs))) return { shown: false, reason: prefs ? "hidden" : "checking" };
   if (season.regular.status !== "complete" || season.postseason.status !== "complete") return { shown: false, reason: "incomplete" };

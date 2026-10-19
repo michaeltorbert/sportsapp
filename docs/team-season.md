@@ -69,11 +69,8 @@ The existing preferences and `dukeHidden`/`dukeStarted` are reused unchanged, an
 games are never passed to the Duke observation writer.
 
 - A schedule game that is also on the scoreboard uses the scoreboard's copy (same event, same
-  teams), so the fresher state decides (`withBoardGames`).
-- A schedule copy can trail a kickoff by minutes. So a Duke game still listed as upcoming
-  after its scheduled start is judged as if under way: hidden whenever the existing rule
-  would hide it in play (`scheduleGameHidden`, using `dukeHidden` unchanged). Until the
-  page's clock is read, every upcoming Duke game is judged that way.
+  teams), so the fresher actual state decides (`withBoardGames`). Otherwise the schedule's own
+  source state decides. Nothing is predicted from the clock or the scheduled kickoff time.
 - A Duke game hidden by the settings shows only its date on any team's schedule: no
   opponent, status, score, result or link. Its game screen is the generic unavailable one.
 - The record and averages are withheld on any team's page whose schedule contains a hidden

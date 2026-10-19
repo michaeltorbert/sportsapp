@@ -1,8 +1,8 @@
 "use client";
 import { useState, type MouseEvent, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, CloudOff, RefreshCw, Signal, Tv } from "lucide-react";
-import type { DukePreferences } from "@/lib/duke-visibility";
-import { scheduleGameHidden, seasonAggregates, TEAM_STAT_ROWS, type ScheduleEntry, type ScheduleSection, type TeamSeason, type TeamSeasonTeam } from "@/lib/team-season";
+import { dukeHidden, type DukePreferences } from "@/lib/duke-visibility";
+import { seasonAggregates, TEAM_STAT_ROWS, type ScheduleEntry, type ScheduleSection, type TeamSeason, type TeamSeasonTeam } from "@/lib/team-season";
 // Relative, like the page's own import, so page tests bundle the real game screen helpers.
 import { gameDay } from "./game-screen";
 
@@ -62,13 +62,13 @@ function Row({ entry, team, hidden, next, href, onOpen }: { entry: ScheduleEntry
     <ChevronRight className="s-chev" size={16} aria-hidden="true" />
   </a></li>;
 }
-function Section({ title, section, team, prefs, now, nextId, gameHref, onOpenGame, onRetry, pending }: { title: string; section: ScheduleSection; team: string; prefs: DukePreferences | null; now: number; nextId: string | undefined; gameHref: (id: string) => string; onOpenGame: (id: string) => void; onRetry: () => void; pending: boolean }) {
+function Section({ title, section, team, prefs, nextId, gameHref, onOpenGame, onRetry, pending }: { title: string; section: ScheduleSection; team: string; prefs: DukePreferences | null; nextId: string | undefined; gameHref: (id: string) => string; onOpenGame: (id: string) => void; onRetry: () => void; pending: boolean }) {
   const lower = title.toLowerCase();
   if (section.status === "unavailable") return <><h3 className="group-title"><span>{title}</span></h3><Notice title={`${title} games couldn’t be loaded`} warning action={<button type="button" data-focus-key={`retry-${lower}`} onClick={onRetry} disabled={pending}><RefreshCw size={13} aria-hidden="true" />{pending ? "Retrying…" : "Retry"}</button>}>The rest of this page is still available.</Notice></>;
   const list = section.entries;
   return <>
     <h3 className="group-title"><span>{title}</span>{list.length > 0 && <span className="count">{list.length} {list.length === 1 ? "game" : "games"}</span>}</h3>
-    {list.length ? <ol className="sched">{list.map(entry => <Row key={entry.game.id} entry={entry} team={team} hidden={scheduleGameHidden(entry.game, prefs, now)} next={entry.game.id === nextId} href={gameHref(entry.game.id)} onOpen={() => onOpenGame(entry.game.id)} />)}</ol>
+    {list.length ? <ol className="sched">{list.map(entry => <Row key={entry.game.id} entry={entry} team={team} hidden={dukeHidden(entry.game, prefs)} next={entry.game.id === nextId} href={gameHref(entry.game.id)} onOpen={() => onOpenGame(entry.game.id)} />)}</ol>
       : <p className="sched-empty">No {lower} games are listed yet.</p>}
   </>;
 }
@@ -76,10 +76,10 @@ function Section({ title, section, team, prefs, now, nextId, gameHref, onOpenGam
 export type TeamScreenProps = {
   teamId: string; season: TeamSeason | null; pending: boolean; failed: boolean; online: boolean; prefs: DukePreferences | null;
   back: { title: string; detail: string; label: string }; onBack: () => void; onRetry: () => void;
-  gameHref: (id: string) => string; onOpenGame: (id: string) => void; timezone: string; now: number; notice?: ReactNode;
+  gameHref: (id: string) => string; onOpenGame: (id: string) => void; timezone: string; notice?: ReactNode;
 };
 /** A team's current season: record, regular-season averages and the full published schedule. */
-export function TeamScreen({ teamId, season, pending, failed, online, prefs, back, onBack, onRetry, gameHref, onOpenGame, timezone, now, notice }: TeamScreenProps) {
+export function TeamScreen({ teamId, season, pending, failed, online, prefs, back, onBack, onRetry, gameHref, onOpenGame, timezone, notice }: TeamScreenProps) {
   const backButton = <button type="button" className="back-button" data-focus-key="back" aria-label={back.label} onClick={onBack}><ChevronLeft size={22} aria-hidden="true" /><span className="back-text" aria-hidden="true"><span>{back.title}</span><small>{back.detail}</small></span></button>;
   const bar = <header className="game-bar">{backButton}<span className="team-bar-title" aria-hidden="true">{season?.team.abbreviation}</span><span className="bar-brand" aria-hidden="true"><span className="brand-icon"><Signal size={17} strokeWidth={3} /></span></span></header>;
   if (!season) {
@@ -93,7 +93,7 @@ export function TeamScreen({ teamId, season, pending, failed, online, prefs, bac
     </div>;
   }
   const aggregates = seasonAggregates(season, prefs), team = season.team;
-  const nextId = [...(season.regular.status === "complete" ? season.regular.entries : []), ...(season.postseason.status === "complete" ? season.postseason.entries : [])].find(entry => entry.game.state === "upcoming" && !scheduleGameHidden(entry.game, prefs, now))?.game.id;
+  const nextId = [...(season.regular.status === "complete" ? season.regular.entries : []), ...(season.postseason.status === "complete" ? season.postseason.entries : [])].find(entry => entry.game.state === "upcoming" && !dukeHidden(entry.game, prefs))?.game.id;
   const record = !aggregates.shown
     ? <span className="team-record">Record <b className="withheld">{aggregates.reason === "checking" ? "checking…" : aggregates.reason === "hidden" ? "hidden" : "not shown yet"}</b></span>
     : season.record ? <span className="team-record"><span aria-hidden="true">Record <b>{season.record.replaceAll("-", "–")}</b></span><span className="sr-only">Record: {recordWords(season.record)}</span></span>
@@ -127,8 +127,8 @@ export function TeamScreen({ teamId, season, pending, failed, online, prefs, bac
           <h2 id="team-schedule-h">Schedule</h2>
           <p className="team-fresh"><span>Checked {checkedTime(season.checkedAt)}</span><span>Dates ET · Kickoffs {timezone}</span></p>
           <div className="sched-wrap">
-            <Section title="Regular season" section={season.regular} team={teamId} prefs={prefs} now={now} nextId={nextId} gameHref={gameHref} onOpenGame={onOpenGame} onRetry={onRetry} pending={pending} />
-            <Section title="Postseason" section={season.postseason} team={teamId} prefs={prefs} now={now} nextId={nextId} gameHref={gameHref} onOpenGame={onOpenGame} onRetry={onRetry} pending={pending} />
+            <Section title="Regular season" section={season.regular} team={teamId} prefs={prefs} nextId={nextId} gameHref={gameHref} onOpenGame={onOpenGame} onRetry={onRetry} pending={pending} />
+            <Section title="Postseason" section={season.postseason} team={teamId} prefs={prefs} nextId={nextId} gameHref={gameHref} onOpenGame={onOpenGame} onRetry={onRetry} pending={pending} />
           </div>
         </section>
       </div>

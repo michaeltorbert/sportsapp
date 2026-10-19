@@ -20,8 +20,8 @@ import { useInitialSearch } from "@/lib/browser-state";
 import { useAppUpdate, LOADED_COMMIT, type AppUpdate } from "@/lib/use-app-update";
 import { DukeSettings, DukeGameControls } from "@/components/duke-settings";
 import { useDukeVisibility } from "@/lib/use-duke-visibility";
-import { protectDukeBoard } from "@/lib/duke-visibility";
-import { findScheduleGame, scheduleGameHidden, withBoardGames } from "@/lib/team-season";
+import { dukeHidden, protectDukeBoard } from "@/lib/duke-visibility";
+import { findScheduleGame, withBoardGames } from "@/lib/team-season";
 import { useTeamSeason } from "@/lib/use-team-season";
 import { AppNavigation } from "@/components/app-navigation";
 import { AppUpdateNotice } from "@/components/app-update";
@@ -349,7 +349,7 @@ export default function Home() {
     if (job.kind === "team") {
       if (route || teamPage !== job.team) return;
       // Wait for the season (or its unavailable state), so focus lands on the heading that stays.
-      if ((teamSeason.season?.team.id !== job.team || !teamSeason.now) && !teamSeason.failure && teamSeason.online) return;
+      if (teamSeason.season?.team.id !== job.team && !teamSeason.failure && teamSeason.online) return;
       restoreJob.current = null;
       const row = job.focus ? document.querySelector<HTMLElement>(`.team-screen [data-focus-key="sched-${CSS.escape(job.focus)}"]`) : null;
       (row ?? document.querySelector<HTMLElement>(".team-screen .team-title"))?.focus({ preventScroll: true });
@@ -406,18 +406,20 @@ export default function Home() {
   const screen = route ? [protectedBoards[scope], protectedBoards.daily, protectedBoards.week].map(b => ({ board: b, game: b?.games.find(g => g.id === route.id) })).find(found => found.game) : undefined;
   // Outside the board, a game opened with team context is found only by exact membership in that
   // team's validated schedule, and only while the Duke settings show it. The board's copy wins when both exist.
-  const season = teamSeason.season?.team.id === (teamPage ?? route?.team) ? withBoardGames(teamSeason.season, dukeGames) : null;
+  // Only a season for the team actually in context; with none (the scoreboard, or the prerendered home) there is none.
+  const contextTeam = teamPage ?? route?.team ?? null, loadedSeason = teamSeason.season;
+  const season = contextTeam && loadedSeason && loadedSeason.team.id === contextTeam ? withBoardGames(loadedSeason, dukeGames) : null;
   const scheduled = route?.team && !screen ? findScheduleGame(season, route.id) : null;
-  const scheduleGame = scheduled && !scheduleGameHidden(scheduled.game, duke.prefs, teamSeason.now) ? scheduled.game : null;
+  const scheduleGame = scheduled && !dukeHidden(scheduled.game, duke.prefs) ? scheduled.game : null;
   const screenGame = screen?.game ?? scheduleGame;
-  const screenLoading = !!route && !screenGame && (route.team ? duke.prefs === null || !teamSeason.now || (!season && !teamSeason.failure && teamSeason.online) : !error && (duke.prefs === null || !data));
+  const screenLoading = !!route && !screenGame && (route.team ? duke.prefs === null || (!season && !teamSeason.failure && teamSeason.online) : !error && (duke.prefs === null || !data));
   const seasonName = season?.team.shortName ?? "Team";
   const gameBack = route?.team ? { title: seasonName, detail: "Schedule", label: `Back to ${seasonName} schedule` } : undefined;
   const teamLinks = screenGame ? screenGame.teams.filter(team => teamParam(team.id)).map(team => ({ id: team.id, name: team.name, href: teamHref(team.id, urlView) })) : undefined;
   const checked = season ? new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }).format(new Date(season.checkedAt)) : "";
   const scheduleNotice = scheduleGame && <p className="schedule-source">From the {seasonName} schedule, checked {checked} ET. {scheduleGame.state === "live" || scheduleGame.state === "delayed" ? "It updates about once a minute, not as live as Scores." : "It updates every few minutes."}</p>;
   // The team page's Back target: the game screen behind it, or the scoreboard for a direct link.
-  const originGame = teamOrigin ? [protectedBoards.daily, protectedBoards.week].flatMap(b => b?.games ?? []).find(g => g.id === teamOrigin) ?? (() => { const found = findScheduleGame(season, teamOrigin); return found && !scheduleGameHidden(found.game, duke.prefs, teamSeason.now) ? found.game : null; })() : null;
+  const originGame = teamOrigin ? [protectedBoards.daily, protectedBoards.week].flatMap(b => b?.games ?? []).find(g => g.id === teamOrigin) ?? (() => { const found = findScheduleGame(season, teamOrigin); return found && !dukeHidden(found.game, duke.prefs) ? found.game : null; })() : null;
   const teamBack = teamOrigin !== null
     ? { title: "Game", detail: originGame ? `${originGame.teams[0].abbreviation || originGame.teams[0].name} at ${originGame.teams[1].abbreviation || originGame.teams[1].name}` : "Back", label: originGame ? `Back to game, ${originGame.teams[0].name} at ${originGame.teams[1].name}` : "Back to game" }
     : { title: "Scores", detail: weekly ? "This week" : dateText, label: `Back to scores, ${weekly ? "This week" : dateText}` };
@@ -452,6 +454,6 @@ export default function Home() {
       onRetryScores={screen || !scheduleGame ? refresh : teamSeason.retry} refreshing={screen || !scheduleGame ? refreshing : teamSeason.pending}
       teamLinks={teamLinks} onOpenTeam={openTeam} notice={<>{scheduleNotice}<AppUpdateNotice update={update} /></>} />}
     {teamPage && <TeamScreen key={teamPage} teamId={teamPage} season={season} pending={teamSeason.pending} failed={!!teamSeason.failure} online={teamSeason.online} prefs={duke.prefs}
-      back={teamBack} onBack={goBackFromTeam} onRetry={teamSeason.retry} gameHref={id => gameHref({ id, section: "team", team: teamPage }, urlView)} onOpenGame={openScheduleGame} timezone={timezone} now={teamSeason.now} notice={<AppUpdateNotice update={update} />} />}
+      back={teamBack} onBack={goBackFromTeam} onRetry={teamSeason.retry} gameHref={id => gameHref({ id, section: "team", team: teamPage }, urlView)} onOpenGame={openScheduleGame} timezone={timezone} notice={<AppUpdateNotice update={update} />} />}
   </main></>;
 }

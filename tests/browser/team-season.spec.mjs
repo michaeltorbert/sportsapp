@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { test, expect, event, NOW } from "./fixtures.mjs";
+import { test, expect, event, NOW, ALERT_ORIGIN } from "./fixtures.mjs";
 import { bundle } from "../helpers.mjs";
 
 // Team seasons (issue #166). /api/team answers are the real Worker service's output for the
@@ -30,7 +30,7 @@ function serveTeams(harness) {
 }
 // The genuine Tulane at Duke final on the board for Saturday, September 5.
 function board(harness) {
-  const e = event(TULANE_GAME, { state: "final", scores: [10, 17], date: "2026-09-05T19:30:00Z" });
+  const e = event(TULANE_GAME, { state: "final", scores: [3, 17], date: "2026-09-05T19:30:00Z" });
   const [away, home] = e.competitions[0].competitors;
   Object.assign(away, { id: tulaneId }); Object.assign(away.team, { id: tulaneId, shortDisplayName: "Tulane", abbreviation: "TULN" });
   Object.assign(home, { id: "150" }); Object.assign(home.team, { id: "150", shortDisplayName: "Duke", abbreviation: "DUKE" });
@@ -154,6 +154,76 @@ test("a schedule game opened directly or reloaded is found only in its team's ch
   await expect(page.getByRole("button", { name: "Refresh scores" })).toBeEnabled();
   await expect(teamScreen(page)).toHaveCount(0);
   expect(harness.state.teamRequests).toHaveLength(requests);
+});
+
+// A genuinely new page (tab) in the same context. Its own interception is installed on the context
+// before the page exists, so every request is answered or blocked before the network: the team API,
+// direct and hosted scores, stats, alerts and its config, ESPN data and logo hosts. Only the app's
+// own documents and assets reach the local Worker.
+async function newTab(context, appOrigin, { teamRequests, blocked, unexpected }) {
+  await context.route("**/*", async route => {
+    const req = route.request(), url = new URL(req.url());
+    const fulfill = (body, status = 200, headers = {}) => route.fulfill({ status, contentType: "application/json", headers: { "Cache-Control": "no-store", ...headers }, body: JSON.stringify(body) });
+    if (url.origin === ALERT_ORIGIN) { blocked.push(`${req.method()} ${url.origin}${url.pathname}`); return fulfill({ error: "simulated alerts unavailable" }, 503); }
+    if (["espn.com", "espncdn.com"].some(base => url.hostname === base || url.hostname.endsWith(`.${base}`))) { blocked.push(`${req.method()} ${url.hostname}${url.pathname}`); return route.abort("blockedbyclient"); }
+    if (url.origin !== appOrigin) { unexpected.push(req.url()); return route.abort("blockedbyclient"); }
+    if (url.pathname === "/alerts-config.json") return fulfill({ serviceUrl: ALERT_ORIGIN });
+    if (url.pathname === "/api/scores") return fulfill({ error: "simulated feed unavailable" }, 503);
+    if (url.pathname === "/api/stats") return fulfill({ error: "simulated stats unavailable" }, 503, { "Retry-After": "300" });
+    if (url.pathname === "/api/team") {
+      teamRequests.push(url.search);
+      const season = SEASONS[url.searchParams.get("team")];
+      return season ? fulfill(season) : fulfill({}, 502, { "Retry-After": "30" });
+    }
+    return route.continue();
+  });
+  const tab = await context.newPage();
+  // Test-scoped silence, as the harness gives its page; verified on a blank document before the app loads.
+  await tab.addInitScript(() => {
+    window.__testMuted = true;
+    for (const type of ["loadstart", "play"]) addEventListener(type, e => { if (e.target instanceof HTMLMediaElement) e.target.muted = true; }, true);
+  });
+  await tab.goto("about:blank");
+  expect(await tab.evaluate(() => window.__testMuted === true), "test-scoped mute installed before navigation").toBe(true);
+  return tab;
+}
+
+test("a schedule game URL opened in a genuinely new tab recovers its validated membership there; Back reaches the team, then Scores", async ({ page, harness, context }, info) => {
+  serveTeams(harness); board(harness);
+  await page.setViewportSize({ width: 393, height: 852 });
+  await harness.open();
+  // The URL the app itself generates for the row.
+  await page.locator(`#game-${TULANE_GAME} a.game-summary`).tap();
+  await gameScreen(page).getByRole("link", { name: "Duke season and schedule" }).tap();
+  const row = teamScreen(page).locator(`[data-focus-key="sched-401858271"]`);
+  await expect(row).toBeVisible();
+  const href = await row.getAttribute("href");
+  expect(href).toBe("/?event=401858271&team=150");
+  const seen = { teamRequests: [], blocked: [], unexpected: [] };
+  const tab = await newTab(context, new URL(info.project.use.baseURL).origin, seen);
+  const errors = [];
+  tab.on("pageerror", error => errors.push(error.message));
+  await tab.setViewportSize({ width: 375, height: 812 });
+  await tab.goto(href);
+  const game = tab.locator(".game-screen:not(.team-screen)");
+  await expect(game.locator(".masthead")).toBeVisible();
+  await expect(game.locator("h1.game-title")).toContainText("DUKE");
+  await expect(game.locator(".schedule-source")).toContainText("From the Duke schedule, checked");
+  expect(seen.teamRequests).toEqual(["?team=150"]);
+  expect(await tab.evaluate(() => history.state?.ss ?? null)).toMatchObject({ kind: "game", id: "401858271", team: "150", from: false });
+  await tab.screenshot({ path: info.outputPath("new-tab-schedule-game-375.png"), fullPage: true, animations: "disabled" });
+  await game.getByRole("button", { name: "Back to Duke schedule" }).tap();
+  await expect(tab.locator(".team-screen h1.team-title")).toHaveText("Duke Blue Devils");
+  await expect(tab.locator(`.team-screen [data-focus-key="sched-401858271"]`)).toBeFocused();
+  await tab.locator(".team-screen").getByRole("button", { name: /^Back to scores/ }).tap();
+  await expect(tab.locator(".scores-view")).toBeVisible();
+  expect(seen.unexpected, "no unintercepted external request from the new tab").toEqual([]);
+  expect(errors).toEqual([]);
+  await info.attach("new-tab-requests", { contentType: "application/json", body: JSON.stringify(seen, null, 2) });
+  await tab.close();
+  await context.unroute("**/*");
+  // The original tab is unaffected.
+  await expect(teamScreen(page).locator("h1.team-title")).toHaveText("Duke Blue Devils");
 });
 
 test("hiding a Duke game conceals its row and withholds the record and averages on Duke's page and its opponent's", async ({ page, harness }) => {

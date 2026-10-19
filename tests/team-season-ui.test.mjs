@@ -29,11 +29,11 @@ function season(team = "150", changes = {}) {
   };
 }
 const prefs = (changes = {}) => ({ ...ui.defaultDukePreferences(), ...changes });
-function render(value, { team = value?.team.id ?? "150", p = prefs(), pending = false, failed = false, online = true, back, now = Date.parse(CHECKED) } = {}) {
+function render(value, { team = value?.team.id ?? "150", p = prefs(), pending = false, failed = false, online = true, back } = {}) {
   return renderToStaticMarkup(createElement(ui.TeamScreen, {
     teamId: team, season: value, pending, failed, online, prefs: p,
     back: back ?? { title: "Scores", detail: "Today", label: "Back to scores, Today" }, onBack() {}, onRetry() {},
-    gameHref: id => `/?event=${id}&team=${team}`, onOpenGame() {}, timezone: "EDT", now,
+    gameHref: id => `/?event=${id}&team=${team}`, onOpenGame() {}, timezone: "EDT",
   }));
 }
 const links = html => [...html.matchAll(/<a [^>]*href="([^"]*)"/g)].map(m => m[1].replaceAll("&amp;", "&"));

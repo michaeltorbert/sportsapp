@@ -32,15 +32,7 @@ export function useTeamSeason(teamId: string | null, load: Load = loadTeamSeason
   const visible = useSyncExternalStore(subscribeVisibility, browserVisible, serverVisible) ?? true;
   const [state, setState] = useState<TeamSeasonState>(() => seed(teamId));
   const [attempt, setAttempt] = useState(0);
-  // A clock for schedule games past their kickoff: read at once, then every 15 seconds while in use.
-  const [now, setNow] = useState(0);
   const forced = useRef(false);
-  useEffect(() => {
-    if (!teamId) return;
-    const tick = () => setNow(Date.now());
-    const first = setTimeout(tick, 0), timer = setInterval(tick, 15_000);
-    return () => { clearTimeout(first); clearInterval(timer); };
-  }, [teamId]);
   if (state.teamId !== teamId) setState(seed(teamId));
   useEffect(() => {
     if (!teamId || !online || !visible) return;
@@ -77,7 +69,7 @@ export function useTeamSeason(teamId: string | null, load: Load = loadTeamSeason
   }, [teamId, online, visible, attempt, load]);
   const current = state.teamId === teamId ? state : seed(teamId);
   return {
-    season: current.season, pending: current.pending, failure: current.failure, online, now,
+    season: current.season, pending: current.pending, failure: current.failure, online,
     // A manual retry runs one attempt now; scheduled retries keep their backoff.
     retry: () => { if (!current.pending) { forced.current = true; setAttempt(n => n + 1); } },
   };
