@@ -33,7 +33,8 @@ function board(harness) {
   const e = event(TULANE_GAME, { state: "final", scores: [3, 17], date: "2026-09-05T19:30:00Z" });
   const [away, home] = e.competitions[0].competitors;
   Object.assign(away, { id: tulaneId }); Object.assign(away.team, { id: tulaneId, shortDisplayName: "Tulane", abbreviation: "TULN" });
-  Object.assign(home, { id: "150" }); Object.assign(home.team, { id: "150", shortDisplayName: "Duke", abbreviation: "DUKE" });
+  // Duke is an ACC team (the capture's team.groups.id "1"), which is why the default All view lists this final.
+  Object.assign(home, { id: "150" }); Object.assign(home.team, { id: "150", shortDisplayName: "Duke", abbreviation: "DUKE", conferenceId: "1" });
   e.competitions[0].neutralSite = false;
   harness.state.events = [...harness.state.events, e];
 }
@@ -226,8 +227,9 @@ test("a schedule game URL opened in a genuinely new tab recovers its validated m
   await expect(teamScreen(page).locator("h1.team-title")).toHaveText("Duke Blue Devils");
 });
 
-test("hiding a Duke game conceals its row and withholds the record and averages on Duke's page and its opponent's", async ({ page, harness }) => {
+test("hiding a Duke game conceals its row and withholds the record and averages on Duke's page and its opponent's", async ({ page, harness }, info) => {
   serveTeams(harness);
+  await page.setViewportSize({ width: 375, height: 812 });
   await harness.open({ path: "/?team=150", waitForScores: false });
   await expect(teamScreen(page).locator(".team-averages")).toBeVisible();
   const hide = id => page.evaluate(id => {
@@ -242,6 +244,7 @@ test("hiding a Duke game conceals its row and withholds the record and averages 
   await expect(teamScreen(page).locator(".team-meta")).toHaveText(/2026 season\s*·\s*Record hidden/);
   await expect(teamScreen(page).locator(`[data-focus-key="sched-${TULANE_GAME}"]`)).toHaveCount(0);
   await expect(teamScreen(page).locator("a.sched-row")).toHaveCount(11);
+  await page.screenshot({ path: info.outputPath("team-150-duke-game-hidden-375.png"), fullPage: true, animations: "disabled" });
   // Its own screen, reached by URL, is the generic unavailable one.
   await page.goto(`/?event=${TULANE_GAME}&team=150`);
   await expect(gameScreen(page).getByRole("heading", { name: "This game isn’t available" })).toBeVisible();
@@ -252,15 +255,19 @@ test("hiding a Duke game conceals its row and withholds the record and averages 
   await expect(teamScreen(page).locator("h1.team-title")).toHaveText("North Carolina Tar Heels");
   await expect(teamScreen(page).getByText("Record and averages not shown yet")).toBeVisible();
   await expect(teamScreen(page).locator(`[data-focus-key="sched-${SHARED}"]`)).toBeVisible();
+  await page.screenshot({ path: info.outputPath("team-153-partial-375.png"), fullPage: true, animations: "disabled" });
   await hide(SHARED);
   await expect(teamScreen(page).locator(`[data-focus-key="sched-${SHARED}"]`)).toHaveCount(0);
   await expect(teamScreen(page).getByText("Duke game hidden by your settings")).toBeVisible();
+  await page.screenshot({ path: info.outputPath("team-153-partial-duke-game-hidden-375.png"), fullPage: true, animations: "disabled" });
 });
 
-test("an unavailable team says so, offers Retry and returns to Scores", async ({ page, harness }) => {
+test("an unavailable team says so, offers Retry and returns to Scores", async ({ page, harness }, info) => {
+  await page.setViewportSize({ width: 375, height: 812 });
   await harness.open({ path: "/?team=150", waitForScores: false });
   await expect(teamScreen(page).getByRole("heading", { name: "This team isn’t available" })).toBeVisible();
   expect(harness.state.teamRequests).toEqual(["?team=150"]);
+  await page.screenshot({ path: info.outputPath("team-unavailable-375.png"), fullPage: true, animations: "disabled" });
   await teamScreen(page).getByRole("button", { name: "Back to scores", exact: true }).tap();
   await expect(scores(page)).toBeVisible();
 });
@@ -274,6 +281,9 @@ for (const [width, height, zoom, wide] of [[375, 812, false], [1440, 1000, false
     await harness.open({ path: "/?team=150", waitForScores: false });
     if (zoom) await page.addStyleTag({ content: ZOOM + (wide ? WIDE_FONT : "") });
     await expect(teamScreen(page).locator("a.sched-row")).toHaveCount(12);
+    // The fixture's logo is failed before the network by the harness; the abbreviation tile stands in.
+    await expect(teamScreen(page).locator(".team-head .mh-logo")).toHaveText("DUKE");
+    expect(harness.state.logoRequests).toContain("/i/teamlogos/ncaa/500/150.png");
     expect(await noOverflow(page)).toBe(true);
     // Every control is at least 44 CSS px tall; full names wrap inside their row.
     const small = await teamScreen(page).locator("a, button").evaluateAll(els => els.filter(el => el.getBoundingClientRect().height < 44).map(el => el.outerHTML.slice(0, 80)));

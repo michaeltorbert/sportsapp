@@ -33,7 +33,7 @@ function render(value, { team = value?.team.id ?? "150", p = prefs(), pending = 
   return renderToStaticMarkup(createElement(ui.TeamScreen, {
     teamId: team, season: value, pending, failed, online, prefs: p,
     back: back ?? { title: "Scores", detail: "Today", label: "Back to scores, Today" }, onBack() {}, onRetry() {},
-    gameHref: id => `/?event=${id}&team=${team}`, onOpenGame() {}, timezone: "EDT",
+    gameHref: id => `/?event=${id}&team=${team}`, onOpenGame() {},
   }));
 }
 const links = html => [...html.matchAll(/<a [^>]*href="([^"]*)"/g)].map(m => m[1].replaceAll("&amp;", "&"));
@@ -56,7 +56,12 @@ test("a complete Duke page: season, source record, four labeled pairs and all 12
   assert.doesNotMatch(html, /espn\.com|target="_blank"|Gamecast/);
   assert.match(text(html), /Regular season 12 games/);
   assert.match(text(html), /Postseason No postseason games are listed yet\./);
-  assert.match(text(html), /Checked Oct 19, 1:04 AM ET Dates ET · Kickoffs EDT/);
+  assert.match(text(html), /Checked Oct 19, 1:04 AM ET Dates and kickoffs in Eastern Time/);
+  assert.doesNotMatch(text(html), /\b(?:EDT|EST)\b/, "no single daylight or standard abbreviation for a season that spans both");
+  // Genuine kickoffs on both sides of the November time change, each converted on its own date.
+  const row = id => text(html.match(new RegExp(`<a class="sched-row" href="/\\?event=${id}[^"]*".*?</a>`))[0]);
+  assert.match(row("401858271"), /Fri, Oct 23 , 7:00 PM/, "2026-10-23T23:00Z is 7:00 PM EDT");
+  assert.match(row("401858303"), /Fri, Nov 20 , 7:30 PM/, "2026-11-21T00:30Z is 7:30 PM EST, on the Eastern day before the UTC date");
   // The first game: date, full opponent name, home, result for Duke, accessible result words.
   const first = html.match(/<li class="sched-item"><a class="sched-row" href="\/\?event=401858209[^"]*".*?<\/a><\/li>/)[0];
   assert.match(text(first), /Sat, Sep 5/);

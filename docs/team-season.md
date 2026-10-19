@@ -63,6 +63,14 @@ old, marked `stale`. `checkedAt` is the retrieval time. The browser (`lib/team-s
 with no direct-provider fallback, and `lib/use-team-season.ts` refreshes at the same
 cadence, backs off after failures, pauses offline or hidden and cancels on team change.
 
+## Time basis
+
+A season crosses the switch between daylight and standard time. So the team page's schedule
+shows each game's Eastern date and its kickoff converted on that date to Eastern time
+(`America/New_York`), under the single cue "Dates and kickoffs in Eastern Time". It never
+uses one season-wide EDT/EST abbreviation or the viewer's current zone. Scores, the Guide
+and the game screen keep their existing time labels.
+
 ## Duke spoiler settings
 
 The existing preferences and `dukeHidden`/`dukeStarted` are reused unchanged, and season

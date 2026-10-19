@@ -6,7 +6,14 @@ import { seasonAggregates, TEAM_STAT_ROWS, type ScheduleEntry, type ScheduleSect
 // Relative, like the page's own import, so page tests bundle the real game screen helpers.
 import { gameDay } from "./game-screen";
 
-function localTime(date: string) { return Number.isFinite(Date.parse(date)) ? new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(date)) : "Time TBD"; }
+// A season crosses daylight and standard time, so every kickoff is converted on its own date to Eastern
+// time, the basis the cue names. Days already use the game's Eastern date (gameDay).
+let kickoffFormat: Intl.DateTimeFormat | undefined;
+function easternTime(date: string) {
+  if (!Number.isFinite(Date.parse(date))) return "Time TBD";
+  kickoffFormat ??= new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+  return kickoffFormat.format(new Date(date));
+}
 let checkedFormat: Intl.DateTimeFormat | undefined;
 function checkedTime(iso: string) {
   checkedFormat ??= new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
@@ -51,7 +58,7 @@ function Row({ entry, team, hidden, next, href, onOpen }: { entry: ScheduleEntry
     out = scored ? <span className={`s-live ${game.state}`} aria-hidden="true">{game.state === "live" && <span className="live-dot" />}{self.score}–{other.score}</span> : null;
     spoken = scored ? `${game.state === "live" ? "In progress" : "Paused"}, ${self.score} to ${other.score}` : "";
   } else if (game.state === "upcoming") {
-    when = game.timeValid ? localTime(game.date) : "Time TBD";
+    when = game.timeValid ? easternTime(game.date) : "Time TBD";
     out = <>{next && <span className="s-next">Next</span>}{game.broadcast && <span className="s-tv"><Tv size={14} aria-hidden="true" /><span className="sr-only">on </span>{game.broadcast}</span>}</>;
   } else when = game.status;
   const special = game.state === "other" || game.state === "delayed";
@@ -76,10 +83,10 @@ function Section({ title, section, team, prefs, nextId, gameHref, onOpenGame, on
 export type TeamScreenProps = {
   teamId: string; season: TeamSeason | null; pending: boolean; failed: boolean; online: boolean; prefs: DukePreferences | null;
   back: { title: string; detail: string; label: string }; onBack: () => void; onRetry: () => void;
-  gameHref: (id: string) => string; onOpenGame: (id: string) => void; timezone: string; notice?: ReactNode;
+  gameHref: (id: string) => string; onOpenGame: (id: string) => void; notice?: ReactNode;
 };
 /** A team's current season: record, regular-season averages and the full published schedule. */
-export function TeamScreen({ teamId, season, pending, failed, online, prefs, back, onBack, onRetry, gameHref, onOpenGame, timezone, notice }: TeamScreenProps) {
+export function TeamScreen({ teamId, season, pending, failed, online, prefs, back, onBack, onRetry, gameHref, onOpenGame, notice }: TeamScreenProps) {
   const backButton = <button type="button" className="back-button" data-focus-key="back" aria-label={back.label} onClick={onBack}><ChevronLeft size={22} aria-hidden="true" /><span className="back-text" aria-hidden="true"><span>{back.title}</span><small>{back.detail}</small></span></button>;
   const bar = <header className="game-bar">{backButton}<span className="team-bar-title" aria-hidden="true">{season?.team.abbreviation}</span><span className="bar-brand" aria-hidden="true"><span className="brand-icon"><Signal size={17} strokeWidth={3} /></span></span></header>;
   if (!season) {
@@ -125,7 +132,7 @@ export function TeamScreen({ teamId, season, pending, failed, online, prefs, bac
       <div className="team-main">
         <section className="team-block" aria-labelledby="team-schedule-h">
           <h2 id="team-schedule-h">Schedule</h2>
-          <p className="team-fresh"><span>Checked {checkedTime(season.checkedAt)}</span><span>Dates ET · Kickoffs {timezone}</span></p>
+          <p className="team-fresh"><span>Checked {checkedTime(season.checkedAt)}</span><span>Dates and kickoffs in Eastern Time</span></p>
           <div className="sched-wrap">
             <Section title="Regular season" section={season.regular} team={teamId} prefs={prefs} nextId={nextId} gameHref={gameHref} onOpenGame={onOpenGame} onRetry={onRetry} pending={pending} />
             <Section title="Postseason" section={season.postseason} team={teamId} prefs={prefs} nextId={nextId} gameHref={gameHref} onOpenGame={onOpenGame} onRetry={onRetry} pending={pending} />

@@ -454,6 +454,6 @@ export default function Home() {
       onRetryScores={screen || !scheduleGame ? refresh : teamSeason.retry} refreshing={screen || !scheduleGame ? refreshing : teamSeason.pending}
       teamLinks={teamLinks} onOpenTeam={openTeam} notice={<>{scheduleNotice}<AppUpdateNotice update={update} /></>} />}
     {teamPage && <TeamScreen key={teamPage} teamId={teamPage} season={season} pending={teamSeason.pending} failed={!!teamSeason.failure} online={teamSeason.online} prefs={duke.prefs}
-      back={teamBack} onBack={goBackFromTeam} onRetry={teamSeason.retry} gameHref={id => gameHref({ id, section: "team", team: teamPage }, urlView)} onOpenGame={openScheduleGame} timezone={timezone} notice={<AppUpdateNotice update={update} />} />}
+      back={teamBack} onBack={goBackFromTeam} onRetry={teamSeason.retry} gameHref={id => gameHref({ id, section: "team", team: teamPage }, urlView)} onOpenGame={openScheduleGame} notice={<AppUpdateNotice update={update} />} />}
   </main></>;
 }
