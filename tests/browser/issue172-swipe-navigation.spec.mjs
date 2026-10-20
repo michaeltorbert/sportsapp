@@ -27,6 +27,39 @@ async function assertFixtureMediaIsMuted(page) {
   expect(muted, "the browser fixture mutes media before interaction").toBe(true);
 }
 
+// Diagnostic evidence for the Linux Chromium CI failures (taps after committed CDP swipes had no
+// effect): which input events of each touch reached the page, in order. Recording only; passive
+// listeners that never cancel, stop or change anything. Attached for every Chromium test, passing or
+// failing, so a lost tap (no touch/pointer events), a browser-suppressed tap (touch/pointer events but
+// no click) and an app-suppressed click (click at window capture but not at window bubble) differ.
+test.beforeEach(async ({ page, browserName }) => {
+  if (browserName !== "chromium") return;
+  await page.addInitScript(() => {
+    const log = [];
+    Object.defineProperty(window, "__issue172Input", { value: log });
+    const describe = target => target instanceof Element ? `${target.tagName.toLowerCase()}${target.id ? `#${target.id}` : ""}${target.getAttribute("aria-label") ? `[${target.getAttribute("aria-label")}]` : ""}${target.closest("article.game-card") ? ` in ${target.closest("article.game-card").id}` : ""}` : String(target);
+    const record = (phase, event) => log.push({ phase, type: event.type, t: Math.round(performance.now()), trusted: event.isTrusted, pointer: event.pointerType ?? null, id: event.pointerId ?? null, detail: event.detail ?? null, prevented: event.defaultPrevented, target: describe(event.target) });
+    for (const type of ["touchstart", "touchend", "touchcancel", "pointerdown", "pointerup", "pointercancel", "click"]) addEventListener(type, event => record("capture", event), { capture: true, passive: true });
+    addEventListener("click", event => record("bubble", event), { passive: true });
+    let moves = 0;
+    addEventListener("pointermove", () => { moves++; }, { capture: true, passive: true });
+    addEventListener("pointerup", event => { log.push({ phase: "moves-before-up", count: moves, id: event.pointerId }); moves = 0; }, { capture: true, passive: true });
+  });
+  // Opt-in reproduction aid for slower runners; off unless ISSUE172_CPU_THROTTLE is set (e.g. 4).
+  const rate = Number(process.env.ISSUE172_CPU_THROTTLE || 0);
+  if (rate > 1) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate });
+    test.info().annotations.push({ type: "diagnostic", description: `CPU throttled ${rate}× (ISSUE172_CPU_THROTTLE)` });
+  }
+});
+test.afterEach(async ({ page, browserName }, testInfo) => {
+  if (browserName !== "chromium" || page.isClosed()) return;
+  let log;
+  try { log = await page.evaluate(() => window.__issue172Input ?? null); } catch (error) { log = { unavailable: error.message }; }
+  await testInfo.attach("issue172-input-log", { contentType: "application/json", body: JSON.stringify(log, null, 1) });
+});
+
 function inputKind(browserName) {
   const description = browserName === "chromium" ? "Chromium CDP Input.dispatchTouchEvent touches (browser input pipeline)" : "WebKit synthetic PointerEvents dispatched in the page (not native touch; no browser scrolling or compatibility clicks)";
   test.info().annotations.push({ type: "gesture input", description });
