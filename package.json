@@ -21,7 +21,8 @@
     "release:verify": "node scripts/verify-deployment.mjs",
     "test:runtime": "node scripts/check-worker-runtime.mjs && node scripts/check-static-home.mjs",
     "test:browser": "BROWSER_TEST_STOP_ON_SERVER_EXIT=1 playwright test",
-    "test:updater": "node scripts/check-app-update.mjs"
+    "test:updater": "node scripts/check-app-update.mjs",
+    "check:home-screen-install": "node .github/scripts/check-home-screen-install.mjs src/vendor/home-screen-install esm"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
