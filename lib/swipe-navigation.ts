@@ -58,6 +58,17 @@ export function useSwipeNavigation<T extends HTMLElement>(enabled: boolean, cont
     if (!node || !enabled) return;
     let gesture: { id: number; x: number; y: number; axis: Axis; target: Element } | null = null;
     let suppress: { target: Element; timer: number } | null = null;
+    // A released swipe commits only once its touch sequence has ended. Committing inside pointerup let
+    // the re-render remove the touched node before the same touch's touchend, which was then dispatched
+    // to a detached node (never reaching window); in Linux CI Chromium the next tap then made no click.
+    // touchend or touchcancel commits; pointer-only input (no touch events) commits on the next task.
+    let pending: { step: Step; timer: number } | null = null;
+    const commit = () => {
+      if (!pending) return;
+      const { step, timer } = pending;
+      pending = null; window.clearTimeout(timer);
+      latest.current(step);
+    };
     const scale = () => window.visualViewport?.scale ?? 1;
     const blocked = () => document.hidden || scale() > ZOOMED || !!node.closest("[hidden]") || !!document.querySelector('[role="dialog"][data-state="open"]');
     const abandon = () => { gesture = null; };
@@ -66,7 +77,7 @@ export function useSwipeNavigation<T extends HTMLElement>(enabled: boolean, cont
     const zoom = () => { if (scale() > ZOOMED) { node.dataset.zoomed = ""; abandon(); } else delete node.dataset.zoomed; };
     const down = (event: PointerEvent) => {
       // Any new contact ends the previous swipe's click suppression; a second finger ends a swipe.
-      disarm();
+      commit(); disarm();
       if (gesture) { abandon(); return; }
       const target = event.target instanceof Element ? swipeTarget(event.target, node) : null;
       if (!target || blocked() || !canStart(event, window.innerWidth, scale())) return;
@@ -87,7 +98,7 @@ export function useSwipeNavigation<T extends HTMLElement>(enabled: boolean, cont
       if (!step) return;
       // The timer only clears a record no click arrived for; it never decides what is swallowed.
       suppress = { target, timer: window.setTimeout(disarm, 1000) };
-      latest.current(step);
+      pending = { step, timer: window.setTimeout(commit, 0) };
     };
     const cancel = (event: PointerEvent) => { if (gesture && event.pointerId === gesture.id) abandon(); };
     const click = (event: MouseEvent) => {
@@ -103,17 +114,22 @@ export function useSwipeNavigation<T extends HTMLElement>(enabled: boolean, cont
     addEventListener("pointermove", move, { capture: true, passive: true });
     addEventListener("pointerup", up, { capture: true, passive: true });
     addEventListener("pointercancel", cancel, { capture: true, passive: true });
+    addEventListener("touchend", commit, { capture: true, passive: true });
+    addEventListener("touchcancel", commit, { capture: true, passive: true });
     addEventListener("resize", abandon);
     window.visualViewport?.addEventListener("resize", viewportResize); window.visualViewport?.addEventListener("scroll", zoom);
     document.addEventListener("visibilitychange", hidden);
     node.addEventListener("click", click, { capture: true });
     return () => {
       abandon(); disarm(); delete node.dataset.zoomed;
+      if (pending) { window.clearTimeout(pending.timer); pending = null; }
       if (stop.current === abandon) stop.current = null;
       removeEventListener("pointerdown", down, { capture: true });
       removeEventListener("pointermove", move, { capture: true });
       removeEventListener("pointerup", up, { capture: true });
       removeEventListener("pointercancel", cancel, { capture: true });
+      removeEventListener("touchend", commit, { capture: true });
+      removeEventListener("touchcancel", commit, { capture: true });
       removeEventListener("resize", abandon);
       window.visualViewport?.removeEventListener("resize", viewportResize); window.visualViewport?.removeEventListener("scroll", zoom);
       document.removeEventListener("visibilitychange", hidden);

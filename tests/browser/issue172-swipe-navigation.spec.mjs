@@ -27,8 +27,10 @@ async function assertFixtureMediaIsMuted(page) {
   expect(muted, "the browser fixture mutes media before interaction").toBe(true);
 }
 
-// Diagnostic evidence for the Linux Chromium CI failures (taps after committed CDP swipes had no
-// effect): which input events of each touch reached the page, in order. Recording only; passive
+// Input evidence for the Linux Chromium CI failures (taps after committed CDP swipes had no effect):
+// which input events of each touch reached the page, in order. It showed that every committed swipe's
+// touchend never reached window, because the step re-rendered inside pointerup and removed the
+// touched node first; expectSwipeTouchEnded below now asserts the corrected order. Recording only; passive
 // listeners that never cancel, stop or change anything. Attached for every Chromium test, passing or
 // failing, so a lost tap (no touch/pointer events), a browser-suppressed tap (touch/pointer events but
 // no click) and an app-suppressed click (click at window capture but not at window bubble) differ.
@@ -59,6 +61,16 @@ test.afterEach(async ({ page, browserName }, testInfo) => {
   try { log = await page.evaluate(() => window.__issue172Input ?? null); } catch (error) { log = { unavailable: error.message }; }
   await testInfo.attach("issue172-input-log", { contentType: "application/json", body: JSON.stringify(log, null, 1) });
 });
+
+// Regression for the Linux CI cause: a committed swipe's own touchend must still reach window, i.e.
+// the step's re-render waits until the touch sequence has ended (Chromium input log only).
+async function expectSwipeTouchEnded(page, browserName) {
+  if (browserName !== "chromium") return;
+  const log = await page.evaluate(() => window.__issue172Input);
+  const up = log.findLastIndex(entry => entry.phase === "capture" && entry.type === "pointerup");
+  expect(up, "the swipe's pointerup was recorded").toBeGreaterThanOrEqual(0);
+  expect(log.slice(up + 1).some(entry => entry.type === "touchend"), "the committed swipe's touchend reached window").toBe(true);
+}
 
 function inputKind(browserName) {
   const description = browserName === "chromium" ? "Chromium CDP Input.dispatchTouchEvent touches (browser input pipeline)" : "WebKit synthetic PointerEvents dispatched in the page (not native touch; no browser scrolling or compatibility clicks)";
@@ -229,6 +241,7 @@ test("Day and Week keep independent selections", async ({ page, harness, browser
   await assertFixtureMediaIsMuted(page);
   await swipe(page, browserName, page.locator("article.game-card").first(), -140);
   await expect(dateInput(page)).toHaveValue("2026-09-06");
+  await expectSwipeTouchEnded(page, browserName);
   await period(page, "Week").tap();
   await expect(weekLabel(page)).toContainText("Sep 3 – Sep 7");
   await swipe(page, browserName, page.locator("article.game-card").first(), -140);
@@ -326,6 +339,7 @@ test("game cards: a tap opens the game, a swipe starting on a card does not, and
 
   await swipe(page, browserName, page.locator("#game-ranked-live .game-summary"), -140);
   await expect(dateInput(page)).toHaveValue("2026-09-06");
+  await expectSwipeTouchEnded(page, browserName);
   await frames(page);
   await expect(page.locator(".game-screen")).toHaveCount(0);
   await expect(page).not.toHaveURL(/event=/);

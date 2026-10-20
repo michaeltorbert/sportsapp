@@ -112,11 +112,15 @@ function mount(t, { enabled = true } = {}) {
     Object.defineProperties(event, { target: { value: target }, pointerId: { value: id }, pointerType: { value: pointerType }, isPrimary: { value: isPrimary }, button: { value: type === "pointermove" ? -1 : 0 }, clientX: { value: x }, clientY: { value: y } });
     win.dispatchEvent(event);
   };
-  // A finger travels in small moves, as a real drag reports them.
-  const swipe = (target, dx, dy = 0, { x = 200, y = 300, id = 1, end = "pointerup", ...rest } = {}) => {
+  // The touch event browsers dispatch right after a touch's pointerup or pointercancel.
+  const touchend = (type = "touchend") => win.dispatchEvent(new Event(type));
+  // A finger travels in small moves, as a real drag reports them, and ends with its touchend
+  // (`touchEvents: false` is pointer-only input, such as WebKit's synthetic test events).
+  const swipe = (target, dx, dy = 0, { x = 200, y = 300, id = 1, end = "pointerup", touchEvents = true, ...rest } = {}) => {
     pointer("pointerdown", target, x, y, { id, ...rest });
     for (let i = 1; i <= 8; i++) pointer("pointermove", target, x + dx * i / 8, y + dy * i / 8, { id, ...rest });
     pointer(end, target, x + dx, y + dy, { id, ...rest });
+    if (touchEvents && (rest.pointerType ?? "touch") === "touch") touchend(end === "pointercancel" ? "touchcancel" : "touchend");
   };
   const click = (target, detail = 1) => {
     const event = new Event("click", { cancelable: true });
@@ -127,7 +131,7 @@ function mount(t, { enabled = true } = {}) {
     region.dispatchEvent(event);
     return { prevented: event.defaultPrevented, stopped };
   };
-  return { region, card, other, control, viewport, doc, win, steps, pointer, swipe, click, render };
+  return { region, card, other, control, viewport, doc, win, steps, pointer, swipe, touchend, click, render };
 }
 
 test("one deliberate horizontal swipe commits exactly one step in each direction", t => {
@@ -193,8 +197,47 @@ test("a visual viewport resize at normal scale, or a change of displayed period 
   partial(); h.render(true, "week:2026-09-03"); h.pointer("pointerup", h.card, 60, 300);
   assert.deepEqual(h.steps, []);
   // An unchanged context re-render keeps the gesture.
-  partial(); h.render(true, "week:2026-09-03"); h.pointer("pointerup", h.card, 60, 300);
+  partial(); h.render(true, "week:2026-09-03"); h.pointer("pointerup", h.card, 60, 300); h.touchend();
   assert.deepEqual(h.steps, [1]);
+});
+
+test("a released swipe steps only after its touch sequence ends, so the touched node is still attached for touchend", t => {
+  const h = mount(t);
+  h.pointer("pointerdown", h.card, 200, 300);
+  for (let x = 190; x >= 60; x -= 10) h.pointer("pointermove", h.card, x, 300);
+  h.pointer("pointerup", h.card, 60, 300);
+  assert.deepEqual(h.steps, [], "no step, so no re-render, between pointerup and the same touch's touchend");
+  h.touchend();
+  assert.deepEqual(h.steps, [1], "the touchend reaching window completes the step");
+  h.touchend(); assert.deepEqual(h.steps, [1], "one step per swipe");
+  // A touchcancel after release ends the sequence too.
+  h.swipe(h.card, 150, 0, { touchEvents: false }); h.touchend("touchcancel");
+  assert.deepEqual(h.steps, [1, -1]);
+  // The suppression record armed at release still swallows that touch's compatibility click.
+  assert.deepEqual(h.click(h.card), { prevented: true, stopped: true });
+});
+
+test("pointer-only input without touch events steps on the next task, and a new contact first completes a pending step", async t => {
+  const h = mount(t);
+  h.swipe(h.card, -150, 0, { touchEvents: false });
+  assert.deepEqual(h.steps, []);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(h.steps, [1]);
+  h.swipe(h.card, 150, 0, { touchEvents: false });
+  h.pointer("pointerdown", h.card, 200, 300);
+  assert.deepEqual(h.steps, [1, -1], "the pending step lands before the next touch is judged");
+  h.pointer("pointerup", h.card, 200, 300);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(h.steps, [1, -1]);
+});
+
+test("disabling between release and touchend drops the pending step", async t => {
+  const h = mount(t);
+  h.swipe(h.card, -150, 0, { touchEvents: false });
+  h.render(false);
+  h.touchend();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(h.steps, []);
 });
 
 test("the range change a commit causes keeps that swipe's compatibility-click record", t => {
