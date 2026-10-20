@@ -6,6 +6,7 @@ import { stripHalftimeTiming } from "./halftime";
 import { enrichScores, requestScores, type ScoreRequest } from "./score-client";
 import { createCdnDocuments } from "./cdn-documents";
 import { boardKey, expiredBoardKey, matchingBoard, type BoardScope } from "./scoreboard-views";
+import { readWeek } from "./app-update";
 
 import { useInitialSearch, useOnline, useTimezone } from "./browser-state";
 
@@ -21,9 +22,13 @@ function refreshError(online: boolean, guide: boolean) {
 }
 export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDate?: string | null) {
   const search = useInitialSearch();
-  const query = new URLSearchParams(search || "").get("date");
+  const params = new URLSearchParams(search || ""), query = params.get("date");
   const [chosenDate, setSelection] = useState<string | null | undefined>(undefined);
   const selection = dailyOnly ? (controlledDate ?? null) : chosenDate === undefined ? (query && validDate(query) ? query : null) : chosenDate;
+  // The chosen Week (#172): the Thursday starting it, or null to follow the current week. It is
+  // independent of the Day selection, and the Guide's daily board never reads it.
+  const [chosenWeek, setWeekSelection] = useState<string | null | undefined>(undefined);
+  const weekAnchor = dailyOnly ? null : chosenWeek === undefined ? readWeek(params) : chosenWeek;
   const [today, setToday] = useState(""), [date, setDate] = useState("");
   const [boards, setBoards] = useState<Record<BoardScope, Scoreboard | null>>({ daily: null, week: null });
   const [errors, setErrors] = useState<Record<BoardScope, string>>({ daily: "", week: "" });
@@ -103,7 +108,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
           }
         }
       };
-      const week = accWeek(effective);
+      const week = accWeek(weekAnchor || effective);
       const checkOvernight = async () => {
         try {
           // Informational only: the selected Guide board owns any enrichment.
@@ -128,7 +133,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
       window.clearTimeout(timeout);
       if (controller.current === c) { controller.current = null; setRefreshing(false); }
     }
-  }, [selection, dailyOnly]);
+  }, [selection, dailyOnly, weekAnchor]);
 
   const queryReady = search !== null;
   useEffect(() => {
@@ -142,9 +147,17 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
     document.addEventListener("visibilitychange", resume); window.addEventListener("online", resume); window.addEventListener("offline", offline);
     return () => { window.clearTimeout(initial); window.clearInterval(interval); controller.current?.abort(); controller.current = null; document.removeEventListener("visibilitychange", resume); window.removeEventListener("online", resume); window.removeEventListener("offline", offline); };
   }, [refresh, queryReady, dailyOnly]);
-  const chooseDate = (value: string | null) => { setErrors({ daily: "", week: "" }); setOvernightError(""); setSelection(value); setDate(value || held.current || easternDate()); };
-  // The weekly period follows the current football week; manual dates apply to Day.
-  const range = today ? accWeek(today) : null;
+  // A real change of day or week supersedes the running refresh at once, so none of its late
+  // results or errors can land on the new range. Choosing the same value keeps polling as it is.
+  const supersede = () => { controller.current?.abort(); controller.current = null; setRefreshing(false); };
+  const chooseDate = (value: string | null) => { if (value !== selection) supersede(); setErrors({ daily: "", week: "" }); setOvernightError(""); setSelection(value); setDate(value || held.current || easternDate()); };
+  const chooseWeek = (value: string | null) => {
+    const next = value && validDate(value) ? accWeek(value).start : null;
+    if (next !== weekAnchor) { supersede(); setErrors(previous => ({ ...previous, week: "" })); }
+    setWeekSelection(next);
+  };
+  // The weekly period follows the current football week unless a week was chosen; manual dates apply to Day.
+  const range = weekAnchor ? accWeek(weekAnchor) : today ? accWeek(today) : null;
   // Guide URL ownership includes null: Today must never fall back to a manual date.
   const displayDate = dailyOnly ? (selection ?? today) : date;
   const matching = {
@@ -153,5 +166,5 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
   };
   const data = matching[scope];
   const error = errors[scope] || overnightError;
-  return { date: displayDate, today, data, boards: matching, error, scopeError: errors[scope], dailyError: dailyOnly ? guideDailyErrors[displayDate] || "" : errors.daily, overnightError, refreshing, online, now, timezone, refresh, setDate: chooseDate, followToday: selection === null };
+  return { date: displayDate, today, data, boards: matching, error, scopeError: errors[scope], dailyError: dailyOnly ? guideDailyErrors[displayDate] || "" : errors.daily, overnightError, refreshing, online, now, timezone, refresh, setDate: chooseDate, followToday: selection === null, week: range, weekDate: weekAnchor, setWeek: chooseWeek, followWeek: weekAnchor === null };
 }

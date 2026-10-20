@@ -18,7 +18,7 @@ export default function Guide() {
   const { date, today, data, dailyError, overnightError, online, refreshing, now, refresh, followToday } = useScoreboard("daily", true, selection.date);
   const duke = useDukeVisibility(data?.games || []);
   const protectedBoard = useMemo(() => protectDukeBoard(data, duke.prefs), [data, duke.prefs]);
-  const update = useAppUpdate({ page: "guide", date, followToday, view: selection.view });
+  const update = useAppUpdate({ page: "guide", date, followToday, view: selection.view, weekDate: selection.weekDate ?? null });
   const age = data ? Math.max(0, Math.floor((now - Date.parse(data.fetchedAt)) / 1000)) : 0;
   const stale = !!data && (!!dailyError || !!data.stale || age > 90 || !online);
   const feedState = !online ? "Offline" : data ? stale ? "Schedule may be out of date." : "Schedule updated." : dailyError ? "Schedule unavailable" : "Connecting to ESPN…";
@@ -29,7 +29,7 @@ export default function Guide() {
   const chooseDate = (value: string | null) => selection.choose({ date: value, view: selection.view });
   return <main className="app-shell guide-shell" data-app-commit={LOADED_COMMIT}>
     <header className="app-header"><Link className="wordmark" href="/" aria-label="Saturday Signal home"><span className="brand-icon"><Signal size={22} /></span><span>saturday<wbr /><span className="brand-light">signal</span></span></Link><div className="header-actions"><button className={`icon-button ${refreshing ? "refreshing" : ""}`} aria-label="Refresh guide" onClick={refresh} disabled={refreshing || !date}><RefreshCw size={20} /></button><DukeSettings games={data?.games || []} visibility={duke} /></div></header>
-    <AppNavigation active="guide" date={date} followToday={followToday} />
+    <AppNavigation active="guide" date={date} followToday={followToday} weekDate={selection.weekDate} />
     <div className="guide-controls"><div className="date-navigation"><button className="icon-button" aria-label="Previous day" disabled={!date} onClick={() => chooseDate(shiftDate(date, -1))}><ChevronLeft size={19} /></button><label className="date-picker"><CalendarDays size={15} /><span>{dateLabel}</span><input type="date" value={date} onChange={event => { if (event.target.value) chooseDate(event.target.value); }} aria-label="Guide date, Eastern time" /></label><button className="icon-button" aria-label="Next day" disabled={!date} onClick={() => chooseDate(shiftDate(date, 1))}><ChevronRight size={19} /></button></div><button className={`today-button ${followToday ? "is-today" : ""}`} disabled={!today} onClick={() => { chooseDate(null); if (followToday) refresh(); }}>Today</button></div>
     <div className="guide-heading"><h1>Guide</h1><div className="guide-modes" role="group" aria-label="Guide games"><button aria-pressed={selection.view === "all"} onClick={() => selection.choose({ date: selection.date, view: "all" })}>All games</button><button aria-pressed={selection.view === "watch"} onClick={() => selection.choose({ date: selection.date, view: "watch" })}>Watchlist only</button></div><DukeGameControls games={data?.games || []} visibility={duke} /></div>
     <div className="guide-feed"><span aria-hidden="true" className={`feed-dot ${stale || !online ? "feed-warning" : !data ? "feed-loading" : ""}`} /><span role="status" className="sr-only">{feedState}</span><span>{!online ? "Offline" : data ? `${stale ? "Last update" : "Updated"} ${ageLabel}` : dailyError ? "Schedule unavailable" : "Connecting to ESPN…"}</span><span>All times Eastern</span></div>

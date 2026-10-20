@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bundle } from "./helpers.mjs";
-const { parseGameRoute, parseTeamRoute, gameUrl, gameHref, teamUrl, teamHref, sectionUrl, boardUrl, readEntry, withEntry, ownedTraversal, createRouteHistory, EARLY_POPSTATE_SCRIPT } = await bundle("lib/game-route.ts");
+const { parseGameRoute, parseTeamRoute, gameUrl, gameHref, teamUrl, teamHref, sectionUrl, boardUrl, weekUrl, periodUrl, readEntry, withEntry, ownedTraversal, createRouteHistory, EARLY_POPSTATE_SCRIPT } = await bundle("lib/game-route.ts");
 const { initialView } = await bundle("lib/app-update.ts");
 
 const view = (changes = {}) => ({ date: "2026-09-05", followToday: false, selection: ["acc", "upset"], period: "day", ...changes });
@@ -228,6 +228,65 @@ test("team and schedule-game history records validate strictly", () => {
   for (const bad of [{ ...team, team: "abc" }, { ...team, team: 150 }, { ...team, from: "yes" }, { ...team, origin: "<x>" }, { ...team, key: "NOT valid" }, { ...game, team: "x" }, { ...game, team: "" }]) assert.equal(readEntry({ ss: bad }), null, JSON.stringify(bad));
   assert.equal(ownedTraversal("/", game, team), true);
   assert.equal(ownedTraversal("/", team, { v: 1, kind: "board", key: "b" }), true);
+});
+
+test("issue 172: game, team and board destinations carry the chosen week canonically; null removes it, unset keeps only a valid one", () => {
+  const chosen = view({ period: "week", weekDate: "2026-09-12" });
+  const game = new URL(gameUrl("https://example.test/?keep=yes", { id: "g1", section: "team" }, chosen));
+  assert.equal(game.searchParams.get("weekDate"), "2026-09-10", "any day names its Thursday");
+  assert.equal(game.searchParams.get("period"), "week"); assert.equal(game.searchParams.get("keep"), "yes");
+  assert.equal(gameHref({ id: "g1", section: "team" }, view({ followToday: true, selection: [], period: "week", weekDate: "2026-09-10" })), "/?event=g1&period=week&weekDate=2026-09-10");
+  const team = new URL(teamUrl(game.href, "150", chosen));
+  assert.equal(team.searchParams.get("weekDate"), "2026-09-10");
+  const board = new URL(boardUrl(team.href, chosen));
+  assert.equal(board.searchParams.get("weekDate"), "2026-09-10"); assert.equal(board.searchParams.has("team"), false);
+  // The current week (null) is never written, and replaces an earlier choice.
+  assert.equal(new URL(boardUrl(board.href, view({ period: "week", weekDate: null }))).searchParams.has("weekDate"), false);
+  // Callers without a week keep a valid one canonically and drop an invalid or repeated one.
+  assert.equal(new URL(gameUrl("https://example.test/?weekDate=2026-09-16", { id: "g1", section: "team" }, view())).searchParams.get("weekDate"), "2026-09-17");
+  for (const bad of ["?weekDate=2026-13-01", "?weekDate=next", "?weekDate=2026-09-10&weekDate=2026-09-17"])
+    assert.equal(new URL(boardUrl(`https://example.test/${bad}`, view())).searchParams.has("weekDate"), false, bad);
+  // The Day date is unaffected.
+  assert.equal(game.searchParams.get("date"), "2026-09-05");
+});
+
+test("issue 172: a Week choice's URL keeps Week and other data, drops transient keys, and removes the week for This week", () => {
+  const chosen = new URL(weekUrl("https://example.test/?date=2026-09-01&cats=acc&keep=1&_ss_update=x&_ss_open=0#top", "2026-09-15"));
+  assert.equal(chosen.searchParams.get("period"), "week"); assert.equal(chosen.searchParams.get("weekDate"), "2026-09-17");
+  assert.equal(chosen.searchParams.get("date"), "2026-09-01", "Day's date is left as it was");
+  assert.equal(chosen.searchParams.get("cats"), "acc"); assert.equal(chosen.searchParams.get("keep"), "1"); assert.equal(chosen.hash, "#top");
+  for (const key of ["_ss_update", "_ss_open"]) assert.equal(chosen.searchParams.has(key), false, key);
+  assert.deepEqual(initialView(chosen.search), { selection: ["acc"], period: "week" });
+  const current = new URL(weekUrl(chosen.href, null));
+  assert.equal(current.searchParams.has("weekDate"), false); assert.equal(current.searchParams.get("period"), "week");
+  // A later Day choice changes only the period; the remembered week and Day's date stay.
+  const day = new URL(periodUrl(`${chosen.href.replace("#top", "")}&_ss_focus=g#top`, "day"));
+  assert.equal(day.searchParams.has("period"), false); assert.equal(day.searchParams.get("weekDate"), "2026-09-17");
+  assert.equal(day.searchParams.get("date"), "2026-09-01"); assert.equal(day.searchParams.has("_ss_focus"), false); assert.equal(day.hash, "#top");
+  assert.deepEqual(initialView(day.search), { selection: ["acc"], period: "day" });
+  assert.equal(new URL(periodUrl(day.href, "week")).searchParams.get("period"), "week");
+});
+
+test("issue 172: board snapshots accept an absent or null week, canonicalize a valid one and reject an invalid one", () => {
+  const board = week => ({ v: 1, kind: "board", key: "w1", snapshot: snapshot(week === undefined ? {} : { weekDate: week }) });
+  assert.deepEqual(readEntry({ ss: board() }).snapshot, snapshot(), "pre-1.19 records stay valid");
+  assert.deepEqual(readEntry({ ss: board(null) }).snapshot, snapshot());
+  assert.deepEqual(readEntry({ ss: board("2026-09-10") }).snapshot, snapshot({ weekDate: "2026-09-10" }));
+  assert.deepEqual(readEntry({ ss: board("2026-09-13") }).snapshot, snapshot({ weekDate: "2026-09-10" }));
+  for (const bad of ["2026-02-30", "", "soon", 20260910, true, {}]) assert.equal(readEntry({ ss: board(bad) }), null, JSON.stringify(bad));
+});
+
+test("issue 172: replacing the scoreboard entry for a Week choice keeps framework state and adds no history", () => {
+  const { win, calls } = fakeWindow();
+  const routes = createRouteHistory(win, () => {});
+  routes.install();
+  win.history.state = { __vinext_previousNextUrl: "/x", __vinext_scrollY: 40 };
+  const entry = { v: 1, kind: "board", key: "b1", snapshot: snapshot({ weekDate: "2026-09-10" }) };
+  routes.replace(entry, weekUrl(win.location.href, "2026-09-10"));
+  assert.deepEqual(calls, [["replace", "https://example.test/?period=week&weekDate=2026-09-10"]]);
+  assert.deepEqual(win.history.state, { __vinext_previousNextUrl: "/x", __vinext_scrollY: 40, ss: entry });
+  assert.deepEqual(readEntry(win.history.state), entry);
+  routes.dispose();
 });
 
 test("board → game → team → schedule game: each Back and Forward is an owned traversal between genuine entries", () => {

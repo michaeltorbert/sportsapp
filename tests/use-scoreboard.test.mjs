@@ -584,6 +584,122 @@ test("real client: a retained-line halftime game still refreshes timing under it
   });
 });
 
+// Issue 172: Week has its own nullable chosen week, independent of the Day selection.
+const weekOf = board => board && [board.date, board.endDate];
+test("issue 172: ±7 stepping keeps canonical Thursday–Monday weeks across month, year and leap-day boundaries", () => {
+  for (const [start, next] of [["2026-08-27", "2026-09-03"], ["2026-09-24", "2026-10-01"], ["2026-12-24", "2026-12-31"], ["2026-12-31", "2027-01-07"], ["2028-02-24", "2028-03-02"]]) {
+    assert.equal(accWeek(start).start, start);
+    assert.equal(shiftDate(start, 7), next); assert.equal(accWeek(next).start, next); assert.equal(shiftDate(next, -7), start);
+  }
+  assert.deepEqual(accWeek("2026-12-31"), { start: "2026-12-31", end: "2027-01-04" });
+  assert.deepEqual(accWeek("2028-02-24"), { start: "2028-02-24", end: "2028-02-28" });
+  // Tuesday and Wednesday already belong to the coming week.
+  assert.equal(accWeek("2026-09-08").start, "2026-09-10"); assert.equal(accWeek("2026-09-09").start, "2026-09-10");
+});
+
+test("issue 172: a chosen week loads its own range while Day keeps its own date, and This week returns to the current one", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: saturday });
+  const requests = [];
+  const h = harness(t, async (date, signal, fetcher, end = date) => {
+    requests.push(`${date}:${end}`);
+    return scoreboard(date === "2026-09-04" && end === date ? [] : date === "2027-01-07" ? [] : [game({ id: `${date}:${end}` })], date, { endDate: end });
+  });
+  h.render(); const initial = await h.settle();
+  assert.deepEqual(initial.week, { start: "2026-09-03", end: "2026-09-07" });
+  assert.equal(initial.weekDate, null); assert.equal(initial.followWeek, true);
+  // Any day names its week; Saturday the 12th is the week starting Thursday the 10th.
+  initial.setWeek("2026-09-12"); h.render();
+  const chosen = await h.settle();
+  assert.equal(chosen.weekDate, "2026-09-10"); assert.equal(chosen.followWeek, false);
+  assert.deepEqual(chosen.week, { start: "2026-09-10", end: "2026-09-14" });
+  assert.deepEqual(weekOf(h.switchTo("week").data), ["2026-09-10", "2026-09-14"]);
+  assert.equal(h.switchTo("week").data.games[0].id, "2026-09-10:2026-09-14", "the games are the chosen range's own");
+  assert.equal(h.switchTo("daily").date, "2026-09-05", "Day keeps following Today");
+  assert.ok(requests.includes("2026-09-10:2026-09-14"));
+  // Changing Day never moves the chosen week, and the reverse.
+  chosen.setDate("2026-09-01"); h.render(); const day = await h.settle();
+  assert.equal(day.date, "2026-09-01"); assert.equal(day.weekDate, "2026-09-10");
+  assert.deepEqual(weekOf(h.switchTo("week").data), ["2026-09-10", "2026-09-14"]);
+  // Across the year boundary, including an empty week, which stays a real loaded result.
+  day.setWeek("2026-12-31"); h.render(); await h.settle();
+  assert.deepEqual(weekOf(h.switchTo("week").data), ["2026-12-31", "2027-01-04"]);
+  h.switchTo("week").setWeek(shiftDate("2026-12-31", 7)); h.render(); const empty = await h.settle();
+  assert.deepEqual(weekOf(h.switchTo("week").data), ["2027-01-07", "2027-01-11"]);
+  assert.deepEqual(h.switchTo("week").data.games, []); assert.equal(h.switchTo("week").error, "");
+  assert.equal(h.switchTo("daily").date, "2026-09-01");
+  empty.setWeek(null); h.render(); const current = await h.settle();
+  assert.equal(current.weekDate, null); assert.equal(current.followWeek, true);
+  assert.deepEqual(weekOf(h.switchTo("week").data), ["2026-09-03", "2026-09-07"]);
+  assert.equal(h.switchTo("daily").date, "2026-09-01", "This week leaves Day alone");
+});
+
+test("issue 172: a real Day or Week change supersedes the running refresh at once; late errors never land on the new range", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: saturday });
+  const held = new Map(), signals = new Map();
+  const h = harness(t, async (date, signal, fetcher, end = date) => {
+    signals.set(`${date}:${end}`, signal);
+    const gate = held.get(`${date}:${end}`);
+    if (gate) await new Promise((resolve, reject) => { gate.resolve = resolve; gate.reject = reject; });
+    return scoreboard([game({ id: `${date}:${end}` })], date, { endDate: end });
+  });
+  held.set("2026-09-03:2026-09-07", {});
+  h.render(); const loading = await h.until(() => held.get("2026-09-03:2026-09-07").reject);
+  const current = signals.get("2026-09-03:2026-09-07");
+  // The same selections keep polling: nothing is canceled or restarted.
+  loading.setWeek(null); loading.setDate(null);
+  assert.equal(current.aborted, false); assert.equal(loading.refreshing, true);
+  loading.setWeek("2026-09-17");
+  assert.equal(current.aborted, true, "canceled synchronously, before any render or effect cleanup");
+  h.render();
+  // The old week's request now fails late, after supersession.
+  held.get("2026-09-03:2026-09-07").reject(new Error("late failure"));
+  const next = await h.until(v => v.boards.week && !v.refreshing);
+  const week = h.switchTo("week");
+  assert.deepEqual(weekOf(week.data), ["2026-09-17", "2026-09-21"]);
+  assert.equal(week.error, ""); assert.equal(week.scopeError, "");
+  assert.equal(h.storage["ss:board:week:2026-09-03:2026-09-07"], undefined, "the superseded week saved nothing");
+  // A Day change does the same for its own range.
+  held.set("2026-09-06:2026-09-06", {});
+  h.switchTo("daily"); next.setDate("2026-09-06"); h.render();
+  await h.until(() => held.get("2026-09-06:2026-09-06").reject);
+  const day = signals.get("2026-09-06:2026-09-06");
+  h.switchTo("daily").setDate("2026-09-07");
+  assert.equal(day.aborted, true);
+  h.render(); held.get("2026-09-06:2026-09-06").reject(new Error("late failure"));
+  const moved = await h.until(v => v.boards.daily?.date === "2026-09-07" && !v.refreshing);
+  assert.equal(moved.error, ""); assert.equal(moved.dailyError, "");
+  assert.deepEqual(weekOf(h.switchTo("week").data), ["2026-09-17", "2026-09-21"], "Day changes keep the chosen week");
+});
+
+test("issue 172: a validated weekDate link sets the chosen week; invalid or repeated values and the Guide ignore it", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: saturday });
+  // An empty Friday keeps Today on Saturday.
+  const load = requests => async (date, signal, fetcher, end = date) => { requests.push(`${date}:${end}`); return scoreboard(date === "2026-09-04" ? [] : [game()], date, { endDate: end }); };
+  await t.test("a Wednesday names the coming Thursday's week", async sub => {
+    const requests = [], h = harness(sub, load(requests));
+    globalThis.location.search = "?weekDate=2026-09-16";
+    h.render(); const v = await h.settle();
+    assert.equal(v.weekDate, "2026-09-17"); assert.equal(v.followWeek, false);
+    assert.deepEqual(v.week, { start: "2026-09-17", end: "2026-09-21" });
+    assert.ok(requests.includes("2026-09-17:2026-09-21")); assert.equal(v.date, "2026-09-05");
+  });
+  for (const search of ["?weekDate=2026-02-30", "?weekDate=soon", "?weekDate=2026-09-17&weekDate=2026-09-24", "?weekDate="]) {
+    await t.test(`ignored: ${search}`, async sub => {
+      const requests = [], h = harness(sub, load(requests));
+      globalThis.location.search = search;
+      h.render(); const v = await h.settle();
+      assert.equal(v.weekDate, null); assert.deepEqual(v.week, { start: "2026-09-03", end: "2026-09-07" });
+    });
+  }
+  await t.test("the Guide's daily board never reads or requests it", async sub => {
+    const requests = [], h = harness(sub, load(requests), {}, { dailyOnly: true, controlledDate: "2026-09-12" });
+    globalThis.location.search = "?date=2026-09-12&weekDate=2026-09-17";
+    h.render(); const v = await h.settle();
+    assert.equal(v.weekDate, null); assert.equal(v.date, "2026-09-12");
+    assert.ok(requests.every(request => { const [start, end] = request.split(":"); return start === end; }), "no weekly request");
+  });
+});
+
 // Browser CDN fallback: the primary scoreboard is refused, so every scope reads ESPN's backup CDN.
 // ESPN weeks run Tuesday 07:00Z to the next Tuesday 06:59Z; the default document is the selected week.
 const cdnCalendar = [

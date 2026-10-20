@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bundle } from "./helpers.mjs";
-const { validCommit, metadata, observe, refreshUrl, updateRestoration, initialView } = await bundle("lib/app-update.ts");
+const { validCommit, metadata, observe, refreshUrl, updateRestoration, initialView, weekParam, readWeek } = await bundle("lib/app-update.ts");
 const A = "a".repeat(40), B = "b".repeat(40), C = "c".repeat(40);
 test("only full commits with descriptive versions are deployment metadata", () => {
   for (const commit of [null, "", "development", "abc1234", "g".repeat(40), 123]) assert.equal(metadata({ commit, version: "1" }), null);
@@ -65,6 +65,35 @@ test("ORD-011 view restoration round-trips every period and selection, including
       assert.equal(url.searchParams.has("date"), !followToday);
     }
   }
+});
+test("issue 172: weekDate names a valid date's Thursday–Monday week; anything else, or a repeat, names nothing", () => {
+  for (const [value, week] of [["2026-09-10", "2026-09-10"], ["2026-09-14", "2026-09-10"], ["2026-09-15", "2026-09-17"], ["2027-01-03", "2026-12-31"], ["2028-02-28", "2028-02-24"], ["2028-02-29", "2028-03-02"]]) assert.equal(weekParam(value), week, value);
+  for (const bad of [null, undefined, "", "2026-9-10", "2026-02-30", "2026-09-10T00:00", 20260910]) assert.equal(weekParam(bad), null, String(bad));
+  assert.equal(readWeek(new URLSearchParams("weekDate=2026-09-12")), "2026-09-10");
+  assert.equal(readWeek(new URLSearchParams("weekDate=2026-09-12&weekDate=2026-09-12")), null);
+  assert.equal(readWeek(new URLSearchParams("date=2026-09-12")), null);
+});
+test("issue 172: an app update keeps the chosen week with Week, removes it for the current week, and keeps a valid one when unset", () => {
+  const base = { date: "2026-09-05", followToday: true, selection: ["acc"], period: "week", hideFinals: false, focusedGame: "" };
+  const chosen = new URL(refreshUrl("https://example.test/?period=week", B, { ...base, weekDate: "2026-09-12" }));
+  assert.equal(chosen.searchParams.get("weekDate"), "2026-09-10");
+  assert.deepEqual(initialView(chosen.search), { selection: ["acc"], period: "week" });
+  assert.deepEqual(updateRestoration(chosen.search), { hideFinals: false, focusedGame: "", openGame: "" });
+  assert.equal(new URL(refreshUrl(chosen.href, B, { ...base, weekDate: null })).searchParams.has("weekDate"), false);
+  assert.equal(new URL(refreshUrl("https://example.test/?weekDate=2026-09-16", B, base)).searchParams.get("weekDate"), "2026-09-17");
+  assert.equal(new URL(refreshUrl("https://example.test/?weekDate=bad", B, base)).searchParams.has("weekDate"), false);
+  // Day keeps its own date beside a remembered week.
+  const day = new URL(refreshUrl("https://example.test/", B, { ...base, period: "day", followToday: false, weekDate: "2026-09-10" }));
+  assert.equal(day.searchParams.get("date"), "2026-09-05"); assert.equal(day.searchParams.get("weekDate"), "2026-09-10"); assert.equal(day.searchParams.has("period"), false);
+});
+test("issue 172: the Guide's update carries the chosen week unread, while Scores categories and period stay stripped", () => {
+  const guide = { page: "guide", date: "2026-09-12", followToday: false, view: "all" };
+  const kept = new URL(refreshUrl("https://example.test/guide?weekDate=2026-09-13&cats=acc&period=week", B, guide));
+  assert.equal(kept.searchParams.get("weekDate"), "2026-09-10");
+  assert.equal(kept.searchParams.has("cats"), false); assert.equal(kept.searchParams.has("period"), false);
+  assert.equal(new URL(refreshUrl("https://example.test/guide", B, { ...guide, weekDate: "2026-09-17" })).searchParams.get("weekDate"), "2026-09-17");
+  assert.equal(new URL(refreshUrl("https://example.test/guide?weekDate=2026-09-17", B, { ...guide, weekDate: null })).searchParams.has("weekDate"), false);
+  assert.equal(new URL(refreshUrl("https://example.test/guide?weekDate=nope", B, guide)).searchParams.has("weekDate"), false);
 });
 test("legacy tab links keep their daily or weekly meaning and invalid values fall back to All on Day", () => {
   assert.deepEqual(initialView("?tab=acc"), { selection: ["acc"], period: "week" });

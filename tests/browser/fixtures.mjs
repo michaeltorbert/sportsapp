@@ -136,7 +136,9 @@ export const test = base.extend({
           state.scoreRequestCount++;
           if (state.holdAfterInitialProbe && state.scoreRequestCount > 1) await new Promise(resolve => state.heldScoreReleases.push(resolve));
           state.scoreRequests.push(url.search);
-          const events = url.searchParams.get("groups") === "1" ? state.events.filter(e => e.competitions[0].competitors.some(c => c.team.conferenceId === "1")) : state.events;
+          // Opt-in: `state.events` may be a (possibly async) function of the request URL, e.g. to hold one range.
+          const all = typeof state.events === "function" ? await state.events(url) : state.events;
+          const events = url.searchParams.get("groups") === "1" ? all.filter(e => e.competitions[0].competitors.some(c => c.team.conferenceId === "1")) : all;
           return json({ events }, state.failScores || (state.failAfterInitialProbe && state.scoreRequestCount > 1) ? 503 : 200);
         }
       }

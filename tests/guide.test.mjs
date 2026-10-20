@@ -111,6 +111,18 @@ test("Guide URL and update restoration keep explicit date/view and remove inheri
   assert.equal(today.searchParams.has("date"), false); assert.equal(today.searchParams.has("view"), false);
 });
 
+test("issue 172: the Guide carries Scores' chosen week along unread, drops an invalid one, and never adds it to its own selection", () => {
+  assert.deepEqual(parseGuide("?date=2026-09-12&weekDate=2026-09-13"), { date: "2026-09-12", view: "all", weekDate: "2026-09-10" });
+  for (const bad of ["?weekDate=bad", "?weekDate=2026-09-10&weekDate=2026-09-17", "?weekDate="]) assert.deepEqual(parseGuide(bad), { date: null, view: "all" }, bad);
+  // Guide date and view choices (no weekDate) keep a valid week from the URL, canonically.
+  assert.equal(guideUrl("https://test/guide?weekDate=2026-09-16&cats=acc&period=week", { date: "2026-09-13", view: "watch" }), "/guide?weekDate=2026-09-17&date=2026-09-13&view=watch");
+  assert.equal(guideUrl("https://test/guide?weekDate=2026-02-30&date=2026-09-12", { date: null, view: "all" }), "/guide");
+  assert.equal(guideUrl("https://test/guide?weekDate=2026-09-10", { date: null, view: "all", weekDate: null }), "/guide");
+  assert.equal(guideUrl("https://test/guide", { date: null, view: "all", weekDate: "2026-09-12" }), "/guide?weekDate=2026-09-10");
+  // The initial URL normalization keeps it: parse, then serialize, is stable.
+  assert.equal(guideUrl("https://test/guide?date=2026-09-12&weekDate=2026-09-10", parseGuide("?date=2026-09-12&weekDate=2026-09-10")), "/guide?date=2026-09-12&weekDate=2026-09-10");
+});
+
 test("fixed palette has at least eight swatches, white-text contrast, and stable game identity", () => {
   assert.ok(new Set(g.PALETTE).size >= 8);
   for (const color of g.PALETTE) {

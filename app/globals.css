@@ -293,6 +293,11 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .compact-scoreboard .period-modes button { min-height: 40px; min-width: 44px; padding: 0 9px; font-size: .75rem; }
 .compact-scoreboard .week-label { font-size: .875rem; }
 .compact-scoreboard .week-note { font-size: .625rem; }
+.compact-scoreboard .week-navigation .week-label { min-width: 0; justify-content: center; }
+/* #172: the results take horizontal touch swipes while the browser keeps vertical scrolling and pinch
+   zoom. Zoomed in, the region returns to default panning and swipes are off (lib/swipe-navigation.ts). */
+.compact-scoreboard .score-content { touch-action: pan-y pinch-zoom; }
+.compact-scoreboard .score-content[data-zoomed] { touch-action: auto; }
 .compact-scoreboard .timezone-cue { color: #98a9c0; font-size: .6875rem; margin: 0 0 8px; overflow-wrap: anywhere; }
 /* All five categories share one row: each label and its count pair stay on one line. Whole buttons
    wrap only when enlarged text or zoom makes their content wider than the row, never past the page. */

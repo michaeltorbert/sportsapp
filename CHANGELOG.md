@@ -1,5 +1,13 @@
 # Saturday Signal releases
 
+## 1.19.0 · 2026-10-19
+
+- Preview only, not released: this gesture is not yet verified on a physical iPhone in Safari or the Home Screen app, and it must not be released to production until it is (#172).
+- On Scores, a deliberate horizontal touch swipe on the games, or on the empty, loading or unavailable message, moves once: left goes to the next day in Day or the next Thursday–Monday football week in Week, and right goes back. Vertical scrolling, pinch zoom, taps on games, controls, open panels, multi-finger touches and swipes starting within 32 points of a screen edge do not change the date. While the page is zoomed in, swiping is off so you can pan freely (#172).
+- Week now has Previous week and Next week buttons and a This week button, as accessible alternatives to swiping. A chosen week is kept in the address (`weekDate`) without adding history entries; once it is, the address also follows later Day and Week choices, so reloads, app updates, game and team screens and Back keep it. The Guide passes it along unchanged and still shows one day; returning to Scores opens Day as before, and choosing Week shows the remembered week (#172).
+- Day and Week keep separate selections: the Day arrows, picker and Today never change the chosen week, and the week controls never change the chosen day. Categories, Hide finals and Duke settings are kept. A deliberate move to an empty day or week stays in the chosen view, and a link carrying `weekDate` never switches to Week automatically (#171, #172).
+- Day dates are still not written to the address when changed, as before. Ordering, filters, alerts and the score feed are unchanged.
+
 ## 1.18.0 · 2026-10-19
 
 - When Today’s successfully loaded schedule has no games, Scores opens the existing Thursday–Monday football week so you can see the rest of the week. Day remains available, and a scheduled game hidden by categories or Hide finals does not count as an empty schedule (#171).

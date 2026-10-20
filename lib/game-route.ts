@@ -1,4 +1,4 @@
-import { gameId, viewSearch } from "./app-update";
+import { gameId, viewSearch, weekParam, weekSearch } from "./app-update";
 import { validDate } from "./football";
 import { normalizeSelection, type Period, type Selection } from "./scoreboard-views";
 
@@ -14,7 +14,8 @@ export function isSection(value: unknown): value is Section { return typeof valu
 export type GameRoute = { id: string; section: Section; team?: string };
 export type TeamRoute = { team: string };
 export function teamParam(value: unknown): string { return typeof value === "string" && /^\d{1,6}$/.test(value) ? value : ""; }
-export type BoardView = { date: string | null; selection: Selection; period: Period; hideFinals: boolean };
+// `weekDate` is the chosen Week (#172); absent or null is the current week, as in pre-1.19 records.
+export type BoardView = { date: string | null; selection: Selection; period: Period; hideFinals: boolean; weekDate?: string | null };
 export type BoardSnapshot = BoardView & { scrollY: number; origin: string };
 export type BoardEntry = { v: 1; kind: "board"; key: string; snapshot?: BoardSnapshot; consumed?: string };
 // `from`: an entry of ours (the scoreboard, or the team page for a game with `team`) sits directly behind this one.
@@ -22,7 +23,7 @@ export type GameEntry = { v: 1; kind: "game"; key: string; id: string; section: 
 // `from`: the game screen `origin` sits directly behind this team page.
 export type TeamEntry = { v: 1; kind: "team"; key: string; team: string; from: boolean; origin?: string };
 export type RouteEntry = BoardEntry | GameEntry | TeamEntry;
-export type UrlView = { date: string; followToday: boolean; selection: Selection; period: Period };
+export type UrlView = { date: string; followToday: boolean; selection: Selection; period: Period; weekDate?: string | null };
 
 const TRANSIENT = ["_ss_update", "_ss_hide_finals", "_ss_focus", "_ss_open"];
 const MAX_SCROLL = 10_000_000;
@@ -45,6 +46,7 @@ function applyView(url: URL, view: UrlView) {
   if (view.followToday) url.searchParams.delete("date");
   else if (validDate(view.date)) url.searchParams.set("date", view.date);
   viewSearch(url, view);
+  weekSearch(url, view.weekDate);
 }
 /** The game destination. Unrelated parameters survive; a legacy `#game-` hash and update keys do not. */
 export function gameUrl(href: string, route: GameRoute, view: UrlView): string {
@@ -89,6 +91,22 @@ export function boardUrl(href: string, view: UrlView): string {
   applyView(url, view);
   return url.href;
 }
+/**
+ * The scoreboard entry after a Week choice (#172): Week with its chosen week, or none for the current
+ * week, so a reload or update shows the same range. Day's date, categories and other data are untouched.
+ */
+export function weekUrl(href: string, weekDate: string | null): string {
+  const url = new URL(periodUrl(href, "week"));
+  weekSearch(url, weekDate);
+  return url.href;
+}
+/** The scoreboard entry after a period choice once it owns Week context: only `period` changes. */
+export function periodUrl(href: string, period: Period): string {
+  const url = new URL(href);
+  for (const key of TRANSIENT) url.searchParams.delete(key);
+  if (period === "week") url.searchParams.set("period", "week"); else url.searchParams.delete("period");
+  return url.href;
+}
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -101,7 +119,9 @@ function readSnapshot(value: unknown): BoardSnapshot | null {
   if (selection.length !== s.selection.length || (s.period !== "day" && s.period !== "week") || typeof s.hideFinals !== "boolean") return null;
   if (typeof s.scrollY !== "number" || !Number.isFinite(s.scrollY) || s.scrollY < 0 || s.scrollY > MAX_SCROLL) return null;
   if (typeof s.origin !== "string" || (s.origin !== "" && !gameId(s.origin))) return null;
-  return { date: s.date as string | null, selection, period: s.period, hideFinals: s.hideFinals, scrollY: s.scrollY, origin: s.origin };
+  const weekDate = s.weekDate === undefined || s.weekDate === null ? null : weekParam(s.weekDate);
+  if (weekDate === null && s.weekDate !== undefined && s.weekDate !== null) return null;
+  return { date: s.date as string | null, selection, period: s.period, hideFinals: s.hideFinals, scrollY: s.scrollY, origin: s.origin, ...(weekDate ? { weekDate } : {}) };
 }
 /** Validates the app-owned record in a history state. Anything else is not ours. */
 export function readEntry(state: unknown): RouteEntry | null {

@@ -11,11 +11,12 @@ import { upsetWatch } from "@/lib/upset";
 import { VERSION, releases } from "@/lib/releases";
 import { HalftimeStatus } from "@/components/halftime-status";
 import { Alerts } from "@/components/alerts";
-import { accWeek, classify, easternDate, shiftDate, validDate, type Game, type Scoreboard, type Team } from "@/lib/football";
+import { classify, easternDate, shiftDate, validDate, type Game, type Scoreboard, type Team } from "@/lib/football";
 import { categories, categoryCounts, scoreboardScope, toggleCategory, upsetCounts, viewGames, type Category, type CategoryCounts, type Period, type Selection } from "@/lib/scoreboard-views";
 
-import { initialView, updateRestoration, gameId } from "@/lib/app-update";
-import { boardUrl, createRouteHistory, gameHref, gameUrl, newKey, parseGameRoute, parseTeamRoute, readEntry, sectionUrl, teamHref, teamParam, teamUrl, type BoardSnapshot, type BoardView, type GameRoute, type RouteHistory, type Section, type Traversal } from "@/lib/game-route";
+import { initialView, updateRestoration, gameId, weekParam } from "@/lib/app-update";
+import { boardUrl, createRouteHistory, gameHref, gameUrl, newKey, parseGameRoute, parseTeamRoute, readEntry, sectionUrl, teamHref, teamParam, teamUrl, periodUrl, weekUrl, type BoardEntry, type BoardSnapshot, type BoardView, type GameRoute, type RouteHistory, type Section, type Traversal } from "@/lib/game-route";
+import { useSwipeNavigation } from "@/lib/swipe-navigation";
 import { useInitialSearch } from "@/lib/browser-state";
 import { useAppUpdate, LOADED_COMMIT, type AppUpdate } from "@/lib/use-app-update";
 import { DukeSettings, DukeGameControls } from "@/components/duke-settings";
@@ -33,16 +34,18 @@ const labels: Record<Category, string> = { acc: "ACC", top25: "Top 25", close: "
 const names: Record<Category, string> = { acc: "ACC", top25: "Top 25", close: "One-score", upset: "Upset watch" };
 function listNames(selection: Selection) { const n = selection.map(c => names[c]); return n.length > 2 ? `${n.slice(0, -1).join(", ")}, and ${n.at(-1)}` : n.join(" and "); }
 // Headings and empty states describe the selected categories and the displayed period together.
-function heading(selection: Selection, period: Period) { return `${selection.length ? listNames(selection) : "Your watchlist"}${period === "week" ? " this week" : ""}.`; }
-function emptyTitle(selection: Selection, period: Period) {
-  const when = period === "week" ? " this week" : "";
+// `week` names a chosen week other than the current one (#172), such as "Sep 10 – Sep 14".
+const weekWhen = (week?: string) => week ? ` in the week of ${week}` : " this week";
+function heading(selection: Selection, period: Period, week?: string) { return `${selection.length ? listNames(selection) : "Your watchlist"}${period === "week" ? weekWhen(week) : ""}.`; }
+function emptyTitle(selection: Selection, period: Period, week?: string) {
+  const when = period === "week" ? weekWhen(week) : "";
   if (selection.length > 1) return `Nothing matches these categories${when}.`;
   switch (selection[0]) {
     case "upset": return `No upsets brewing${when}.`;
-    case "close": return period === "week" ? "No one-score games this week." : "No one-score games right now.";
-    case "acc": return period === "week" ? "No ACC games this week." : "No ACC games on this day.";
-    case "top25": return period === "week" ? "No Top 25 games this week." : "No Top 25 games on this day.";
-    default: return period === "week" ? "A quiet football week." : "A quiet scoreboard.";
+    case "close": return period === "week" ? `No one-score games${when}.` : "No one-score games right now.";
+    case "acc": return period === "week" ? `No ACC games${when}.` : "No ACC games on this day.";
+    case "top25": return period === "week" ? `No Top 25 games${when}.` : "No Top 25 games on this day.";
+    default: return period === "week" ? week ? `A quiet football week, ${week}.` : "A quiet football week." : "A quiet scoreboard.";
   }
 }
 // Games in progress, then the parenthesized total; dashes while counts are unknown.
@@ -109,7 +112,7 @@ function GameCard({ game, board, scopeError, showDate = false, href, onOpen }: {
   </article>;
 }
 function LoadingCards() { return <div className="game-grid" role="status" aria-label="Loading scores">{[0, 1, 2].map(i => <div className="loading-card" key={i}><Skeleton className="h-6 w-full mb-2" /><Skeleton className="h-6 w-2/3" /></div>)}</div>; }
-function Help({ update }: { update: AppUpdate }) { return <Sheet><SheetTrigger asChild><button className="icon-button" aria-label="How this scoreboard works"><CircleHelp size={21} /></button></SheetTrigger><AppPanelContent className="help-sheet" bodyClassName="help-body" title="How your watchlist works" description="The right games, automatically." bodyLabel="How it works"><dl><div><dt>ACC</dt><dd>Either team belongs to the ACC.</dd></div><div><dt>Top 25</dt><dd>Either team has an ESPN curated ranking from 1 through 25.</dd></div><div><dt>Day and Week</dt><dd>Day shows the selected Eastern date. Week shows the current football week, Thursday through Monday, for every selected category.</dd></div><div><dt>Halftime countdown</dt><dd>The countdown estimates a 20-minute break from ESPN’s recorded end of the second quarter. Seconds are approximate, and games can remain at halftime after it reaches zero. “Awaiting 3rd quarter” means ESPN still reports halftime. Missing or stale timing, being offline, or returning to the app can temporarily leave just Halftime. Device clock accuracy affects the estimate.</dd></div><div><dt>One score</dt><dd>A live FBS game, in any quarter or at halftime, tied or within 8 points.</dd></div><div><dt>Upset watch</dt><dd>The first Upsets number is games brewing now; the number in parentheses adds completed games that finished as upsets for the selected Day or Week. Brewing includes live games and games delayed after kickoff. Finished games appear in Upsets only when the final score is an upset; earlier watches where the favorite recovered leave this category. Hide finals removes completed upsets from the total. Any trailing pregame favorite, including an unranked team outside ACC/SEC, or trailing known higher-ranked team qualifies, even when the line favors the leader or is pick’em. Without either, unranked ACC/SEC teams trailing American, C-USA, MAC, Mountain West, or Sun Belt opponents appear as a labeled conference watch. Conference membership does not prove who was favored. Games paused after kickoff keep their upset watch in Delayed. Ties get close-game attention, not a trailing label. Unranked watches appear in the list. Phone alerts are separate from these display categories. Game alerts are off when ESPN confirms both teams are unranked and from Group-of-Six conferences. Unknown rankings or conferences do not count as confirmed. Selected categories do not filter notifications. Duke notifications are always off. Choose each type in Alerts; upset watch uses a selective late-game rule, and its definition can differ from this list.</dd></div></dl><p>All combines the four categories without repeating games. Each count shows that category’s games in progress, live or delayed after kickoff, then in parentheses every game it lists for the selected Day or Week, including upcoming, delayed and finished games. Choose any combination of ACC, Top 25, One score and Upsets to show games matching any of them; turning the last one off returns to All. Live games combine team relevance, live drama, and upset significance. ACC interest, bounded Power Four relevance, rankings and separate rank-disruption interest add together; close fourth quarters, the final five minutes, and overtime rise. Major upsets can outrank ACC blowouts. Top 10 close finishes outrank comparable unranked ACC games. Early ties get little urgency. Comfortable leads gradually lose priority, even in the first half, with a stronger reduction as time passes. Equal priorities use stable tiebreakers. Duke and Virginia Tech lead each state group when visible. Upcoming games remain chronological within those pin tiers. In Final, games between two known unranked Group-of-Six teams follow other finished games within a pin tier; other finals remain in kickoff order.</p><p>Finals keep their last observed One-score category and any category matching the final score for that game day. A past upset watch alone does not keep a recovered favorite in Upsets. A delay after kickoff preserves the last live One-score observation for the final, without labeling the delayed game One score. Resumed live play replaces that observation. Hide finals remembers your choice on this device.</p><p>Today stays on the previous Eastern day while its games are unfinished, including games continuing past midnight. It moves forward after the last game finishes. A date you pick manually stays selected.</p><p>Dates and football weeks use Eastern time. Kickoff times use your device’s timezone. One game can match several categories.</p><p>Scores refresh every 30 seconds while the app is open. ESPN clocks may lag the broadcast. When scores are stale, offline, or more than 90 seconds old, any previously loaded game cards remain visible with a warning, while category counts show dashes instead of fresh numbers. Counts return after a successful refresh.</p><p>Refresh scores checks the games. Refresh app loads a confirmed app update only when you choose it.</p><button className="text-link" onClick={update.check}>Check for app update</button><p role="status">{update.status}</p><div className="install-tip"><h3>Keep it on your iPhone</h3><p>In Safari, tap Share, then Add to Home Screen. Keep Open as Web App enabled if offered. Open that icon to set up alerts.</p></div><h3 className="history-heading">Version history</h3><ol className="release-history">{releases.map(r => <li key={r.version}><strong>v{r.version}</strong><span>{r.date}</span><p>{r.changes}</p></li>)}</ol><a href="https://www.espn.com/college-football/scoreboard" target="_blank" rel="noopener noreferrer" className="source-link">ESPN college football scoreboard <ArrowUpRight size={15} /></a></AppPanelContent></Sheet>; }
+function Help({ update }: { update: AppUpdate }) { return <Sheet><SheetTrigger asChild><button className="icon-button" aria-label="How this scoreboard works"><CircleHelp size={21} /></button></SheetTrigger><AppPanelContent className="help-sheet" bodyClassName="help-body" title="How your watchlist works" description="The right games, automatically." bodyLabel="How it works"><dl><div><dt>ACC</dt><dd>Either team belongs to the ACC.</dd></div><div><dt>Top 25</dt><dd>Either team has an ESPN curated ranking from 1 through 25.</dd></div><div><dt>Day and Week</dt><dd>Day shows the selected Eastern date. Week shows the current football week, Thursday through Monday, for every selected category, or the week you choose with its arrows; This week returns to the current one. Day and Week keep their own selections. On a touch screen, swipe left across the games for the next day or week, or right for the previous one. The arrows do the same.</dd></div><div><dt>Halftime countdown</dt><dd>The countdown estimates a 20-minute break from ESPN’s recorded end of the second quarter. Seconds are approximate, and games can remain at halftime after it reaches zero. “Awaiting 3rd quarter” means ESPN still reports halftime. Missing or stale timing, being offline, or returning to the app can temporarily leave just Halftime. Device clock accuracy affects the estimate.</dd></div><div><dt>One score</dt><dd>A live FBS game, in any quarter or at halftime, tied or within 8 points.</dd></div><div><dt>Upset watch</dt><dd>The first Upsets number is games brewing now; the number in parentheses adds completed games that finished as upsets for the selected Day or Week. Brewing includes live games and games delayed after kickoff. Finished games appear in Upsets only when the final score is an upset; earlier watches where the favorite recovered leave this category. Hide finals removes completed upsets from the total. Any trailing pregame favorite, including an unranked team outside ACC/SEC, or trailing known higher-ranked team qualifies, even when the line favors the leader or is pick’em. Without either, unranked ACC/SEC teams trailing American, C-USA, MAC, Mountain West, or Sun Belt opponents appear as a labeled conference watch. Conference membership does not prove who was favored. Games paused after kickoff keep their upset watch in Delayed. Ties get close-game attention, not a trailing label. Unranked watches appear in the list. Phone alerts are separate from these display categories. Game alerts are off when ESPN confirms both teams are unranked and from Group-of-Six conferences. Unknown rankings or conferences do not count as confirmed. Selected categories do not filter notifications. Duke notifications are always off. Choose each type in Alerts; upset watch uses a selective late-game rule, and its definition can differ from this list.</dd></div></dl><p>All combines the four categories without repeating games. Each count shows that category’s games in progress, live or delayed after kickoff, then in parentheses every game it lists for the selected Day or Week, including upcoming, delayed and finished games. Choose any combination of ACC, Top 25, One score and Upsets to show games matching any of them; turning the last one off returns to All. Live games combine team relevance, live drama, and upset significance. ACC interest, bounded Power Four relevance, rankings and separate rank-disruption interest add together; close fourth quarters, the final five minutes, and overtime rise. Major upsets can outrank ACC blowouts. Top 10 close finishes outrank comparable unranked ACC games. Early ties get little urgency. Comfortable leads gradually lose priority, even in the first half, with a stronger reduction as time passes. Equal priorities use stable tiebreakers. Duke and Virginia Tech lead each state group when visible. Upcoming games remain chronological within those pin tiers. In Final, games between two known unranked Group-of-Six teams follow other finished games within a pin tier; other finals remain in kickoff order.</p><p>Finals keep their last observed One-score category and any category matching the final score for that game day. A past upset watch alone does not keep a recovered favorite in Upsets. A delay after kickoff preserves the last live One-score observation for the final, without labeling the delayed game One score. Resumed live play replaces that observation. Hide finals remembers your choice on this device.</p><p>Today stays on the previous Eastern day while its games are unfinished, including games continuing past midnight. It moves forward after the last game finishes. A date you pick manually stays selected.</p><p>Dates and football weeks use Eastern time. Kickoff times use your device’s timezone. One game can match several categories.</p><p>Scores refresh every 30 seconds while the app is open. ESPN clocks may lag the broadcast. When scores are stale, offline, or more than 90 seconds old, any previously loaded game cards remain visible with a warning, while category counts show dashes instead of fresh numbers. Counts return after a successful refresh.</p><p>Refresh scores checks the games. Refresh app loads a confirmed app update only when you choose it.</p><button className="text-link" onClick={update.check}>Check for app update</button><p role="status">{update.status}</p><div className="install-tip"><h3>Keep it on your iPhone</h3><p>In Safari, tap Share, then Add to Home Screen. Keep Open as Web App enabled if offered. Open that icon to set up alerts.</p></div><h3 className="history-heading">Version history</h3><ol className="release-history">{releases.map(r => <li key={r.version}><strong>v{r.version}</strong><span>{r.date}</span><p>{r.changes}</p></li>)}</ol><a href="https://www.espn.com/college-football/scoreboard" target="_blank" rel="noopener noreferrer" className="source-link">ESPN college football scoreboard <ArrowUpRight size={15} /></a></AppPanelContent></Sheet>; }
 
 // Per-document memory of where each scoreboard entry was left and each game entry's scroll.
 // History entries carry the same scoreboard snapshot for cross-document returns.
@@ -141,7 +144,7 @@ export default function Home() {
   const initial = useMemo(() => initialView(search), [search]);
   const selection = selectedCategories ?? initial.selection, period = selectedPeriod ?? initial.period;
   const scope = scoreboardScope(period), weekly = period === "week";
-  const { date, today, data, boards, error, scopeError, dailyError, overnightError, refreshing, online, now, timezone, refresh, setDate, followToday } = useScoreboard(scope);
+  const { date, today, data, boards, error, scopeError, dailyError, overnightError, refreshing, online, now, timezone, refresh, setDate, followToday, week, weekDate, setWeek, followWeek } = useScoreboard(scope);
   const dukeGames = useMemo(() => Object.values(boards).flatMap(board => board?.games || []), [boards]);
   const duke = useDukeVisibility(dukeGames);
   const protectedBoards = useMemo(() => ({ daily: protectDukeBoard(boards.daily, duke.prefs), week: protectDukeBoard(boards.week, duke.prefs) }), [boards, duke.prefs]);
@@ -163,15 +166,14 @@ export default function Home() {
   const focusedOnce = useRef(false);
   const initialRestore = useRef<ReturnType<typeof updateRestoration> | undefined>(undefined);
   const cancelAutomaticWeek = () => { automaticWeekPending.current = false; };
-  const choosePeriod = (next: Period) => { cancelAutomaticWeek(); setPeriod(next); };
-  const chooseDate = (next: string | null) => { cancelAutomaticWeek(); setDate(next); };
+  const chooseDate =(next: string | null) => { cancelAutomaticWeek(); setDate(next); };
   useEffect(() => {
     if (search === null || automaticWeekPending.current !== null) return;
     const params = new URLSearchParams(search), tab = params.get("tab");
     const legacyTab = tab === "acc" || tab === "top25" || tab === "close" || tab === "upset";
     const entry = readEntry(history.state);
     automaticWeekPending.current = initial.period === "day"
-      && !params.has("date") && !params.has("period") && !legacyTab
+      && !params.has("date") && !params.has("period") && !params.has("weekDate") && !legacyTab
       && !parseGameRoute(search) && !parseTeamRoute(search)
       && !updateRestoration(search) && !/^#game-[A-Za-z0-9_-]+$/.test(location.hash)
       && !initialRestore.current && !(entry?.kind === "board" && (entry.snapshot || entry.consumed));
@@ -199,15 +201,15 @@ export default function Home() {
     if (route || teamPage) { focusedOnce.current = true; return; }
     const card = document.getElementById(`game-${focusedGame}`); if (card) { card.scrollIntoView({ block: "center" }); focusedOnce.current = true; }
   }, [data, focusedGame, route, teamPage]);
-  const urlView = { date, followToday, selection, period };
-  const update = useAppUpdate({ date, followToday, selection, period, hideFinals, focusedGame, openGame: openIntent });
+  const urlView = { date, followToday, selection, period, weekDate };
+  const update = useAppUpdate({ date, followToday, selection, period, hideFinals, focusedGame, openGame: openIntent, weekDate });
 
   // Navigation between the scoreboard and the game screen. The scoreboard stays mounted
   // (one poller, its state and DOM) and is only hidden while a game is open.
   const routeHistory = useRef<RouteHistory | null>(null);
   const restoreJob = useRef<Restore | null>(null);
   const traverse = useRef<(traversal: Traversal) => void>(() => {});
-  const snapshotNow = (origin: string): BoardSnapshot => ({ date: followToday ? null : validDate(date) ? date : null, selection: [...selection], period, hideFinals, scrollY: Math.round(window.scrollY), origin });
+  const snapshotNow = (origin: string): BoardSnapshot => ({ date: followToday ? null : validDate(date) ? date : null, selection: [...selection], period, hideFinals, scrollY: Math.round(window.scrollY), origin, ...(weekDate ? { weekDate } : {}) });
   // A restored snapshot owns the scoreboard view. Categories, period and a manual date may currently be
   // read from the URL being left (a reloaded game URL carries them); the scoreboard entry's URL may not,
   // so equal values are still pinned as explicit state rather than left to the URL.
@@ -221,7 +223,40 @@ export default function Home() {
     // Pinning the same manual date keeps the hook's selected value, so polling does not restart;
     // only a real change of day, or of Today versus a manual day, restarts it.
     if (view.date === null ? !followToday || urlDate !== null : followToday || view.date !== date || urlDate !== view.date) setDate(view.date);
+    // The chosen week is pinned too; only a real change restarts polling.
+    setWeek(view.weekDate ?? null);
   };
+  // Week choices (#172) replace the current scoreboard entry's URL and saved snapshot together, never
+  // adding history, so reload, update and Back all show the same view. Framework state is kept.
+  const replaceBoard = (url: string, change: (snapshot: BoardSnapshot) => BoardSnapshot) => {
+    const controller = routeHistory.current;
+    if (!controller || route || teamPage) return;
+    const entry = controller.current(), board: BoardEntry = entry?.kind === "board" ? entry : { v: 1, kind: "board", key: newKey() };
+    const remembered = boardSnapshots.get(board.key);
+    if (remembered) boardSnapshots.set(board.key, change(remembered));
+    controller.replace({ ...board, ...(board.snapshot ? { snapshot: change(board.snapshot) } : {}) }, url);
+  };
+  // Set once this entry's URL carries Week context of ours, so later period choices keep it current.
+  const weekContext = useRef(false);
+  const chooseWeek = (next: string | null) => {
+    cancelAutomaticWeek();
+    const chosen = weekParam(next);
+    setWeek(chosen);
+    if (chosen === weekDate) return;
+    weekContext.current = true;
+    replaceBoard(weekUrl(location.href, chosen), snapshot => { const next = { ...snapshot, period: "week" as const }; delete next.weekDate; return chosen ? { ...next, weekDate: chosen } : next; });
+  };
+  // Without Week context in the URL, a period choice leaves the URL alone, as before. With it, the
+  // entry's period follows the choice, so reload never reopens Week after Day was chosen.
+  const choosePeriod = (next: Period) => {
+    cancelAutomaticWeek(); setPeriod(next);
+    if (!weekContext.current && !new URLSearchParams(location.search).has("weekDate")) return;
+    replaceBoard(periodUrl(location.href, next), snapshot => ({ ...snapshot, period: next }));
+  };
+  const swipeRegion = useSwipeNavigation<HTMLElement>(!route && !teamPage, weekly ? `week:${week?.start ?? ""}` : `day:${date}`, step => {
+    if (weekly) { if (week) chooseWeek(shiftDate(week.start, 7 * step)); }
+    else if (date) chooseDate(shiftDate(date, step));
+  });
   const openGame = (id: string, consume = false) => {
     const controller = routeHistory.current;
     if (!controller) return;
@@ -416,7 +451,6 @@ export default function Home() {
   // Every count describes the displayed period; the All count is the deduplicated union.
   const board = protectedBoards[scope], loaded = !!boards[scope];
   const visible = viewGames(board, selection, hideFinals, focusedGame);
-  const week = today ? accWeek(today) : null;
   const shortDate = (d: string) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${d}T12:00:00Z`));
   const overnight = followToday && today && today !== easternDate();
   const age = data ? Math.max(0, Math.floor((now - Date.parse(data.fetchedAt)) / 1000)) : 0;
@@ -426,6 +460,10 @@ export default function Home() {
   const allCounts = counts([]);
   const upset = loaded && !stale ? upsetCounts(board, hideFinals) : null;
   const dateText = date ? new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`)) : "Today";
+  // The current week keeps its existing wording; a chosen other week names its dates (#172).
+  const weekRange = week ? `${shortDate(week.start)} – ${shortDate(week.end)}` : "";
+  const otherWeek = !followWeek && week ? weekRange : undefined;
+  const weekBack = otherWeek ? `Week of ${shortDate(week!.start)}` : "This week";
   const warning = error || (data?.stale ? "ESPN is unavailable. Showing the last successful scores." : age > 90 ? "Waiting for a fresh score update." : data?.warnings?.join(" "));
   const section = (title: string, state: Game["state"]) => {
     const list = visible.filter(g => g.state === state);
@@ -452,13 +490,13 @@ export default function Home() {
   const originGame = teamOrigin ? [protectedBoards.daily, protectedBoards.week].flatMap(b => b?.games ?? []).find(g => g.id === teamOrigin) ?? (() => { const found = findScheduleGame(season, teamOrigin); return found && !dukeHidden(found.game, duke.prefs) ? found.game : null; })() : null;
   const teamBack = teamOrigin !== null
     ? { title: "Game", detail: originGame ? `${originGame.teams[0].abbreviation || originGame.teams[0].name} at ${originGame.teams[1].abbreviation || originGame.teams[1].name}` : "Back", label: originGame ? `Back to game, ${originGame.teams[0].name} at ${originGame.teams[1].name}` : "Back to game" }
-    : { title: "Scores", detail: weekly ? "This week" : dateText, label: `Back to scores, ${weekly ? "This week" : dateText}` };
+    : { title: "Scores", detail: weekly ? weekBack : dateText, label: `Back to scores, ${weekly ? weekBack : dateText}` };
   return <>
   <main className="app-shell compact-scoreboard" data-app-commit={LOADED_COMMIT}>
     <div className="scores-view" hidden={!!route || !!teamPage}>
-    <header className="app-header"><Link className="wordmark" href="/" onClick={() => { cancelAutomaticWeek(); setDate(null); setSelection([]); setPeriod("day"); setFocusedGame(""); }} aria-label="Saturday Signal home"><span className="brand-icon"><Signal size={22} strokeWidth={3} /></span><span>saturday<wbr /><span className="brand-light">signal</span><span className="sport-label">COLLEGE FOOTBALL</span></span></Link><div className="header-actions"><Alerts iconOnly /><button className={`icon-button ${refreshing ? "refreshing" : ""}`} aria-label="Refresh scores" onClick={refresh} disabled={refreshing || !date}><RefreshCw size={20} /></button><Help update={update} /><DukeSettings games={data?.games || []} visibility={duke} /></div></header>
-    <AppNavigation active="scores" date={date} followToday={followToday} />
-    <div className="date-bar">{weekly ? <div className="week-label"><CalendarDays size={16} /><span>{week ? `${shortDate(week.start)} – ${shortDate(week.end)}` : "This football week"}</span><span className="week-note">THU–MON</span></div> : <><div className="date-navigation"><button className="icon-button" aria-label="Previous day" disabled={!date} onClick={() => chooseDate(shiftDate(date, -1))}><ChevronLeft size={19} /></button><label className="date-picker"><CalendarDays size={15} /><span>{dateText}</span><input type="date" value={date} onChange={e => { if (e.target.value) chooseDate(e.target.value); }} aria-label="Scoreboard date, Eastern time" /></label><button className="icon-button" aria-label="Next day" disabled={!date} onClick={() => chooseDate(shiftDate(date, 1))}><ChevronRight size={19} /></button></div><button className={`today-button ${followToday ? "is-today" : ""}`} onClick={() => { chooseDate(null); if (followToday) refresh(); }} disabled={!today}>Today</button></>}<div className="period-modes" role="group" aria-label="Scoreboard period"><button aria-pressed={!weekly} onClick={() => choosePeriod("day")}>Day</button><button aria-pressed={weekly} onClick={() => choosePeriod("week")}>Week</button></div></div>
+    <header className="app-header"><Link className="wordmark" href="/" onClick={() => { cancelAutomaticWeek(); setDate(null); setWeek(null); setSelection([]); setPeriod("day"); setFocusedGame(""); }} aria-label="Saturday Signal home"><span className="brand-icon"><Signal size={22} strokeWidth={3} /></span><span>saturday<wbr /><span className="brand-light">signal</span><span className="sport-label">COLLEGE FOOTBALL</span></span></Link><div className="header-actions"><Alerts iconOnly /><button className={`icon-button ${refreshing ? "refreshing" : ""}`} aria-label="Refresh scores" onClick={refresh} disabled={refreshing || !date}><RefreshCw size={20} /></button><Help update={update} /><DukeSettings games={data?.games || []} visibility={duke} /></div></header>
+    <AppNavigation active="scores" date={date} followToday={followToday} weekDate={weekDate} />
+    <div className="date-bar">{weekly ? <><div className="date-navigation week-navigation"><button className="icon-button" aria-label="Previous week" disabled={!week} onClick={() => { if (week) chooseWeek(shiftDate(week.start, -7)); }}><ChevronLeft size={19} /></button><div className="week-label"><CalendarDays size={16} /><span>{week ? weekRange : "This football week"}</span><span className="week-note">THU–MON</span></div><button className="icon-button" aria-label="Next week" disabled={!week} onClick={() => { if (week) chooseWeek(shiftDate(week.start, 7)); }}><ChevronRight size={19} /></button></div><button className={`today-button ${followWeek ? "is-today" : ""}`} onClick={() => { chooseWeek(null); if (followWeek) refresh(); }} disabled={!week}>This week</button></> : <><div className="date-navigation"><button className="icon-button" aria-label="Previous day" disabled={!date} onClick={() => chooseDate(shiftDate(date, -1))}><ChevronLeft size={19} /></button><label className="date-picker"><CalendarDays size={15} /><span>{dateText}</span><input type="date" value={date} onChange={e => { if (e.target.value) chooseDate(e.target.value); }} aria-label="Scoreboard date, Eastern time" /></label><button className="icon-button" aria-label="Next day" disabled={!date} onClick={() => chooseDate(shiftDate(date, 1))}><ChevronRight size={19} /></button></div><button className={`today-button ${followToday ? "is-today" : ""}`} onClick={() => { chooseDate(null); if (followToday) refresh(); }} disabled={!today}>Today</button></>}<div className="period-modes" role="group" aria-label="Scoreboard period"><button aria-pressed={!weekly} onClick={() => choosePeriod("day")}>Day</button><button aria-pressed={weekly} onClick={() => choosePeriod("week")}>Week</button></div></div>
     <p className="timezone-cue">Dates ET · Kickoffs {timezone}</p>
     {overnight && !weekly && <p className="overnight-note">Late games are still on. Today is staying on {shortDate(today)}.</p>}
     <div className="score-tabs">
@@ -466,20 +504,20 @@ export default function Home() {
         <button type="button" className="filter-tab filter-watch" aria-pressed={selection.length === 0} aria-label={countLabel("All", allCounts)} onClick={() => setSelection([])}><span>All</span><CountPair counts={allCounts} /></button>
         {categories.map(c => { const pair = c === "upset" ? null : counts([c]); return <button type="button" className={`filter-tab filter-${c}`} aria-pressed={selection.includes(c)} aria-label={c === "upset" ? upset ? `Upsets, ${upset.brewing} brewing, ${upset.total} brewing or completed upsets` : stale ? "Upsets, counts unavailable while scores are stale" : "Upsets, counts loading" : countLabel(labels[c], pair)} onClick={() => setSelection(toggleCategory(selection, c))} key={c}><span>{labels[c]}</span>{c === "upset" ? <span className="tab-count upset-count" aria-hidden="true">{upset ? <>{upset.brewing} <span className="upset-total">({upset.total})</span></> : "– (–)"}</span> : <CountPair counts={pair} />}</button>; })}
       </div>
-      <div className="watch-header"><h1 className="sr-only" id="scoreboard-heading" tabIndex={-1}>{heading(selection, period)}</h1><div className="feed-status" role="status"><span className={`feed-dot ${stale || !online || error ? "feed-warning" : !data ? "feed-loading" : ""}`} />{!online ? "Offline" : error && !data ? "Scores unavailable" : data ? `${stale ? "Last update" : "Updated"} ${age < 15 ? "just now" : age < 60 ? `${age}s ago` : `${Math.floor(age / 60)}m ago`}` : "Connecting to ESPN…"}</div><DukeGameControls games={data?.games || []} visibility={duke} /><label className="toggle-label"><input type="checkbox" checked={hideFinals} onChange={e => toggleFinals(e.target.checked)} /><span>Hide finals</span></label></div>
+      <div className="watch-header"><h1 className="sr-only" id="scoreboard-heading" tabIndex={-1}>{heading(selection, period, otherWeek)}</h1><div className="feed-status" role="status"><span className={`feed-dot ${stale || !online || error ? "feed-warning" : !data ? "feed-loading" : ""}`} />{!online ? "Offline" : error && !data ? "Scores unavailable" : data ? `${stale ? "Last update" : "Updated"} ${age < 15 ? "just now" : age < 60 ? `${age}s ago` : `${Math.floor(age / 60)}m ago`}` : "Connecting to ESPN…"}</div><DukeGameControls games={data?.games || []} visibility={duke} /><label className="toggle-label"><input type="checkbox" checked={hideFinals} onChange={e => toggleFinals(e.target.checked)} /><span>Hide finals</span></label></div>
       {duke.storageWarning && <p className="duke-storage-warning" role="alert">{duke.storageWarning}</p>}
       {!route && !teamPage && <AppUpdateNotice update={update} />}
       {warning && <div className="feed-banner" role="alert"><CloudOff size={18} /><span>{warning}{data && " Displayed scores may be out of date."}</span><button onClick={refresh} disabled={refreshing}>Retry</button></div>}
-      <section className="score-content" aria-labelledby="scoreboard-heading">
+      <section ref={swipeRegion} className="score-content" aria-labelledby="scoreboard-heading">
         {data && <p className="sr-only" role="status">{visible.length} {visible.length === 1 ? "game" : "games"} shown.</p>}
         {!data && !error && <LoadingCards />}
         {!data && error && <Empty className="empty-card"><EmptyHeader><EmptyMedia variant="icon"><CloudOff /></EmptyMedia><EmptyTitle>Scores are temporarily unavailable</EmptyTitle><EmptyDescription>We&apos;ll try again in 30 seconds. You can also check the source directly.</EmptyDescription></EmptyHeader><div className="empty-actions"><button className="solid-button" onClick={refresh} disabled={refreshing}>Try again</button><a className="text-link" href={`https://www.espn.com/college-football/scoreboard/_/date/${date.replaceAll("-", "")}/group/80`} target="_blank" rel="noopener noreferrer">Open ESPN <ArrowUpRight size={15} /></a></div></Empty>}
-        {data && <>{section("On now", "live")}{section("Delayed", "delayed")}{section("Coming up", "upcoming")}{section("Schedule updates", "other")}{section("Final", "final")}{visible.length === 0 && <Empty className="empty-card"><EmptyHeader><EmptyMedia variant="icon">{selection.length === 1 && selection[0] === "upset" ? <Zap /> : <Radio />}</EmptyMedia><EmptyTitle>{emptyTitle(selection, period)}</EmptyTitle><EmptyDescription>{selection.length === 1 && selection[0] === "upset" ? "Trailing pregame favorites, trailing known higher-ranked teams, and labeled ACC/SEC conference watches appear here, including unranked games." : selection.length === 1 && selection[0] === "close" ? "Live games appear here when the margin is 8 points or fewer, including ties." : weekly ? "New qualifying games appear automatically as the schedule updates." : "Choose another date to check the schedule. New qualifying games appear automatically."}</EmptyDescription></EmptyHeader></Empty>}</>}
+        {data && <>{section("On now", "live")}{section("Delayed", "delayed")}{section("Coming up", "upcoming")}{section("Schedule updates", "other")}{section("Final", "final")}{visible.length === 0 && <Empty className="empty-card"><EmptyHeader><EmptyMedia variant="icon">{selection.length === 1 && selection[0] === "upset" ? <Zap /> : <Radio />}</EmptyMedia><EmptyTitle>{emptyTitle(selection, period, otherWeek)}</EmptyTitle><EmptyDescription>{selection.length === 1 && selection[0] === "upset" ? "Trailing pregame favorites, trailing known higher-ranked teams, and labeled ACC/SEC conference watches appear here, including unranked games." : selection.length === 1 && selection[0] === "close" ? "Live games appear here when the margin is 8 points or fewer, including ties." : weekly ? "New qualifying games appear automatically as the schedule updates." : "Choose another date to check the schedule. New qualifying games appear automatically."}</EmptyDescription></EmptyHeader></Empty>}</>}
       </section>
     </div>
     <footer className="app-footer"><div><span className="footer-brand">SS<span> / </span></span><a href="https://www.espn.com/college-football/scoreboard" target="_blank" rel="noopener noreferrer">Scores via ESPN <ArrowUpRight size={12} /></a></div><p className="version-label">v{VERSION}</p></footer>
     </div>
-    {route && <GameScreen game={screenGame} board={screen?.board ?? null} loading={screenLoading} scopeError={!!scopeError} backLabel={weekly ? "This week" : dateText} section={route.section} onSection={changeSection} onBack={goBack} back={gameBack}
+    {route && <GameScreen game={screenGame} board={screen?.board ?? null} loading={screenLoading} scopeError={!!scopeError} backLabel={weekly ? weekBack : dateText} section={route.section} onSection={changeSection} onBack={goBack} back={gameBack}
       warning={screen || !scheduleGame ? warning || undefined : teamSeason.failure || season?.stale ? "Couldn’t refresh this team’s schedule." : undefined}
       onRetryScores={screen || !scheduleGame ? refresh : teamSeason.retry} refreshing={screen || !scheduleGame ? refreshing : teamSeason.pending}
       teamLinks={teamLinks} onOpenTeam={openTeam} notice={<>{scheduleNotice}<AppUpdateNotice update={update} /></>} />}

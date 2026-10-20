@@ -5,7 +5,7 @@ import * as jsxRuntime from "react/jsx-runtime";
 import { renderToStaticMarkup } from "react-dom/server";
 import { build } from "esbuild";
 import { bundle, game, scoreboard } from "./helpers.mjs";
-const { retainFinalCategories } = await bundle("lib/football.ts");
+const { retainFinalCategories, shiftDate } = await bundle("lib/football.ts");
 
 // Exercise the real page and game cards with controlled hook data and lightweight
 // UI wrappers. The catalog primitives have separate tests; no browser/feed is used.
@@ -55,13 +55,13 @@ function fixtures() {
 }
 
 // Home's useState order: selection, period, hideFinals, focusedGame, open game screen route, open intent.
-function render(selection, { period = "day", hideFinals = false, focusedGame = "", route, showHelp = false, boards = fixtures(), stale = false, effects = [], changes = [] } = {}) {
+function render(selection, { period = "day", hideFinals = false, focusedGame = "", route, showHelp = false, boards = fixtures(), stale = false, effects = [], changes = [], weekDate = null, week = weekDate ? { start: weekDate, end: shiftDate(weekDate, 4) } : { start: "2026-09-03", end: "2026-09-07" } } = {}) {
   let state = 0, selectedScope;
   globalThis.scorePageTest = {
     ...jsxRuntime, showHelp, element: React.createElement,
     effect(fn) { effects.push(fn); },
     useState(initial) { const slot = state++; return [[selection, period, hideFinals, focusedGame, route][slot] ?? initial, value => changes.push({ slot, value })]; },
-    scoreboard(scope) { selectedScope = scope; return { date: "2026-08-29", today: "2026-09-05", boards, data: boards[scope] && (stale ? boards[scope] : { ...boards[scope], fetchedAt: new Date().toISOString() }), error: "", refreshing: false, online: true, now: Date.now(), timezone: "EDT", refresh() {}, setDate() {}, followToday: true }; },
+    scoreboard(scope) { selectedScope = scope; return { date: "2026-08-29", today: "2026-09-05", boards, data: boards[scope] && (stale ? boards[scope] : { ...boards[scope], fetchedAt: new Date().toISOString() }), error: "", refreshing: false, online: true, now: Date.now(), timezone: "EDT", refresh() {}, setDate() {}, followToday: true, week, weekDate, setWeek() {}, followWeek: weekDate === null }; },
   };
   try { return { html: renderToStaticMarkup(React.createElement(Home)), scope: selectedScope }; }
   finally { delete globalThis.scorePageTest; }
@@ -510,6 +510,43 @@ test("counts use the Duke-protected board, so a hidden Duke game is never counte
     assert.deepEqual(pair(html, "watch"), [1, 1], focusedGame); assert.deepEqual(pair(html, "acc"), [0, 0]); assert.deepEqual(pair(html, "top25"), [1, 1]);
     assert.match(html, /aria-label="All, 1 in progress, 1 total"/); assert.match(html, /aria-label="ACC, 0 in progress, 0 total"/);
   }
+});
+
+test("issue 172: Week has Previous week, Next week and This week controls, and the current week keeps its wording", () => {
+  const { html } = render(["top25"], { period: "week" });
+  assert.match(html, /<button class="icon-button" aria-label="Previous week">.*?<div class="week-label">.*?<span>Sep 3 – Sep 7<\/span><span class="week-note">THU–MON<\/span><\/div><button class="icon-button" aria-label="Next week">/);
+  assert.match(html, /<button class="today-button is-today">This week<\/button>/);
+  assert.match(html, /Top 25 this week\./);
+  assert.match(html, /href="\/\?event=top-live&amp;cats=top25&amp;period=week"/, "no week in links for the current week");
+  const day = render([]).html;
+  assert.doesNotMatch(day, /Previous week|Next week|This week</);
+  assert.match(day, /aria-label="Previous day"/); assert.match(day, /aria-label="Next day"/);
+  assert.equal((html.match(/<section class="score-content"/g) || []).length, 1, "one swipeable results region");
+});
+
+test("issue 172: a chosen other week names its range in the heading, empty states, Back labels and links", () => {
+  const { html } = render(["top25"], { period: "week", weekDate: "2026-09-10" });
+  assert.match(html, /<span>Sep 10 – Sep 14<\/span><span class="week-note">THU–MON<\/span>/);
+  assert.match(html, /<button class="today-button ">This week<\/button>/);
+  assert.match(html, /Top 25 in the week of Sep 10 – Sep 14\./);
+  assert.match(html, /href="\/\?event=top-live&amp;cats=top25&amp;period=week&amp;weekDate=2026-09-10"/);
+  const boards = fixtures(); boards.week.games = [];
+  assert.match(render(["top25"], { period: "week", weekDate: "2026-09-10", boards }).html, /No Top 25 games in the week of Sep 10 – Sep 14\./);
+  assert.match(render([], { period: "week", weekDate: "2026-09-10", boards }).html, /A quiet football week, Sep 10 – Sep 14\./);
+  assert.match(render(["acc", "upset"], { period: "week", weekDate: "2026-09-10", boards }).html, /Nothing matches these categories in the week of Sep 10 – Sep 14\./);
+  assert.match(render(["close"], { period: "week", weekDate: "2026-12-31", boards }).html, /No one-score games in the week of Dec 31 – Jan 4\./);
+  const screen = render([], { period: "week", weekDate: "2026-09-10", route: { id: "top-live", section: "team" } }).html;
+  assert.match(screen, /aria-label="Back to scores, Week of Sep 10"/);
+  // Day keeps its own copy and controls; the chosen week is only carried along in links.
+  const day = render(["acc"], { weekDate: "2026-09-10" }).html;
+  assert.match(day, /No ACC games on this day\./); assert.match(day, /value="2026-08-29"/);
+  assert.doesNotMatch(day, /Sep 10 – Sep 14|Previous week/);
+});
+
+test("issue 172: Help explains swiping, the week arrows and This week", () => {
+  const { html } = render([], { showHelp: true });
+  assert.match(html, /Day shows the selected Eastern date\. Week shows the current football week, Thursday through Monday, for every selected category, or the week you choose with its arrows; This week returns to the current one\./);
+  assert.match(html, /swipe left across the games for the next day or week, or right for the previous one\. The arrows do the same\./);
 });
 
 test("restoration effect replay uses its captured snapshot after transient URL cleanup", () => {
