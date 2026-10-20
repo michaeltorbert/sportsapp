@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.18.0 · 2026-10-19
+
+- When Today’s successfully loaded schedule has no games, Scores opens the existing Thursday–Monday football week so you can see the rest of the week. Day remains available, and a scheduled game hidden by categories or Hide finals does not count as an empty schedule (#171).
+- Explicit period and date links, notification destinations, restored views and choices made while scores load keep their selected view. Failed or stale score feeds do not trigger the default.
+- Game ordering, filters, week dates, alerts and the empty-week message are unchanged.
+
 ## 1.17.1 · 2026-10-19
 
 - When ESPN’s main score feed is unavailable, one refresh reuses backup score documents it has already finished downloading instead of downloading them again, so there are fewer repeat downloads. Two parts of a refresh that need the same document at the same moment can still each download it. Every refresh starts fresh; nothing is kept for a later one (#53).

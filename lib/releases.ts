@@ -1,5 +1,6 @@
-export const VERSION = "1.17.1";
+export const VERSION = "1.18.0";
 export const releases = [
+  { version: "1.18.0", date: "October 19, 2026", changes: "When Today has no scheduled games, start with the current football week. Day stays available, and explicit links and choices keep their view." },
   { version: "1.17.1", date: "October 19, 2026", changes: "Reduce repeated score downloads during refreshes." },
   { version: "1.17.0", date: "October 19, 2026", changes: "Open a team from any game to see its current season: record, regular-season averages for and against, and the full schedule with results, kickoff times and TV. Every scheduled or completed game opens here in the app. Duke games you hide stay hidden, along with any record or averages that would reveal them." },
   { version: "1.16.8", date: "October 19, 2026", changes: "Remove the redundant This game label from started Team stats while keeping the comparison and other game details intact." },
