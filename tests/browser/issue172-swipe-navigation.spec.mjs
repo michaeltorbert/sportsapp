@@ -28,9 +28,10 @@ async function assertFixtureMediaIsMuted(page) {
 }
 
 // Input evidence for the Linux Chromium CI failures (taps after committed CDP swipes had no effect):
-// which input events of each touch reached the page, in order. It showed that every committed swipe's
-// touchend never reached window, because the step re-rendered inside pointerup and removed the
-// touched node first; expectSwipeTouchEnded below now asserts the corrected order. Recording only; passive
+// which input events of each touch reached the page, in order. It first showed committed swipes'
+// touchends never reached window (the step re-rendered inside pointerup); fixing that did not restore
+// the taps. Every lost tap followed a horizontal touch the browser neither panned nor cancelled, so the
+// page now consumes such a touch's touchmoves. expectSwipeTouchEnded asserts both. Recording only; passive
 // listeners that never cancel, stop or change anything. Attached for every Chromium test, passing or
 // failing, so a lost tap (no touch/pointer events), a browser-suppressed tap (touch/pointer events but
 // no click) and an app-suppressed click (click at window capture but not at window bubble) differ.
@@ -43,9 +44,12 @@ test.beforeEach(async ({ page, browserName }) => {
     const record = (phase, event) => log.push({ phase, type: event.type, t: Math.round(performance.now()), trusted: event.isTrusted, pointer: event.pointerType ?? null, id: event.pointerId ?? null, detail: event.detail ?? null, prevented: event.defaultPrevented, target: describe(event.target) });
     for (const type of ["touchstart", "touchend", "touchcancel", "pointerdown", "pointerup", "pointercancel", "click"]) addEventListener(type, event => record("capture", event), { capture: true, passive: true });
     addEventListener("click", event => record("bubble", event), { passive: true });
-    let moves = 0;
+    let moves = 0, touchMoves = 0, consumed = 0;
     addEventListener("pointermove", () => { moves++; }, { capture: true, passive: true });
-    addEventListener("pointerup", event => { log.push({ phase: "moves-before-up", count: moves, id: event.pointerId }); moves = 0; }, { capture: true, passive: true });
+    // Read at window bubble, after the app's region listener: how many touchmoves the app consumed.
+    addEventListener("touchmove", event => { touchMoves++; if (event.defaultPrevented) consumed++; }, { passive: true });
+    addEventListener("pointerup", event => { log.push({ phase: "moves-before-up", count: moves, touchMoves, consumed, id: event.pointerId }); moves = 0; touchMoves = 0; consumed = 0; }, { capture: true, passive: true });
+    addEventListener("pointercancel", () => { log.push({ phase: "moves-before-cancel", count: moves, touchMoves, consumed }); moves = 0; touchMoves = 0; consumed = 0; }, { capture: true, passive: true });
   });
   // Opt-in reproduction aid for slower runners; off unless ISSUE172_CPU_THROTTLE is set (e.g. 4).
   const rate = Number(process.env.ISSUE172_CPU_THROTTLE || 0);
@@ -70,6 +74,10 @@ async function expectSwipeTouchEnded(page, browserName) {
   const up = log.findLastIndex(entry => entry.phase === "capture" && entry.type === "pointerup");
   expect(up, "the swipe's pointerup was recorded").toBeGreaterThanOrEqual(0);
   expect(log.slice(up + 1).some(entry => entry.type === "touchend"), "the committed swipe's touchend reached window").toBe(true);
+  // The page owned the horizontal touch: its touchmoves were consumed, so the browser made no scroll
+  // or fling gesture of it. (Ordinary taps afterwards are asserted by each test itself.)
+  const moves = log.slice(up).find(entry => entry.phase === "moves-before-up");
+  expect(moves?.consumed, "the committed swipe's horizontal touchmoves were consumed by the page").toBeGreaterThan(0);
 }
 
 function inputKind(browserName) {

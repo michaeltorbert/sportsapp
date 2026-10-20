@@ -131,7 +131,14 @@ function mount(t, { enabled = true } = {}) {
     region.dispatchEvent(event);
     return { prevented: event.defaultPrevented, stopped };
   };
-  return { region, card, other, control, viewport, doc, win, steps, pointer, swipe, touchend, click, render };
+  // A touchmove on the region, as browsers dispatch it after the same move's pointermove.
+  const touchmove = (touches = 1, cancelable = true) => {
+    const event = new Event("touchmove", { cancelable });
+    Object.defineProperty(event, "touches", { value: { length: touches } });
+    region.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  return { region, card, other, control, viewport, doc, win, steps, pointer, swipe, touchend, touchmove, click, render };
 }
 
 test("one deliberate horizontal swipe commits exactly one step in each direction", t => {
@@ -215,6 +222,52 @@ test("a released swipe steps only after its touch sequence ends, so the touched 
   assert.deepEqual(h.steps, [1, -1]);
   // The suppression record armed at release still swallows that touch's compatibility click.
   assert.deepEqual(h.click(h.card), { prevented: true, stopped: true });
+});
+
+test("only a touch judged horizontal has its touchmoves consumed; scrolling, pending, multi-finger, zoomed and finished touches stay with the browser", t => {
+  const h = mount(t);
+  h.pointer("pointerdown", h.card, 200, 300);
+  h.pointer("pointermove", h.card, 196, 300);
+  assert.equal(h.touchmove(), false, "pending within the slop");
+  h.pointer("pointermove", h.card, 180, 302);
+  assert.equal(h.touchmove(), true, "the move that locks horizontal intent is consumed");
+  h.pointer("pointermove", h.card, 140, 305);
+  assert.equal(h.touchmove(), true);
+  assert.equal(h.touchmove(2), false, "a second finger is never consumed");
+  assert.equal(h.touchmove(1, false), false, "an uncancelable move is left alone");
+  h.pointer("pointerup", h.card, 120, 305); h.touchend();
+  assert.deepEqual(h.steps, [1]);
+  assert.equal(h.touchmove(), false, "nothing after the touch ends");
+  // Vertical scrolling: abandoned for good, never consumed, even if it later turns sideways.
+  h.pointer("pointerdown", h.card, 200, 300);
+  h.pointer("pointermove", h.card, 200, 280);
+  assert.equal(h.touchmove(), false);
+  h.pointer("pointermove", h.card, 100, 280);
+  assert.equal(h.touchmove(), false);
+  h.pointer("pointercancel", h.card, 100, 280); h.touchend("touchcancel");
+  // A horizontal swipe that turns vertical stops being consumed at once.
+  h.pointer("pointerdown", h.card, 200, 300);
+  h.pointer("pointermove", h.card, 170, 300);
+  assert.equal(h.touchmove(), true);
+  h.pointer("pointermove", h.card, 160, 330);
+  assert.equal(h.touchmove(), false);
+  h.pointer("pointerup", h.card, 160, 330); h.touchend();
+  // Edge starts, controls and zoomed pages are never tracked, so never consumed.
+  h.pointer("pointerdown", h.region, 20, 300); h.pointer("pointermove", h.region, 60, 300);
+  assert.equal(h.touchmove(), false); h.pointer("pointerup", h.region, 60, 300); h.touchend();
+  h.pointer("pointerdown", h.control, 200, 300); h.pointer("pointermove", h.control, 150, 300);
+  assert.equal(h.touchmove(), false); h.pointer("pointerup", h.control, 150, 300); h.touchend();
+  h.viewport.scale = 2; h.viewport.dispatchEvent(new Event("resize"));
+  h.pointer("pointerdown", h.card, 200, 300); h.pointer("pointermove", h.card, 150, 300);
+  assert.equal(h.touchmove(), false); h.pointer("pointerup", h.card, 150, 300); h.touchend();
+  assert.deepEqual(h.steps, [1]);
+});
+
+test("disabling removes the touchmove consumer", t => {
+  const h = mount(t);
+  h.pointer("pointerdown", h.card, 200, 300); h.pointer("pointermove", h.card, 170, 300);
+  h.render(false);
+  assert.equal(h.touchmove(), false);
 });
 
 test("pointer-only input without touch events steps on the next task, and a new contact first completes a pending step", async t => {

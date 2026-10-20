@@ -2,8 +2,10 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 
 // Horizontal touch swipes on the Scores results step the displayed day or week (#172). The browser
-// keeps vertical scrolling and pinch zoom (CSS `touch-action: pan-y pinch-zoom` on the region), so
-// this only judges one primary touch's own pointer events and never captures or cancels them.
+// keeps vertical scrolling and pinch zoom (CSS `touch-action: pan-y pinch-zoom` on the region). This
+// judges one primary touch's own pointer events and never captures them. Only once a touch is judged
+// horizontal are its touchmoves consumed, so the browser generates no scroll or fling gesture for a
+// touch the page owns (in Linux CI Chromium, the next tap after such a swipe otherwise made no click).
 export const EDGE = 32; // CSS px at each side left to the browser's own edge navigation.
 export const SLOP = 10; // Movement before the direction is judged.
 export const COMMIT = 60; // Horizontal travel that commits on release.
@@ -60,7 +62,7 @@ export function useSwipeNavigation<T extends HTMLElement>(enabled: boolean, cont
     let suppress: { target: Element; timer: number } | null = null;
     // A released swipe commits only once its touch sequence has ended. Committing inside pointerup let
     // the re-render remove the touched node before the same touch's touchend, which was then dispatched
-    // to a detached node (never reaching window); in Linux CI Chromium the next tap then made no click.
+    // to a detached node, never reaching window.
     // touchend or touchcancel commits; pointer-only input (no touch events) commits on the next task.
     let pending: { step: Step; timer: number } | null = null;
     const commit = () => {
@@ -101,6 +103,12 @@ export function useSwipeNavigation<T extends HTMLElement>(enabled: boolean, cont
       pending = { step, timer: window.setTimeout(commit, 0) };
     };
     const cancel = (event: PointerEvent) => { if (gesture && event.pointerId === gesture.id) abandon(); };
+    // The touchmove follows its pointermove, so the move that locks horizontal intent is itself consumed.
+    // Pending, vertical, abandoned, multi-finger and zoomed touches are never consumed, so scrolling and
+    // pinch zoom stay with the browser.
+    const touchMove = (event: TouchEvent) => {
+      if (gesture?.axis === "horizontal" && event.touches.length === 1 && event.cancelable) event.preventDefault();
+    };
     const click = (event: MouseEvent) => {
       if (!suppress || event.detail === 0 || !(event.target instanceof Node) || !suppress.target.contains(event.target)) return;
       disarm(); event.preventDefault(); event.stopPropagation();
@@ -120,7 +128,10 @@ export function useSwipeNavigation<T extends HTMLElement>(enabled: boolean, cont
     window.visualViewport?.addEventListener("resize", viewportResize); window.visualViewport?.addEventListener("scroll", zoom);
     document.addEventListener("visibilitychange", hidden);
     node.addEventListener("click", click, { capture: true });
+    // Non-passive on the results region only, never on the window or document.
+    node.addEventListener("touchmove", touchMove, { passive: false });
     return () => {
+      node.removeEventListener("touchmove", touchMove);
       abandon(); disarm(); delete node.dataset.zoomed;
       if (pending) { window.clearTimeout(pending.timer); pending = null; }
       if (stop.current === abandon) stop.current = null;
