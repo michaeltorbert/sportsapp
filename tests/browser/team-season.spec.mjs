@@ -144,7 +144,7 @@ test("board → game → team → schedule game: in-app links, owned Back and Fo
   expect(await page.evaluate(() => window.__main === document.querySelector("main"))).toBe(true);
 });
 
-test("a schedule game opened directly or reloaded is found only in its team's checked schedule; Back falls back to the team, then Scores", async ({ page, harness }) => {
+test("a schedule game opened directly or reloaded is found only in its team's checked schedule; Back returns to the team, then Scores", async ({ page, harness }) => {
   serveTeams(harness);
   await harness.open({ path: `/?event=${DUKE_ONLY}&team=150`, waitForScores: false });
   await expect(gameScreen(page).locator(".masthead")).toBeVisible();
@@ -162,19 +162,32 @@ test("a schedule game opened directly or reloaded is found only in its team's ch
   await expect(scores(page)).toBeVisible();
   await expect(page.locator("#scoreboard-heading")).toBeFocused();
   expect(await page.evaluate(() => history.length), "fallbacks replace; they never leave the app").toBe(length);
-  // A fresh document (as a new tab would open it; interception is per page) works from the URL alone.
-  await page.goto("/?team=150");
+});
+
+test("a team URL opened directly works from the URL alone", async ({ page, harness }) => {
+  serveTeams(harness);
+  await harness.open({ path: "/?team=150", waitForScores: false });
   await expect(teamScreen(page).locator("h1.team-title")).toHaveText("Duke Blue Devils");
   expect(await entry(page)).toMatchObject({ kind: "team", team: "150", from: false });
-  // Membership is exact: an event outside the context team's schedule is unavailable, whatever the URL says.
-  await page.goto(`/?event=${DUKE_ONLY}&team=153`);
+});
+
+test("a schedule game outside the context team's membership is unavailable", async ({ page, harness }) => {
+  serveTeams(harness);
+  await harness.open({ path: `/?event=${DUKE_ONLY}&team=153`, waitForScores: false });
   await expect(gameScreen(page).getByRole("heading", { name: "This game isn’t available" })).toBeVisible();
   await expect(gameScreen(page).locator(".masthead")).toHaveCount(0);
-  await page.goto(`/?event=401999999&team=150`);
+});
+
+test("an unknown schedule game is unavailable", async ({ page, harness }) => {
+  serveTeams(harness);
+  await harness.open({ path: "/?event=401999999&team=150", waitForScores: false });
   await expect(gameScreen(page).getByRole("heading", { name: "This game isn’t available" })).toBeVisible();
-  // A malformed team is no team page and makes no request.
+});
+
+test("a malformed team URL is no team page and makes no team request", async ({ page, harness }) => {
+  serveTeams(harness);
   const requests = harness.state.teamRequests.length;
-  await page.goto(`/?team=abc`);
+  await harness.open({ path: "/?team=abc" });
   await expect(page.getByRole("button", { name: "Refresh scores" })).toBeEnabled();
   await expect(teamScreen(page)).toHaveCount(0);
   expect(harness.state.teamRequests).toHaveLength(requests);
