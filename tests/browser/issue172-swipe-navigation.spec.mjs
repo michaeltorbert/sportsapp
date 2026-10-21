@@ -105,10 +105,17 @@ async function syntheticDrag(page, from, to) {
   }, { from, to });
 }
 
-// Starts near the top of the target, inside the viewport.
+// Starts near the top of the target, on its part that is on screen and clear of the 32 px edges, as a
+// finger can only touch what is shown. Since the motion refinement, a swipe made right after another
+// finds its target still sliding in, so boundingBox() is the painted, translated box: in the candidate 1
+// Chromium input logs (Week and year-boundary cases), the box centre was off screen, the touch landed on
+// <html> outside the results and the browser cancelled it. Touching the target's visible part keeps
+// the same target, distance and direction; a target with no visible part fails here instead.
 async function startOf(target) {
-  const box = await target.boundingBox();
-  return { x: box.x + box.width / 2, y: box.y + Math.min(box.height / 2, 40) };
+  const box = await target.boundingBox(), width = target.page().viewportSize().width;
+  const left = Math.max(box.x, 40), right = Math.min(box.x + box.width, width - 40);
+  if (right - left < 20) throw new Error(`swipe target is not on screen: ${JSON.stringify(box)}`);
+  return { x: (left + right) / 2, y: box.y + Math.min(box.height / 2, 40) };
 }
 async function swipe(page, browserName, target, dx, dy = 0) {
   const from = await startOf(target), to = { x: from.x + dx, y: from.y + dy };

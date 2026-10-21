@@ -86,7 +86,9 @@ test("issue 172 motion geometry: the held offset reveals its side, stays within 
 function mount(t, { enabled = true, motion = false, reduced = false, moved = true } = {}) {
   const win = new EventTarget(), doc = new EventTarget(), viewport = new EventTarget();
   Object.assign(viewport, { scale: 1 });
-  Object.assign(doc, { hidden: false, dialog: false, querySelector: () => doc.dialog ? {} : null });
+  // `covers`: the bottoms of elements pinned over the results (the sticky category row).
+  const covers = [];
+  Object.assign(doc, { hidden: false, dialog: false, querySelector: () => doc.dialog ? {} : null, querySelectorAll: selector => selector === "[data-pager-cover]" ? covers.map(bottom => ({ getBoundingClientRect: () => ({ bottom }) })) : [] });
   const region = new FakeElement("section", ["score-content"]);
   const card = new FakeElement("a", ["game-summary"], new FakeElement("article", ["game-card"], region));
   const other = new FakeElement("a", ["game-summary"], new FakeElement("article", ["game-card"], region));
@@ -166,7 +168,7 @@ function mount(t, { enabled = true, motion = false, reduced = false, moved = tru
   };
   const flush = () => { while (frames.length) frames.shift()(); };
   const transitionend = () => { const event = new Event("transitionend"); Object.defineProperty(event, "propertyName", { value: "transform" }); track.dispatchEvent(event); };
-  return { region, card, other, control, viewport, doc, win, steps, pointer, swipe, touchend, touchmove, click, render, track, transforms, reveals, settled, flush, transitionend };
+  return { region, card, other, control, viewport, doc, win, steps, pointer, swipe, touchend, touchmove, click, render, track, transforms, reveals, settled, flush, transitionend, covers };
 }
 
 test("one deliberate horizontal swipe commits exactly one step in each direction", t => {
@@ -404,6 +406,23 @@ test("issue 172 held drag: the track follows the finger 1:1, reveals the uncover
   assert.equal(h.region.dataset.pager, "settle"); h.transitionend();
   h.pointer("pointerup", h.card, 150, 340); h.touchend();
   assert.deepEqual(h.steps, []);
+});
+
+test("issue 172 the date cue sits below the screen top and the pinned category row, and stays inside the held results", t => {
+  const h = mount(t, { motion: true });
+  // The results' top (100) is below the category row's bottom (60): the cue is at the results' top.
+  h.covers.push(60); hold(h, 150);
+  assert.equal(h.region.style["--pager-cue"], "0px");
+  h.pointer("pointerup", h.card, 150, 300); h.touchend(); h.transitionend();
+  // Scrolled: the row is pinned at 0–60 and the results started 300 px above the screen.
+  h.region.getBoundingClientRect = () => ({ top: -300, height: 2000 });
+  hold(h, 150);
+  assert.equal(h.region.style["--pager-cue"], `${60 + 8 + 300}px`, "just below the pinned row");
+  h.pointer("pointerup", h.card, 150, 300); h.touchend(); h.transitionend();
+  // Never below the held results' last 48 px.
+  h.region.getBoundingClientRect = () => ({ top: -300, height: 360 });
+  hold(h, 150);
+  assert.equal(h.region.style["--pager-cue"], "312px");
 });
 
 test("issue 172 commit: the step lands at touchend, and its own range change settles the new results from the neighbor's place", t => {

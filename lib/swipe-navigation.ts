@@ -148,11 +148,14 @@ export function useSwipeNavigation<T extends HTMLElement>(enabled: boolean, cont
     const resume = () => { window.clearTimeout(resumeTimer); if (phase === "frozen" && !gesture && contact === null) glide(offset); };
     const resumeLater = () => { window.clearTimeout(resumeTimer); resumeTimer = window.setTimeout(resume, TAP_WAIT); };
     // The region keeps its height while held, so neighbors share the results' natural top and the page
-    // never jumps; the date cue sits at the top of the visible part of the results.
+    // never jumps. The date cue sits at the top of the visible part of the results: below the screen's
+    // top and anything pinned over the results (`data-pager-cover`, the sticky category row).
     const hold = () => {
       const box = node.getBoundingClientRect();
+      let covered = 0;
+      for (const cover of document.querySelectorAll("[data-pager-cover]")) covered = Math.max(covered, cover.getBoundingClientRect().bottom);
       node.style.height = `${box.height}px`;
-      node.style.setProperty("--pager-cue", `${Math.max(0, Math.min(12 - box.top, box.height - 160))}px`);
+      node.style.setProperty("--pager-cue", `${Math.max(0, Math.min(covered + 8 - box.top, box.height - 48))}px`);
       node.dataset.pager = "drag";
     };
     const lock = () => {

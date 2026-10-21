@@ -60,7 +60,8 @@ const frames = page => page.evaluate(() => new Promise(resolve => requestAnimati
 const region = page => page.locator("section.score-content");
 const live = page => page.locator("section.score-content > .pager-track > .pager-pane:not([data-side])");
 const pane = (page, side) => page.locator(`section.score-content .pager-pane[data-side="${side}"]`);
-const caption = (page, side) => pane(page, side).locator(".pager-caption");
+// The date cue is held still in the results region, outside the moving panes.
+const caption = (page, side) => page.locator(`section.score-content > .pager-caption[data-side="${side}"]`);
 const weekLabel = page => page.locator(".week-label");
 const historyLength = page => page.evaluate(() => history.length);
 // The results track's painted horizontal translation.
@@ -115,16 +116,32 @@ const sampleFrames = (page, count) => page.evaluate(count => {
 }, count);
 const samples = async (page, count) => { await expect.poll(() => page.evaluate(() => window.__samples.length)).toBeGreaterThanOrEqual(count); return page.evaluate(() => window.__samples); };
 
+// The neighbor's whole date cue is drawn inside the visible part of the results: within the results'
+// sides and the screen, below the pinned category row, and not clipped inside its own box.
+async function expectReadableCue(page, side, label) {
+  const date = caption(page, side).locator(".pager-caption-date");
+  await expect(date).toHaveText(side === 1 ? `${label} ›` : `‹ ${label}`);
+  const cue = await caption(page, side).boundingBox(), results = await region(page).boundingBox(), view = page.viewportSize();
+  const covered = await page.evaluate(() => Math.max(0, document.querySelector("[data-pager-cover]")?.getBoundingClientRect().bottom ?? 0));
+  expect(cue.x, "cue left edge inside the results and screen").toBeGreaterThanOrEqual(Math.max(0, results.x) - 0.5);
+  expect(cue.x + cue.width, "cue right edge inside the results and screen").toBeLessThanOrEqual(Math.min(view.width, results.x + results.width) + 0.5);
+  expect(cue.y, "cue below the pinned category row").toBeGreaterThanOrEqual(covered - 0.5);
+  expect(cue.y + cue.height, "cue above the bottom of the screen and results").toBeLessThanOrEqual(Math.min(view.height, results.y + results.height) + 0.5);
+  expect(await date.evaluate(element => element.scrollWidth <= element.clientWidth + 1 && element.getClientRects().length === 1), "the date is one unclipped line").toBe(true);
+}
+
 // Holds a drag through `offsets` (each checked against the painted results and screenshotted) and checks
-// the neighbor on `side` is labeled `label` with its own `games` text.
-async function holdThrough(page, testInfo, held, offsets, { side, label, has, hasNot = [], name }) {
-  const base = await live(page).boundingBox(), seen = [];
+// the neighbor on `side`: its readable date cue `label`, its own `cards` count and `has` text.
+async function holdThrough(page, testInfo, held, offsets, { side, label, cards, has = [], hasNot = [], name }) {
+  // The results' resting x: their painted x minus the offset already held (a reversal continues a drag).
+  const base = { x: (await live(page).boundingBox()).x - await offset(page) }, seen = [];
   for (const dx of offsets) {
     await held.to(dx);
     const painted = await offset(page); seen.push(painted);
     expect(Math.abs(painted - dx), `the results are painted ${dx}px from rest while held`).toBeLessThanOrEqual(1);
     expect(Math.abs((await live(page).boundingBox()).x - (base.x + dx))).toBeLessThanOrEqual(1);
-    await expect(caption(page, side)).toContainText(label);
+    await expectReadableCue(page, side, label);
+    if (cards !== undefined) await expect(pane(page, side).locator(".game-card")).toHaveCount(cards);
     for (const text of has) await expect(pane(page, side)).toContainText(text);
     for (const text of hasNot) await expect(pane(page, side)).not.toContainText(text);
     // The neighbor sits one results width plus the 40 px gap beside the results.
@@ -151,7 +168,7 @@ test("Day: held results follow the finger with the next day's own games beside t
   await assertFixtureMediaIsMuted(page);
   const length = await historyLength(page), url = page.url();
   const held = await holdTouch(page, browserName, await startOf(page.locator("#game-ranked-live .game-summary")));
-  const seen = await holdThrough(page, testInfo, held, [-30, -90, -160], { side: 1, label: "Sun, Sep 6", has: ["1 game", "sunday-acc away"], hasNot: ["ranked-live"], name: "day-forward" });
+  const seen = await holdThrough(page, testInfo, held, [-30, -90, -160], { side: 1, label: "Sun, Sep 6", cards: 1, has: ["sunday-acc away"], hasNot: ["ranked-live"], name: "day-forward" });
   expect(seen[0] > seen[1] && seen[1] > seen[2], `monotonic tracking ${seen}`).toBe(true);
   // Nothing has changed yet: date, address, history; the neighbor repeats no live ID.
   await expect(dateInput(page)).toHaveValue("2026-09-05");
@@ -192,7 +209,7 @@ for (const view of [
     const width = (await live(page).boundingBox()).width;
     const card = () => page.locator("#game-ranked-live .game-summary");
     let held = await holdTouch(page, browserName, await startOf(card()));
-    await holdThrough(page, testInfo, held, [-40, -Math.round(width * 0.45)], { side: 1, label: "Sun, Sep 6", has: ["1 game", "sunday-acc away"], name: `${view.name}-forward` });
+    await holdThrough(page, testInfo, held, [-40, -Math.round(width * 0.45)], { side: 1, label: "Sun, Sep 6", cards: 1, has: ["sunday-acc away"], name: `${view.name}-forward` });
     await held.to(-30);
     await held.end();
     await expect(region(page)).not.toHaveAttribute("data-pager");
@@ -277,7 +294,7 @@ for (const throttle of [1, 4]) {
     }
     const held = await holdTouch(page, browserName, await startOf(page.locator("#game-ranked-live .game-summary")));
     await held.to(-140);
-    await expect(caption(page, 1)).toContainText("1 game");
+    await expect(pane(page, 1).locator(".game-card")).toHaveCount(1);
     await held.end();
     // Find the incoming card while it is still moving, and touch it where it is painted.
     const point = await page.evaluate(() => new Promise(resolve => {
@@ -318,7 +335,7 @@ test("Chromium touches: a contact stops the settle where it is painted; scrollin
   await assertFixtureMediaIsMuted(page);
   const held = await holdTouch(page, browserName, await startOf(page.locator("#game-ranked-live .game-summary")));
   await held.to(-140);
-  await expect(caption(page, 1)).toContainText("1 game");
+  await expect(pane(page, 1).locator(".game-card")).toHaveCount(1);
   await held.end();
   const point = await page.evaluate(() => new Promise(resolve => {
     const track = document.querySelector("section.score-content > .pager-track");
@@ -392,7 +409,7 @@ test("Chromium touches: scrolled deep in a long day, the neighbor keeps the natu
   const from = { x: 195, y: 420 };
   expect(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest("section.score-content"), from)).toBe(true);
   const held = await holdTouch(page, browserName, from);
-  await holdThrough(page, testInfo, held, [-60, -140], { side: 1, label: "Sun, Sep 6", has: ["1 game"], name: "deep-forward" });
+  await holdThrough(page, testInfo, held, [-60, -140], { side: 1, label: "Sun, Sep 6", cards: 1, name: "deep-forward" });
   const cue = await caption(page, 1).boundingBox();
   expect(cue.y, "the date cue is below the top of the screen").toBeGreaterThanOrEqual(0);
   expect(cue.y + cue.height, "and above its bottom").toBeLessThanOrEqual(page.viewportSize().height);
@@ -405,6 +422,45 @@ test("Chromium touches: scrolled deep in a long day, the neighbor keeps the natu
   expect(box.y + box.height, "the results region reaches into the viewport").toBeGreaterThan(0);
   await expect(page.locator("#game-sunday-acc")).toBeAttached();
   await screenshot(page, testInfo, "deep-forward-settled");
+});
+
+test("Chromium touches: a poll that would hide the touched game mid-drag waits until the touch ends; its touchend reaches window and taps still work", async ({ page, harness, browserName }, testInfo) => {
+  test.skip(browserName !== "chromium", "Needs real input-pipeline touches (CDP), which only Chromium provides here.");
+  inputKind(browserName);
+  let finished = [];
+  harness.state.events = () => events().map(e => finished.includes(e.id) ? event(e.id, { state: "final", scores: [10, 13] }) : e);
+  await harness.open();
+  await assertFixtureMediaIsMuted(page);
+  await page.getByLabel("Hide finals").check();
+  // Delivers the ordinary 30-second poll after `id` finishes; Hide finals would then hide its card.
+  const finish = async id => {
+    const before = await category(page, "All").getAttribute("aria-label");
+    finished = [...finished, id];
+    await page.clock.fastForward(30_000);
+    await expect(category(page, "All"), "the poll's new board has arrived").not.toHaveAttribute("aria-label", before);
+  };
+  const touchedEnd = async id => {
+    const log = await page.evaluate(() => window.__issue172Motion);
+    const end = log.findLast(entry => entry.type === "touchend");
+    expect(end?.target, "the held touch's touchend reached window from the touched game").toContain(`game-${id}`);
+  };
+  for (const [id, dx, date] of [["close-live", -40, "2026-09-05"], ["ranked-live", -120, "2026-09-06"]]) {
+    await page.evaluate(id => { window.__touched = document.querySelector(`#game-${id} .game-summary`); }, id);
+    const held = await holdTouch(page, browserName, await startOf(page.locator(`#game-${id} .game-summary`)));
+    await held.to(dx);
+    await finish(id);
+    expect(await page.evaluate(() => window.__touched.isConnected), "the touched node is still in the page").toBe(true);
+    await expect(page.locator(`#game-${id}`), "the held results are unchanged").toBeVisible();
+    await screenshot(page, testInfo, `held-through-poll-${id}`);
+    await held.end();
+    await expect(region(page)).not.toHaveAttribute("data-pager");
+    await expect(dateInput(page)).toHaveValue(date);
+    await touchedEnd(id);
+    if (date === "2026-09-05") await expect(page.locator(`#game-${id}`), "the finished game is hidden once the drag ends").toHaveCount(0);
+  }
+  await page.locator("#game-sunday-acc .game-summary").tap();
+  await expect(page.locator(".game-screen")).toBeVisible();
+  await expect(page).toHaveURL(/event=sunday-acc/);
 });
 
 test("reduced motion: the held results still follow the finger, and release moves or returns at once", async ({ page, harness, browserName }, testInfo) => {
@@ -420,7 +476,7 @@ test("reduced motion: the held results still follow the finger, and release move
   expect(Math.abs(await offset(page)), "a short release returns at once").toBe(0);
   await expect(page.locator(".pager-pane[data-side]")).toHaveCount(0);
   held = await holdTouch(page, browserName, await startOf(page.locator("#game-ranked-live .game-summary")));
-  await holdThrough(page, testInfo, held, [-120], { side: 1, label: "Sun, Sep 6", has: ["1 game"], name: "reduced-commit" });
+  await holdThrough(page, testInfo, held, [-120], { side: 1, label: "Sun, Sep 6", cards: 1, name: "reduced-commit" });
   await held.end();
   await expect(dateInput(page)).toHaveValue("2026-09-06");
   await sampleFrames(page, 5);
@@ -439,22 +495,25 @@ test("ORD-021 with #172: the neighbor lists exactly what the same filters would;
   ];
   await harness.open();
   await assertFixtureMediaIsMuted(page);
-  const look = async (count, has, hasNot, name) => {
-    const held = await holdTouch(page, browserName, await startOf(page.locator("article.game-card").first()));
-    await holdThrough(page, testInfo, held, [-100], { side: 1, label: "Sun, Sep 6", has: [count, ...has], hasNot, name });
+  // Each drag starts on the results surface itself, which exists with or without listed games (ACC with
+  // Hide finals lists none on Saturday, leaving the empty message to swipe on).
+  const look = async (cards, has, hasNot, name) => {
+    const held = await holdTouch(page, browserName, await startOf(region(page)));
+    await holdThrough(page, testInfo, held, [-100], { side: 1, label: "Sun, Sep 6", cards, has, hasNot, name });
     await held.to(-20); await held.end();
     await expect(region(page)).not.toHaveAttribute("data-pager");
     await expect(dateInput(page)).toHaveValue("2026-09-05");
   };
-  await look("1 game", ["sunday-acc away"], ["sunday-fbs"], "curated");
+  await look(1, ["sunday-acc away"], ["sunday-fbs"], "curated");
   await page.getByLabel("All FBS games").check();
-  await look("3 games", ["sunday-acc away", "sunday-fbs away", "sunday-fbs-final away"], [], "all-fbs");
+  await look(3, ["sunday-acc away", "sunday-fbs away", "sunday-fbs-final away"], [], "all-fbs");
   await page.getByLabel("Hide finals").check();
-  await look("2 games", ["sunday-fbs away"], ["sunday-fbs-final"], "all-fbs-hide-finals");
+  await look(2, ["sunday-fbs away"], ["sunday-fbs-final"], "all-fbs-hide-finals");
   await category(page, "ACC").tap();
-  await look("1 game", ["sunday-acc away"], ["sunday-fbs"], "all-fbs-acc");
+  await expect(page.locator("article.game-card"), "Saturday lists no unfinished ACC game").toHaveCount(0);
+  await look(1, ["sunday-acc away"], ["sunday-fbs"], "all-fbs-acc");
   await category(page, "All FBS").tap();
-  const held = await holdTouch(page, browserName, await startOf(page.locator("article.game-card").first()));
+  const held = await holdTouch(page, browserName, await startOf(region(page)));
   await held.to(-120); await held.end();
   await expect(dateInput(page)).toHaveValue("2026-09-06");
   await expect(page.locator("#game-sunday-fbs")).toBeVisible();

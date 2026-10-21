@@ -553,8 +553,10 @@ test("issue 172: Help explains swiping, the week arrows and This week", () => {
 });
 
 // The inert pane beside the results (#172), from its opening tag to the end of the results track.
-const paneOf = (html, side) => html.match(new RegExp(`<div class="pager-pane" data-side="${side}" aria-hidden="true" inert="">[\\s\\S]*?(?=<div class="pager-pane" data-side|</div></section>)`))?.[0] ?? "";
+const paneOf = (html, side) => html.match(new RegExp(`<div class="pager-pane" data-side="${side}" aria-hidden="true" inert="">[\\s\\S]*?(?=<div class="pager-pane" data-side|</div>(?:<p class="pager-caption"|</section>))`))?.[0] ?? "";
 const paneCards = pane => (pane.match(/<div class="game-card /g) || []).length;
+// The neighbor's date cue: outside the moving panes, held still in the results region.
+const captionOf = html => html.match(/<p class="pager-caption"[^>]*>.*?<\/p>(?=<\/section>)/)?.[0] ?? "";
 
 test("issue 172: a revealed neighbor is an inert, date-labeled picture of that range's own filtered games, never the current ones", () => {
   // Unranked, non-ACC and not One-score (21–0), so only All FBS lists it, like the `focused` fixture.
@@ -563,28 +565,43 @@ test("issue 172: a revealed neighbor is an inert, date-labeled picture of that r
   const duke = game({ id: "neighbor-duke" }); duke.teams[0] = { ...duke.teams[0], id: "150", name: "Duke", abbreviation: "DUKE" };
   const neighbors = { "daily:2026-08-30:2026-08-30": scoreboard([game({ id: "neighbor-ranked" }), fbsOnly, final, duke], "2026-08-30") };
   const current = render([]).html;
-  assert.equal(paneOf(current, 1), "", "no pane at rest");
+  assert.equal(paneOf(current, 1), "", "no pane at rest"); assert.equal(captionOf(current), "", "no date cue at rest");
   const { html } = render([], { pager: [1], neighbors });
   const pane = paneOf(html, 1);
-  assert.match(pane, /<p class="pager-caption"><span class="pager-caption-date">Sun, Aug 30<\/span><span>2 games<\/span><\/p>/);
+  // Just the incoming date, on the side it comes from; no counts.
+  assert.equal(captionOf(html), '<p class="pager-caption" data-side="1" aria-hidden="true"><span class="pager-caption-date">Sun, Aug 30 ›</span></p>');
+  assert.doesNotMatch(pane, /pager-caption/, "the cue does not move with the pane");
   assert.equal(paneCards(pane), 2, "the watchlist's ranked game and final; the unranked game and protected Duke game are left out");
   assert.doesNotMatch(pane, /id="|<a |href=|data-focus-key|role=|tabindex|DUKE/, "no IDs, links, focus targets, live regions or hidden Duke game");
   assert.deepEqual(cardIds(html), cardIds(current), "the live results are unchanged beside it");
   assert.equal((html.match(/id="game-/g) || []).length, cardIds(current).length, "no live ID is repeated");
   // The same scope, Hide finals and category filters as the results.
   assert.equal(paneCards(paneOf(render([], { pager: [1], neighbors, allFbs: true }).html, 1)), 3, "All FBS adds the unranked game");
-  assert.match(paneOf(render([], { pager: [1], neighbors, hideFinals: true }).html, 1), /<span>1 game<\/span>/);
-  assert.match(paneOf(render(["acc"], { pager: [1], neighbors }).html, 1), /<span>No ACC games on this day\.<\/span>[\s\S]*class="pager-empty-title">No ACC games on this day\./);
+  assert.equal(paneCards(paneOf(render([], { pager: [1], neighbors, hideFinals: true }).html, 1)), 1, "Hide finals");
+  const acc = render(["acc"], { pager: [1], neighbors }).html;
+  assert.match(paneOf(acc, 1), /class="pager-empty-title">No ACC games on this day\./);
+  assert.match(captionOf(acc), /Sun, Aug 30 ›<\/span><span>No games listed<\/span>/);
   // Unknown scores are an honest loading or unavailable state, never the current games.
-  const loading = paneOf(render([], { pager: [1] }).html, 1);
-  assert.match(loading, /<span class="pager-caption-date">Sun, Aug 30<\/span><span>Loading scores…<\/span>/);
+  const loadingHtml = render([], { pager: [1] }).html, loading = paneOf(loadingHtml, 1);
+  assert.match(captionOf(loadingHtml), /Sun, Aug 30 ›<\/span><span>Loading<\/span>/);
   assert.equal(paneCards(loading), 0); assert.equal((loading.match(/class="loading-card"/g) || []).length, 3);
-  const failed = paneOf(render([], { pager: [1], neighborFailed: true }).html, 1);
-  assert.match(failed, /<span>Scores unavailable<\/span>[\s\S]*Scores are temporarily unavailable/);
-  assert.equal(paneCards(failed), 0);
-  // Week: the previous Thursday–Monday week, named by its dates.
-  const week = paneOf(render(["top25"], { period: "week", pager: [-1], neighbors: { "week:2026-08-27:2026-08-31": scoreboard([], "2026-08-27", { endDate: "2026-08-31" }) } }).html, -1);
-  assert.match(week, /<span class="pager-caption-date">Aug 27 – Aug 31<\/span><span>No Top 25 games in the week of Aug 27 – Aug 31\.<\/span>/);
+  const failedHtml = render([], { pager: [1], neighborFailed: true }).html;
+  assert.match(captionOf(failedHtml), /<span>Scores unavailable<\/span>/);
+  assert.match(paneOf(failedHtml, 1), /Scores are temporarily unavailable/);
+  assert.equal(paneCards(paneOf(failedHtml, 1)), 0);
+  // Week: the previous Thursday–Monday week, named by its dates, on the left.
+  const week = render(["top25"], { period: "week", pager: [-1], neighbors: { "week:2026-08-27:2026-08-31": scoreboard([], "2026-08-27", { endDate: "2026-08-31" }) } }).html;
+  assert.match(captionOf(week), /data-side="-1" aria-hidden="true"><span class="pager-caption-date">‹ Aug 27 – Aug 31<\/span><span>No games listed<\/span>/);
+  assert.match(paneOf(week, -1), /No Top 25 games in the week of Aug 27 – Aug 31\./);
+});
+
+test("issue 172: a held swipe keeps the displayed games as they were until it ends", () => {
+  // A poll since the drag began would have removed the live top-final card; the held list keeps it.
+  const boards = fixtures(), held = [...boards.week.games];
+  boards.week.games = boards.week.games.filter(g => g.id !== "top-final");
+  const { html } = render(["top25"], { period: "week", boards, pager: [1, null, held] });
+  assert.ok(cardIds(html).includes("top-final"));
+  assert.ok(!cardIds(render(["top25"], { period: "week", boards }).html).includes("top-final"), "at rest the new board shows");
 });
 
 test("issue 172: the view a committed swipe leaves is the same static picture on the side it leaves toward, without a caption", () => {

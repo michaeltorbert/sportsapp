@@ -127,10 +127,15 @@ function LoadingCards() { return <div className="game-grid" role="status" aria-l
 // halftime clocks. `label` is the range it shows; `step` is the swipe that left it.
 type PaneView = { label: string; weekly: boolean; status: "games" | "empty" | "loading" | "failed"; games: Game[]; title: string; description: string; upsets: boolean; step?: Step };
 const SECTIONS: [string, Game["state"]][] = [["On now", "live"], ["Delayed", "delayed"], ["Coming up", "upcoming"], ["Schedule updates", "other"], ["Final", "final"]];
-function StaticPane({ view, side, caption = false }: { view: PaneView; side: Step; caption?: boolean }) {
-  const cue = view.status === "games" ? `${view.games.length} ${view.games.length === 1 ? "game" : "games"}` : view.status === "loading" ? "Loading scores…" : view.status === "failed" ? "Scores unavailable" : view.title;
+// The incoming neighbor's date or week, held still at the top of the visible results on the side it
+// comes from, so it stays whole and readable however far the panes move. Only a range with no games
+// shown adds a short state.
+function PagerCaption({ view, side }: { view: PaneView; side: Step }) {
+  const state = view.status === "loading" ? "Loading" : view.status === "failed" ? "Scores unavailable" : view.status === "empty" ? "No games listed" : "";
+  return <p className="pager-caption" data-side={side} aria-hidden="true"><span className="pager-caption-date">{side === -1 ? "‹ " : ""}{view.label}{side === 1 ? " ›" : ""}</span>{state && <span>{state}</span>}</p>;
+}
+function StaticPane({ view, side }: { view: PaneView; side: Step }) {
   return <div className="pager-pane" data-side={side} aria-hidden="true" inert>
-    {caption && <p className="pager-caption"><span className="pager-caption-date">{view.label}</span><span>{cue}</span></p>}
     {view.status === "games" ? SECTIONS.map(([title, state]) => {
       const list = view.games.filter(g => g.state === state);
       return list.length > 0 && <div className="score-section" key={state}><div className={state === "live" ? "sr-only" : "section-label"}><h2>{title}</h2>{state !== "live" && <span>{list.length} {list.length === 1 ? "game" : "games"}</span>}</div><div className="game-grid">{list.map(g => <div className={cardClass(g)} key={g.id}><span className="game-summary"><CardContent game={g} showDate={view.weekly} /></span></div>)}</div></div>;
@@ -194,6 +199,9 @@ export default function Home() {
   // A held swipe's revealed neighbor (1 next, −1 previous, 0 none), and the view a committed swipe is leaving (#172).
   const [pagerSide, setPagerSide] = useState<Step | 0>(0);
   const [leaving, setLeaving] = useState<PaneView | null>(null);
+  // While a drag is held the displayed games stay as they were, so a poll never moves or removes the
+  // touched card mid-touch; newer scores show once the drag ends.
+  const [heldGames, setHeldGames] = useState<Game[] | null>(null);
   const teamPage = chosenTeam === undefined ? (route ? null : parseTeamRoute(search)?.team ?? null) : chosenTeam;
   const show = (game: GameRoute | null, team: string | null = null, origin: string | null = null) => { setRoute(game); setChosenTeam(game ? null : team); setTeamOrigin(game ? null : origin); };
   // The season of the open team page, or of the schedule a game was opened from (its context).
@@ -301,11 +309,12 @@ export default function Home() {
     const target = neighborRange(step);
     if (!target) return false;
     // The view being left, exactly as displayed, slides out beside the new range.
-    setLeaving({ ...shownView, step }); setPagerSide(0);
+    setLeaving({ ...shownView, step }); setPagerSide(0); setHeldGames(null);
     if (weekly) chooseWeek(target.start, true); else chooseDate(target.start, true);
   }, {
     reveal: (side, gesture) => {
       setPagerSide(side);
+      setHeldGames(held => side ? held ?? listed : null);
       const range = side ? neighborRange(side) : null;
       if (range) preview(scope, range.start, range.end, gesture);
     },
@@ -512,6 +521,8 @@ export default function Home() {
   const board = protectedBoards[scope], loaded = !!boards[scope];
   const visible = viewGames(board, selection, hideFinals, focusedGame, allFbs);
   const allLabel = allFbs ? "All FBS" : "All";
+  // The games shown: frozen while a swipe is held (#172), otherwise the current filtered board.
+  const listed = heldGames ?? visible;
   const shortDate = (d: string) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${d}T12:00:00Z`));
   const overnight = followToday && today && today !== easternDate();
   const age = data ? Math.max(0, Math.floor((now - Date.parse(data.fetchedAt)) / 1000)) : 0;
@@ -531,7 +542,7 @@ export default function Home() {
   const upsetsOnly = selection.length === 1 && selection[0] === "upset";
   const emptyDescription = upsetsOnly ? "Trailing pregame favorites, trailing known higher-ranked teams, and labeled ACC/SEC conference watches appear here, including unranked games." : selection.length === 1 && selection[0] === "close" ? "Live games appear here when the margin is 8 points or fewer, including ties." : weekly ? `${newGames} appear automatically as the schedule updates.` : `Choose another date to check the schedule. ${newGames} appear automatically.`;
   // Swipe panes (#172). The displayed results as a picture, for a committed swipe to slide out.
-  const shownView: PaneView = { label: weekly ? week ? weekRange : "This football week" : dateText, weekly, status: data ? visible.length ? "games" : "empty" : error ? "failed" : "loading", games: visible, title: emptyTitle(selection, period, allFbs, otherWeek), description: data ? emptyDescription : error ? "We'll try again in 30 seconds." : "", upsets: upsetsOnly };
+  const shownView: PaneView = { label: weekly ? week ? weekRange : "This football week" : dateText, weekly, status: data ? listed.length ? "games" : "empty" : error ? "failed" : "loading", games: listed, title: emptyTitle(selection, period, allFbs, otherWeek), description: data ? emptyDescription : error ? "We'll try again in 30 seconds." : "", upsets: upsetsOnly };
   // The revealed neighbor: that range's own known scores with the same Duke settings, filters and
   // scope as the results, or an honest loading or unavailable state; never the current games.
   const currentWeek = today ? accWeek(today).start : "";
@@ -547,7 +558,7 @@ export default function Home() {
   const neighbor = pagerSide ? neighborView(pagerSide) : null;
   const warning = error || (data?.stale ? "ESPN is unavailable. Showing the last successful scores." : age > 90 ? "Waiting for a fresh score update." : data?.warnings?.join(" "));
   const section = (title: string, state: Game["state"]) => {
-    const list = visible.filter(g => g.state === state);
+    const list = listed.filter(g => g.state === state);
     return list.length > 0 && <section className="score-section"><div className={state === "live" ? "sr-only" : "section-label"}><h2>{title}</h2>{state !== "live" && <span>{list.length} {list.length === 1 ? "game" : "games"}</span>}</div><div className="game-grid">{list.map(g => <GameCard key={g.id} game={g} board={data!} scopeError={!!scopeError} showDate={weekly} href={gameHref({ id: g.id, section: "team" }, urlView)} onOpen={() => openGame(g.id)} />)}</div></section>;
   };
   // The screen's game is looked up on the Duke-protected boards at every render, so a game hidden
@@ -581,7 +592,7 @@ export default function Home() {
     <p className="timezone-cue">Dates ET · Kickoffs {timezone}</p>
     {overnight && !weekly && <p className="overnight-note">Late games are still on. Today is staying on {shortDate(today)}.</p>}
     <div className="score-tabs">
-      <div className="filter-tabs" role="group" aria-label="Game categories">
+      <div className="filter-tabs" role="group" aria-label="Game categories" data-pager-cover="">
         <button type="button" className="filter-tab filter-watch" aria-pressed={selection.length === 0} aria-label={countLabel(allLabel, allCounts)} onClick={() => setSelection([])}><span>{allLabel}</span><CountPair counts={allCounts} /></button>
         {categories.map(c => { const pair = c === "upset" ? null : counts([c]); return <button type="button" className={`filter-tab filter-${c}`} aria-pressed={selection.includes(c)} aria-label={c === "upset" ? upset ? `Upsets, ${upset.brewing} brewing, ${upset.total} brewing or completed upsets` : stale ? "Upsets, counts unavailable while scores are stale" : "Upsets, counts loading" : countLabel(labels[c], pair)} onClick={() => setSelection(toggleCategory(selection, c))} key={c}><span>{labels[c]}</span>{c === "upset" ? <span className="tab-count upset-count" aria-hidden="true">{upset ? <>{upset.brewing} <span className="upset-total">({upset.total})</span></> : "– (–)"}</span> : <CountPair counts={pair} />}</button>; })}
       </div>
@@ -592,14 +603,15 @@ export default function Home() {
       <section ref={swipeRegion} className="score-content" aria-labelledby="scoreboard-heading">
         {/* #172: the track follows a held swipe; the live results stay in normal flow, the panes beside them. */}
         <div className="pager-track"><div className="pager-pane">
-        {data && <p className="sr-only" role="status">{visible.length} {visible.length === 1 ? "game" : "games"} shown.</p>}
+        {data && <p className="sr-only" role="status">{listed.length} {listed.length === 1 ? "game" : "games"} shown.</p>}
         {!data && !error && <LoadingCards />}
         {!data && error && <Empty className="empty-card"><EmptyHeader><EmptyMedia variant="icon"><CloudOff /></EmptyMedia><EmptyTitle>Scores are temporarily unavailable</EmptyTitle><EmptyDescription>We&apos;ll try again in 30 seconds. You can also check the source directly.</EmptyDescription></EmptyHeader><div className="empty-actions"><button className="solid-button" onClick={refresh} disabled={refreshing}>Try again</button><a className="text-link" href={`https://www.espn.com/college-football/scoreboard/_/date/${date.replaceAll("-", "")}/group/80`} target="_blank" rel="noopener noreferrer">Open ESPN <ArrowUpRight size={15} /></a></div></Empty>}
-        {data && <>{section("On now", "live")}{section("Delayed", "delayed")}{section("Coming up", "upcoming")}{section("Schedule updates", "other")}{section("Final", "final")}{visible.length === 0 && <Empty className="empty-card"><EmptyHeader><EmptyMedia variant="icon">{upsetsOnly ? <Zap /> : <Radio />}</EmptyMedia><EmptyTitle>{emptyTitle(selection, period, allFbs, otherWeek)}</EmptyTitle><EmptyDescription>{emptyDescription}</EmptyDescription></EmptyHeader></Empty>}</>}
+        {data && <>{section("On now", "live")}{section("Delayed", "delayed")}{section("Coming up", "upcoming")}{section("Schedule updates", "other")}{section("Final", "final")}{listed.length === 0 && <Empty className="empty-card"><EmptyHeader><EmptyMedia variant="icon">{upsetsOnly ? <Zap /> : <Radio />}</EmptyMedia><EmptyTitle>{emptyTitle(selection, period, allFbs, otherWeek)}</EmptyTitle><EmptyDescription>{emptyDescription}</EmptyDescription></EmptyHeader></Empty>}</>}
         </div>
-        {neighbor && pagerSide !== 0 && <StaticPane view={neighbor} side={pagerSide} caption />}
+        {neighbor && pagerSide !== 0 && <StaticPane view={neighbor} side={pagerSide} />}
         {leaving?.step && <StaticPane view={leaving} side={leaving.step === 1 ? -1 : 1} />}
         </div>
+        {neighbor && pagerSide !== 0 && <PagerCaption view={neighbor} side={pagerSide} />}
       </section>
     </div>
     <footer className="app-footer"><div><span className="footer-brand">SS<span> / </span></span><a href="https://www.espn.com/college-football/scoreboard" target="_blank" rel="noopener noreferrer">Scores via ESPN <ArrowUpRight size={12} /></a></div><p className="version-label">v{VERSION}</p></footer>
