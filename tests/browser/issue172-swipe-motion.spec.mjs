@@ -299,10 +299,11 @@ test("Week: a reversed drag shows each side's own week, and a short release slid
   await holdThrough(page, testInfo, held, [-80], { side: 1, label: "Sep 10 – Sep 14", has: ["next-week-sat away"], hasNot: ["ranked-live"], name: "week-forward" });
   await holdThrough(page, testInfo, held, [40, 25], { side: -1, label: "Aug 27 – Aug 31", has: ["prev-week-sat away"], hasNot: ["ranked-live", "next-week-sat"], name: "week-reversed" });
   await expect(pane(page, 1)).toHaveCount(0);
-  await sampleFrames(page, 30);
+  await sampleFrames(page, 30, true);
   await held.end();
   const back = await samples(page, 30);
   test.info().annotations.push({ type: "slide-back offsets", description: back.map(Math.round).join(" ") });
+  await attachSettleRecord(page, testInfo, "week-slide-back-record");
   for (let i = 1; i < back.length; i++) expect(back[i], `sliding back never overshoots (frame ${i})`).toBeLessThanOrEqual(back[i - 1] + 0.5);
   expect(Math.abs(back.at(-1))).toBe(0);
   await expect(region(page)).not.toHaveAttribute("data-pager");
