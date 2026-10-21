@@ -342,6 +342,77 @@ for (const width of [320, 390, 1280]) test(`category chips keep one row of one-l
   await expectCompactChips(page, ["All", "ACC", "Top 25", "One score", "Upsets"].map(label => [label, "0 (0)"]));
 });
 
+// The Hide finals / All FBS games pair: native labeled checkboxes with 44px targets and one-line labels,
+// inside the viewport and clear of each other; beside each other when wide, All FBS games beneath when narrow.
+async function expectScopeToggles(page, { stacked, oneLine = true }) {
+  const layout = await page.evaluate(() => {
+    const viewport = document.documentElement.clientWidth;
+    const spread = element => { const range = document.createRange(); range.selectNodeContents(element); const tops = [...range.getClientRects()].filter(r => r.width > 0 && r.height > 0).map(r => r.top); return tops.length ? Math.max(...tops) - Math.min(...tops) : Infinity; };
+    const labels = [...document.querySelectorAll(".scope-toggles .toggle-label")].map(label => {
+      const box = label.getBoundingClientRect(), text = label.querySelector("span"), input = label.querySelector("input");
+      return { text: text.textContent, type: input.type, left: box.left, right: box.right, top: box.top, bottom: box.bottom, height: box.height, spread: spread(text), fits: label.scrollWidth <= label.clientWidth + .5, fontSize: getComputedStyle(text).fontSize };
+    });
+    const status = document.querySelector(".feed-status").getBoundingClientRect();
+    return { viewport, documentFits: document.documentElement.scrollWidth <= innerWidth, labels, status: { left: status.left, right: status.right, top: status.top, bottom: status.bottom } };
+  });
+  expect(layout.documentFits, "no document overflow").toBe(true);
+  expect(layout.labels.map(label => [label.text, label.type])).toEqual([["Hide finals", "checkbox"], ["All FBS games", "checkbox"]]);
+  for (const label of layout.labels) {
+    expect(label.height, `${label.text} target height`).toBeGreaterThanOrEqual(44);
+    expect(label.left, `${label.text} left edge`).toBeGreaterThanOrEqual(-.5);
+    expect(label.right, `${label.text} right edge`).toBeLessThanOrEqual(layout.viewport + .5);
+    expect(label.fits, `${label.text} is not clipped`).toBe(true);
+    if (oneLine) expect(label.spread, `${label.text} stays on one line`).toBeLessThan(4);
+    const s = layout.status;
+    expect(label.right <= s.left || s.right <= label.left || label.bottom <= s.top || s.bottom <= label.top, `${label.text} does not overlap the feed status`).toBe(true);
+  }
+  const [hide, all] = layout.labels;
+  expect(hide.right <= all.left || all.right <= hide.left || hide.bottom <= all.top + .5 || all.bottom <= hide.top + .5, "the two labels do not overlap").toBe(true);
+  if (stacked === true) expect(all.top, "All FBS games sits beneath Hide finals").toBeGreaterThanOrEqual(hide.bottom - .5);
+  if (stacked === false) { expect(Math.abs(all.top - hide.top), "All FBS games sits beside Hide finals").toBeLessThan(1); expect(all.left).toBeGreaterThan(hide.right); }
+  return layout;
+}
+
+// All FBS games on: the same compact row with the longer reset label, through narrowed, busy, unavailable and empty states.
+for (const width of [320, 390, 1280]) test(`All FBS chips keep one row of one-line labels and count pairs at ${width}px, on, narrowed, busy, unavailable and empty`, async ({ page, harness }, testInfo) => {
+  await page.setViewportSize({ width, height: 800 });
+  harness.state.events = [...harness.state.events, event("ordinary-next", { state: "upcoming", date: "2026-09-05T23:00:00Z" })];
+  await harness.open();
+  await expectCount(page, "All", 2, 3);
+  await expectScopeToggles(page, { stacked: width < 480 });
+  await attachScreenshot(page, testInfo, `all-fbs-off-${width}`);
+  await page.getByRole("checkbox", { name: "All FBS games", exact: true }).click();
+  await expectCount(page, "All FBS", 2, 4);
+  await expectCompactChips(page, [["All FBS", "2 (4)"], ["ACC", "0 (1)"], ["Top 25", "1 (1)"], ["One score", "2 (2)"], ["Upsets", "1 (1)"]]);
+  await expectScopeToggles(page, { stacked: width < 480 });
+  await attachScreenshot(page, testInfo, `all-fbs-on-${width}`);
+  await category(page, "Top 25").click();
+  await expectPressed(page, ["Top 25"]);
+  await expectCompactChips(page, [["All FBS", "2 (4)"], ["ACC", "0 (1)"], ["Top 25", "1 (1)"], ["One score", "2 (2)"], ["Upsets", "1 (1)"]]);
+  await attachScreenshot(page, testInfo, `all-fbs-narrowed-${width}`);
+  await period(page, "Week").click();
+  harness.state.events = busyWeek();
+  await page.getByRole("button", { name: "Refresh scores" }).click();
+  await category(page, "All FBS").click();
+  for (const [name, current, total] of [["All FBS", 18, 196], ["ACC", 4, 64], ["Top 25", 12, 130], ["One score", 10, 68]]) await expectCount(page, name, current, total);
+  await expectCompactChips(page, [["All FBS", "18 (196)"], ["ACC", "4 (64)"], ["Top 25", "12 (130)"], ["One score", "10 (68)"], ["Upsets", "4 (12)"]]);
+  await expectScopeToggles(page, { stacked: width < 480 });
+  await attachScreenshot(page, testInfo, `all-fbs-busy-${width}`);
+  harness.state.failScores = true;
+  await page.getByRole("button", { name: "Refresh scores" }).click();
+  await expect(page.getByRole("alert")).toContainText("Could not refresh scores");
+  await expect(category(page, "All FBS")).toHaveAttribute("aria-label", "All FBS, counts unavailable while scores are stale");
+  await expectCompactChips(page, ["All FBS", "ACC", "Top 25", "One score", "Upsets"].map(label => [label, "– (–)"]));
+  await attachScreenshot(page, testInfo, `all-fbs-stale-${width}`);
+  harness.state.failScores = false; harness.state.events = [];
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expectCount(page, "All FBS", 0, 0);
+  await expectCompactChips(page, ["All FBS", "ACC", "Top 25", "One score", "Upsets"].map(label => [label, "0 (0)"]));
+  await expect(page.locator('.empty-card [data-slot="empty-title"]')).toHaveText("No FBS games this week.");
+  await attachScreenshot(page, testInfo, `all-fbs-empty-${width}`);
+});
+
 // The preserved 200 percent flows: doubled root text, and actual CSS zoom with and without wide
 // fallback fonts (Linux CI WebKit's wider metrics), on a busy week's multidigit counts.
 const BUSY_CHIPS = [["All", "18 (196)"], ["ACC", "4 (64)"], ["Top 25", "12 (130)"], ["One score", "10 (68)"], ["Upsets", "4 (12)"]];
@@ -383,6 +454,13 @@ for (const width of [320, 375, 390, 393, 430]) for (const [mode, style, sizes] o
   // Counts and their spoken meaning are unchanged by the enlarged layout.
   await expectCount(page, "All", 18, 196); await expectUpsetCount(page, 4, 12);
   await attachScreenshot(page, testInfo, `chips-enlarged-${mode}-${width}`);
+  // The longer All FBS reset label wraps only as a whole chip; the checkbox pair stays inside the page.
+  await expectScopeToggles(page, { oneLine: false });
+  await page.getByRole("checkbox", { name: "All FBS games", exact: true }).click();
+  await expectCount(page, "All FBS", 18, 196);
+  await expectCompactChips(page, [["All FBS", "18 (196)"], ...BUSY_CHIPS.slice(1)], { oneRow: false, ...sizes });
+  await expectScopeToggles(page, { oneLine: false });
+  await attachScreenshot(page, testInfo, `chips-enlarged-${mode}-${width}-all-fbs`);
 });
 
 test("home wordmark returns a manually selected date to Today", async ({ page, harness }) => {

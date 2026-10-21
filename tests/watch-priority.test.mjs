@@ -424,6 +424,30 @@ test("ORD-007 Duke and Virginia Tech lead each state group without crossing grou
     "both favorites share a tier; chronology breaks their upcoming tie");
 });
 
+test("ORD-021 All FBS games keeps pins, state groups and Hide finals, with the comparator's own order", () => {
+  // Unranked, non-ACC games outside the curated watchlist in every state, beside pinned and curated ones.
+  const states = ["live", "delayed", "upcoming", "other", "final"];
+  const games = states.flatMap((state, index) => {
+    const date = `2026-09-${13 + index}T12:00:00Z`;
+    const outside = match(`${state}-outside`, { state, score: 3, otherScore: 45, date });
+    const curated = match(`${state}-ranked`, { state, rank: 4, score: 24, otherScore: 27, date });
+    const pinned = match(`${state}-259`, { state, score: 56, otherScore: 0, period: 1, date }); pinned.teams[0].id = "259";
+    return [outside, curated, pinned];
+  });
+  for (const input of [games, [...games].reverse(), [...games.slice(7), ...games.slice(0, 7)]]) {
+    const scoped = viewGames(scoreboard(input), [], false, "", true);
+    assert.deepEqual(scoped.map(g => g.id), sortGames(input).map(g => g.id), "every game, in exactly the comparator's order");
+    assert.deepEqual(scoped.map(g => g.state), states.flatMap(state => [state, state, state]));
+    for (const state of states) assert.equal(scoped.find(g => g.state === state).id, `${state}-259`, `the pin leads ${state}`);
+    const curated = viewGames(scoreboard(input), []).map(g => g.id);
+    assert.equal(curated.some(id => id.endsWith("-outside")), false, "fixture: outside games are not in the curated watchlist");
+    assert.deepEqual(curated, scoped.map(g => g.id).filter(id => curated.includes(id)));
+    assert.equal(viewGames(scoreboard(input), [], true, "", true).some(g => g.state === "final"), false);
+    for (const selection of [["acc"], ["top25"], ["upset"], ["acc", "top25", "close", "upset"]])
+      assert.deepEqual(viewGames(scoreboard(input), selection, false, "", true).map(g => g.id), viewGames(scoreboard(input), selection).map(g => g.id), JSON.stringify(selection));
+  }
+});
+
 test("FABLE-016 equal-kickoff upcoming games order by team relevance, then event ID, within state and pin tiers", () => {
   // Documents the imported comparator; no new ordering rule.
   const kickoff = "2026-09-12T16:00:00Z";

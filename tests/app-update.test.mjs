@@ -22,12 +22,12 @@ test("refresh URL preserves actual view and unrelated URL data without replaying
   const url = new URL(refreshUrl("https://example.test/?other=keep&tab=acc#game-abc", B, { date: "2026-09-05", followToday: false, selection: ["upset", "acc"], period: "day", hideFinals: true, focusedGame: "abc" }));
   assert.equal(url.hash, ""); assert.equal(url.searchParams.get("other"), "keep"); assert.equal(url.searchParams.get("date"), "2026-09-05");
   assert.equal(url.searchParams.has("tab"), false); assert.equal(url.searchParams.get("cats"), "acc,upset"); assert.equal(url.searchParams.has("period"), false);
-  assert.deepEqual(initialView(url.search), { selection: ["acc", "upset"], period: "day" }); assert.deepEqual(updateRestoration(url.search), { hideFinals: true, focusedGame: "abc", openGame: "" });
+  assert.deepEqual(initialView(url.search), { selection: ["acc", "upset"], period: "day" }); assert.deepEqual(updateRestoration(url.search), { hideFinals: true, allFbs: false, focusedGame: "abc", openGame: "" });
   const home = new URL(refreshUrl(url.href + "#unrelated", B, { date: "2026-09-05", followToday: true, selection: [], period: "day", hideFinals: false, focusedGame: "" }));
   assert.equal(home.hash, "#unrelated"); assert.equal(home.searchParams.has("date"), false); assert.equal(home.searchParams.has("_ss_focus"), false);
   assert.equal(home.searchParams.has("cats"), false); assert.equal(home.searchParams.has("period"), false);
   assert.deepEqual(initialView(home.search), { selection: [], period: "day" });
-  assert.deepEqual(updateRestoration(home.search), { hideFinals: false, focusedGame: "", openGame: "" });
+  assert.deepEqual(updateRestoration(home.search), { hideFinals: false, allFbs: false, focusedGame: "", openGame: "" });
   assert.equal(updateRestoration(`?_ss_update=${B}`), null);
   assert.equal(updateRestoration(`?_ss_update=${B}&_ss_hide_finals=1&_ss_focus=%3Cscript%3E`), null);
 });
@@ -37,17 +37,18 @@ test("game screen open intent: an open game survives refresh by URL; a pending i
   const screen = new URL(refreshUrl("https://example.test/?event=401858481&section=players&date=2026-09-05", B, base));
   assert.equal(screen.searchParams.get("event"), "401858481"); assert.equal(screen.searchParams.get("section"), "players");
   assert.equal(screen.searchParams.get("_ss_open"), "0");
-  assert.deepEqual(updateRestoration(screen.search), { hideFinals: false, focusedGame: "abc", openGame: "" });
+  assert.deepEqual(updateRestoration(screen.search), { hideFinals: false, allFbs: false, focusedGame: "abc", openGame: "" });
   // Still unconsumed (for example scores had not loaded): it opens once after the update.
   const pending = new URL(refreshUrl("https://example.test/#game-abc", B, { ...base, openGame: "abc" }));
   assert.equal(pending.searchParams.get("_ss_open"), "abc"); assert.equal(pending.hash, "");
-  assert.deepEqual(updateRestoration(pending.search), { hideFinals: false, focusedGame: "abc", openGame: "abc" });
+  assert.deepEqual(updateRestoration(pending.search), { hideFinals: false, allFbs: false, focusedGame: "abc", openGame: "abc" });
   // Consumed or returned to the scoreboard: X is 0, membership only.
   assert.equal(new URL(refreshUrl("https://example.test/", B, { ...base, openGame: "" })).searchParams.get("_ss_open"), "0");
   assert.equal(new URL(refreshUrl("https://example.test/", B, { ...base, openGame: "<bad>" })).searchParams.get("_ss_open"), "0");
   // A 1.14.0 update link has no _ss_open: its focused game opens once, as it used to expand.
-  assert.deepEqual(updateRestoration(`?_ss_update=${B}&_ss_hide_finals=0&_ss_focus=abc`), { hideFinals: false, focusedGame: "abc", openGame: "abc" });
-  assert.deepEqual(updateRestoration(`?_ss_update=${B}&_ss_hide_finals=0`), { hideFinals: false, focusedGame: "", openGame: "" });
+  // Such old links have no _ss_all_fbs either: null leaves the scope to the saved preference.
+  assert.deepEqual(updateRestoration(`?_ss_update=${B}&_ss_hide_finals=0&_ss_focus=abc`), { hideFinals: false, allFbs: null, focusedGame: "abc", openGame: "abc" });
+  assert.deepEqual(updateRestoration(`?_ss_update=${B}&_ss_hide_finals=0`), { hideFinals: false, allFbs: null, focusedGame: "", openGame: "" });
   assert.equal(updateRestoration(`?_ss_update=${B}&_ss_hide_finals=0&_ss_open=%3Cx%3E`), null);
   // The Guide never carries a Scores open intent.
   assert.equal(new URL(refreshUrl("https://example.test/guide?_ss_open=abc", B, { page: "guide", date: "", followToday: true, view: "all" })).searchParams.has("_ss_open"), false);
@@ -65,6 +66,27 @@ test("ORD-011 view restoration round-trips every period and selection, including
       assert.equal(url.searchParams.has("date"), !followToday);
     }
   }
+});
+test("ORD-021 an update carries the actual All FBS scope transiently; old links defer to the saved preference", () => {
+  const base = { date: "2026-09-05", followToday: false, selection: [], period: "week", hideFinals: false, focusedGame: "" };
+  for (const allFbs of [true, false]) {
+    const url = new URL(refreshUrl("https://example.test/?keep=yes", B, { ...base, allFbs }));
+    assert.equal(url.searchParams.get("_ss_all_fbs"), allFbs ? "1" : "0");
+    assert.equal(updateRestoration(url.search).allFbs, allFbs, "an explicit scope wins in either direction");
+    // The scope is not part of the ordinary view: the URL's view parameters are unchanged.
+    assert.deepEqual(initialView(url.search), { selection: [], period: "week" });
+    assert.equal(url.searchParams.get("keep"), "yes");
+    // A narrowed view keeps its categories and its scope.
+    const narrowed = new URL(refreshUrl("https://example.test/", B, { ...base, allFbs, selection: ["acc"] }));
+    assert.equal(narrowed.searchParams.get("cats"), "acc"); assert.equal(updateRestoration(narrowed.search).allFbs, allFbs);
+  }
+  for (const bad of ["", "true", "2", "yes"]) assert.equal(updateRestoration(`?_ss_update=${B}&_ss_hide_finals=0&_ss_all_fbs=${bad}`), null, bad);
+  assert.equal(updateRestoration(`?_ss_update=${B}&_ss_all_fbs=1`), null, "Hide finals is still required");
+  // The Guide never carries the Scores scope.
+  const guide = new URL(refreshUrl("https://example.test/guide?_ss_all_fbs=1&view=watch", B, { page: "guide", date: "", followToday: true, view: "all" }));
+  assert.equal(guide.searchParams.has("_ss_all_fbs"), false); assert.equal(guide.searchParams.has("view"), false);
+  assert.equal(new URL(refreshUrl("https://example.test/guide?_ss_all_fbs=0", B, { page: "guide", date: "", followToday: true, view: "watch" })).searchParams.has("_ss_all_fbs"), false);
+  for (const search of [null, "", "?cats=acc&period=week", "?_ss_all_fbs=1"]) assert.deepEqual(Object.keys(initialView(search)), ["selection", "period"]);
 });
 test("legacy tab links keep their daily or weekly meaning and invalid values fall back to All on Day", () => {
   assert.deepEqual(initialView("?tab=acc"), { selection: ["acc"], period: "week" });

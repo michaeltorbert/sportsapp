@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.19.0 · 2026-10-21
+
+- A new **All FBS games** checkbox beside Hide finals, off by default. When checked, the All chip reads **All FBS** and lists every game the existing FBS scoreboard feed returns for the selected Day or Week, including games against FCS opponents; unchecked, All is still your watchlist. It adds no separate FCS coverage and does not promise the feed is complete (#176).
+- ACC, Top 25, One score and Upsets still narrow the list as before, and their counts are unchanged. Checking or unchecking the box clears category selections to that view's All; All FBS counts describe what it lists (#176).
+- This device remembers the choice across dates, Day and Week, and reloads. Game Back, history and app updates restore the view you left; ordinary links use the saved choice. Home returns to Day and All within it (#176).
+- Duke spoiler settings and Hide finals still apply first. Ordering, the Guide's own All games/Watchlist choice, game screens, pregame lines and alerts are unchanged (ORD-021).
+
 ## 1.18.0 · 2026-10-19
 
 - When Today’s successfully loaded schedule has no games, Scores opens the existing Thursday–Monday football week so you can see the rest of the week. Day remains available, and a scheduled game hidden by categories or Hide finals does not count as an empty schedule (#171).
