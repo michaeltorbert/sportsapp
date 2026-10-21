@@ -105,10 +105,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Chromium as one job ran 356 of its 371 tests in about 14 minutes before the 15-minute job limit
+          # canceled it (run 39562891879). With fullyParallel, Playwright's shards split the test list itself,
+          # so three shards keep every test within the existing limit, with room for uneven splits and growth.
           - project: chromium-mobile
             engine: chromium
             shardIndex: 1
-            shardTotal: 1
+            shardTotal: 3
+          - project: chromium-mobile
+            engine: chromium
+            shardIndex: 2
+            shardTotal: 3
+          - project: chromium-mobile
+            engine: chromium
+            shardIndex: 3
+            shardTotal: 3
           - project: webkit-mobile
             engine: webkit
             shardIndex: 1
