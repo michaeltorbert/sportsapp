@@ -73,15 +73,22 @@ export function gameDay(now: Date, previous: Scoreboard | null, heldDate?: strin
   // A failed or incomplete refresh is not evidence that the last game ended.
   return heldDate === yesterday ? yesterday : calendar;
 }
+// Category history follows the participants, even if the provider corrects their designations.
+function sameCategoryTeams(a: Game, b: Game) {
+  const ids = (game: Game) => game.teams.map(team => team.id);
+  const valid = (values: string[]) => values.length === 2 && values.every(id => typeof id === "string" && id.trim().length > 0) && new Set(values).size === 2;
+  const before = ids(a), after = ids(b);
+  return valid(before) && valid(after) && before.every(id => after.includes(id));
+}
 export function retainFinalCategories(next: Scoreboard, previous: Scoreboard | null): Scoreboard {
   const sameRange = previous?.date === next.date && (previous.endDate || previous.date) === (next.endDate || next.date);
   return { ...next, games: next.games.map(raw => {
     const game = { ...raw };
     // Only our matching prior observation can supply delay history.
     delete game.lastActiveClose;
-    const old = sameRange ? previous?.games.find(g => g.id === game.id && g.teams.every((t, i) => t.id === game.teams[i].id)) : undefined;
+    const old = sameRange ? previous?.games.find(g => g.id === game.id && sameCategoryTeams(g, game)) : undefined;
     // Categories belong to the event; betting evidence also belongs to its scheduled matchup.
-    if (!game.pregameLine && old?.pregameLine && old.date === game.date) game.pregameLine = old.pregameLine;
+    if (!game.pregameLine && old?.pregameLine && old.date === game.date && old.teams.every((team, i) => team.id === game.teams[i].id)) game.pregameLine = old.pregameLine;
     const delayedClose = sameRange && old?.state === "delayed" && old.started ? old.lastActiveClose === true : false;
     if (sameRange && game.state === "delayed" && game.started && old) {
       if (old.state === "live") game.lastActiveClose = classify(old).close;

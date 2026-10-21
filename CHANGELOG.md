@@ -1,5 +1,9 @@
 # Saturday Signal releases
 
+## 1.21.1 · 2026-10-21
+
+- Keep a game's category and delayed One-score history when the provider corrects its home/away designations without changing the event or participants. Saved betting lines still require the same ordered matchup and kickoff (#14).
+
 ## 1.21.0 · 2026-10-21
 
 - Add to Home Screen guidance appears in browser tabs and stays out of the Home Screen app. Open the footer action for Safari’s Share and Add to Home Screen steps, from Scores, Guide, game or team screens (#169).
@@ -430,4 +434,4 @@ Source: `2f64d4e68ef099685648573828fd272b4e9555ca`. Sites saved version 1.
 
 ## Release policy
 
-Every published change gets a new semantic version, changelog entry, source commit, immutable Git tag, and GitHub release. Never move an existing release tag. Starting with v1.2.0, the GitHub release workflow deploys the exact tagged source to Cloudflare and verifies the deployed version and commit. See `docs/releases.md` for setup and rollback. Existing Sites publications remain available during migration; new releases do not require a Sites source push or saved version.
+Every published change gets a new semantic version, changelog entry, source commit, immutable Git tag, and GitHub release. Never move an existing release tag. The initial v1.2.0 deployment used an authorized local Wrangler session; subsequent automated releases use the GitHub release workflow to deploy the exact tagged source to Cloudflare and verify the deployed version and commit. See `docs/releases.md` for setup and rollback. Existing Sites publications remain available during migration; new releases do not require a Sites source push or saved version.

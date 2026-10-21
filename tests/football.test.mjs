@@ -107,7 +107,6 @@ test("delays cannot invent close history or carry it across identity, board rang
   const held = retainFinalCategories(scoreboard([delay]), scoreboard([live]));
   const variations = [
     { ...delay, started: false }, { ...delay, id: "other" },
-    { ...delay, teams: [...delay.teams].reverse() },
     { ...delay, teams: [{ ...delay.teams[0], id: "replacement" }, delay.teams[1]] },
   ];
   for (const changed of variations) {
@@ -144,4 +143,57 @@ test("pregame betting evidence shares the board-range guard with category histor
   for (const next of [scoreboard([live], "2026-09-06"), scoreboard([live], previous.date, { endDate: "2026-09-07" })]) {
     assert.equal(retainFinalCategories(next, previous).games[0].pregameLine, undefined, "a matching event and kickoff cannot import betting evidence from another board range");
   }
+});
+
+
+test("FABLE-014 designation correction retains close history across live, delayed and final observations", () => {
+  for (const reversedInitially of [false, true]) {
+    const live = game({ neutralSite: true }); live.teams[0].rank = 5;
+    if (reversedInitially) live.teams.reverse();
+    const corrected = structuredClone(live); corrected.teams.reverse();
+    const favorite = corrected.teams.find(team => team.rank === 5); favorite.score = 42;
+    const final = { ...corrected, state: "final" };
+    assert.equal(classify(final).close, false);
+    const direct = retainFinalCategories(scoreboard([final]), scoreboard([live]));
+    assert.equal(classify(direct.games[0]).close, true, "same participants retain their close observation");
+    assert.equal(classify(direct.games[0]).upset, false, "ORD-016: recovered favorites leave Upsets");
+    let delayed = retainFinalCategories(scoreboard([{ ...corrected, state: "delayed" }]), scoreboard([live]));
+    assert.equal(delayed.games[0].lastActiveClose, true);
+    assert.equal(classify(delayed.games[0]).close, false, "delay itself has no live close badge");
+    const repeated = { ...structuredClone(delayed.games[0]), teams: [...delayed.games[0].teams].reverse() };
+    delayed = retainFinalCategories(scoreboard([repeated]), JSON.parse(JSON.stringify(delayed)));
+    assert.equal(delayed.games[0].lastActiveClose, true);
+    const finished = retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(delayed)));
+    assert.equal(classify(finished.games[0]).close, true);
+    assert.equal(classify(finished.games[0]).upset, false);
+    assert.equal(classify(retainFinalCategories(scoreboard([final]), JSON.parse(JSON.stringify(finished))).games[0]).close, true);
+  }
+});
+
+test("FABLE-014 category history requires exactly two distinct valid IDs and the same event and range", () => {
+  const live = game(), final = game({ state: "final" }); final.teams[1].score = 42;
+  const invalidTeams = [[], [live.teams[0]], [...live.teams, live.teams[0]],
+    [live.teams[0], { ...live.teams[1], id: "a" }],
+    ...["", " ", null, undefined, 7].map(id => [live.teams[0], { ...live.teams[1], id }])];
+  for (const teams of [...invalidTeams, [live.teams[0], { ...live.teams[1], id: "replacement" }]]) {
+    const next = retainFinalCategories(scoreboard([final]), scoreboard([{ ...live, teams }]));
+    assert.equal(classify(next.games[0]).close, false, "malformed or changed prior participants carry no history");
+    const delay = retainFinalCategories(scoreboard([{ ...final, state: "delayed", teams }]), scoreboard([live]));
+    assert.equal(delay.games[0].lastActiveClose, undefined, "malformed or changed next participants carry no history");
+  }
+  const swapped = { ...final, teams: [...final.teams].reverse() };
+  for (const next of [scoreboard([{ ...swapped, id: "other" }]), scoreboard([swapped], "2026-09-06"), scoreboard([swapped], "2026-09-05", { endDate: "2026-09-07" })])
+    assert.equal(classify(retainFinalCategories(next, scoreboard([live])).games[0]).close, false);
+});
+
+test("FABLE-014 category identity never relaxes ordered-team and kickoff betting-baseline identity", () => {
+  const pregameLine = { favoriteId: "a", spread: 7, source: "fixture" };
+  const old = game({ pregameLine });
+  const final = game({ state: "final" }); final.teams[1].score = 42;
+  for (const change of [{ teams: [...final.teams].reverse() }, { date: "2026-09-06T03:30:00Z" }]) {
+    const kept = retainFinalCategories(scoreboard([{ ...final, ...change }]), scoreboard([old])).games[0];
+    assert.equal(classify(kept).close, true, "categories follow the event through designation or schedule correction");
+    assert.equal(kept.pregameLine, undefined, "betting evidence remains conservative");
+  }
+  assert.deepEqual(retainFinalCategories(scoreboard([final]), scoreboard([old])).games[0].pregameLine, pregameLine);
 });

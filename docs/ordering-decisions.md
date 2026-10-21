@@ -34,6 +34,13 @@ This is the cumulative product contract and conflict log. The numeric implementa
 
 ## Conflict and supersession history
 
+### 2026-10-21 — FABLE-014 participant designation correction
+
+- Source: issue #14's explicit review follow-up, reopened for implementation. This is an unobserved provider-correction case, not a reported production incident. Category and delayed-close history follow the same event and exactly the same two distinct, nonempty team IDs in either order, within the same board range. Schedule corrections keep category history. Changed opponents, malformed identities, unrelated events/ranges and unstarted delays cannot carry it.
+- This implements the existing category-history intent without adding a preference or ORD ID. It intentionally supersedes only the old `delays cannot invent close history…` fixture's reversed-participant rejection; every other identity, range and started-state guard remains. ORD-015/016 still derive final Upsets from the actual result, including recovered favorites. ORD-001/007/011 shared order, state groups, pins and category filters, Duke visibility, all weights, alert eligibility/IDs and every other active rule remain unchanged; ORD-008 remains pending.
+- Betting baselines remain separate: same event, board range, kickoff and **ordered** participants. A designation swap may retain category history but cannot import the old line. Summary parsing and alert identity are unchanged.
+- Regression: the three `FABLE-014` cases in `tests/football.test.mjs` cover either initial participant order, live-to-final and live-to-delay-to-final with repeated swaps/reload, recovered final Upsets, invalid/changed participants and ranges, plus strict betting identity. Complete ordering and full unit suites remain required before handoff.
+
 ### 2026-10-21 — ORD-021 All FBS games scope
 
 - Source: [issue #176](https://github.com/michaeltorbert/sportsapp/issues/176), the agreed issue body (“Add a simple way to see every game on that slate without changing the default watchlist experience”), and its implementation follow-up comment of 2026-10-21 asking for “All FBS games” rather than “Your watchlist” headings and empty states when the unfiltered all-FBS scope is active.
