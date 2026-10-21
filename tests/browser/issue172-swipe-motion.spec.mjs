@@ -63,6 +63,8 @@ const pane = (page, side) => page.locator(`section.score-content .pager-pane[dat
 // The date cue is held still in the results region, outside the moving panes.
 const caption = (page, side) => page.locator(`section.score-content > .pager-caption[data-side="${side}"]`);
 const weekLabel = page => page.locator(".week-label");
+// The checkbox itself: once All FBS is shown, the results region is also labeled "All FBS games".
+const allFbsBox = page => page.getByRole("checkbox", { name: "All FBS games", exact: true });
 const historyLength = page => page.evaluate(() => history.length);
 // The results track's painted horizontal translation.
 const offset = page => page.evaluate(() => new DOMMatrixReadOnly(getComputedStyle(document.querySelector("section.score-content > .pager-track")).transform).m41);
@@ -429,8 +431,11 @@ test("Chromium touches: a poll that would hide the touched game mid-drag waits u
   inputKind(browserName);
   let finished = [];
   harness.state.events = () => events().map(e => finished.includes(e.id) ? event(e.id, { state: "final", scores: [10, 13] }) : e);
-  await harness.open();
+  // Saturday chosen explicitly: the fixture's 23:59 ET plus two 30-second polls passes midnight, and with
+  // both live games finished Today would correctly move to Sunday. This case is a same-range poll only.
+  await harness.open({ path: "/?date=2026-09-05" });
   await assertFixtureMediaIsMuted(page);
+  await expect(dateInput(page)).toHaveValue("2026-09-05");
   await page.getByLabel("Hide finals").check();
   // Delivers the ordinary 30-second poll after `id` finishes; Hide finals would then hide its card.
   const finish = async id => {
@@ -505,7 +510,7 @@ test("ORD-021 with #172: the neighbor lists exactly what the same filters would;
     await expect(dateInput(page)).toHaveValue("2026-09-05");
   };
   await look(1, ["sunday-acc away"], ["sunday-fbs"], "curated");
-  await page.getByLabel("All FBS games").check();
+  await allFbsBox(page).check();
   await look(3, ["sunday-acc away", "sunday-fbs away", "sunday-fbs-final away"], [], "all-fbs");
   await page.getByLabel("Hide finals").check();
   await look(2, ["sunday-fbs away"], ["sunday-fbs-final"], "all-fbs-hide-finals");
@@ -519,7 +524,7 @@ test("ORD-021 with #172: the neighbor lists exactly what the same filters would;
   await expect(page.locator("#game-sunday-fbs")).toBeVisible();
   await expect(page.locator("#game-sunday-fbs-final")).toHaveCount(0);
   await expect(category(page, "All FBS")).toHaveAttribute("aria-label", "All FBS, 0 in progress, 2 total");
-  await page.getByLabel("All FBS games").uncheck();
+  await allFbsBox(page).uncheck();
   await expect(page.locator("#game-sunday-fbs")).toHaveCount(0);
   await expect(page.locator("#game-sunday-acc")).toBeVisible();
 });
