@@ -1,4 +1,4 @@
-import { test, expect, event, standardEvents, dateInput, category } from "./fixtures.mjs";
+import { test, expect, event, standardEvents, dateInput, category, NOW, dateOnlyClockEvidence } from "./fixtures.mjs";
 
 // Issue 172 held-drag motion evidence: the results follow a finger that is still down, the neighboring
 // range is visible beside them with its own date and games, and a release commits once (settling in) or
@@ -29,6 +29,27 @@ async function assertFixtureMediaIsMuted(page) {
     return result;
   });
   expect(muted, "the browser fixture mutes media before interaction").toBe(true);
+}
+
+// The Date-only clock is what the page actually has: attached, then checked, before any interaction.
+async function expectDateOnlyClock(page, testInfo) {
+  const evidence = await dateOnlyClockEvidence(page);
+  // The native animation-frame clock advances on its own (no clock is driving it).
+  evidence.frame = await page.evaluate(() => new Promise(resolve => { const before = performance.now(); requestAnimationFrame(time => resolve({ before, time, after: performance.now() })); }));
+  await testInfo.attach("clock-setup", { contentType: "application/json", body: JSON.stringify(evidence, null, 1) });
+  for (const [name, check] of Object.entries(evidence.scheduling)) {
+    expect(check.same, `${name} is the function found before Date was replaced`).toBe(true);
+    expect(check.native, `${name} is the browser's own`).toBe(true);
+  }
+  const fixed = Date.parse(NOW), d = evidence.date;
+  expect(evidence.fixed).toBe(fixed); expect(evidence.dateReplaced).toBe(true);
+  expect([d.now, d.constructed, d.parse, d.utc, d.fromIso]).toEqual([fixed, fixed, fixed, fixed, fixed]);
+  expect(d.epoch).toBe(0);
+  expect(d.local, "argumentful construction keeps local-time meaning").toEqual([2026, 8, 5, 12, 30]);
+  expect(d.call).toBe("string"); expect(d.callIsFixed).toBe(true);
+  expect([d.instance, d.nativeInstance, d.sharedPrototype]).toEqual([true, true, true]);
+  expect(d.tag).toBe("[object Date]"); expect(d.name).toBe("Date"); expect(d.iso).toBe(NOW.replace("Z", ".000Z"));
+  expect(evidence.frame.after, "native performance advances").toBeGreaterThan(evidence.frame.before);
 }
 
 function inputKind(browserName) {
@@ -200,8 +221,12 @@ function events() {
 test("Day: held results follow the finger with the next day's own games beside them; release commits once and settles in", async ({ page, harness, browserName }, testInfo) => {
   inputKind(browserName);
   harness.state.events = events();
-  await harness.open();
+  // Controlled comparison (#172 hosted WebKit settle readings): the same fixed calendar time, with the
+  // browser's native timers, animation frames and performance instead of Playwright's fake clock.
+  test.info().annotations.push({ type: "clock", description: "date-only: fixed Date, native timers, animation frames and performance (no page.clock method)" });
+  await harness.open({ clock: "date-only" });
   await assertFixtureMediaIsMuted(page);
+  await expectDateOnlyClock(page, testInfo);
   const length = await historyLength(page), url = page.url();
   const held = await holdTouch(page, browserName, await startOf(page.locator("#game-ranked-live .game-summary")));
   const seen = await holdThrough(page, testInfo, held, [-30, -90, -160], { side: 1, label: "Sun, Sep 6", cards: 1, has: ["sunday-acc away"], hasNot: ["ranked-live"], name: "day-forward" });

@@ -61,6 +61,53 @@ async function installPushSimulation(page, options) {
   }, { options, credentials: CREDENTIALS });
 }
 
+// Date-only fixed wall time, for a case that needs the browser's native scheduling (#172 settle timing).
+// Before replacing Date it records the scheduling built-ins as found, for the test to compare later.
+// Date semantics: `new Date()` and `Date.now()` give the fixed `now` (it does not advance); `new Date(...)`
+// with arguments, Date.parse, Date.UTC, the prototype and its methods are the browser's own; `Date()` called
+// as a function returns the fixed time's string; `new Date() instanceof Date` holds, and Date.name is
+// "Date". Not replaced: Temporal, timers, animation frames, idle callbacks and performance.
+async function installDateOnly(page, now) {
+  await page.addInitScript(fixed => {
+    const native = {
+      Date, requestAnimationFrame, cancelAnimationFrame, setTimeout, clearTimeout, setInterval, clearInterval,
+      requestIdleCallback: window.requestIdleCallback, performanceNow: performance.now, performance,
+    };
+    Object.defineProperty(window, "__dateOnlyClock", { value: { fixed, native } });
+    const NativeDate = Date;
+    function FixedDate(...args) {
+      if (!new.target) return new NativeDate(fixed).toString();
+      return args.length ? new NativeDate(...args) : new NativeDate(fixed);
+    }
+    FixedDate.prototype = NativeDate.prototype;
+    Object.defineProperty(FixedDate, "name", { value: "Date" });
+    Object.defineProperty(FixedDate, "length", { value: 7 });
+    FixedDate.now = () => fixed;
+    FixedDate.parse = NativeDate.parse;
+    FixedDate.UTC = NativeDate.UTC;
+    window.Date = FixedDate;
+  }, Date.parse(now));
+}
+// The Date-only clock as the page sees it: scheduling built-ins compared with those found before Date was
+// replaced (same function and still the browser's own), and the Date behavior described above.
+export const dateOnlyClockEvidence = page => page.evaluate(() => {
+  const { fixed, native } = window.__dateOnlyClock;
+  const isNative = fn => typeof fn === "function" && /\{\s*\[native code\]\s*\}\s*$/.test(Function.prototype.toString.call(fn));
+  const current = { requestAnimationFrame, cancelAnimationFrame, setTimeout, clearTimeout, setInterval, clearInterval, requestIdleCallback: window.requestIdleCallback, performanceNow: performance.now, performance };
+  const scheduling = Object.fromEntries(Object.keys(current).map(key => [key, { same: current[key] === native[key], native: key === "performance" ? current[key] instanceof Performance : current[key] === undefined || isNative(current[key]) }]));
+  const local = new Date(2026, 8, 5, 12, 30);
+  return {
+    fixed, scheduling, dateReplaced: Date !== native.Date,
+    date: {
+      now: Date.now(), constructed: new Date().getTime(), epoch: new Date(0).getTime(), fromIso: new Date("2026-09-06T03:59:00Z").getTime(),
+      local: [local.getFullYear(), local.getMonth(), local.getDate(), local.getHours(), local.getMinutes()],
+      parse: Date.parse("2026-09-06T03:59:00Z"), utc: Date.UTC(2026, 8, 6, 3, 59), call: typeof Date(), callIsFixed: Date() === new native.Date(fixed).toString(),
+      instance: new Date() instanceof Date, nativeInstance: new native.Date() instanceof Date, tag: Object.prototype.toString.call(new Date()),
+      sharedPrototype: Date.prototype === native.Date.prototype, name: Date.name, iso: new Date().toISOString(),
+    },
+  };
+});
+
 export const test = base.extend({
   muteMedia: [async ({ page }, provide) => {
     // Layout/behavior cases are silent without stubbing playback or changing saved preferences.
@@ -190,8 +237,12 @@ export const test = base.extend({
     expect(health).toEqual({ version: testInfo.config.metadata.appVersion, commit: testInfo.config.metadata.sourceCommit });
     await provide({
       state,
-      async open({ now = NOW, push = {}, path = "/", waitForScores = true } = {}) {
-        await page.clock.install({ time: new Date(now) });
+      // `clock`: "fake" (default) installs Playwright's clock, which also replaces timers, animation frames
+      // and performance. "date-only" calls no page.clock method: only Date reports the fixed `now`, and the
+      // browser's own timers, animation frames and performance stay untouched (see installDateOnly).
+      async open({ now = NOW, push = {}, path = "/", waitForScores = true, clock = "fake" } = {}) {
+        if (clock === "date-only") await installDateOnly(page, now);
+        else await page.clock.install({ time: new Date(now) });
         await installPushSimulation(page, push);
         await page.goto(path);
         if (waitForScores) await expect(page.getByRole("button", { name: "Refresh scores" })).toBeEnabled();
