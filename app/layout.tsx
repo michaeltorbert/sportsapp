@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { HomeScreenInstall } from "@/components/home-screen-install";
 import { EARLY_POPSTATE_SCRIPT } from "@/lib/game-route";
 
 export const metadata: Metadata = {
@@ -29,7 +30,7 @@ export default function RootLayout({
       {/* First in the body, so it parses before the framework's entry script on every route (Scores and
           Guide). Inert by itself: it only forwards history traversals to the mounted Scores page, which
           handles one only when both entries are its own validated root entries. See lib/game-route.ts. */}
-      <body className="antialiased"><script dangerouslySetInnerHTML={{ __html: EARLY_POPSTATE_SCRIPT }} />{children}</body>
+      <body className="antialiased"><script dangerouslySetInnerHTML={{ __html: EARLY_POPSTATE_SCRIPT }} />{children}<HomeScreenInstall /></body>
     </html>
   );
 }

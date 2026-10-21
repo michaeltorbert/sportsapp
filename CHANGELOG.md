@@ -1,5 +1,10 @@
 # Saturday Signal releases
 
+## 1.21.0 · 2026-10-21
+
+- Add to Home Screen guidance appears in browser tabs and stays out of the Home Screen app. Open the footer action for Safari’s Share and Add to Home Screen steps, from Scores, Guide, game or team screens (#169).
+- The action uses the current launch mode, so an existing Home Screen icon does not hide it in a browser tab. Saved settings, alerts and installation identity are preserved.
+
 ## 1.20.0 · 2026-10-21
 
 - On Scores, a deliberate horizontal touch swipe on the games, or on the empty, loading or unavailable message, moves once: left goes to the next day in Day or the next Thursday–Monday football week in Week, and right goes back. Vertical scrolling, pinch zoom, taps on games, controls, open panels, multi-finger touches and swipes starting within 32 points of a screen edge do not change the date. While the page is zoomed in, swiping is off so you can pan freely (#172).

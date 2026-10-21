@@ -3,11 +3,31 @@
 `src/vendor/home-screen-install/` holds a vendored copy of the ES module from
 [michaeltorbert/home-screen-install](https://github.com/michaeltorbert/home-screen-install).
 
-**Saturday Signal does not load it yet.** No component imports it. TypeScript
-does not include `.mjs` files, and the service worker does not precache them.
-Scores, alerts, subscriptions, install identity and settings are unchanged.
-Adding the button is tracked in #169, which stays open until Saturday Signal is
-adopted and verified on iPhone and iPad.
+Saturday Signal mounts the pinned shared `mount()` UI through
+`components/home-screen-install.tsx`, once after the page in the root layout.
+The quiet footer action is available on Scores, Guide, game and team views,
+outside the existing modal panels and hidden score view. Help's old unconditional
+installation tip is replaced by this action; Alerts retains its contextual
+installation prerequisite guidance.
+
+The shared component alone decides visibility from the current window:
+`navigator.standalone === true` or `(display-mode: standalone)` hides it.
+Stored preferences, an existing Home Screen icon, referrer and generic fullscreen
+do not hide it. Its manual guide explains Safari Share → Add to Home Screen;
+it does not install anything or request notification permission. The wrapper
+mounts on the client and destroys its guide and listeners on unmount. A hidden
+host adds no footer spacing. Styling uses only the supported `--hsi-*` tokens
+and `::part(button)`; the vendored files remain unchanged. The imported module
+is bundled with the application; no extra service-worker precache entry is needed.
+
+Browser tests simulate launch-mode signals and verify the real shared guide,
+mode changes, focus and unchanged preferences/notification activity. This is
+browser-engine evidence, not native installation proof. Issue #169 remains open
+until separate iPhone and iPad physical-device or Apple Simulator Safari and
+Home Screen launch evidence proves the native acceptance checks. In particular,
+an injected standalone flag or a WKWebView shell cannot establish installation
+or native Home Screen launch behavior. Existing install identity, manifest,
+service worker, scores, alerts, subscriptions and settings are preserved.
 
 ## Files
 
