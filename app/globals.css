@@ -303,10 +303,13 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .compact-scoreboard .watch-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 10px; padding: 2px 0; }
 .compact-scoreboard .feed-status { font-size: .75rem; }
 .compact-scoreboard .toggle-label { font-size: .75rem; gap: 6px; }
-/* Hide finals and All FBS games: side by side where the header row has room, All FBS games
-   beneath Hide finals on a narrow phone. Each keeps its 44px target and one-line label. */
-.compact-scoreboard .scope-toggles { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; column-gap: 14px; margin-left: auto; min-width: 0; max-width: 100%; }
-@media (max-width: 479px) { .compact-scoreboard .scope-toggles { flex-direction: column; align-items: flex-start; } }
+/* Hide finals and All FBS games share the status row whenever they fit beside each other and the
+   status. The status may then wrap its own short text within that 44px row instead of pushing the
+   pair to a new row; it never shrinks below its longest word and keeps its dot beside the text. The
+   pair moves to its own row only when that still does not fit, and All FBS games wraps beneath Hide
+   finals only when the pair cannot fit side by side (enlarged text or zoom). Targets stay 44px. */
+.compact-scoreboard .watch-header .feed-status { flex: 1 1 0; flex-wrap: nowrap; max-width: max-content; }
+.compact-scoreboard .scope-toggles { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; column-gap: 14px; margin-left: auto; min-width: 0; max-width: 100%; }
 .compact-scoreboard .section-label { margin-bottom: 3px; font-size: .6875rem; }
 .compact-scoreboard .section-label h2 { font-size: .75rem; }
 .compact-scoreboard .score-section { margin-bottom: 14px; }

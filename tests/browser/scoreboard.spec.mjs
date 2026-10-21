@@ -343,7 +343,7 @@ for (const width of [320, 390, 1280]) test(`category chips keep one row of one-l
 });
 
 // The Hide finals / All FBS games pair: native labeled checkboxes with 44px targets and one-line labels,
-// inside the viewport and clear of each other; beside each other when wide, All FBS games beneath when narrow.
+// inside the viewport and clear of each other; beside each other where they fit, All FBS games beneath only when not.
 async function expectScopeToggles(page, { stacked, oneLine = true }) {
   const layout = await page.evaluate(() => {
     const viewport = document.documentElement.clientWidth;
@@ -352,9 +352,14 @@ async function expectScopeToggles(page, { stacked, oneLine = true }) {
       const box = label.getBoundingClientRect(), text = label.querySelector("span"), input = label.querySelector("input");
       return { text: text.textContent, type: input.type, left: box.left, right: box.right, top: box.top, bottom: box.bottom, height: box.height, spread: spread(text), fits: label.scrollWidth <= label.clientWidth + .5, fontSize: getComputedStyle(text).fontSize };
     });
-    const status = document.querySelector(".feed-status").getBoundingClientRect();
-    return { viewport, documentFits: document.documentElement.scrollWidth <= innerWidth, labels, status: { left: status.left, right: status.right, top: status.top, bottom: status.bottom } };
+    const statusElement = document.querySelector(".feed-status"), status = statusElement.getBoundingClientRect(), dot = statusElement.querySelector(".feed-dot").getBoundingClientRect();
+    // The status keeps its dot beside its text and is never narrower than its longest word.
+    const range = document.createRange(); range.selectNodeContents(statusElement);
+    const textTop = Math.min(...[...range.getClientRects()].filter(r => r.width > 6 && r.height > 0).map(r => r.top));
+    return { viewport, documentFits: document.documentElement.scrollWidth <= innerWidth, labels, status: { left: status.left, right: status.right, top: status.top, bottom: status.bottom, fits: statusElement.scrollWidth <= statusElement.clientWidth + .5, dotBeside: dot.top >= textTop - 1 && dot.top <= textTop + 20 } };
   });
+  expect(layout.status.fits, "the feed status text is not clipped").toBe(true);
+  expect(layout.status.dotBeside, "the feed dot stays beside the first status line").toBe(true);
   expect(layout.documentFits, "no document overflow").toBe(true);
   expect(layout.labels.map(label => [label.text, label.type])).toEqual([["Hide finals", "checkbox"], ["All FBS games", "checkbox"]]);
   for (const label of layout.labels) {
@@ -379,12 +384,12 @@ for (const width of [320, 390, 1280]) test(`All FBS chips keep one row of one-li
   harness.state.events = [...harness.state.events, event("ordinary-next", { state: "upcoming", date: "2026-09-05T23:00:00Z" })];
   await harness.open();
   await expectCount(page, "All", 2, 3);
-  await expectScopeToggles(page, { stacked: width < 480 });
+  await expectScopeToggles(page, { stacked: false });
   await attachScreenshot(page, testInfo, `all-fbs-off-${width}`);
   await page.getByRole("checkbox", { name: "All FBS games", exact: true }).click();
   await expectCount(page, "All FBS", 2, 4);
   await expectCompactChips(page, [["All FBS", "2 (4)"], ["ACC", "0 (1)"], ["Top 25", "1 (1)"], ["One score", "2 (2)"], ["Upsets", "1 (1)"]]);
-  await expectScopeToggles(page, { stacked: width < 480 });
+  await expectScopeToggles(page, { stacked: false });
   await attachScreenshot(page, testInfo, `all-fbs-on-${width}`);
   await category(page, "Top 25").click();
   await expectPressed(page, ["Top 25"]);
@@ -396,7 +401,7 @@ for (const width of [320, 390, 1280]) test(`All FBS chips keep one row of one-li
   await category(page, "All FBS").click();
   for (const [name, current, total] of [["All FBS", 18, 196], ["ACC", 4, 64], ["Top 25", 12, 130], ["One score", 10, 68]]) await expectCount(page, name, current, total);
   await expectCompactChips(page, [["All FBS", "18 (196)"], ["ACC", "4 (64)"], ["Top 25", "12 (130)"], ["One score", "10 (68)"], ["Upsets", "4 (12)"]]);
-  await expectScopeToggles(page, { stacked: width < 480 });
+  await expectScopeToggles(page, { stacked: false });
   await attachScreenshot(page, testInfo, `all-fbs-busy-${width}`);
   harness.state.failScores = true;
   await page.getByRole("button", { name: "Refresh scores" }).click();
@@ -411,6 +416,51 @@ for (const width of [320, 390, 1280]) test(`All FBS chips keep one row of one-li
   await expectCompactChips(page, ["All FBS", "ACC", "Top 25", "One score", "Upsets"].map(label => [label, "0 (0)"]));
   await expect(page.locator('.empty-card [data-slot="empty-title"]')).toHaveText("No FBS games this week.");
   await attachScreenshot(page, testInfo, `all-fbs-empty-${width}`);
+});
+
+// Compact density (F1): All FBS games may cost the board no height while the pair fits beside the status,
+// and at most the status's own single line when it must move to its own row. Compared against the same page
+// with only Hide finals (the pre-#176 header), at default fonts and with wide fallback fonts (Linux CI WebKit's
+// wider metrics, which also wrap the date bar), so the check does not depend on one platform's font widths.
+// The absolute first-card limits of compact-scoreboard.spec.mjs are repeated unchanged at default fonts.
+for (const width of [320, 390]) for (const fonts of ["default", "wide"]) test(`All FBS games adds no compact header height while it fits beside the status at ${width}px, ${fonts} fonts`, async ({ page, harness }, testInfo) => {
+  await page.setViewportSize({ width, height: 844 });
+  await harness.open();
+  await expect(cards(page)).toHaveCount(3);
+  if (fonts === "wide") await page.addStyleTag({ content: WIDE_FONT });
+  const measure = () => page.evaluate(() => {
+    const status = document.querySelector(".feed-status"), pair = document.querySelector(".scope-toggles"), header = document.querySelector(".watch-header");
+    const natural = (element, width) => {
+      const saved = element.getAttribute("style");
+      Object.assign(element.style, { flex: "none", width, maxWidth: "none" });
+      const size = element.getBoundingClientRect().width;
+      if (saved === null) element.removeAttribute("style"); else element.setAttribute("style", saved);
+      return size;
+    };
+    const statusMin = natural(status, "min-content"), pairMax = natural(pair, "max-content"), gap = Number.parseFloat(getComputedStyle(header).columnGap) || 0;
+    const nav = document.querySelector(".date-navigation")?.getBoundingClientRect(), modes = document.querySelector(".period-modes").getBoundingClientRect();
+    return {
+      firstTop: document.querySelector("article.game-card").getBoundingClientRect().top, headerHeight: header.getBoundingClientRect().height,
+      statusHeight: status.getBoundingClientRect().height, statusMin, pairMax, headerWidth: header.clientWidth,
+      fitsBeside: statusMin + gap + pairMax <= header.clientWidth + .5, dateBarWrapped: !!nav && modes.top >= nav.bottom - 1,
+    };
+  });
+  const current = await measure();
+  const before = await page.addStyleTag({ content: ".scope-toggles .toggle-label:nth-child(2) { display: none !important; }" });
+  const baseline = await measure();
+  await before.evaluate(element => element.remove());
+  await expect(page.getByRole("checkbox", { name: "All FBS games", exact: true })).toBeVisible();
+  await testInfo.attach(`density-${width}-${fonts}`, { contentType: "application/json", body: JSON.stringify({ current, baseline }, null, 2) });
+  const added = current.firstTop - baseline.firstTop;
+  if (current.fitsBeside) expect(added, "no added height while the pair fits beside the status").toBeLessThan(1);
+  else expect(added, "at most the status's own line when the pair needs its own row").toBeLessThanOrEqual(current.statusHeight + 1);
+  if (fonts === "default") expect(current.firstTop).toBeLessThan(width === 390 ? 350 : 400);
+  await expectScopeToggles(page, { stacked: false });
+  // Checking the box changes the reset label only; the board starts no lower.
+  await page.getByRole("checkbox", { name: "All FBS games", exact: true }).click();
+  await expectCount(page, "All FBS", 2, 3);
+  expect((await measure()).firstTop).toBeLessThanOrEqual(current.firstTop + 1);
+  await attachScreenshot(page, testInfo, `density-${width}-${fonts}`);
 });
 
 // The preserved 200 percent flows: doubled root text, and actual CSS zoom with and without wide
