@@ -93,7 +93,7 @@ async function cleanup(failed) {
 }
 await keepFirstFailure(async () => {
   // Explicit source allowlist excludes private config, generated outputs and logs.
-  const paths = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { cwd: root }).toString().split("\0").filter(p => p && (/^(app|components|lib|public|scripts|services|tests|worker|vendor|hooks|db|drizzle)\//.test(p) || /^(package(-lock)?\.json|wrangler\.jsonc|.*config\.(ts|mjs|jsonc?|js)|tsconfig\.json|worker-configuration\.d\.ts|next-env\.d\.ts)$/.test(p))).sort();
+  const paths = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { cwd: root }).toString().split("\0").filter(p => p && (/^(app|components|lib|public|scripts|services|src|tests|types|worker|vendor|hooks|db|drizzle)\//.test(p) || /^(package(-lock)?\.json|wrangler\.jsonc|.*config\.(ts|mjs|jsonc?|js)|tsconfig\.json|worker-configuration\.d\.ts|next-env\.d\.ts)$/.test(p))).sort();
   const dirs = [join(temp, "a"), join(temp, "b")];
   for (const path of paths) {
     const bytes = await readFile(join(root, path)); evidence.sourceManifest.push({ path, sha256: createHash("sha256").update(bytes).digest("hex"), bytes: bytes.length });
