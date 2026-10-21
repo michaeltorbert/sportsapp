@@ -291,8 +291,9 @@ for (const view of [
 test("Week: a reversed drag shows each side's own week, and a short release slides back with no change", async ({ page, harness, browserName }, testInfo) => {
   inputKind(browserName);
   harness.state.events = events();
-  await harness.open({ path: "/?period=week" });
+  await harness.open({ path: "/?period=week", clock: "date-only" });
   await assertFixtureMediaIsMuted(page);
+  await expectDateOnlyClock(page, testInfo);
   const length = await historyLength(page), url = page.url();
   await expect(weekLabel(page)).toContainText("Sep 3 – Sep 7");
   const held = await holdTouch(page, browserName, await startOf(page.locator("article.game-card").first()));
