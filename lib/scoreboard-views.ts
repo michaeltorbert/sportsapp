@@ -3,7 +3,8 @@ import { classify, sortGames, type Game, type Scoreboard } from "./football";
 export type Category = "acc" | "top25" | "close" | "upset";
 export const categories: readonly Category[] = ["acc", "top25", "close", "upset"];
 // Independently toggled categories in canonical order. An empty selection is
-// All: the complete curated watchlist (ORD-011).
+// All: the complete curated watchlist (ORD-011), or with All FBS games on, every
+// game on the displayed board (ORD-021). Explicit categories ignore that scope.
 export type Selection = readonly Category[];
 export type Period = "day" | "week";
 export type BoardScope = "daily" | "week";
@@ -30,16 +31,17 @@ export function toggleCategory(selection: Selection, category: Category): Select
   return normalizeSelection(selection.includes(category) ? selection.filter(c => c !== category) : [...selection, category]);
 }
 
-export function matchesSelection(game: Game, selection: Selection, focusedGame = "") {
+export function matchesSelection(game: Game, selection: Selection, focusedGame = "", allFbs = false) {
+  if (selection.length === 0 && allFbs) return true;
   const tags = classify(game);
   // The focused-game exception applies to All only; each category shows what it names.
   return selection.length === 0 ? game.id === focusedGame || categories.some(c => tags[c]) : selection.some(c => tags[c]);
 }
 
 // Selected categories combine with OR; each game appears once and sorting never
-// sees the selection, so matching several categories adds no priority.
-export function viewGames(board: Scoreboard | null, selection: Selection, hideFinals = false, focusedGame = "") {
-  return sortGames((board?.games || []).filter(game => !(hideFinals && game.state === "final") && matchesSelection(game, selection, focusedGame)));
+// sees the selection or scope, so neither adds priority.
+export function viewGames(board: Scoreboard | null, selection: Selection, hideFinals = false, focusedGame = "", allFbs = false) {
+  return sortGames((board?.games || []).filter(game => !(hideFinals && game.state === "final") && matchesSelection(game, selection, focusedGame, allFbs)));
 }
 
 export type UpsetCounts = { brewing: number; total: number };
@@ -66,12 +68,12 @@ export type CategoryCounts = { current: number; total: number };
 // A chip's qualifying games in progress, then every game its view lists: upcoming,
 // delayed, schedule updates and finals included. Membership is the view's own, so a
 // delay never adds a One-score game. Upsets alone keeps its brewing count and total.
-export function categoryCounts(board: Scoreboard | null, selection: Selection, hideFinals = false, focusedGame = ""): CategoryCounts {
+export function categoryCounts(board: Scoreboard | null, selection: Selection, hideFinals = false, focusedGame = "", allFbs = false): CategoryCounts {
   if (selection.length === 1 && selection[0] === "upset") {
     const { brewing, total } = upsetCounts(board, hideFinals);
     return { current: brewing, total };
   }
-  const games = viewGames(board, selection, hideFinals, focusedGame);
+  const games = viewGames(board, selection, hideFinals, focusedGame, allFbs);
   return { current: games.filter(inProgress).length, total: games.length };
 }
 

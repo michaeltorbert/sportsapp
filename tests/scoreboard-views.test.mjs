@@ -6,6 +6,7 @@ const { gamePriority } = await bundle("lib/watch-priority.ts");
 const { classify, retainFinalCategories } = await bundle("lib/football.ts");
 const { upsetExplanation } = await bundle("lib/upset.ts");
 const { loadScores } = await bundle("lib/score-client.ts");
+const { protectDukeBoard, defaultDukePreferences } = await bundle("lib/duke-visibility.ts");
 
 test("every count describes the displayed period's board and honors Hide finals", () => {
   const live = game();
@@ -317,6 +318,84 @@ test("storage cleanup retains weekly history through the weekend and expires com
   assert.equal(expiredBoardKey("ss:board:2026-09-04:2026-09-04", "2026-09-05"), true);
   assert.equal(expiredBoardKey("ss:board:2026-09-05:2026-09-05", "2026-09-05"), false);
   assert.equal(expiredBoardKey("ss:hide-finals", "2026-09-05"), false);
+});
+
+// ORD-021 fixtures: curated games, an ordinary unranked non-ACC upcoming game outside the watchlist,
+// an FBS–FCS matchup as the feed returns it (unranked, unknown conference), and a Duke game.
+function scopeGames() {
+  const ranked = game({ id: "ranked-live" });
+  const accFinal = game({ id: "acc-final", state: "final" }); accFinal.teams[0].conferenceId = "1"; accFinal.teams.forEach(team => { team.rank = null; }); accFinal.teams[0].score = 35;
+  const ordinary = game({ id: "ordinary-upcoming", state: "upcoming", started: false, period: 0, date: "2026-09-05T23:00:00Z" }); ordinary.teams.forEach(team => { team.rank = null; });
+  const fcs = game({ id: "fbs-fcs", state: "upcoming", started: false, period: 0, date: "2026-09-05T17:00:00Z" }); fcs.teams.forEach(team => { team.rank = null; }); fcs.teams[1].conferenceId = "";
+  const ordinaryFinal = game({ id: "ordinary-final", state: "final" }); ordinaryFinal.teams.forEach(team => { team.rank = null; }); ordinaryFinal.teams[0].score = 42;
+  const duke = game({ id: "duke-game", state: "upcoming", started: false, period: 0 }); duke.teams[0] = { ...duke.teams[0], id: "150", name: "Duke", rank: null }; duke.teams[1].rank = null;
+  return { ranked, accFinal, ordinary, fcs, ordinaryFinal, duke };
+}
+
+test("ORD-021 All FBS games shows every board game only for the empty selection; categories still narrow with OR", () => {
+  const g = scopeGames(), games = Object.values(g);
+  const hideDuke = { ...defaultDukePreferences(), manual: { "duke-game": true } };
+  const daily = protectDukeBoard(scoreboard(games), hideDuke);
+  const week = protectDukeBoard(scoreboard([...games, game({ id: "monday-ranked", state: "upcoming", started: false, period: 0, date: "2026-09-08T00:00:00Z" })], "2026-09-03", { endDate: "2026-09-07" }), hideDuke);
+  for (const board of [daily, week]) {
+    const ids = (selection, hideFinals = false, allFbs = false) => viewGames(board, selection, hideFinals, "", allFbs).map(game => game.id);
+    // Curated All excludes the ordinary and FBS–FCS games; All FBS adds them.
+    assert.equal(ids([]).includes("ordinary-upcoming"), false); assert.equal(ids([]).includes("fbs-fcs"), false);
+    assert.deepEqual(new Set(ids([], false, true)), new Set(board.games.map(game => game.id)));
+    assert.ok(ids([], false, true).includes("ordinary-upcoming") && ids([], false, true).includes("fbs-fcs"));
+    // Selecting ACC narrows; the scope never widens a category.
+    assert.deepEqual(ids(["acc"], false, true), ids(["acc"]));
+    assert.equal(ids(["acc"], false, true).includes("ordinary-upcoming"), false);
+    // Four manual categories are their union, not every FBS game.
+    const four = ["acc", "top25", "close", "upset"];
+    assert.deepEqual(ids(four, false, true), ids(four)); assert.deepEqual(ids(four, false, true), ids([]));
+    assert.equal(ids(four, false, true).includes("fbs-fcs"), false);
+    // Hide finals excludes finals in either scope.
+    assert.equal(viewGames(board, [], true, "", true).some(game => game.state === "final"), false);
+    assert.ok(ids([], true, true).includes("ordinary-upcoming"));
+    // The protected Duke game is absent in both scopes and from every category.
+    for (const selection of [[], ["acc"], four]) for (const allFbs of [false, true]) assert.equal(ids(selection, false, allFbs).includes("duke-game"), false);
+  }
+  assert.ok(viewGames(week, [], false, "", true).some(game => game.id === "monday-ranked"));
+  // Unprotected, the Duke game would be listed: protection, not the scope, removes it.
+  assert.ok(viewGames(scoreboard(games), [], false, "", true).some(game => game.id === "duke-game"));
+  assert.deepEqual(viewGames(null, [], false, "", true), []);
+});
+
+test("ORD-021 counts describe each chip's own scope after Hide finals; category and Upsets counts are unchanged", () => {
+  const g = scopeGames();
+  const upset = game({ id: "brewing-upset" }); upset.teams[0].rank = 5; upset.teams[1].rank = null;
+  const board = protectDukeBoard(scoreboard([...Object.values(g), upset]), { ...defaultDukePreferences(), manual: { "duke-game": true } });
+  for (const hideFinals of [false, true]) {
+    const all = categoryCounts(board, [], hideFinals, "", true);
+    assert.equal(all.total, viewGames(board, [], hideFinals, "", true).length);
+    assert.deepEqual(all, { current: 2, total: hideFinals ? 4 : 6 }, String(hideFinals));
+    for (const selection of [["acc"], ["top25"], ["close"], ["upset"], ["acc", "upset"], ["acc", "top25", "close", "upset"]])
+      assert.deepEqual(categoryCounts(board, selection, hideFinals, "", true), categoryCounts(board, selection, hideFinals), JSON.stringify(selection));
+    const { brewing, total } = upsetCounts(board, hideFinals);
+    assert.deepEqual(categoryCounts(board, ["upset"], hideFinals, "", true), { current: brewing, total }, "Upsets keeps its brewing/completed count");
+  }
+  assert.deepEqual(categoryCounts(board, ["upset"], false, "", true), { current: 1, total: 1 });
+  // The curated count stays the watchlist's; the focused-game exception adds nothing beyond every game.
+  assert.deepEqual(categoryCounts(board, []), { current: 2, total: 3 });
+  assert.deepEqual(categoryCounts(board, [], false, "ordinary-upcoming", true), categoryCounts(board, [], false, "", true));
+  assert.deepEqual(categoryCounts(scoreboard([]), [], false, "", true), { current: 0, total: 0 });
+  assert.deepEqual(categoryCounts(null, [], false, "", true), { current: 0, total: 0 });
+});
+
+test("ORD-021 scope keeps the shared order and curated relative order for reversed and rotated inputs", () => {
+  const games = Object.values(scopeGames()).filter(game => game.id !== "duke-game");
+  const expected = viewGames(scoreboard(games), [], false, "", true).map(game => game.id);
+  for (const input of [games, [...games].reverse(), [...games.slice(2), ...games.slice(0, 2)]]) {
+    const before = structuredClone(input);
+    const order = viewGames(scoreboard(input), [], false, "", true).map(game => game.id);
+    assert.deepEqual(order, expected);
+    const curated = viewGames(scoreboard(input), []).map(game => game.id);
+    assert.deepEqual(curated, order.filter(id => curated.includes(id)), "curated games keep their relative order under All FBS");
+    assert.deepEqual(input, before, "inputs are not mutated");
+  }
+  assert.deepEqual(expected.slice(0, 1), ["ranked-live"], "the live game still leads its state groups");
+  assert.equal(expected.at(-1).endsWith("final"), true);
 });
 
 test("a weekly response filling ESPN's requested limit is flagged as possibly incomplete", async () => {

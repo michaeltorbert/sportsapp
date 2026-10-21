@@ -207,6 +207,58 @@ test("an update from the game screen reopens that screen and section by URL; Bac
   await expect(page.locator(".game-screen")).toHaveCount(0);
   expect(harness.state.alertRequests.filter(r => r.method !== "GET")).toEqual([]);
 });
+// ORD-021: an update restores the actual scope in view, not the saved preference. The opposite saved value
+// is a simulated write from another tab; this page has no storage listener, so its own view is unchanged.
+test("an update keeps the All FBS scope in view over the opposite saved preference, from a game and a narrowed board", async ({ page, harness }) => {
+  const { event } = await import("./fixtures.mjs");
+  harness.state.events = [...harness.state.events, event("ordinary-next", { state: "upcoming", date: "2026-09-05T23:00:00Z" })];
+  const state = await mockHealth(page);
+  await harness.open();
+  const box = page.getByRole("checkbox", { name: "All FBS games", exact: true });
+  const otherTab = value => page.evaluate(v => localStorage.setItem("ss:all-fbs", v), value);
+  await box.check();
+  await page.locator("#game-ordinary-next a.game-summary").tap();
+  await expect(page.locator(".game-screen")).toBeVisible();
+  await otherTab("false");
+  await detect(page, state);
+  const fromGame = page.waitForEvent("load");
+  await page.locator(".game-screen").getByRole("button", { name: "Refresh app", exact: true }).click(); await fromGame;
+  await expect.poll(() => page.url()).not.toContain("_ss_");
+  expect(new URL(page.url()).searchParams.get("event")).toBe("ordinary-next");
+  await expect(page.locator(".game-screen h1.game-title")).toContainText("ordinary-next");
+  await page.locator(".game-screen").getByRole("button", { name: /^Back to scores/ }).tap();
+  await expect(page.locator(".game-screen")).toHaveCount(0);
+  await expect(box).toBeChecked();
+  await expect(page.locator("#game-ordinary-next a.game-summary")).toBeFocused();
+  expect(await page.evaluate(() => localStorage.getItem("ss:all-fbs"))).toBe("false");
+  // Narrowed on the board, still opposite the saved preference.
+  await page.getByRole("button", { name: /^ACC/ }).click();
+  state.commit = C;
+  await detect(page, state);
+  const fromBoard = page.waitForEvent("load");
+  await page.getByRole("button", { name: "Refresh app", exact: true }).click(); await fromBoard;
+  await expect.poll(() => page.url()).not.toContain("_ss_");
+  await expect(page.getByRole("button", { name: /^ACC/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(box).toBeChecked();
+  await expect(page.getByRole("button", { name: /^All FBS,/ })).toHaveAttribute("aria-pressed", "false");
+  expect(new URL(page.url()).searchParams.get("cats")).toBe("acc");
+  // The other direction: the watchlist in view, All FBS saved elsewhere.
+  await box.uncheck();
+  await otherTab("true");
+  state.commit = B;
+  await detect(page, state);
+  const again = page.waitForEvent("load");
+  await page.getByRole("button", { name: "Refresh app", exact: true }).click(); await again;
+  await expect.poll(() => page.url()).not.toContain("_ss_");
+  await expect(page.getByRole("button", { name: "Refresh scores" })).toBeEnabled();
+  await expect(box).not.toBeChecked();
+  await expect(page.locator("#game-ordinary-next")).toHaveCount(0);
+  // Home returns to Day and All within the saved scope.
+  await page.getByRole("link", { name: "Saturday Signal home" }).click();
+  await expect(box).toBeChecked();
+  await expect(page.locator("#game-ordinary-next")).toBeVisible();
+  expect(harness.state.alertRequests.filter(r => r.method !== "GET")).toEqual([]);
+});
 test("updater preserves initial manual date before slow scores finish", async ({ page, harness }) => {
   const state = await mockHealth(page);
   // Hold score fetches before the network layer, including the fallback. This

@@ -14,8 +14,8 @@ export function isSection(value: unknown): value is Section { return typeof valu
 export type GameRoute = { id: string; section: Section; team?: string };
 export type TeamRoute = { team: string };
 export function teamParam(value: unknown): string { return typeof value === "string" && /^\d{1,6}$/.test(value) ? value : ""; }
-// `weekDate` is the chosen Week (#172); absent or null is the current week, as in pre-1.19 records.
-export type BoardView = { date: string | null; selection: Selection; period: Period; hideFinals: boolean; weekDate?: string | null };
+// `weekDate` is the chosen Week (#172); absent or null is the current week, as in pre-1.20 records.
+export type BoardView = { date: string | null; selection: Selection; period: Period; hideFinals: boolean; allFbs: boolean; weekDate?: string | null };
 export type BoardSnapshot = BoardView & { scrollY: number; origin: string };
 export type BoardEntry = { v: 1; kind: "board"; key: string; snapshot?: BoardSnapshot; consumed?: string };
 // `from`: an entry of ours (the scoreboard, or the team page for a game with `team`) sits directly behind this one.
@@ -25,7 +25,7 @@ export type TeamEntry = { v: 1; kind: "team"; key: string; team: string; from: b
 export type RouteEntry = BoardEntry | GameEntry | TeamEntry;
 export type UrlView = { date: string; followToday: boolean; selection: Selection; period: Period; weekDate?: string | null };
 
-const TRANSIENT = ["_ss_update", "_ss_hide_finals", "_ss_focus", "_ss_open"];
+const TRANSIENT = ["_ss_update", "_ss_hide_finals", "_ss_all_fbs", "_ss_focus", "_ss_open"];
 const MAX_SCROLL = 10_000_000;
 
 // A repeated parameter is ambiguous, so it identifies nothing.
@@ -119,9 +119,11 @@ function readSnapshot(value: unknown): BoardSnapshot | null {
   if (selection.length !== s.selection.length || (s.period !== "day" && s.period !== "week") || typeof s.hideFinals !== "boolean") return null;
   if (typeof s.scrollY !== "number" || !Number.isFinite(s.scrollY) || s.scrollY < 0 || s.scrollY > MAX_SCROLL) return null;
   if (typeof s.origin !== "string" || (s.origin !== "" && !gameId(s.origin))) return null;
+  // A snapshot saved before All FBS games existed was the curated view (ORD-021).
+  if (s.allFbs !== undefined && typeof s.allFbs !== "boolean") return null;
   const weekDate = s.weekDate === undefined || s.weekDate === null ? null : weekParam(s.weekDate);
   if (weekDate === null && s.weekDate !== undefined && s.weekDate !== null) return null;
-  return { date: s.date as string | null, selection, period: s.period, hideFinals: s.hideFinals, scrollY: s.scrollY, origin: s.origin, ...(weekDate ? { weekDate } : {}) };
+  return { date: s.date as string | null, selection, period: s.period, hideFinals: s.hideFinals, allFbs: s.allFbs === true, scrollY: s.scrollY, origin: s.origin, ...(weekDate ? { weekDate } : {}) };
 }
 /** Validates the app-owned record in a history state. Anything else is not ours. */
 export function readEntry(state: unknown): RouteEntry | null {

@@ -298,6 +298,24 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
    zoom. Zoomed in, the region returns to default panning and swipes are off (lib/swipe-navigation.ts). */
 .compact-scoreboard .score-content { touch-action: pan-y pinch-zoom; }
 .compact-scoreboard .score-content[data-zoomed] { touch-action: auto; }
+/* #172 held swipes: lib/swipe-navigation.ts moves `.pager-track` with the finger. The live results stay in
+   normal flow; a neighbor (`data-side` 1 next, -1 previous) or the view being left sits one results width
+   plus the gap beside them, at the same natural top. While held or settling, the region keeps its height
+   and clips below it, and the shell clips sideways so nothing scrolls the page horizontally. */
+.pager-track { --pager-gap: 40px; position: relative; }
+.compact-scoreboard .score-content[data-pager] { overflow-x: visible; overflow-y: clip; }
+.compact-scoreboard .score-content[data-pager] .pager-track { will-change: transform; }
+.app-shell:has(.score-content[data-pager]) { overflow-x: clip; }
+.pager-pane[data-side] { position: absolute; top: 0; left: calc(100% + var(--pager-gap)); width: 100%; pointer-events: none; user-select: none; }
+.pager-pane[data-side="-1"] { left: calc(-100% - var(--pager-gap)); }
+/* The neighbor's date and state, kept at the top of the visible part of the results (`--pager-cue`). */
+.pager-caption { position: absolute; z-index: 1; top: var(--pager-cue, 0px); left: 50%; transform: translateX(-50%); display: flex; align-items: baseline; gap: 8px; max-width: calc(100% - 16px); margin: 0; padding: 6px 14px; border: 1px solid #3a4a61; border-radius: 999px; background: #182131f2; box-shadow: 0 6px 18px #0006; color: #c5d1e2; font-size: .8125rem; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pager-caption-date { color: #f3f7fc; font-weight: 650; }
+.pager-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 24px; padding: 22px 14px; border: 1px solid #2b374b; border-radius: 16px; background: #141c29; text-align: center; text-wrap: balance; }
+.pager-empty-icon { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; margin-bottom: 8px; border-radius: 50%; color: #cefb70; background: #2c3828; }
+.pager-empty-icon svg { width: 24px; height: 24px; }
+.pager-empty-title { font-size: 20px; font-weight: 650; }
+.pager-empty-description { max-width: 340px; color: var(--muted-foreground); font-size: 14px; line-height: 1.7; }
 .compact-scoreboard .timezone-cue { color: #98a9c0; font-size: .6875rem; margin: 0 0 8px; overflow-wrap: anywhere; }
 /* All five categories share one row: each label and its count pair stay on one line. Whole buttons
    wrap only when enlarged text or zoom makes their content wider than the row, never past the page. */
@@ -308,6 +326,13 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .compact-scoreboard .watch-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 10px; padding: 2px 0; }
 .compact-scoreboard .feed-status { font-size: .75rem; }
 .compact-scoreboard .toggle-label { font-size: .75rem; gap: 6px; }
+/* Hide finals and All FBS games share the status row whenever they fit beside each other and the
+   status. The status may then wrap its own short text within that 44px row instead of pushing the
+   pair to a new row; it never shrinks below its longest word and keeps its dot beside the text. The
+   pair moves to its own row only when that still does not fit, and All FBS games wraps beneath Hide
+   finals only when the pair cannot fit side by side (enlarged text or zoom). Targets stay 44px. */
+.compact-scoreboard .watch-header .feed-status { flex: 1 1 0; flex-wrap: nowrap; max-width: max-content; }
+.compact-scoreboard .scope-toggles { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; column-gap: 14px; margin-left: auto; min-width: 0; max-width: 100%; }
 .compact-scoreboard .section-label { margin-bottom: 3px; font-size: .6875rem; }
 .compact-scoreboard .section-label h2 { font-size: .75rem; }
 .compact-scoreboard .score-section { margin-bottom: 14px; }

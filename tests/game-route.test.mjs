@@ -5,7 +5,7 @@ const { parseGameRoute, parseTeamRoute, gameUrl, gameHref, teamUrl, teamHref, se
 const { initialView } = await bundle("lib/app-update.ts");
 
 const view = (changes = {}) => ({ date: "2026-09-05", followToday: false, selection: ["acc", "upset"], period: "day", ...changes });
-const snapshot = (changes = {}) => ({ date: "2026-09-05", selection: ["acc"], period: "week", hideFinals: true, scrollY: 812, origin: "401858481", ...changes });
+const snapshot = (changes = {}) => ({ date: "2026-09-05", selection: ["acc"], period: "week", hideFinals: true, allFbs: false, scrollY: 812, origin: "401858481", ...changes });
 
 test("game URLs round-trip the event and section and keep the scoreboard view and unrelated data", () => {
   const href = gameUrl("https://example.test/?keep=yes&tab=acc&_ss_update=x&_ss_focus=y&_ss_open=0#game-401858481", { id: "401858481", section: "players" }, view());
@@ -77,6 +77,24 @@ test("history records validate strictly and carry UI state and IDs only", () => 
   // Our record merges with framework state; the framework's scroll keys are written only when given.
   assert.deepEqual(withEntry({ __vinext_previousNextUrl: "/x", __vinext_scrollY: 40 }, game), { __vinext_previousNextUrl: "/x", __vinext_scrollY: 40, ss: game });
   assert.deepEqual(withEntry(null, game, 812.4), { ss: game, __vinext_scrollX: 0, __vinext_scrollY: 812 });
+});
+
+test("ORD-021 scoreboard snapshots record the All FBS scope; a pre-scope snapshot is the curated view; URLs never carry it", () => {
+  const board = scope => { const saved = snapshot({ allFbs: scope }); if (scope === undefined) delete saved.allFbs; return { v: 1, kind: "board", key: "abc123", snapshot: saved }; };
+  for (const allFbs of [true, false]) assert.equal(readEntry({ ss: board(allFbs) }).snapshot.allFbs, allFbs);
+  // Saved before the scope existed: still a valid entry, restored as the curated view it showed.
+  const legacy = board(undefined);
+  assert.equal(Object.hasOwn(legacy.snapshot, "allFbs"), false, "fixture: no scope field");
+  assert.deepEqual(readEntry({ ss: legacy }).snapshot, snapshot({ allFbs: false }));
+  for (const bad of ["1", 1, null, "true", {}]) assert.equal(readEntry({ ss: board(bad) }), null, JSON.stringify(bad));
+  // The update transient is stripped by every destination, like the others; no URL gains a scope.
+  const dirty = "https://example.test/?keep=yes&_ss_update=x&_ss_hide_finals=1&_ss_all_fbs=1&_ss_focus=y&_ss_open=0";
+  for (const href of [gameUrl(dirty, { id: "g1", section: "team" }, view()), teamUrl(dirty, "150", view()), boardUrl(dirty, view())]) {
+    const url = new URL(href);
+    for (const key of ["_ss_update", "_ss_hide_finals", "_ss_all_fbs", "_ss_focus", "_ss_open"]) assert.equal(url.searchParams.has(key), false, `${key} in ${href}`);
+    assert.equal(url.searchParams.get("keep"), "yes");
+  }
+  for (const href of [gameHref({ id: "g1", section: "team" }, view()), teamHref("150", view())]) assert.doesNotMatch(href, /fbs|scope/i);
 });
 
 test("ownership needs the root path, a validated source and a validated target", () => {

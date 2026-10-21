@@ -316,6 +316,64 @@ test("reload on the screen keeps it; Back then restores the scoreboard as it was
   await expect(page.locator(".overnight-note")).toHaveCount(0);
 });
 
+// ORD-021: the board entry's snapshot owns the scope on a cross-document return, even when the saved
+// preference was changed meanwhile (here by a simulated write from another tab), in both directions.
+for (const scoped of [true, false]) test(`reload on the screen, then Back, restores the board's ${scoped ? "All FBS" : "watchlist"} scope over the opposite saved preference`, async ({ page, harness }) => {
+  harness.state.events = [...harness.state.events, event("ordinary-next", { state: "upcoming", date: "2026-09-05T23:00:00Z" })];
+  await harness.open();
+  const box = page.getByRole("checkbox", { name: "All FBS games", exact: true });
+  if (scoped) await box.check();
+  const target = scoped ? "ordinary-next" : "close-live";
+  await cardLink(page, target).tap();
+  await expect(screen(page)).toBeVisible();
+  expect(new URL(page.url()).search).toBe(`?event=${target}`);
+  expect((await entry(page)).kind).toBe("game");
+  await page.evaluate(value => localStorage.setItem("ss:all-fbs", value), String(!scoped));
+  await page.reload();
+  await expect(screen(page).locator("h1.game-title")).toContainText(target);
+  await page.goBack();
+  await expect(board(page)).toBeVisible();
+  if (scoped) await expect(box).toBeChecked(); else await expect(box).not.toBeChecked();
+  await expect(page.locator("#game-ordinary-next")).toHaveCount(scoped ? 1 : 0);
+  await expect(cardLink(page, target)).toBeFocused();
+  await expect(category(page, scoped ? "All FBS" : "All")).toHaveAttribute("aria-label", scoped ? "All FBS, 2 in progress, 4 total" : "All, 2 in progress, 3 total");
+  expect(await page.evaluate(() => localStorage.getItem("ss:all-fbs")), "restoration never rewrites the preference").toBe(String(!scoped));
+  // A later poll keeps the restored scope; Home then returns to the saved one.
+  await page.clock.fastForward(30_000);
+  if (scoped) await expect(box).toBeChecked(); else await expect(box).not.toBeChecked();
+  await page.getByRole("link", { name: "Saturday Signal home" }).tap();
+  if (scoped) await expect(box).not.toBeChecked(); else await expect(box).toBeChecked();
+  await expect(page.locator("#game-ordinary-next")).toHaveCount(scoped ? 0 : 1);
+});
+
+test("a scoreboard snapshot saved before All FBS games existed restores the curated view even with All FBS saved", async ({ page, harness }) => {
+  harness.state.events = [...harness.state.events, event("ordinary-next", { state: "upcoming", date: "2026-09-05T23:00:00Z" })];
+  await harness.open();
+  const box = page.getByRole("checkbox", { name: "All FBS games", exact: true });
+  await box.check();
+  await cardLink(page, "close-live").tap();
+  await expect(screen(page)).toBeVisible();
+  await page.goBack();
+  await expect(board(page)).toBeVisible();
+  // Rewrite this board entry's snapshot as a pre-ORD-021 version would have saved it: no scope field.
+  await page.evaluate(() => {
+    const ss = history.state.ss, { allFbs, ...legacy } = ss.snapshot;
+    if (allFbs !== true) throw new Error("fixture: the current snapshot records the scope");
+    history.replaceState({ ...history.state, ss: { ...ss, snapshot: legacy } }, "", location.href);
+  });
+  expect(Object.hasOwn((await entry(page)).snapshot, "allFbs")).toBe(false);
+  await page.goForward();
+  await expect(screen(page)).toBeVisible();
+  await page.reload();
+  await expect(screen(page).locator("h1.game-title")).toContainText("close-live");
+  await page.goBack();
+  await expect(board(page)).toBeVisible();
+  await expect(box).not.toBeChecked();
+  await expect(page.locator("#game-ordinary-next")).toHaveCount(0);
+  await expect(cardLink(page, "close-live")).toBeFocused();
+  expect(await page.evaluate(() => localStorage.getItem("ss:all-fbs"))).toBe("true");
+});
+
 // Request tracking for tests that start a new document mid-test. Installed at test start, before the first
 // load. Records URLs and lifecycle only (no headers or bodies). `doc` counts main-frame document requests,
 // so "finished in the current document" never counts an earlier document's request.

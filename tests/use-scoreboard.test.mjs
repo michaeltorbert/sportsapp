@@ -700,6 +700,57 @@ test("issue 172: a validated weekDate link sets the chosen week; invalid or repe
   });
 });
 
+test("issue 172 previews: one request per revealed range per drag, the other side canceled, failures kept off the active range, and a commit adopting its request", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: saturday });
+  const calls = [], signals = new Map(), gates = new Map();
+  const h = harness(t, async (date, signal, fetcher, end = date) => {
+    const key = `${date}:${end}`; calls.push(key); signals.set(key, signal);
+    if (gates.has(key)) await gates.get(key);
+    if (date === "2026-09-08") throw new Error("simulated preview failure");
+    return scoreboard(date === "2026-09-04" && end === date ? [] : [game({ id: `g-${key}`, state: "final" })], date, { endDate: end, fetchedAt: new Date().toISOString() });
+  });
+  h.render(); const initial = await h.settle();
+  assert.equal(initial.date, "2026-09-05");
+  const count = key => calls.filter(call => call === key).length;
+  // Revealing Sunday requests it once, however often the same drag reveals it; it shows as loading.
+  let release; gates.set("2026-09-06:2026-09-06", new Promise(resolve => { release = resolve; }));
+  initial.preview("daily", "2026-09-06", "2026-09-06", 1); initial.preview("daily", "2026-09-06", "2026-09-06", 1);
+  assert.equal(count("2026-09-06:2026-09-06"), 1);
+  assert.deepEqual(initial.peek("daily", "2026-09-06", "2026-09-06"), { board: null, failed: false });
+  // Reversing reveals Friday: Sunday's request is canceled and forgotten, and is not asked again in this drag.
+  initial.preview("daily", "2026-09-04", "2026-09-04", 1);
+  assert.equal(signals.get("2026-09-06:2026-09-06").aborted, true);
+  const reversed = await h.settle();
+  assert.equal(reversed.peek("daily", "2026-09-04", "2026-09-04").board.date, "2026-09-04", "Friday's own board");
+  reversed.preview("daily", "2026-09-06", "2026-09-06", 1);
+  assert.equal(count("2026-09-06:2026-09-06"), 1, "at most one request per range per drag");
+  release(); gates.delete("2026-09-06:2026-09-06");
+  const late = await h.settle();
+  assert.deepEqual(late.peek("daily", "2026-09-06", "2026-09-06"), { board: null, failed: false }, "the canceled request's late result is never shown");
+  assert.equal(late.boards.daily.date, "2026-09-05", "a preview never replaces the displayed board");
+  // Known fresh scores need no request: the displayed Week is history already.
+  late.preview("week", "2026-09-03", "2026-09-07", 2);
+  assert.equal(count("2026-09-03:2026-09-07"), 1);
+  assert.equal(late.peek("week", "2026-09-03", "2026-09-07").board, late.boards.week);
+  // A failed preview is an honest unavailable neighbor, never an error on the active range.
+  late.preview("daily", "2026-09-08", "2026-09-08", 3);
+  const failed = await h.settle();
+  assert.deepEqual(failed.peek("daily", "2026-09-08", "2026-09-08"), { board: null, failed: true });
+  assert.equal(failed.error, ""); assert.equal(failed.dailyError, "");
+  // A later drag may ask again; committing then shows those scores at once and adopts the same request.
+  failed.preview("daily", "2026-09-06", "2026-09-06", 4);
+  const ready = await h.settle();
+  const shown = ready.peek("daily", "2026-09-06", "2026-09-06").board;
+  assert.equal(shown.games[0].id, "g-2026-09-06:2026-09-06");
+  const adopted = h.requested.findLast(request => request.board.date === "2026-09-06");
+  ready.setDate("2026-09-06", true);
+  assert.equal(h.render().data, shown, "the committed range's known scores show while its refresh runs");
+  const moved = await h.settle();
+  assert.equal(moved.data.date, "2026-09-06");
+  assert.equal(count("2026-09-06:2026-09-06"), 2, "the commit reused the drag's request instead of asking again");
+  assert.ok(h.enriched.some(request => request.generation === adopted.generation && request.board.date === "2026-09-06"), "with that request's own generation, through the normal enrichment path");
+});
+
 // Browser CDN fallback: the primary scoreboard is refused, so every scope reads ESPN's backup CDN.
 // ESPN weeks run Tuesday 07:00Z to the next Tuesday 06:59Z; the default document is the selected week.
 const cdnCalendar = [

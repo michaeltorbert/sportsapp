@@ -54,14 +54,17 @@ function fixtures() {
   };
 }
 
-// Home's useState order: selection, period, hideFinals, focusedGame, open game screen route, open intent.
-function render(selection, { period = "day", hideFinals = false, focusedGame = "", route, showHelp = false, boards = fixtures(), stale = false, effects = [], changes = [], weekDate = null, week = weekDate ? { start: weekDate, end: shiftDate(weekDate, 4) } : { start: "2026-09-03", end: "2026-09-07" } } = {}) {
+// Home's useState order: selection, period, hideFinals, focusedGame, open game screen route, open intent,
+// team page, team origin, All FBS scope, then the swipe pager's revealed side and leaving view (#172).
+// Unset slots keep their initial values.
+const SLOTS = { hideFinals: 2, focusedGame: 3, openIntent: 5, allFbs: 8 };
+function render(selection, { period = "day", hideFinals = false, focusedGame = "", route, allFbs = false, showHelp = false, boards = fixtures(), stale = false, effects = [], changes = [], weekDate = null, week = weekDate ? { start: weekDate, end: shiftDate(weekDate, 4) } : { start: "2026-09-03", end: "2026-09-07" }, pager = [], neighbors = {}, neighborFailed = false } = {}) {
   let state = 0, selectedScope;
   globalThis.scorePageTest = {
     ...jsxRuntime, showHelp, element: React.createElement,
     effect(fn) { effects.push(fn); },
-    useState(initial) { const slot = state++; return [[selection, period, hideFinals, focusedGame, route][slot] ?? initial, value => changes.push({ slot, value })]; },
-    scoreboard(scope) { selectedScope = scope; return { date: "2026-08-29", today: "2026-09-05", boards, data: boards[scope] && (stale ? boards[scope] : { ...boards[scope], fetchedAt: new Date().toISOString() }), error: "", refreshing: false, online: true, now: Date.now(), timezone: "EDT", refresh() {}, setDate() {}, followToday: true, week, weekDate, setWeek() {}, followWeek: weekDate === null }; },
+    useState(initial) { const slot = state++; return [[selection, period, hideFinals, focusedGame, route, undefined, undefined, undefined, allFbs, ...pager][slot] ?? initial, value => changes.push({ slot, value })]; },
+    scoreboard(scope) { selectedScope = scope; return { date: "2026-08-29", today: "2026-09-05", boards, data: boards[scope] && (stale ? boards[scope] : { ...boards[scope], fetchedAt: new Date().toISOString() }), error: "", refreshing: false, online: true, now: Date.now(), timezone: "EDT", refresh() {}, setDate() {}, followToday: true, week, weekDate, setWeek() {}, followWeek: weekDate === null, peek: (s, start, end) => ({ board: neighbors[`${s}:${start}:${end}`] ?? null, failed: neighborFailed }), preview() {} }; },
   };
   try { return { html: renderToStaticMarkup(React.createElement(Home)), scope: selectedScope }; }
   finally { delete globalThis.scorePageTest; }
@@ -549,6 +552,49 @@ test("issue 172: Help explains swiping, the week arrows and This week", () => {
   assert.match(html, /swipe left across the games for the next day or week, or right for the previous one\. The arrows do the same\./);
 });
 
+// The inert pane beside the results (#172), from its opening tag to the end of the results track.
+const paneOf = (html, side) => html.match(new RegExp(`<div class="pager-pane" data-side="${side}" aria-hidden="true" inert="">[\\s\\S]*?(?=<div class="pager-pane" data-side|</div></section>)`))?.[0] ?? "";
+const paneCards = pane => (pane.match(/<div class="game-card /g) || []).length;
+
+test("issue 172: a revealed neighbor is an inert, date-labeled picture of that range's own filtered games, never the current ones", () => {
+  // Unranked, non-ACC and not One-score (21–0), so only All FBS lists it, like the `focused` fixture.
+  const fbsOnly = game({ id: "neighbor-fbs" }); fbsOnly.teams.forEach(team => { team.rank = null; }); fbsOnly.teams[0].score = 0;
+  const final = game({ id: "neighbor-final", state: "final" });
+  const duke = game({ id: "neighbor-duke" }); duke.teams[0] = { ...duke.teams[0], id: "150", name: "Duke", abbreviation: "DUKE" };
+  const neighbors = { "daily:2026-08-30:2026-08-30": scoreboard([game({ id: "neighbor-ranked" }), fbsOnly, final, duke], "2026-08-30") };
+  const current = render([]).html;
+  assert.equal(paneOf(current, 1), "", "no pane at rest");
+  const { html } = render([], { pager: [1], neighbors });
+  const pane = paneOf(html, 1);
+  assert.match(pane, /<p class="pager-caption"><span class="pager-caption-date">Sun, Aug 30<\/span><span>2 games<\/span><\/p>/);
+  assert.equal(paneCards(pane), 2, "the watchlist's ranked game and final; the unranked game and protected Duke game are left out");
+  assert.doesNotMatch(pane, /id="|<a |href=|data-focus-key|role=|tabindex|DUKE/, "no IDs, links, focus targets, live regions or hidden Duke game");
+  assert.deepEqual(cardIds(html), cardIds(current), "the live results are unchanged beside it");
+  assert.equal((html.match(/id="game-/g) || []).length, cardIds(current).length, "no live ID is repeated");
+  // The same scope, Hide finals and category filters as the results.
+  assert.equal(paneCards(paneOf(render([], { pager: [1], neighbors, allFbs: true }).html, 1)), 3, "All FBS adds the unranked game");
+  assert.match(paneOf(render([], { pager: [1], neighbors, hideFinals: true }).html, 1), /<span>1 game<\/span>/);
+  assert.match(paneOf(render(["acc"], { pager: [1], neighbors }).html, 1), /<span>No ACC games on this day\.<\/span>[\s\S]*class="pager-empty-title">No ACC games on this day\./);
+  // Unknown scores are an honest loading or unavailable state, never the current games.
+  const loading = paneOf(render([], { pager: [1] }).html, 1);
+  assert.match(loading, /<span class="pager-caption-date">Sun, Aug 30<\/span><span>Loading scores…<\/span>/);
+  assert.equal(paneCards(loading), 0); assert.equal((loading.match(/class="loading-card"/g) || []).length, 3);
+  const failed = paneOf(render([], { pager: [1], neighborFailed: true }).html, 1);
+  assert.match(failed, /<span>Scores unavailable<\/span>[\s\S]*Scores are temporarily unavailable/);
+  assert.equal(paneCards(failed), 0);
+  // Week: the previous Thursday–Monday week, named by its dates.
+  const week = paneOf(render(["top25"], { period: "week", pager: [-1], neighbors: { "week:2026-08-27:2026-08-31": scoreboard([], "2026-08-27", { endDate: "2026-08-31" }) } }).html, -1);
+  assert.match(week, /<span class="pager-caption-date">Aug 27 – Aug 31<\/span><span>No Top 25 games in the week of Aug 27 – Aug 31\.<\/span>/);
+});
+
+test("issue 172: the view a committed swipe leaves is the same static picture on the side it leaves toward, without a caption", () => {
+  const leaving = { label: "Sat, Aug 29", weekly: false, status: "games", games: [game({ id: "left-behind" })], title: "", description: "", upsets: false, step: 1 };
+  const { html } = render([], { pager: [0, leaving] });
+  const pane = paneOf(html, -1);
+  assert.equal(paneCards(pane), 1); assert.doesNotMatch(pane, /pager-caption|id="|<a /);
+  assert.equal(paneOf(render([], { pager: [0, { ...leaving, step: -1 }] }).html, 1).length > 0, true, "a backward swipe leaves toward the right");
+});
+
 test("restoration effect replay uses its captured snapshot after transient URL cleanup", () => {
   const effects = [], changes = [];
   render([], { effects, changes });
@@ -558,11 +604,127 @@ test("restoration effect replay uses its captured snapshot after transient URL c
   const url = new URL(`https://example.test/?_ss_update=${"b".repeat(40)}&_ss_hide_finals=1&_ss_focus=focused`);
   Object.defineProperty(globalThis, "location", { configurable: true, value: url });
   Object.defineProperty(globalThis, "history", { configurable: true, value: { state: { retained: true }, replaceState(state, title, next) { assert.deepEqual(state, { retained: true }); url.href = String(next); } } });
-  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem() { throw Error("Restoration must not read stored preference"); } } });
+  // Hide finals comes only from the link. This pre-ORD-021 link has no scope, so the saved All FBS preference applies.
+  const reads = [];
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem(key) { reads.push(key); if (key !== "ss:all-fbs") throw Error("Restoration must not read stored preference"); return "true"; } } });
   try {
     restorationEffect(); assert.equal(url.search, ""); restorationEffect();
     // A 1.14.0 update link (no _ss_open) keeps its membership and opens that game once.
-    const once = [{ slot: 2, value: true }, { slot: 3, value: "focused" }, { slot: 5, value: "focused" }];
+    const once = [{ slot: SLOTS.hideFinals, value: true }, { slot: SLOTS.focusedGame, value: "focused" }, { slot: SLOTS.openIntent, value: "focused" }, { slot: SLOTS.allFbs, value: true }];
     assert.deepEqual(changes, [...once, ...once]);
+    assert.deepEqual(reads, ["ss:all-fbs", "ss:all-fbs"]);
   } finally { for (const [key, descriptor] of original) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; } }
+});
+
+test("ORD-021 an update link's explicit scope overrides the opposite saved preference and is cleaned up", () => {
+  const original = new Map(["location", "history", "localStorage"].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  try {
+    for (const [scope, saved] of [["0", "true"], ["1", "false"], ["1", null]]) {
+      const effects = [], changes = [];
+      render([], { effects, changes });
+      const restorationEffect = effects.find(effect => effect.toString().includes('"_ss_update"'));
+      const url = new URL(`https://example.test/?keep=yes&_ss_update=${"b".repeat(40)}&_ss_hide_finals=0&_ss_all_fbs=${scope}&_ss_open=0`);
+      Object.defineProperty(globalThis, "location", { configurable: true, value: url });
+      Object.defineProperty(globalThis, "history", { configurable: true, value: { state: null, replaceState(state, title, next) { url.href = String(next); } } });
+      Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem(key) { if (key === "ss:all-fbs") throw Error(`An explicit scope must not read the saved ${saved}`); throw Error("Restoration must not read stored preference"); } } });
+      restorationEffect();
+      assert.deepEqual(changes.filter(change => change.slot === SLOTS.allFbs), [{ slot: SLOTS.allFbs, value: scope === "1" }], `${scope} over saved ${saved}`);
+      assert.equal(url.search, "?keep=yes", "every update transient, including the scope, is removed");
+    }
+    // An ordinary entry (no update) reads the saved preference, off when none is saved.
+    for (const [saved, expected] of [["true", true], ["false", false], [null, false]]) {
+      const effects = [], changes = [];
+      render([], { effects, changes });
+      const restorationEffect = effects.find(effect => effect.toString().includes('"_ss_update"'));
+      const url = new URL("https://example.test/?cats=acc&period=week");
+      Object.defineProperty(globalThis, "location", { configurable: true, value: url });
+      Object.defineProperty(globalThis, "history", { configurable: true, value: { state: null, replaceState() { throw Error("nothing to clean"); } } });
+      Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem(key) { return key === "ss:all-fbs" ? saved : null; } } });
+      restorationEffect();
+      assert.deepEqual(changes.filter(change => change.slot === SLOTS.allFbs), [{ slot: SLOTS.allFbs, value: expected }], String(saved));
+    }
+  } finally { for (const [key, descriptor] of original) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; } }
+});
+
+test("ORD-021 unfiltered All FBS lists every protected board game with a scope-correct heading, chip and counts", () => {
+  // Day: the curated watchlist omits the unranked, non-ACC "focused" game; All FBS lists it.
+  const curated = render([]).html, day = render([], { allFbs: true }).html;
+  assert.deepEqual(cardIds(curated), ["daily-only"]); assert.deepEqual(cardIds(day), ["daily-only", "focused"]);
+  assert.match(curated, /Your watchlist\./); assert.match(day, /id="scoreboard-heading" tabindex="-1">All FBS games\.<\/h1>/);
+  assert.doesNotMatch(day, /Your watchlist/);
+  assert.match(day, /class="filter-tab filter-watch" aria-pressed="true"[^>]*><span>All FBS<\/span>/);
+  assert.match(curated, /class="filter-tab filter-watch" aria-pressed="true"[^>]*><span>All<\/span>/);
+  assert.deepEqual(pair(day, "watch"), [2, 2]); assert.match(day, /aria-label="All FBS, 2 in progress, 2 total"/);
+  assert.deepEqual(pair(curated, "watch"), [1, 1]);
+  // Week: every game on the weekly board, in the shared order; Hide finals still applies.
+  const week = render([], { period: "week", allFbs: true }).html, curatedWeek = render([], { period: "week" }).html;
+  assert.match(week, /All FBS games this week\./);
+  assert.equal(cardIds(week).length, 8); assert.equal(new Set(cardIds(week)).size, 8);
+  const sections = [...week.matchAll(/<section class="score-section">(.*?)<\/section>/g)].map(match => match[1]);
+  assert.deepEqual(sections.map(section => cardIds(section).length), [3, 1, 2, 1, 1], "the existing live, delayed, upcoming, schedule-update and final groups"); assert.ok(cardIds(week).includes("focused") && !cardIds(curatedWeek).includes("focused"));
+  assert.deepEqual(cardIds(curatedWeek), cardIds(week).filter(id => cardIds(curatedWeek).includes(id)), "curated games keep their relative order");
+  assert.deepEqual(pair(week, "watch"), [4, 8]); assert.deepEqual(pair(curatedWeek, "watch"), [3, 7]);
+  const hidden = render([], { period: "week", allFbs: true, hideFinals: true }).html;
+  assert.deepEqual(pair(hidden, "watch"), [4, 7]); assert.doesNotMatch(hidden, /game-top-final/);
+  // Category chips keep their own counts in either scope.
+  for (const category of ["acc", "top25", "close"]) assert.deepEqual(pair(week, category), pair(curatedWeek, category), category);
+  assert.deepEqual(upsetBadge(week), upsetBadge(curatedWeek));
+  // The checkbox: native, labeled, beside Hide finals, reflecting the displayed scope.
+  assert.match(day, /<div class="scope-toggles"><label class="toggle-label"><input type="checkbox"\/><span>Hide finals<\/span><\/label><label class="toggle-label"><input type="checkbox" checked=""\/><span>All FBS games<\/span><\/label><\/div>/);
+  assert.match(curated, /<label class="toggle-label"><input type="checkbox"\/><span>All FBS games<\/span><\/label>/);
+  // Card links carry no scope; ordinary links follow the saved preference.
+  assert.match(day, /<a class="game-summary" href="\/\?event=focused"/);
+  assert.doesNotMatch(day, /href="[^"]*(?:fbs|_ss_)[^"]*"/i);
+});
+
+test("ORD-021 narrowed categories keep their own membership and copy; empty, stale and loading states stay truthful", () => {
+  for (const [selection, heading] of [[["acc"], "ACC this week."], [["acc", "top25"], "ACC and Top 25 this week."], [["acc", "top25", "close", "upset"], "ACC, Top 25, One-score, and Upset watch this week."]]) {
+    const scoped = render(selection, { period: "week", allFbs: true }).html, curated = render(selection, { period: "week" }).html;
+    assert.deepEqual(cardIds(scoped), cardIds(curated), JSON.stringify(selection));
+    assert.match(scoped, new RegExp(`>${heading.replace(/[.]/g, "\\.")}</h1>`));
+    assert.deepEqual(pressed(scoped), selection);
+    assert.match(scoped, /class="filter-tab filter-watch" aria-pressed="false"[^>]*><span>All FBS<\/span>/);
+  }
+  assert.ok(!cardIds(render(["acc", "top25", "close", "upset"], { period: "week", allFbs: true }).html).includes("focused"), "four categories are their union, not every FBS game");
+  // Empty boards: scope-correct unfiltered copy; category copy unchanged.
+  const empty = { ...fixtures(), daily: scoreboard([]) }, emptyWeek = { ...fixtures(), week: scoreboard([], "2026-09-03", { endDate: "2026-09-07" }) };
+  const day = render([], { allFbs: true, boards: empty }).html, week = render([], { period: "week", allFbs: true, boards: emptyWeek }).html;
+  assert.match(day, /No FBS games on this day\./); assert.match(day, /Choose another date to check the schedule\. New games appear automatically\./);
+  assert.match(week, /No FBS games this week\./); assert.match(week, /New games appear automatically as the schedule updates\./);
+  for (const html of [day, week]) { assert.doesNotMatch(html, /qualifying|Your watchlist|A quiet/); assert.deepEqual(pair(html, "watch"), [0, 0]); }
+  const curatedDay = render([], { boards: empty }).html;
+  assert.match(curatedDay, /A quiet scoreboard\./); assert.match(curatedDay, /New qualifying games appear automatically\./);
+  const acc = render(["acc"], { allFbs: true, boards: empty }).html;
+  assert.match(acc, /No ACC games on this day\./); assert.match(acc, /New qualifying games appear automatically\./);
+  // Stale and loading counts stay unknown under the new label.
+  const stale = render([], { allFbs: true, stale: true }).html;
+  assert.match(stale, /aria-label="All FBS, counts unavailable while scores are stale"/);
+  assert.match(stale, /class="filter-tab filter-watch"[^>]*><span>All FBS<\/span><span class="tab-count count-pair" aria-hidden="true">– \(–\)<\/span>/);
+  assert.deepEqual(cardIds(stale), cardIds(render([], { allFbs: true }).html), "stale cards stay visible");
+  assert.match(stale, /Waiting for a fresh score update/);
+  const loading = render([], { allFbs: true, boards: { ...fixtures(), daily: null } }).html;
+  assert.match(loading, /aria-label="All FBS, counts loading"/);
+  assert.doesNotMatch(loading, /class="count-total"/);
+});
+
+test("ORD-021 a protected Duke game is neither listed nor counted under All FBS, in Day or Week", () => {
+  const duke = game({ id: "duke-game", state: "upcoming", started: false, period: 0 });
+  duke.teams[0] = { ...duke.teams[0], id: "150", name: "Duke", abbreviation: "DUKE", rank: null }; duke.teams[1].rank = null;
+  const boards = fixtures(); boards.daily = scoreboard([duke, ...boards.daily.games]); boards.week = scoreboard([duke, ...boards.week.games], "2026-09-03", { endDate: "2026-09-07" });
+  for (const [period, expected] of [["day", [2, 2]], ["week", [4, 8]]]) for (const focusedGame of ["", "duke-game"]) {
+    const { html } = render([], { period, allFbs: true, boards, focusedGame });
+    assert.doesNotMatch(html, /game-duke-game|DUKE/, `${period} ${focusedGame}`);
+    // Unprotected, the Duke game would add one to each total.
+    assert.deepEqual(pair(html, "watch"), expected, `${period} ${focusedGame}`);
+  }
+});
+
+test("ORD-021 Help explains the conditional All FBS scope without promising provider completeness", () => {
+  const html = render([], { showHelp: true }).html;
+  assert.match(html, /All combines the four categories without repeating games\./);
+  assert.match(html, /With All FBS games checked, All becomes All FBS: every game ESPN’s FBS scoreboard returns for the selected Day or Week, including games against FCS opponents, after your Duke settings and Hide finals\./);
+  assert.match(html, /It adds no separate FCS coverage\./);
+  assert.match(html, /This device remembers that choice; the Guide keeps its own All games and Watchlist choice\./);
+  assert.match(html, /Hide finals remembers your choice on this device\./);
+  assert.doesNotMatch(html, /every FBS game in existence|complete list of|all games are guaranteed/i);
 });

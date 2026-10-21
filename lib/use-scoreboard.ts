@@ -20,6 +20,40 @@ function refreshError(online: boolean, guide: boolean) {
   const subject = guide ? "schedule" : "scores";
   return online ? `Could not refresh ${subject}. Retrying automatically.` : `You're offline. Reconnect to refresh ${subject}.`;
 }
+// A neighboring range shown beside the results while a swipe is held (#172): its scores-only request,
+// and that board with saved final categories once it arrives. `gesture` is the drag that asked for it.
+type Preview = { key: string; gesture: number; controller: AbortController; promise: Promise<ScoreRequest>; request: ScoreRequest | null; board: Scoreboard | null; failed: boolean };
+// A neighbor shows scores fetched within this long, the same age at which displayed scores count as stale.
+const PREVIEW_FRESH = 90_000;
+// A committed range adopts its preview's request only when it is no older than one poll.
+const ADOPT_FRESH = 30_000;
+const PREVIEW_LIMIT = 4;
+const fresh = (board: Scoreboard | null | undefined, limit = PREVIEW_FRESH): board is Scoreboard => !!board && Date.now() - Date.parse(board.fetchedAt) <= limit;
+// At most one speculative request runs at a time; completed previews are kept, bounded. `asked` holds the
+// ranges the current drag has requested, so none is requested twice in one drag.
+type PreviewStore = { entries: Map<string, Preview>; speculative: Preview | null; gesture: number; asked: Set<string> };
+// The refresh of a range reuses that range's preview request, with the request's own generation and
+// epoch, through the same history and enrichment path. An old, failed or canceled one is requested
+// again; the refresh's cancellation cancels an adopted request still in flight.
+function adoptPreview(store: PreviewStore, key: string, signal: AbortSignal, request: () => Promise<ScoreRequest>) {
+  const entry = store.entries.get(key);
+  if (!entry || entry.failed) return request();
+  store.entries.delete(key);
+  if (entry.request) return fresh(entry.request.board, ADOPT_FRESH) ? Promise.resolve(entry.request) : request();
+  if (store.speculative === entry) store.speculative = null;
+  const stop = () => entry.controller.abort();
+  signal.addEventListener("abort", stop);
+  if (signal.aborted) stop();
+  return entry.promise.catch(error => { if (signal.aborted) throw error; return request(); }).finally(() => signal.removeEventListener("abort", stop));
+}
+// Cancels the speculative request in flight (if any but `keep`) and forgets it, so its late result is never shown.
+function cancelSpeculative(store: PreviewStore, keep = "") {
+  const entry = store.speculative;
+  if (!entry || entry.key === keep) return;
+  store.speculative = null;
+  if (store.entries.get(entry.key) === entry) store.entries.delete(entry.key);
+  entry.controller.abort();
+}
 export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDate?: string | null) {
   const search = useInitialSearch();
   const params = new URLSearchParams(search || ""), query = params.get("date");
@@ -39,6 +73,8 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
   const [now, setNow] = useState(0);
   const held = useRef(""), controller = useRef<AbortController | null>(null);
   const cache = useRef(new Map<string, Scoreboard>());
+  const previews = useRef<PreviewStore>({ entries: new Map(), speculative: null, gesture: -1, asked: new Set() });
+  const [, setPreviewed] = useState(0);
 
   useEffect(() => {
     try {
@@ -50,6 +86,14 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
   }, []);
 
   useEffect(retainHalftimeEnvironment, []);
+  // A speculative preview never outlives the page being shown or mounted. A committed range's
+  // adopted request belongs to its refresh instead, and is canceled with it.
+  useEffect(() => {
+    const store = previews.current;
+    const hidden = () => { if (document.hidden) cancelSpeculative(store); };
+    document.addEventListener("visibilitychange", hidden);
+    return () => { document.removeEventListener("visibilitychange", hidden); cancelSpeculative(store); };
+  }, []);
 
   const refresh = useCallback(async () => {
     if (document.hidden || controller.current) return;
@@ -83,7 +127,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
         const key = boardKey(boardScope, range.start, range.end);
         try {
           // A displayed prior board is enriched here, once, with its original request's generation and epoch.
-          const request = boardScope === "daily" && prior?.board.date === activeDate ? prior : await requestScores(range.start, c.signal, fetch, range.end, false, cdn);
+          const request = boardScope === "daily" && prior?.board.date === activeDate ? prior : await adoptPreview(previews.current, key, c.signal, () => requestScores(range.start, c.signal, fetch, range.end, false, cdn));
           if (controller.current !== c) return;
           // Read this scope's history once. The weekly board's pre-1.9 key keeps retained final categories across the upgrade.
           const old = cache.current.get(key) || readBoard(key) || (boardScope === "week" ? readBoard(boardKey(boardScope, range.start, range.end, true)) : null);
@@ -150,10 +194,57 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
   // A real change of day or week supersedes the running refresh at once, so none of its late
   // results or errors can land on the new range. Choosing the same value keeps polling as it is.
   const supersede = () => { controller.current?.abort(); controller.current = null; setRefreshing(false); };
-  const chooseDate = (value: string | null) => { if (value !== selection) supersede(); setErrors({ daily: "", week: "" }); setOvernightError(""); setSelection(value); setDate(value || held.current || easternDate()); };
-  const chooseWeek = (value: string | null) => {
+
+  // Neighbor previews (#172). The best known scores for an adjacent range: fresh history first, then its
+  // preview. Neither is ever written to the displayed board, its errors or saved history before a commit.
+  const peek = (boardScope: BoardScope, start: string, end: string) => {
+    const key = boardKey(boardScope, start, end), cached = cache.current.get(key), known = previews.current.entries.get(key), previewed = known?.board;
+    if (fresh(cached)) return { board: cached, failed: false };
+    if (fresh(previewed)) return { board: previewed, failed: false };
+    return { board: null, failed: !!known?.failed };
+  };
+  // Requests a range the drag `gesture` has revealed, unless it is already known, in flight, or was
+  // already requested in this drag. Revealing another range cancels the one in flight first.
+  const preview = (boardScope: BoardScope, start: string, end: string, gesture: number) => {
+    const store = previews.current, key = boardKey(boardScope, start, end), known = store.entries.get(key);
+    if (dailyOnly || document.hidden || fresh(cache.current.get(key))) return;
+    if (store.gesture !== gesture) { store.gesture = gesture; store.asked.clear(); }
+    if (store.asked.has(key) || (known && !known.failed && (!known.request || fresh(known.board)))) return;
+    store.asked.add(key);
+    cancelSpeculative(store);
+    const controller = new AbortController();
+    const entry: Preview = { key, gesture, controller, promise: requestScores(start, controller.signal, fetch, end, false), request: null, board: null, failed: false };
+    store.entries.delete(key); store.entries.set(key, entry); store.speculative = entry;
+    for (const [other, kept] of store.entries) if (store.entries.size > PREVIEW_LIMIT && kept !== store.speculative) store.entries.delete(other);
+    entry.promise.then(request => {
+      if (store.entries.get(key) !== entry) return;
+      entry.request = request;
+      // Only the saved final categories, as the displayed board keeps them; no summaries or other enrichment.
+      entry.board = retainFinalCategories(request.board, cache.current.get(key) || readBoard(key));
+      setPreviewed(n => n + 1);
+    }, () => {
+      if (store.entries.get(key) !== entry) return;
+      if (controller.signal.aborted) store.entries.delete(key);
+      else { entry.failed = true; setPreviewed(n => n + 1); }
+    }).finally(() => { if (store.speculative === entry) store.speculative = null; });
+  };
+  // A change to any other range cancels a speculative request; the chosen range's own is adopted by its refresh.
+  // `seed` (a committed swipe) shows the chosen range's known scores at once while that refresh runs.
+  const settle = (boardScope: BoardScope, start: string | null, end: string | null, seed: boolean) => {
+    cancelSpeculative(previews.current, start && end ? boardKey(boardScope, start, end) : "");
+    const known = seed && start && end ? peek(boardScope, start, end).board : null;
+    if (known) setBoards(previous => ({ ...previous, [boardScope]: known }));
+  };
+  const chooseDate = (value: string | null, seed = false) => {
+    if (value !== selection) supersede();
+    settle("daily", value, value, seed);
+    setErrors({ daily: "", week: "" }); setOvernightError(""); setSelection(value); setDate(value || held.current || easternDate());
+  };
+  const chooseWeek = (value: string | null, seed = false) => {
     const next = value && validDate(value) ? accWeek(value).start : null;
     if (next !== weekAnchor) { supersede(); setErrors(previous => ({ ...previous, week: "" })); }
+    const target = next ? accWeek(next) : today ? accWeek(today) : null;
+    settle("week", target?.start ?? null, target?.end ?? null, seed);
     setWeekSelection(next);
   };
   // The weekly period follows the current football week unless a week was chosen; manual dates apply to Day.
@@ -166,5 +257,5 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
   };
   const data = matching[scope];
   const error = errors[scope] || overnightError;
-  return { date: displayDate, today, data, boards: matching, error, scopeError: errors[scope], dailyError: dailyOnly ? guideDailyErrors[displayDate] || "" : errors.daily, overnightError, refreshing, online, now, timezone, refresh, setDate: chooseDate, followToday: selection === null, week: range, weekDate: weekAnchor, setWeek: chooseWeek, followWeek: weekAnchor === null };
+  return { date: displayDate, today, data, boards: matching, error, scopeError: errors[scope], dailyError: dailyOnly ? guideDailyErrors[displayDate] || "" : errors.daily, overnightError, refreshing, online, now, timezone, refresh, setDate: chooseDate, followToday: selection === null, week: range, weekDate: weekAnchor, setWeek: chooseWeek, followWeek: weekAnchor === null, peek, preview };
 }

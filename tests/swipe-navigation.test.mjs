@@ -12,7 +12,7 @@ const output = await build({
     build.onLoad({ filter: /.*/, namespace: "test" }, () => ({ contents: "export const useRef=(...a)=>globalThis.swipeTest.useRef(...a), useEffect=(...a)=>globalThis.swipeTest.useEffect(...a), useLayoutEffect=(...a)=>globalThis.swipeTest.useLayoutEffect(...a);" }));
   } }],
 });
-const { EDGE, COMMIT, SLOP, canStart, follow, release, swipeTarget, useSwipeNavigation } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString("base64")}`);
+const { EDGE, COMMIT, SLOP, GAP, TAP_WAIT, canStart, follow, release, revealed, bounded, settleStart, swipeTarget, useSwipeNavigation } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString("base64")}`);
 
 // A tiny element tree: tag, classes, parent, and the selectors the module uses.
 class FakeElement extends EventTarget {
@@ -71,8 +71,19 @@ test("swipes start on a game card's link or the region itself, never on another 
   assert.equal(swipeTarget(outside, region), null);
 });
 
-// Mounts the real hook against fake window, document and visual viewport objects.
-function mount(t, { enabled = true } = {}) {
+test("issue 172 motion geometry: the held offset reveals its side, stays within one pane, and a commit starts where the neighbor was", () => {
+  assert.equal(revealed(-1), 1, "results moved left show the next range");
+  assert.equal(revealed(1), -1);
+  assert.equal(revealed(0), 0);
+  assert.equal(bounded(-900, 430), -430); assert.equal(bounded(900, 430), 430); assert.equal(bounded(-120, 430), -120);
+  // The neighbor sits one pitch beside the results, so the new results start exactly where it was painted.
+  assert.equal(settleStart(-120, 1, 390 + GAP), 310);
+  assert.equal(settleStart(95, -1, 390 + GAP), -335);
+});
+
+// Mounts the real hook against fake window, document and visual viewport objects. With `motion`, the
+// region has a fake `.pager-track` whose style changes are recorded, and frames run when flushed.
+function mount(t, { enabled = true, motion = false, reduced = false, moved = true } = {}) {
   const win = new EventTarget(), doc = new EventTarget(), viewport = new EventTarget();
   Object.assign(viewport, { scale: 1 });
   Object.assign(doc, { hidden: false, dialog: false, querySelector: () => doc.dialog ? {} : null });
@@ -80,6 +91,15 @@ function mount(t, { enabled = true } = {}) {
   const card = new FakeElement("a", ["game-summary"], new FakeElement("article", ["game-card"], region));
   const other = new FakeElement("a", ["game-summary"], new FakeElement("article", ["game-card"], region));
   const control = new FakeElement("button", [], region);
+  const transforms = [], frames = [], reveals = [], settled = [];
+  const track = new FakeElement("div", ["pager-track"], region);
+  // `painted` is what getComputedStyle reports: a settle's current, mid-transition position.
+  Object.assign(track, { offsetWidth: 390, painted: "none", style: { transition: "", current: "", get transform() { return this.current; }, set transform(value) { this.current = value; transforms.push(value); } } });
+  if (motion) Object.assign(region, {
+    querySelector: selector => selector === ":scope > .pager-track" ? track : null,
+    getBoundingClientRect: () => ({ top: 100, height: 400 }),
+    style: { height: "", setProperty(name, value) { this[name] = value; }, removeProperty(name) { delete this[name]; } },
+  });
   const steps = [], refs = [], effects = [], layouts = [];
   let cursor = 0, layoutCursor = 0;
   const saved = new Map();
@@ -91,13 +111,19 @@ function mount(t, { enabled = true } = {}) {
     // Layout effects run during the render here, with React's dependency rule.
     useLayoutEffect: (fn, deps) => { const i = layoutCursor++; if (!deps || changed(layouts[i], deps)) { layouts[i] = deps; fn(); } },
   });
-  replace("window", { innerWidth: 390, visualViewport: viewport, setTimeout, clearTimeout });
+  replace("window", { innerWidth: 390, visualViewport: viewport, setTimeout, clearTimeout,
+    ...(motion ? { requestAnimationFrame: fn => frames.push(fn), cancelAnimationFrame() {}, matchMedia: () => ({ matches: reduced }) } : {}) });
   replace("document", doc);
   replace("Element", FakeElement); replace("Node", FakeElement);
   replace("addEventListener", win.addEventListener.bind(win)); replace("removeEventListener", win.removeEventListener.bind(win));
+  if (motion) {
+    replace("getComputedStyle", element => ({ transform: element.painted }));
+    replace("DOMMatrixReadOnly", class { constructor(value) { this.m41 = Number(/^matrix\(1, 0, 0, 1, (-?[\d.]+), 0\)$/.exec(value)[1]); } });
+  }
   let cleanup = null, lastDeps = null, context = "day:2026-09-05", on = enabled;
+  const pager = motion ? { reveal: (side, gesture) => reveals.push([side, gesture]), settled: () => settled.push(true) } : undefined;
   // A named component, as the page uses the hook; the controlled runtime above supplies React.
-  function Harness({ on, context }) { return useSwipeNavigation(on, context, step => steps.push(step)); }
+  function Harness({ on, context }) { return useSwipeNavigation(on, context, step => { steps.push(step); return moved; }, pager); }
   const render = (next = on, nextContext = context) => {
     on = next; context = nextContext; cursor = 0; layoutCursor = 0; effects.length = 0;
     const ref = Harness({ on, context });
@@ -138,7 +164,9 @@ function mount(t, { enabled = true } = {}) {
     region.dispatchEvent(event);
     return event.defaultPrevented;
   };
-  return { region, card, other, control, viewport, doc, win, steps, pointer, swipe, touchend, touchmove, click, render };
+  const flush = () => { while (frames.length) frames.shift()(); };
+  const transitionend = () => { const event = new Event("transitionend"); Object.defineProperty(event, "propertyName", { value: "transform" }); track.dispatchEvent(event); };
+  return { region, card, other, control, viewport, doc, win, steps, pointer, swipe, touchend, touchmove, click, render, track, transforms, reveals, settled, flush, transitionend };
 }
 
 test("one deliberate horizontal swipe commits exactly one step in each direction", t => {
@@ -326,7 +354,144 @@ test("only the committed touch's own compatibility click is swallowed; keyboard,
   h.swipe(h.region, 150);
   assert.deepEqual(h.click(h.card), { prevented: true, stopped: true }, "the card is inside the region the swipe started on");
   assert.deepEqual(h.steps, [1, 1, -1]);
-  // Nothing is armed without a commit.
+  // Nothing is armed without a horizontal drag.
   h.swipe(h.card, 0, -200);
   assert.deepEqual(h.click(h.card), { prevented: false, stopped: false });
+  // A short horizontal pull that slides back arms its own click record too, and the next tap still passes.
+  h.swipe(h.card, -(COMMIT - 10));
+  assert.deepEqual(h.click(h.card), { prevented: true, stopped: true });
+  h.pointer("pointerdown", h.card, 200, 300); h.pointer("pointerup", h.card, 200, 300);
+  assert.deepEqual(h.click(h.card), { prevented: false, stopped: false });
+  assert.deepEqual(h.steps, [1, 1, -1]);
+});
+
+// Issue 172 motion. A drag `from` x 200 to `to`, one move per 10 px, then release (and touchend).
+function hold(h, to, { target = h.card, from = 200 } = {}) {
+  h.pointer("pointerdown", target, from, 300);
+  for (let x = from; x !== to;) { x += Math.sign(to - x) * Math.min(10, Math.abs(to - x)); h.pointer("pointermove", target, x, 300); }
+}
+// A committed forward swipe and the range change it causes, which starts its settle.
+function commitForward(h, context = "day:2026-09-06") {
+  hold(h, 80); h.flush(); h.pointer("pointerup", h.card, 80, 300); h.touchend();
+  h.render(true, context);
+}
+
+test("issue 172 held drag: the track follows the finger 1:1, reveals the uncovered side, and a short release slides back without a step", t => {
+  const h = mount(t, { motion: true });
+  h.pointer("pointerdown", h.card, 200, 300); h.pointer("pointermove", h.card, 195, 300); h.flush();
+  assert.deepEqual(h.transforms, [], "nothing moves within the slop");
+  h.pointer("pointermove", h.card, 180, 300); h.flush();
+  assert.equal(h.track.style.transform, "translate3d(-20px, 0, 0)");
+  assert.equal(h.region.dataset.pager, "drag"); assert.equal(h.region.style.height, "400px", "the region keeps its height while held");
+  assert.equal(h.region.style["--pager-cue"], "0px", "the results' top is on screen, so the date cue sits there");
+  for (const x of [170, 160, 150]) h.pointer("pointermove", h.card, x, 300);
+  assert.equal(h.track.style.transform, "translate3d(-20px, 0, 0)", "moves wait for the next frame");
+  h.flush(); assert.equal(h.track.style.transform, "translate3d(-50px, 0, 0)", "one paint per frame, at the latest offset");
+  h.pointer("pointermove", h.card, 230, 300); h.flush();
+  assert.equal(h.track.style.transform, "translate3d(30px, 0, 0)");
+  assert.deepEqual(h.reveals, [[1, 1], [-1, 1]], "next, then previous after reversing, both in drag 1");
+  h.pointer("pointerup", h.card, 230, 300); h.touchend();
+  assert.deepEqual(h.steps, [], "30 px commits nothing");
+  assert.equal(h.region.dataset.pager, "settle");
+  assert.deepEqual(h.transforms.slice(-2), ["translate3d(30px, 0, 0)", "translate3d(0px, 0, 0)"], "the slide back starts where the results were");
+  h.transitionend();
+  assert.equal(h.track.style.transform, ""); assert.equal(h.region.style.height, ""); assert.equal("pager" in h.region.dataset, false);
+  assert.deepEqual(h.reveals.at(-1), [0, 1], "the neighbor goes once at rest");
+  assert.deepEqual(h.settled, [], "nothing was left");
+  assert.deepEqual(h.click(h.card), { prevented: true, stopped: true }, "the slide back still swallows that touch's own click");
+  // Turning vertical mid-drag slides back too; nothing steps.
+  hold(h, 150); h.pointer("pointermove", h.card, 150, 340); h.flush();
+  assert.equal(h.region.dataset.pager, "settle"); h.transitionend();
+  h.pointer("pointerup", h.card, 150, 340); h.touchend();
+  assert.deepEqual(h.steps, []);
+});
+
+test("issue 172 commit: the step lands at touchend, and its own range change settles the new results from the neighbor's place", t => {
+  const h = mount(t, { motion: true });
+  hold(h, 80); h.flush(); h.pointer("pointerup", h.card, 80, 300);
+  assert.deepEqual(h.steps, []); assert.equal(h.track.style.transform, "translate3d(-120px, 0, 0)", "held in place until the touch ends");
+  h.touchend(); assert.deepEqual(h.steps, [1]);
+  assert.equal(h.region.dataset.pager, "drag", "nothing settles before the new range renders");
+  h.render(true, "day:2026-09-06");
+  assert.deepEqual(h.transforms.slice(-2), [`translate3d(${-120 + 390 + GAP}px, 0, 0)`, "translate3d(0px, 0, 0)"]);
+  assert.equal(h.region.style.height, "", "the new results take their own height");
+  assert.equal(h.region.dataset.pager, "settle"); assert.deepEqual(h.settled, []);
+  h.transitionend();
+  assert.deepEqual(h.settled, [true], "the view being left goes once settled"); assert.equal(h.track.style.transform, "");
+  assert.deepEqual(h.reveals, [[1, 1]]);
+  assert.deepEqual(h.click(h.card), { prevented: true, stopped: true });
+  // A range change the swipe did not cause ends a held drag at once, with no step.
+  hold(h, 150); h.flush();
+  h.render(true, "day:2026-09-09");
+  assert.equal(h.track.style.transform, ""); assert.equal(h.region.style.height, ""); assert.deepEqual(h.reveals.at(-1), [0, 2]);
+  h.pointer("pointerup", h.card, 60, 300); h.touchend();
+  assert.deepEqual(h.steps, [1]);
+});
+
+test("issue 172 a step that moves nowhere slides back and drops the view being left", t => {
+  const nowhere = mount(t, { motion: true, moved: false });
+  hold(nowhere, 80); nowhere.flush(); nowhere.pointer("pointerup", nowhere.card, 80, 300); nowhere.touchend();
+  assert.deepEqual(nowhere.steps, [1]); assert.equal(nowhere.region.dataset.pager, "settle");
+  nowhere.transitionend(); assert.deepEqual(nowhere.settled, [true]); assert.equal(nowhere.track.style.transform, "");
+});
+
+test("issue 172 reduced motion: the drag still follows the finger; release, commit and slide back need no transition", t => {
+  const h = mount(t, { motion: true, reduced: true });
+  hold(h, 170); h.flush();
+  assert.equal(h.track.style.transform, "translate3d(-30px, 0, 0)", "direct manipulation is kept");
+  h.pointer("pointerup", h.card, 170, 300); h.touchend();
+  assert.equal(h.track.style.transform, ""); assert.deepEqual(h.reveals.at(-1), [0, 1]);
+  commitForward(h);
+  assert.deepEqual(h.steps, [1]); assert.equal(h.track.style.transform, ""); assert.deepEqual(h.settled, [true]);
+  assert.equal("pager" in h.region.dataset, false);
+});
+
+test("issue 172 a contact on settling results stops them where painted; its tap keeps its click and the settle then resumes", async t => {
+  const h = mount(t, { motion: true });
+  commitForward(h);
+  h.track.painted = "matrix(1, 0, 0, 1, 155, 0)";
+  h.pointer("pointerdown", h.other, 200, 300);
+  assert.equal(h.track.style.transform, "translate3d(155px, 0, 0)"); assert.equal(h.track.style.transition, "none");
+  h.transitionend(); assert.equal(h.track.style.transform, "translate3d(155px, 0, 0)", "the stopped settle's end does not move it");
+  h.pointer("pointerup", h.other, 201, 300); h.touchend();
+  assert.deepEqual(h.click(h.other), { prevented: false, stopped: false }, "the tap's own click reaches the game under the finger");
+  assert.equal(h.track.style.transform, "translate3d(155px, 0, 0)", "still in place while its click runs");
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(h.transforms.slice(-2), ["translate3d(155px, 0, 0)", "translate3d(0px, 0, 0)"], "then it resumes from there");
+  h.transitionend(); assert.deepEqual(h.settled, [true]); assert.deepEqual(h.steps, [1], "no deferred navigation");
+});
+
+test("issue 172 a stopped settle resumes after a tap without a click, or at once when the browser takes the touch to scroll", t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const h = mount(t, { motion: true });
+  commitForward(h);
+  h.track.painted = "matrix(1, 0, 0, 1, 90, 0)";
+  h.pointer("pointerdown", h.region, 200, 300); h.pointer("pointerup", h.region, 200, 300); h.touchend();
+  t.mock.timers.tick(TAP_WAIT - 1); assert.equal(h.track.style.transform, "translate3d(90px, 0, 0)");
+  t.mock.timers.tick(1); assert.equal(h.track.style.transform, "translate3d(0px, 0, 0)");
+  h.track.painted = "matrix(1, 0, 0, 1, 40, 0)";
+  h.pointer("pointerdown", h.card, 200, 300); h.pointer("pointermove", h.card, 200, 260);
+  assert.equal(h.track.style.transform, "translate3d(40px, 0, 0)");
+  h.pointer("pointercancel", h.card, 200, 260);
+  assert.equal(h.track.style.transform, "translate3d(0px, 0, 0)", "a vertical scroll resumes it at once");
+  h.transitionend(); assert.deepEqual(h.settled, [true]);
+  // A contact outside the results ends a settle immediately; its control works as usual.
+  commitForward(h, "day:2026-09-07");
+  assert.equal(h.region.dataset.pager, "settle");
+  h.pointer("pointerdown", new FakeElement("button"), 200, 100);
+  assert.equal(h.track.style.transform, ""); assert.deepEqual(h.settled, [true, true]);
+  assert.deepEqual(h.steps, [1, 1]);
+});
+
+test("issue 172 a new drag from a stopped settle continues from the painted place and gives the view being left way to neighbors", t => {
+  const h = mount(t, { motion: true });
+  commitForward(h);
+  h.track.painted = "matrix(1, 0, 0, 1, 155, 0)";
+  hold(h, 160); h.flush();
+  assert.deepEqual(h.settled, [true], "the leaving view goes when the new drag locks");
+  assert.equal(h.track.style.transform, "translate3d(115px, 0, 0)", "the frozen offset plus the new travel");
+  assert.deepEqual(h.reveals, [[1, 1], [-1, 2]], "the side its offset uncovers, in drag 2");
+  h.pointer("pointerup", h.card, 160, 300); h.touchend();
+  assert.deepEqual(h.steps, [1], "40 px of new travel commits nothing");
+  h.transitionend(); assert.equal(h.track.style.transform, "");
 });
