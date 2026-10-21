@@ -294,6 +294,19 @@ h1 { margin: 0; font-weight: 740; letter-spacing: -1.2px; font-size: clamp(26px,
 .compact-scoreboard .week-label { font-size: .875rem; }
 .compact-scoreboard .week-note { font-size: .625rem; }
 .compact-scoreboard .week-navigation .week-label { min-width: 0; justify-content: center; }
+/* Week keeps its Day/Week switch on the date row at ordinary phone widths (#172). The range and its
+   THU–MON note stack between the arrows; the range may break once at a space ("Sep 10 –" / "Sep 14")
+   rather than push the switch to its own row. The arrows' 44 px targets are kept: the label only reaches
+   into their empty margins and takes no taps. The decorative calendar icon is left to Day's picker.
+   The navigation grows no wider than its content and never narrower than 7.5rem, so larger text wraps
+   whole controls instead of squeezing the range. When the date row is narrower than 20rem (narrow
+   screens, enlarged text or zoom), the navigation takes its own row with This week and Day/Week below. */
+.compact-scoreboard .date-bar:has(> .week-navigation) { container: week-bar / inline-size; }
+.compact-scoreboard .week-navigation { flex: 1 1 0; min-width: 7.5rem; max-width: max-content; }
+.compact-scoreboard .week-navigation .week-label { flex: 1 1 0; flex-direction: column; flex-wrap: nowrap; align-items: center; row-gap: 0; margin: 0 -8px; line-height: 1.15; text-align: center; text-wrap: balance; pointer-events: none; }
+.compact-scoreboard .week-navigation .week-label > svg { display: none; }
+.compact-scoreboard .week-navigation .week-note { margin-left: 0; }
+@container week-bar (max-width: 20rem) { .compact-scoreboard .week-navigation { flex-basis: 100%; max-width: none; } }
 /* #172: the results take horizontal touch swipes while the browser keeps vertical scrolling and pinch
    zoom. Zoomed in, the region returns to default panning and swipes are off (lib/swipe-navigation.ts). */
 .compact-scoreboard .score-content { touch-action: pan-y pinch-zoom; }
