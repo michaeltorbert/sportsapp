@@ -110,13 +110,47 @@ async function holdTouch(page, browserName, from) {
 }
 
 // Records the painted offset on every frame from now until `count` frames have passed.
-const sampleFrames = (page, count) => page.evaluate(count => {
+// `record` (diagnostic only, for an unexplained WebKit settle reading): also keeps, per sampled frame,
+// the clocks (the page's possibly faked performance.now and rAF time, and the native document timeline),
+// the track's inline style and running animations with their own progress, and the live results' painted
+// x; and every change to the track's or region's attributes from before release, as a MutationObserver
+// sees it. Nothing here changes the samples or any assertion.
+const sampleFrames = (page, count, record = false) => page.evaluate(({ count, record }) => {
   const track = document.querySelector("section.score-content > .pager-track"), samples = [];
   window.__samples = samples;
-  const loop = () => { samples.push(new DOMMatrixReadOnly(getComputedStyle(track).transform).m41); if (samples.length < count) requestAnimationFrame(loop); };
+  let frames = null, mutations = null;
+  if (record) {
+    const region = track.parentElement, clocks = () => ({ now: performance.now(), timeline: document.timeline.currentTime });
+    frames = []; mutations = [];
+    const observer = new MutationObserver(records => { for (const r of records) mutations.push({ ...clocks(), sample: samples.length, target: r.target === track ? "track" : "region", attribute: r.attributeName, from: r.oldValue, to: r.target.getAttribute(r.attributeName) }); });
+    observer.observe(track, { attributes: true, attributeOldValue: true, attributeFilter: ["style", "class"] });
+    observer.observe(region, { attributes: true, attributeOldValue: true, attributeFilter: ["style", "data-pager"] });
+    window.__settleRecord = { frames, mutations, stop: () => observer.disconnect() };
+  }
+  const loop = time => {
+    const transform = getComputedStyle(track).transform;
+    samples.push(new DOMMatrixReadOnly(transform).m41);
+    if (frames) {
+      const live = track.querySelector(":scope > .pager-pane:not([data-side])");
+      frames.push({
+        sample: samples.length - 1, rafTime: time, ...{ now: performance.now(), timeline: document.timeline.currentTime },
+        transform, inline: track.getAttribute("style"), liveX: live?.getBoundingClientRect().x ?? null,
+        animations: track.getAnimations().map(animation => {
+          const timing = animation.effect?.getComputedTiming?.() ?? {};
+          return { type: animation.constructor.name, property: animation.transitionProperty ?? null, playState: animation.playState, startTime: animation.startTime, currentTime: animation.currentTime, progress: timing.progress ?? null, duration: timing.duration ?? null, easing: timing.easing ?? null };
+        }),
+      });
+    }
+    if (samples.length < count) requestAnimationFrame(loop);
+  };
   requestAnimationFrame(loop);
-}, count);
+}, { count, record });
 const samples = async (page, count) => { await expect.poll(() => page.evaluate(() => window.__samples.length)).toBeGreaterThanOrEqual(count); return page.evaluate(() => window.__samples); };
+// The diagnostic record, attached as JSON (before any assertion reads the samples).
+async function attachSettleRecord(page, testInfo, name) {
+  const record = await page.evaluate(() => { const r = window.__settleRecord; if (!r) return null; r.stop(); return { frames: r.frames, mutations: r.mutations }; });
+  await testInfo.attach(name, { contentType: "application/json", body: JSON.stringify(record, null, 1) });
+}
 
 // The neighbor's whole date cue is drawn inside the visible part of the results: within the results'
 // sides and the screen, below the pinned category row, and not clipped inside its own box.
@@ -177,12 +211,13 @@ test("Day: held results follow the finger with the next day's own games beside t
   expect(page.url()).toBe(url);
   await expect(page.locator("#game-sunday-acc")).toHaveCount(0);
   expect(requests(harness, "20260906"), "one request for the revealed day").toBe(1);
-  await sampleFrames(page, 45);
+  await sampleFrames(page, 45, true);
   await held.end();
   await expect(dateInput(page)).toHaveValue("2026-09-06");
   await expect(page.locator("#game-sunday-acc")).toBeVisible();
   const settle = await samples(page, 45), peak = settle.indexOf(Math.max(...settle));
   test.info().annotations.push({ type: "settle offsets", description: settle.map(Math.round).join(" ") });
+  await attachSettleRecord(page, testInfo, "day-settle-record");
   expect(settle[peak], "the new day's results start on the right, where the neighbor was").toBeGreaterThan(100);
   for (let i = peak + 1; i < settle.length; i++) expect(settle[i], `settling never reverses (frame ${i})`).toBeLessThanOrEqual(settle[i - 1] + 0.5);
   expect(Math.abs(settle.at(-1))).toBe(0);
