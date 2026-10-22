@@ -274,7 +274,7 @@ test("hiding a Duke game conceals its row and withholds the record and averages 
     localStorage.setItem(key, value); dispatchEvent(new StorageEvent("storage", { key, newValue: value }));
   }, id);
   await hide(TULANE_GAME);
-  await expect(teamScreen(page).getByText("Record and averages hidden")).toBeVisible();
+  await expect(teamScreen(page).getByText("Record and season statistics hidden")).toBeVisible();
   await expect(teamScreen(page).locator(".team-averages")).toHaveCount(0);
   await expect(teamScreen(page)).not.toContainText("Tulane");
   await expect(teamScreen(page).locator(".team-meta")).toHaveText(/2026 season\s*·\s*Record hidden/);
@@ -289,7 +289,7 @@ test("hiding a Duke game conceals its row and withholds the record and averages 
   // aggregates, but UNC's postseason wasn't captured, so they wait for complete coverage.
   await page.goto("/?team=153");
   await expect(teamScreen(page).locator("h1.team-title")).toHaveText("North Carolina Tar Heels");
-  await expect(teamScreen(page).getByText("Record and averages not shown yet")).toBeVisible();
+  await expect(teamScreen(page).getByText("Record and season statistics not shown yet")).toBeVisible();
   await expect(teamScreen(page).locator(`[data-focus-key="sched-${SHARED}"]`)).toBeVisible();
   await page.screenshot({ path: info.outputPath("team-153-partial-375.png"), fullPage: true, animations: "disabled" });
   await hide(SHARED);
@@ -397,3 +397,80 @@ for (const [width, height, zoom, wide] of [[375, 812, false], [1440, 1000, false
     else expect(main.y, "one column on a phone or with large text").toBeGreaterThanOrEqual(side.y + side.height - 1);
   });
 }
+
+// #181 leaders slice: actual captured Texas normalized base + minimized Core source rows.
+// All partial, stale and protection variations below are explicitly SYNTHETIC behavior fixtures.
+const { selectSeasonLeaders, seasonLeaderAthlete } = await bundle("lib/team-season-leaders-server.ts");
+const TEXAS_BASE = JSON.parse(readFileSync(new URL("../fixtures/espn-team-season-texas-2026-normalized.json", import.meta.url), "utf8"));
+const TEXAS_SOURCE = JSON.parse(readFileSync(new URL("../fixtures/espn-season-leaders-texas-2026.json", import.meta.url), "utf8"));
+const chosenTexas = selectSeasonLeaders(TEXAS_SOURCE.leaders, "251", 2026);
+const TEXAS_SEASON = { ...TEXAS_BASE, leaders: { year: 2026, seasonType: 2, ...Object.fromEntries(Object.entries(chosenTexas).map(([key, row]) => [key, seasonLeaderAthlete(TEXAS_SOURCE.athletes[row.athleteId], row, "251", 2026)])) } };
+async function verifyFixtureMute(page) {
+  // Verify the fixture's real media mute listener before any UI interaction; do not play audio.
+  expect(await page.evaluate(() => { const audio = document.createElement("audio"); document.body.append(audio); audio.dispatchEvent(new Event("loadstart", { bubbles: true })); const muted = audio.muted; audio.remove(); return muted; })).toBe(true);
+}
+function serveCandidate(harness, getSeason) {
+  harness.state.team = (_url, route) => route.fulfill({ status: 200, contentType: "application/json", headers: { "Cache-Control": "no-store" }, body: JSON.stringify(getSeason()) });
+}
+for (const [width, zoom] of [[320, false], [390, false], [390, true], [1440, false]]) {
+  test(`three full-name Texas leaders above averages at ${width}px${zoom ? " and 200% zoom" : ""}`, async ({ page, harness }, info) => {
+    serveCandidate(harness, () => TEXAS_SEASON);
+    await page.setViewportSize({ width, height: 900 });
+    await harness.open({ path: "/?team=251", waitForScores: false });
+    await verifyFixtureMute(page);
+    if (zoom) await page.addStyleTag({ content: ZOOM });
+    await expect(teamScreen(page).locator(".team-leader-name")).toHaveText(["Arch Manning", "Hollywood Smothers", "Ryan Wingo"]);
+    await expect(teamScreen(page).locator(".team-leader-row dd strong")).toHaveText(["1,295", "289", "345"]);
+    await expect(teamScreen(page).locator(".team-leader-row dd span")).toHaveText(["total yards", "total yards", "total yards"]);
+    await expect(teamScreen(page).locator(".team-leaders-heading")).toContainText("Regular season");
+    await expect(teamScreen(page).locator("a.sched-row")).toHaveCount(12);
+    expect(await noOverflow(page)).toBe(true);
+    const leader = await teamScreen(page).locator(".team-leaders").boundingBox(), avg = await teamScreen(page).locator('[aria-labelledby="team-averages-h"]').boundingBox();
+    expect(leader.y + leader.height).toBeLessThanOrEqual(avg.y + 1);
+    expect(overlaps(await textBoxes(teamScreen(page).locator(".team-leader-name, .team-leader-row dd, .team-leader-category")))).toEqual([]);
+    await page.screenshot({ path: info.outputPath(`leaders-texas-${width}${zoom ? "-zoom200" : ""}.png`), fullPage: true, animations: "disabled" });
+    // The existing schedule route remains a real in-app game, then returns to this team.
+    await teamScreen(page).locator("a.sched-row").first().click();
+    await expect(gameScreen(page)).toBeVisible();
+    await gameScreen(page).getByRole("button", { name: "Back to Texas schedule" }).click();
+    await expect(teamScreen(page).locator(".team-leader-name").first()).toHaveText("Arch Manning");
+  });
+}
+test("partial/stale leader data is honest and Retry restores only missing content", async ({ page, harness }, info) => {
+  let candidate = { ...TEXAS_SEASON, stale: true, leaders: { ...TEXAS_SEASON.leaders, rushingYards: null } };
+  serveCandidate(harness, () => candidate);
+  await page.setViewportSize({ width: 320, height: 900 });
+  await harness.open({ path: "/?team=251", waitForScores: false });
+  await verifyFixtureMute(page);
+  await expect(teamScreen(page).locator(".team-leader-name")).toHaveText(["Arch Manning", "Leader unavailable", "Ryan Wingo"]);
+  await expect(teamScreen(page).locator(".feed-banner")).toContainText("Showing the season checked");
+  await expect(teamScreen(page).locator(".team-leaders-status")).toContainText("Some season leaders couldn’t be loaded");
+  await page.screenshot({ path: info.outputPath("leaders-partial-stale-320.png"), fullPage: true, animations: "disabled" });
+  candidate = TEXAS_SEASON;
+  await teamScreen(page).locator('[data-focus-key="leaders-retry"]').click();
+  await expect(teamScreen(page).locator(".team-leader-name")).toHaveText(["Arch Manning", "Hollywood Smothers", "Ryan Wingo"]);
+});
+test("incomplete coverage and hidden started Duke omit every new name and number from DOM and accessible text", async ({ page, harness }, info) => {
+  // SYNTHETIC injected leader sentinels on existing Duke fixture solely exercise aggregate withholding.
+  let candidate = { ...SEASONS[150], leaders: TEXAS_SEASON.leaders };
+  serveCandidate(harness, () => candidate);
+  await page.setViewportSize({ width: 320, height: 900 });
+  await harness.open({ path: "/?team=150", waitForScores: false });
+  await verifyFixtureMute(page);
+  await expect(teamScreen(page).locator(".team-leader-name").first()).toHaveText("Arch Manning");
+  await page.evaluate(id => {
+    const key = "ss:duke-visibility:v2", stored = JSON.parse(localStorage.getItem(key)) ?? { version: 2, rules: [{ from: 0, mode: "away" }], manual: {}, remembered: {}, waiting: {} };
+    const value = JSON.stringify({ ...stored, manual: { ...stored.manual, [id]: true } });
+    localStorage.setItem(key, value); dispatchEvent(new StorageEvent("storage", { key, newValue: value }));
+  }, TULANE_GAME);
+  await expect(teamScreen(page).getByText("Record and season statistics hidden")).toBeVisible();
+  expect(await teamScreen(page).textContent()).not.toMatch(/Arch Manning|Hollywood Smothers|Ryan Wingo|1,295/);
+  expect(await teamScreen(page).ariaSnapshot()).not.toMatch(/Arch Manning|Hollywood Smothers|Ryan Wingo|1,295/);
+  await expect(teamScreen(page).locator(".team-leader-row")).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("leaders-protected-320.png"), fullPage: true, animations: "disabled" });
+  candidate = { ...TEXAS_SEASON, postseason: { status: "unavailable" } };
+  await page.goto("/?team=251");
+  await expect(teamScreen(page).getByText("Record and season statistics not shown yet")).toBeVisible();
+  expect(await teamScreen(page).textContent()).not.toMatch(/Arch Manning|Hollywood Smothers|Ryan Wingo|1,295/);
+  await expect(teamScreen(page).locator(".team-leader-row")).toHaveCount(0);
+});

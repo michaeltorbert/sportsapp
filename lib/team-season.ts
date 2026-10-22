@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Game } from "./football";
 import { dukeHidden, dukeStarted, type DukePreferences } from "./duke-visibility";
 
-// A team's current football season: overall record, four regular-season per-game pairs and
+// A team's current football season: record, three yard leaders, four regular-season per-game pairs and
 // the published regular and postseason schedules. Shared by the Worker, which builds it from
 // fixed upstream reads (lib/team-season-server.ts), and the browser, which validates it again.
 export const TEAM_SEASON_TOTAL_DEADLINE_MS = 10_000;
@@ -22,6 +22,14 @@ export const TEAM_STAT_ROWS = [
   ["rushingYards", "Rushing yards", "rushing", "rushingYardsPerGame"],
 ] as const;
 export type TeamStatKey = typeof TEAM_STAT_ROWS[number][0];
+export const TEAM_LEADER_ROWS = [
+  ["passingYards", "Passing", "passingYards"],
+  ["rushingYards", "Rushing", "rushingYards"],
+  ["receivingYards", "Receiving", "receivingYards"],
+] as const;
+export type TeamLeaderKey = typeof TEAM_LEADER_ROWS[number][0];
+export type SeasonLeader = { athleteId: string; name: string; yards: number };
+export type SeasonLeaders = { year: number; seasonType: 2 } & Record<TeamLeaderKey, SeasonLeader | null>;
 export type StatPair = [string | null, string | null];
 // The existing season-metric shape: signed, up to two decimals. Anything else is unavailable, never zero.
 export const STAT_FORMAT = /^-?\d{1,5}(?:\.\d{1,2})?$/;
@@ -33,6 +41,7 @@ export type ScheduleEntry = { game: Game; opponent: { id: string; name: string }
 export type ScheduleSection = { status: "complete"; entries: ScheduleEntry[] } | { status: "unavailable" };
 export type TeamSeason = {
   v: 1; team: TeamSeasonTeam; season: { year: number };
+  leaders?: SeasonLeaders | null;
   record: string | null; stats: Record<TeamStatKey, StatPair> | null;
   regular: ScheduleSection; postseason: ScheduleSection;
   checkedAt: string; stale?: boolean;
@@ -45,11 +54,11 @@ export function findScheduleGame(season: TeamSeason | null, id: string) { return
 export function hasLiveGame(season: TeamSeason) { return seasonEntries(season).some(({ game }) => game.state === "live" || (game.state === "delayed" && game.started)); }
 export function seasonTtl(season: TeamSeason) {
   // Incomplete answers are retried sooner so a recovered source shows up quickly.
-  return hasLiveGame(season) || !season.stats || season.regular.status !== "complete" || season.postseason.status !== "complete" ? TEAM_SEASON_LIVE_TTL_MS : TEAM_SEASON_TTL_MS;
+  return hasLiveGame(season) || !season.leaders || TEAM_LEADER_ROWS.some(([key]) => !season.leaders?.[key]) || !season.stats || season.regular.status !== "complete" || season.postseason.status !== "complete" ? TEAM_SEASON_LIVE_TTL_MS : TEAM_SEASON_TTL_MS;
 }
 
 /**
- * Whether the record and averages may be shown. They aggregate every game played, so a protected
+ * Whether the record and season statistics may be shown. They aggregate every game played, so a protected
  * Duke game that has started (live or final) withholds them, on any team's page whose schedule
  * contains it. While preferences load, Duke games count as protected, as on the scoreboard. An
  * incomplete schedule cannot show that no protected result is included, so it withholds them too.
@@ -94,6 +103,13 @@ const entrySchema = z.object({ game: gameSchema, opponent: z.object({ id: z.stri
 const sectionSchema = z.union([z.object({ status: z.literal("complete"), entries: z.array(entrySchema).max(TEAM_SEASON_MAX_GAMES) }), z.object({ status: z.literal("unavailable") })]);
 const value = z.string().regex(STAT_FORMAT).nullable();
 const pair = z.tuple([value, value]);
+const leaderSchema = z.object({ athleteId: z.string().regex(/^\d{1,12}$/), name: text(100).refine(name => !/[\u0000-\u001f\u007f]/.test(name)), yards: z.number().int().min(-999_999).max(999_999) });
+function parseLeaders(raw: unknown, year: number): SeasonLeaders | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  if (value.year !== year || value.seasonType !== 2) return null;
+  return { year, seasonType: 2, ...Object.fromEntries(TEAM_LEADER_ROWS.map(([key]) => { const row = leaderSchema.safeParse(value[key]); return [key, row.success ? row.data : null]; })) } as SeasonLeaders;
+}
 const seasonSchema = z.object({
   v: z.literal(1),
   team: z.object({ id: z.string().regex(/^\d{1,6}$/), name: text(64), shortName: text(48), abbreviation: z.string().max(16), logo }),
@@ -109,6 +125,7 @@ export function parseTeamSeason(body: unknown, teamId: string): TeamSeason | nul
   const parsed = seasonSchema.safeParse(body);
   if (!parsed.success || parsed.data.team.id !== teamId) return null;
   const season = parsed.data as unknown as TeamSeason;
+  season.leaders = parseLeaders((body as Record<string, unknown>).leaders, season.season.year);
   // Every listed game must include the team, once, in the section its season type names.
   const ids = new Set<string>();
   for (const [section, type] of [[season.regular, 2], [season.postseason, 3]] as const) for (const entry of entries(section)) {

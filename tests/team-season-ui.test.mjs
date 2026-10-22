@@ -86,7 +86,7 @@ test("a hidden Duke game shows only its date: no opponent, score, result, link o
   assert.equal(links(html).length, 11);
   assert.match(text(html), /Record hidden/);
   assert.doesNotMatch(html, /Record <b>4–2|4 wins|<table/);
-  assert.match(text(html), /Record and averages hidden They include a Duke game your settings are hiding\./);
+  assert.match(text(html), /Record and season statistics hidden They include a Duke game your settings are hiding\./);
   // A hidden game that hasn't started hides its row only.
   const upcoming = value.regular.entries.find(e => e.game.state === "upcoming").game.id;
   const later = render(value, { p: prefs({ manual: { [upcoming]: true } }) });
@@ -110,7 +110,7 @@ test("the opponent's page conceals the shared Duke game and withholds its aggreg
   const html = render(value, { p: hide });
   assert.doesNotMatch(html, new RegExp(SHARED));
   assert.match(text(html), /Duke game hidden by your settings/);
-  assert.match(text(html), /Record and averages hidden/);
+  assert.match(text(html), /Record and season statistics hidden/);
   assert.doesNotMatch(html, /<table/);
   // Shown normally: the full name of the opponent and the same in-app link pattern.
   const shown = render(value);
@@ -122,7 +122,7 @@ test("the opponent's page conceals the shared Duke game and withholds its aggreg
 test("incomplete coverage, missing statistics and missing values are explicit", () => {
   const partial = render(season("150", { postseason: { status: "unavailable" } }));
   assert.match(text(partial), /Record not shown yet/);
-  assert.match(text(partial), /Record and averages not shown yet/);
+  assert.match(text(partial), /Record and season statistics not shown yet/);
   assert.match(text(partial), /Postseason games couldn’t be loaded/);
   assert.equal(links(partial).length, 12);
   const noStats = render(season("150", { stats: null }));
@@ -168,4 +168,27 @@ test("the game screen's team links are quiet, in-app, outside the aria-hidden sc
   const plain = renderToStaticMarkup(createElement(ui.GameScreen, { ...props, back: undefined, teamLinks: undefined }));
   assert.match(plain, /aria-label="Back to scores, Today"/);
   assert.equal(links(plain).length, 0);
+});
+
+const leaderRows = { year: 2026, seasonType: 2, passingYards: { athleteId: "4870906", name: "Arch Manning", yards: 1295 }, rushingYards: { athleteId: "4871053", name: "Hollywood Smothers", yards: 289 }, receivingYards: { athleteId: "5218633", name: "Ryan Wingo", yards: 345 } };
+test("season leaders precede unchanged averages, with full names, regular-season basis and total-yard units", () => {
+  const html = render(season("150", { leaders: leaderRows }));
+  assert.ok(html.indexOf("Season leaders") < html.indexOf("Season averages"));
+  for (const name of ["Arch Manning", "Hollywood Smothers", "Ryan Wingo"]) assert.match(html, new RegExp(name));
+  assert.match(text(html), /Season leaders Regular season Duke’s yard leaders. Passing Arch Manning 1,295 total yards Rushing Hollywood Smothers 289 total yards Receiving Ryan Wingo 345 total yards/);
+  assert.equal(links(html).length, 12, "no fictitious player routes");
+  const partial = render(season("150", { leaders: { ...leaderRows, rushingYards: null } }));
+  assert.match(text(partial), /Rushing Leader unavailable/); assert.doesNotMatch(partial, /Hollywood Smothers|>289</);
+  assert.match(text(partial), /Some season leaders couldn’t be loaded/);
+  assert.match(render(season("150", { leaders: null }), { online: false }), /data-focus-key="leaders-retry" disabled=""/);
+});
+test("every aggregate withholding reason omits leader names and totals from all markup", () => {
+  const full = season("150", { leaders: leaderRows });
+  for (const [value, p] of [[full, null], [full, prefs({ rules: [{ from: 0, mode: "hide" }] })], [{ ...full, postseason: { status: "unavailable" } }, prefs()]]) {
+    const html = render(value, { p });
+    assert.doesNotMatch(html, /Arch Manning|Hollywood Smothers|Ryan Wingo|1,295|>289<|>345<|team-leader-row/);
+  }
+  // SYNTHETIC complete Duke-free coverage: null preferences must not blanket-hide aggregates.
+  const dukeFree = { ...full, regular: { status: "complete", entries: [] } };
+  assert.match(render(dukeFree, { p: null }), /Arch Manning/);
 });

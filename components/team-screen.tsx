@@ -2,7 +2,7 @@
 import { useState, type MouseEvent, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, CloudOff, RefreshCw, Signal, Tv } from "lucide-react";
 import { dukeHidden, type DukePreferences } from "@/lib/duke-visibility";
-import { seasonAggregates, TEAM_STAT_ROWS, type ScheduleEntry, type ScheduleSection, type TeamSeason, type TeamSeasonTeam } from "@/lib/team-season";
+import { seasonAggregates, TEAM_LEADER_ROWS, TEAM_STAT_ROWS, type ScheduleEntry, type ScheduleSection, type TeamSeason, type TeamSeasonTeam } from "@/lib/team-season";
 // Relative, like the page's own import, so page tests bundle the real game screen helpers.
 import { gameDay } from "./game-screen";
 
@@ -85,7 +85,7 @@ export type TeamScreenProps = {
   back: { title: string; detail: string; label: string }; onBack: () => void; onRetry: () => void;
   gameHref: (id: string) => string; onOpenGame: (id: string) => void; notice?: ReactNode;
 };
-/** A team's current season: record, regular-season averages and the full published schedule. */
+/** A team's current season: record, three yard leaders, averages and the published schedule. */
 export function TeamScreen({ teamId, season, pending, failed, online, prefs, back, onBack, onRetry, gameHref, onOpenGame, notice }: TeamScreenProps) {
   const backButton = <button type="button" className="back-button" data-focus-key="back" aria-label={back.label} onClick={onBack}><ChevronLeft size={22} aria-hidden="true" /><span className="back-text" aria-hidden="true"><span>{back.title}</span><small>{back.detail}</small></span></button>;
   const bar = <header className="game-bar">{backButton}<span className="team-bar-title" aria-hidden="true">{season?.team.abbreviation}</span><span className="bar-brand" aria-hidden="true"><span className="brand-icon"><Signal size={17} strokeWidth={3} /></span></span></header>;
@@ -107,8 +107,8 @@ export function TeamScreen({ teamId, season, pending, failed, online, prefs, bac
     : <span className="team-record">Record unavailable</span>;
   let averages: ReactNode;
   if (!aggregates.shown) averages = aggregates.reason === "checking" ? <div className="stats-loading" role="status"><p>Checking your Duke settings…</p></div>
-    : aggregates.reason === "hidden" ? <Notice title="Record and averages hidden">They include a Duke game your settings are hiding.</Notice>
-    : <Notice title="Record and averages not shown yet">Part of this schedule couldn’t be loaded, so we can’t yet confirm they leave out Duke games you’ve hidden.</Notice>;
+    : aggregates.reason === "hidden" ? <Notice title="Record and season statistics hidden">They include a Duke game your settings are hiding.</Notice>
+    : <Notice title="Record and season statistics not shown yet">Part of this schedule couldn’t be loaded, so we can’t yet confirm they leave out Duke games you’ve hidden.</Notice>;
   else if (!season.stats) averages = <Notice title="Season averages unavailable" action={<button type="button" data-focus-key="retry-stats" onClick={onRetry} disabled={pending}><RefreshCw size={13} aria-hidden="true" />{pending ? "Retrying…" : "Retry"}</button>}>They couldn’t be loaded. The record and schedule are still available.</Notice>;
   else {
     const stats = season.stats, missing = Object.values(stats).some(([a, b]) => a === null || b === null);
@@ -138,6 +138,16 @@ export function TeamScreen({ teamId, season, pending, failed, online, prefs, bac
       <div className="team-side">
         <header className="team-head"><TeamLogo team={team} /><div className="team-id"><h1 className="team-title" tabIndex={-1}>{team.name}</h1><p className="team-meta"><span>{season.season.year} season</span><span className="sep" aria-hidden="true">·</span>{record}</p></div></header>
         {refreshFailed && <div className="feed-banner game-feed" role="alert"><CloudOff size={18} aria-hidden="true" /><span>{online ? "Couldn’t refresh this team." : "You’re offline."} Showing the season checked {checkedTime(season.checkedAt)}.</span>{online && <button type="button" onClick={onRetry} disabled={pending}>Retry</button>}</div>}
+        {aggregates.shown && <section className="team-block team-leaders" aria-labelledby="team-leaders-h">
+          <div className="team-leaders-heading"><h2 id="team-leaders-h">Season leaders</h2><p>Regular season</p></div>
+          <p className="team-leaders-intro">{team.shortName}’s yard leaders.</p>
+          <dl className="team-leader-list">{TEAM_LEADER_ROWS.map(([key, label]) => {
+            const row = season.leaders?.[key];
+            return <div className="team-leader-row" key={key}><dt><span className="team-leader-category">{label}</span><span className={`team-leader-name${row ? "" : " team-leader-missing"}`}>{row ? row.name : "Leader unavailable"}</span></dt>
+              <dd>{row && <><strong>{row.yards.toLocaleString("en-US")}</strong><span>total yards</span></>}</dd></div>;
+          })}</dl>
+          {TEAM_LEADER_ROWS.some(([key]) => !season.leaders?.[key]) && <div className="team-leaders-status"><p>{season.leaders && TEAM_LEADER_ROWS.some(([key]) => season.leaders?.[key]) ? "Some season leaders couldn’t be loaded." : "Season leaders couldn’t be loaded."}</p><button type="button" className="notice-button" data-focus-key="leaders-retry" onClick={onRetry} disabled={pending || !online}>{pending ? "Retrying…" : "Retry"}</button></div>}
+        </section>}
         <section className="team-block" aria-labelledby="team-averages-h"><h2 id="team-averages-h">Season averages</h2>{averages}</section>
       </div>
       <div className="team-main">

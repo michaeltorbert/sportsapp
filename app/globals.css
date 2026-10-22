@@ -662,6 +662,25 @@ body:has(.game-screen)::before { background: #0d1626; }
 .team-screen .team-block { padding: 6px 0 18px; }
 .team-screen .team-block + .team-block, .team-screen .team-main > .team-block { border-top: 1px solid var(--line); padding-top: 18px; }
 .team-screen .team-block h2 { font-size: 1.25rem; font-weight: 750; letter-spacing: -.01em; }
+/* Season yard leaders share the aggregate visibility decision with record and averages. */
+.team-screen .team-leaders { container: leaders / inline-size; }
+.team-screen .team-leaders-heading { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 12px; row-gap: 4px; }
+.team-screen .team-leaders-heading p, .team-screen .team-leaders-intro, .team-screen .team-leaders-status p { margin: 0; color: var(--muted); font-size: .8125rem; }
+.team-screen .team-leaders-intro { margin: 6px 0 16px; }
+.team-screen .team-leader-list { margin: 0; }
+.team-screen .team-leader-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 18px 0; border-top: 1px solid var(--line); }
+.team-screen .team-leader-row dt { min-width: 0; }
+.team-screen .team-leader-category { display: block; color: var(--muted); font-size: .75rem; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+.team-screen .team-leader-name { display: block; margin-top: 5px; font-size: 1rem; font-weight: 750; overflow-wrap: anywhere; }
+.team-screen .team-leader-missing { color: var(--muted); font-weight: 500; }
+.team-screen .team-leader-row dd { margin: 0; text-align: right; }
+.team-screen .team-leader-row dd strong { display: block; font-size: 1.5rem; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.team-screen .team-leader-row dd span { display: block; margin-top: 4px; font-size: .75rem; color: var(--muted); }
+.team-screen .team-leaders-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-top: 8px; }
+@container leaders (max-width: 16rem) {
+  .team-screen .team-leader-row { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .team-screen .team-leader-row dd { text-align: left; }
+}
 .team-screen .team-averages { width: 100%; margin-top: 4px; border-collapse: collapse; table-layout: fixed; }
 .team-screen .team-averages caption { caption-side: top; padding: 2px 0 8px; color: var(--muted); font-size: .8125rem; font-weight: 600; text-align: left; }
 .team-screen .team-averages thead th { padding: 6px 0; color: var(--dim); font-size: .75rem; font-weight: 650; letter-spacing: .04em; text-align: right; vertical-align: bottom; overflow-wrap: anywhere; }

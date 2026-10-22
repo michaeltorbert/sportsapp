@@ -5,6 +5,7 @@ import { bundle } from "./helpers.mjs";
 
 const { createTeamSeasonService, teamScheduleUrl, teamStatsUrl } = await bundle("lib/team-season-server.ts");
 const { loadTeamSeason } = await bundle("lib/team-season-client.ts");
+const { teamLeadersUrl } = await bundle("lib/team-season-leaders-server.ts");
 const { TEAM_SEASON_TTL_MS } = await bundle("lib/team-season.ts");
 const fixture = name => JSON.parse(readFileSync(new URL(`./fixtures/espn-team-season-${name}.json`, import.meta.url), "utf8"));
 const DUKE = fixture("duke-2026"), UNC = fixture("unc-2026");
@@ -37,7 +38,7 @@ test("the fixed upstream URLs: current schedule, then the postseason and regular
   assert.equal(teamStatsUrl("150", 2026), `${base}/statistics?season=2026&seasontype=2`);
 });
 
-test("a Duke season from three reads: record, stats, 12 regular games and none listed after the season", async () => {
+test("a Duke season from three base reads and one optional leaders read: record, stats, 12 regular games and none listed after the season", async () => {
   let now = T0;
   const { calls, fetcher } = upstream(dukeRoutes());
   const service = createTeamSeasonService(fetcher, () => now);
@@ -45,7 +46,7 @@ test("a Duke season from three reads: record, stats, 12 regular games and none l
   assert.equal(result.status, 200);
   const season = result.season;
   // The current answer is regular season 2026, so it is not fetched twice.
-  assert.deepEqual(calls.sort(), [teamScheduleUrl("150"), teamScheduleUrl("150", { year: 2026, type: 3 }), teamStatsUrl("150", 2026)].sort());
+  assert.deepEqual(calls.sort(), [teamScheduleUrl("150"), teamScheduleUrl("150", { year: 2026, type: 3 }), teamStatsUrl("150", 2026), teamLeadersUrl("150", 2026)].sort());
   assert.deepEqual(season.team, { id: "150", name: "Duke Blue Devils", shortName: "Duke", abbreviation: "DUKE", logo: "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png" });
   assert.deepEqual(season.season, { year: 2026 });
   assert.equal(season.record, "4-2");
@@ -55,9 +56,9 @@ test("a Duke season from three reads: record, stats, 12 regular games and none l
   // Retrieval time is this read, not any source timestamp.
   assert.equal(season.checkedAt, new Date(T0).toISOString());
   // A fresh hit keeps its original retrieval time and makes no upstream request.
-  now += 60_000;
+  now += 59_000;
   assert.equal((await service.get("150")).season.checkedAt, new Date(T0).toISOString());
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
 });
 
 test("after its cadence, a failed refresh returns that team's last season marked stale, and nothing for another team", async () => {

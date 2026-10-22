@@ -1,0 +1,44 @@
+{
+  "capturedDate": "2026-10-22",
+  "sourceFreshness": "unknown; retrieval does not establish sports-data freshness",
+  "source": "Public ESPN Core HTTP 200 captures; HTTP identity refs, HTTPS transport. Minimized to first passing/rushing/receiving rows and athlete identity/name, no biography. Fixtures are captured evidence, not live availability proof.",
+  "captures": [
+    {
+      "source": "texas-athlete-4870906.json",
+      "sha256": "794287d5a83869deda7947baa9d72429fa711eb298437d97535f4558917b27b7"
+    },
+    {
+      "source": "texas-athlete-4871053.json",
+      "sha256": "cdd16e183ff49d162c9c9ecc36f1c201c16ab06069f3307f53bfce5cec743387"
+    },
+    {
+      "source": "texas-athlete-5218633.json",
+      "sha256": "a784c58045f487eb5b7b6dc60b53ca880f72013096973003d45378677fca08b1"
+    },
+    {
+      "source": "texas-leaders.json",
+      "sha256": "8471cdda45315040eea18e39ff11266b726eea137f2c888f4754f73898421b4b"
+    },
+    {
+      "source": "athlete-4592532.json",
+      "sha256": "a160115da092c2eac86f7c60d14e8b6b1886e6a21f75aa75c74f178be8469874"
+    },
+    {
+      "source": "athlete-5008017.json",
+      "sha256": "18ff123c89adf50deff39d202a39619c9bcc7f23c8a555d0faac33d6589339d7"
+    },
+    {
+      "source": "athlete-5079687.json",
+      "sha256": "bf54a708b4817de0e017938628541e1f3e6d084fcd97e020149d7f48d4e6f00a"
+    },
+    {
+      "source": "season-leaders.json",
+      "sha256": "f387a451c72d9e0a1076f49ace1c2bc3322f47ce80b424a41a2706d70626a96c"
+    },
+    {
+      "source": "texas-team.json",
+      "sha256": "4d9a2e2ecd282c1cc12ef817eb83401793c920b3be43274f39171d4b7b8c52cf",
+      "kind": "Existing app normalized v1 response, complete published schedule; not raw upstream schedule."
+    }
+  ]
+}
