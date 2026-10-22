@@ -31,11 +31,33 @@ async function assertFixtureMediaIsMuted(page) {
   expect(muted, "the browser fixture mutes media before interaction").toBe(true);
 }
 
+// One bounded observation of native progress; equal intermediate readings are allowed.
+// This self-contained function is also executed unchanged by isolated synthetic controls.
+function observeNativeClockProgress() {
+  return new Promise(resolve => {
+    const before = performance.now(), samples = [], maxSamples = 60;
+    let after = before, time = null;
+    const finish = termination => resolve({ before, time, after, samples, sampleCount: samples.length, maxSamples, termination });
+    if (!Number.isFinite(before)) return finish("nonfinite");
+    const sample = timestamp => {
+      const previous = after;
+      time = timestamp; after = performance.now();
+      samples.push({ time, performance: after });
+      if (!Number.isFinite(after)) return finish("nonfinite");
+      if (after < previous) return finish("backward");
+      if (after > before) return finish("advanced");
+      if (samples.length === maxSamples) return finish("sample-limit");
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+}
+
 // The Date-only clock is what the page actually has: attached, then checked, before any interaction.
 async function expectDateOnlyClock(page, testInfo) {
   const evidence = await dateOnlyClockEvidence(page);
   // The native animation-frame clock advances on its own (no clock is driving it).
-  evidence.frame = await page.evaluate(() => new Promise(resolve => { const before = performance.now(); requestAnimationFrame(time => resolve({ before, time, after: performance.now() })); }));
+  evidence.frame = await page.evaluate(observeNativeClockProgress);
   await testInfo.attach("clock-setup", { contentType: "application/json", body: JSON.stringify(evidence, null, 1) });
   for (const [name, check] of Object.entries(evidence.scheduling)) {
     expect(check.same, `${name} is the function found before Date was replaced`).toBe(true);
@@ -49,6 +71,7 @@ async function expectDateOnlyClock(page, testInfo) {
   expect(d.call).toBe("string"); expect(d.callIsFixed).toBe(true);
   expect([d.instance, d.nativeInstance, d.sharedPrototype]).toEqual([true, true, true]);
   expect(d.tag).toBe("[object Date]"); expect(d.name).toBe("Date"); expect(d.iso).toBe(NOW.replace("Z", ".000Z"));
+  expect(evidence.frame.termination, "finite nondecreasing native samples end only on actual progress").toBe("advanced");
   expect(evidence.frame.after, "native performance advances").toBeGreaterThan(evidence.frame.before);
 }
 
