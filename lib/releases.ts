@@ -1,5 +1,6 @@
-export const VERSION = "1.21.1";
+export const VERSION = "1.21.2";
 export const releases = [
+  { version: "1.21.2", date: "October 21, 2026", changes: "Show toolbar hover feedback only with a hover-capable mouse or trackpad, and brief press feedback on enabled icon buttons. Keyboard focus indicators stay available. Confirmation of the lingering highlight fix on iPhone is still pending." },
   { version: "1.21.1", date: "October 21, 2026", changes: "Keep a game’s category and delayed One-score history when its home/away designations are corrected. Saved betting lines still require the same ordered matchup and kickoff." },
   { version: "1.21.0", date: "October 21, 2026", changes: "Add to Home Screen guidance appears in browser tabs and stays out of the Home Screen app. Open the footer action for Safari’s Share and Add to Home Screen steps, from Scores, Guide, game or team screens." },
   { version: "1.20.0", date: "October 21, 2026", changes: "Drag the games left or right and they follow your finger, with the next or previous day or week sliding in beside them. Let go past a short distance to move there, or sooner to slide back. Week now has its own arrows and a This week button, and keeps the week you choose through reloads, game screens and the Guide. At normal phone widths, Day/Week stays beside the date controls without shrinking the buttons." },

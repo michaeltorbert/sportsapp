@@ -34,7 +34,11 @@ button:focus-visible, a:focus-visible, .date-picker:focus-within { outline: 2px 
    sizes its four controls keep their current row; enlarged pages can share the width in rows. */
 .compact-scoreboard .app-header .header-actions { flex-wrap: wrap; min-width: 0; max-width: 100%; flex-shrink: 1; justify-content: flex-end; }
 .icon-button { flex: 0 0 44px; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 50%; color: #a6b3c8; }
-.icon-button:hover { background: #1f2b3e; color: #fff; }.refreshing svg { animation: spin 1.3s linear infinite; }
+@media (hover: hover) and (pointer: fine) {
+  .icon-button:hover { background: #1f2b3e; color: #fff; }
+}
+.icon-button:active:where(:not(:disabled)) { background: #1f2b3e; color: #fff; }
+.refreshing svg { animation: spin 1.3s linear infinite; }
 .date-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-height: 76px; padding: 8px 0; }
 .date-navigation { display: flex; align-items: center; margin-left: -10px; }
 .date-picker { position: relative; display: flex; justify-content: center; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; font-weight: 640; }

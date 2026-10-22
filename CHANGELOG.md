@@ -1,5 +1,10 @@
 # Saturday Signal releases
 
+## 1.21.2 · 2026-10-21
+
+- Limit shared icon-button hover feedback to hover-capable, fine-pointer input and retain brief press feedback on enabled controls. Preserve keyboard focus indicators, panel focus restoration and the Alerts color cue (#127).
+- The owner recording establishes lingering toolbar circles on iPhone before this change. Desktop touch emulation did not reproduce the same lingering state; physical after-fix confirmation remains pending and #127 stays open.
+
 ## 1.21.1 · 2026-10-21
 
 - Keep a game's category and delayed One-score history when the provider corrects its home/away designations without changing the event or participants. Saved betting lines still require the same ordered matchup and kickoff (#14).
