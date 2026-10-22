@@ -12,7 +12,7 @@ const signal = () => new AbortController().signal;
 function upstream(data = TEXAS, team = "251", change = () => undefined) {
   const calls = [];
   return { calls, fetcher: async (url, init) => {
-    calls.push(url); assert.equal(init.redirect, "error"); assert.equal(init.headers.Accept, "application/json");
+    calls.push(url); assert.equal(init.redirect, "manual"); assert.equal(init.headers.Accept, "application/json");
     const override = change(url, init); if (override !== undefined) return override;
     if (url === teamLeadersUrl(team, 2026)) return json(data.leaders);
     for (const [id, a] of Object.entries(data.athletes)) if (url === seasonAthleteUrl(id, 2026)) return json(a);

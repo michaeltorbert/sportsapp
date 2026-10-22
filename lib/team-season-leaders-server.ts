@@ -59,7 +59,8 @@ export async function loadSeasonLeaders(fetcher: typeof fetch, team: string, yea
   const timer = setTimeout(stop, Math.min(3000, budgetMs));
   async function json(destination: string): Promise<unknown> {
     if (controller.signal.aborted) throw new Error("leader deadline");
-    const response = await fetcher(destination, { headers: { Accept: "application/json" }, redirect: "error", signal: controller.signal });
+    // workerd supports manual, not error. Reject non-OK (including 3xx) below without following.
+    const response = await fetcher(destination, { headers: { Accept: "application/json" }, redirect: "manual", signal: controller.signal });
     if (controller.signal.aborted) { void response.body?.cancel().catch(() => {}); throw new Error("leader deadline"); }
     if (!response.ok || response.redirected || Number(response.headers.get("content-length")) > MAX_BYTES || !response.body) {
       void response.body?.cancel().catch(() => {}); throw new Error("leader response unavailable");

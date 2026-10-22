@@ -112,7 +112,11 @@ basis. References are identity evidence, never request destinations. Athlete-doc
 statistics refs are teamless; leader-row statistics refs include team and `/0`.
 Only bounded signed integer yard totals are accepted, including real zero.
 
-The new pipeline uses redirect:error, a streaming 256KB per-response limit, no retries,
+The pipeline uses redirect:manual and rejects non-OK responses (including 3xx) without
+following Location. workerd does not implement redirect:error: its native RequestInit
+rejects that mode before outbound fetch. A pinned-runtime fixture regression verifies
+manual mode, named rows and no-follow/no-retry behavior, with all egress intercepted.
+It uses a streaming 256KB per-response limit, no retries,
 and its own 3-second settle deadline capped by the remaining monotonic 9-second root
 budget less a 100ms return margin. Abort-ignoring optional fetches/bodies cannot hold
 the result or service admission open past that optional cutoff. Outstanding readers
