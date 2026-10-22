@@ -3,8 +3,9 @@
 A team page shows one team's **current** football season: its overall record, four
 regular-season per-game averages for the team and its opponents, and the published
 regular-season and postseason schedules. Every schedule game opens the existing game
-screen in the app. There is no archive, year selector, player season, standings or
-rankings view.
+screen in the app. Three full-name regular-season yard leaders (passing, rushing, receiving) appear above
+the existing averages. There is no archive, year selector, full season player table,
+standings or rankings view; the broader #181 remains open.
 
 ## Routes and history
 
@@ -81,9 +82,10 @@ games are never passed to the Duke observation writer.
   source state decides. Nothing is predicted from the clock or the scheduled kickoff time.
 - A Duke game hidden by the settings shows only its date on any team's schedule: no
   opponent, status, score, result or link. Its game screen is the generic unavailable one.
-- The record and averages are withheld on any team's page whose schedule contains a hidden
+- The record, leaders and averages are withheld on any team's page whose schedule contains a hidden
   Duke game that has started (`dukeStarted`, so a live 0–0 period-0 game counts). They are
-  also withheld while preferences load and while any schedule section is unavailable,
+  also withheld while preferences load if a possibly protected started Duke game is present,
+  and while any schedule section is unavailable,
   because then a hidden result cannot be ruled out. A hidden game that hasn't started
   withholds nothing. Inference through third-party schedules is out of scope.
 
@@ -98,3 +100,35 @@ games are never passed to the Duke observation writer.
 - `npm run test:runtime` checks that invalid `/api/team` input is rejected before upstream work.
 - Fixtures, local curl and workerd are not hosted proof. Real current-season data through
   the Cloudflare preview's `/api/team` is a release gate.
+
+## Optional season leaders (#181, first slice)
+
+After discovering the active year, a fixed Core HTTPS `seasons/<year>/types/2/teams/<id>/leaders?lang=en&region=us`
+read selects exactly the first supplied passingYards, rushingYards and receivingYards row.
+A malformed first row never promotes a runner-up. At most three distinct fixed
+`seasons/<year>/athletes/<athlete>?lang=en&region=us` reads supply fullName. The self,
+team, athlete and statistics references must name the exact year/team/regular-season
+basis. References are identity evidence, never request destinations. Athlete-document
+statistics refs are teamless; leader-row statistics refs include team and `/0`.
+Only bounded signed integer yard totals are accepted, including real zero.
+
+The new pipeline uses redirect:error, a streaming 256KB per-response limit, no retries,
+and its own 3-second settle deadline capped by the remaining monotonic 9-second root
+budget less a 100ms return margin. Abort-ignoring optional fetches/bodies cannot hold
+the result or service admission open past that optional cutoff. Outstanding readers
+are canceled and requests aborted; JavaScript cannot forcibly end a noncooperative promise.
+Validated rows completed before an optional timeout are returned in a detached snapshot;
+only unfinished athlete rows stay unavailable, and late responses cannot mutate the result.
+No independent athlete cache is retained. Partial/missing rows trigger the existing
+one-minute incomplete cadence; optional failures preserve the base season.
+
+The v1 response adds optional leaders with year, seasonType:2 and three nullable rows
+(athleteId, name, numeric yards). Legacy v1 responses remain usable. Browser validation
+degrades malformed optional rows alone and rejects an incorrect leader basis without
+discarding schedule or averages. The unchanged seasonAggregates verdict controls names
+and totals as well as record/averages; withheld leaders are omitted from the DOM.
+
+Minimized Texas and North Carolina captures and original-source hashes are recorded in
+`tests/fixtures/season-leaders-provenance.json`. Capture date is October22; provider
+data freshness is unknown. The stale banner describes retrieval time, never source
+update time. Captures and browser fixtures do not prove current hosted availability.

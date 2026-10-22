@@ -1,3 +1,4 @@
+import { loadSeasonLeaders } from "./team-season-leaders-server";
 import { normalizeScoreboard } from "./espn-data";
 import { easternDate } from "./football";
 import { validEventId } from "./game-stats";
@@ -148,6 +149,7 @@ export function createTeamSeasonService(fetcher: typeof fetch = fetch, now = () 
     if (cached && cached.expires > now()) { cache.delete(teamId); cache.set(teamId, cached); return { status: 200, season: cached.season }; }
     if (active >= MAX_ACTIVE) { const old = stale(teamId); return old ? { status: 200, season: old } : { status: 503, error: "Team seasons are busy. Please retry.", retryAfter: 5 }; }
     active++;
+    const deadlineAt = performance.now() + TEAM_SEASON_WORKER_BUDGET_MS;
     const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), TEAM_SEASON_WORKER_BUDGET_MS);
     try {
       const discovery = await json(teamScheduleUrl(teamId), controller.signal);
@@ -155,10 +157,11 @@ export function createTeamSeasonService(fetcher: typeof fetch = fetch, now = () 
       const { year, type } = activeSeason(discovery, teamId);
       const settled = (promise: Promise<unknown>) => promise.then(value => ({ ok: true as const, value }), () => ({ ok: false as const }));
       // The current answer doubles as the regular season only when that is what it reports.
-      const [regular, postseason, stats] = await Promise.all([
+      const [regular, postseason, stats, leaders] = await Promise.all([
         type === 2 ? Promise.resolve({ ok: true as const, value: discovery }) : settled(json(teamScheduleUrl(teamId, { year, type: 2 }), controller.signal)),
         settled(json(teamScheduleUrl(teamId, { year, type: 3 }), controller.signal)),
         settled(json(teamStatsUrl(teamId, year), controller.signal)),
+        loadSeasonLeaders(fetcher, teamId, year, controller.signal, Math.min(3000, Math.max(0, deadlineAt - performance.now() - 100))),
       ]);
       if (controller.signal.aborted) throw new TeamSeasonSourceError("team season deadline expired");
       const body = object(discovery), team = object(body.team);
@@ -166,7 +169,7 @@ export function createTeamSeasonService(fetcher: typeof fetch = fetch, now = () 
       if (!name || !shortName) throw new TeamSeasonSourceError("team name");
       const season: TeamSeason = {
         v: 1, team: { id: teamId, name, shortName, abbreviation: text(team.abbreviation, 16) ?? "", logo: typeof team.logo === "string" && /^https:\/\/[a-z0-9.-]+\.espncdn\.com\//.test(team.logo) && team.logo.length <= 300 ? team.logo : null },
-        season: { year }, record: overallRecord(discovery),
+        season: { year }, leaders, record: overallRecord(discovery),
         stats: stats.ok ? seasonStats(stats.value, teamId, year) : null,
         regular: regular.ok ? scheduleSection(regular.value, teamId, year, 2, checkedAt) : { status: "unavailable" },
         postseason: postseason.ok ? scheduleSection(postseason.value, teamId, year, 3, checkedAt) : { status: "unavailable" },

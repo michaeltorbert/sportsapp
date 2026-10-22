@@ -1,0 +1,103 @@
+{
+  "leaders": {
+    "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/types/2/teams/153/leaders?lang=en&region=us",
+    "type": "season",
+    "categories": [
+      {
+        "name": "passingYards",
+        "leaders": [
+          {
+            "value": 1260.0,
+            "rel": [
+              "athlete"
+            ],
+            "athlete": {
+              "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/athletes/4592532?lang=en&region=us"
+            },
+            "team": {
+              "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/teams/153?lang=en&region=us"
+            },
+            "statistics": {
+              "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/types/2/teams/153/athletes/4592532/statistics/0?lang=en&region=us"
+            }
+          }
+        ]
+      },
+      {
+        "name": "rushingYards",
+        "leaders": [
+          {
+            "value": 283.0,
+            "rel": [
+              "athlete"
+            ],
+            "athlete": {
+              "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/athletes/5008017?lang=en&region=us"
+            },
+            "team": {
+              "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/teams/153?lang=en&region=us"
+            },
+            "statistics": {
+              "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/types/2/teams/153/athletes/5008017/statistics/0?lang=en&region=us"
+            }
+          }
+        ]
+      },
+      {
+        "name": "receivingYards",
+        "leaders": [
+          {
+            "value": 441.0,
+            "rel": [
+              "athlete"
+            ],
+            "athlete": {
+              "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/athletes/5079687?lang=en&region=us"
+            },
+            "team": {
+              "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/teams/153?lang=en&region=us"
+            },
+            "statistics": {
+              "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/types/2/teams/153/athletes/5079687/statistics/0?lang=en&region=us"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "athletes": {
+    "4592532": {
+      "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/athletes/4592532?lang=en&region=us",
+      "id": "4592532",
+      "fullName": "Billy Edwards Jr.",
+      "team": {
+        "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/teams/153?lang=en&region=us"
+      },
+      "statistics": {
+        "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/types/2/athletes/4592532/statistics?lang=en&region=us"
+      }
+    },
+    "5008017": {
+      "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/athletes/5008017?lang=en&region=us",
+      "id": "5008017",
+      "fullName": "Benjamin Hall",
+      "team": {
+        "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/teams/153?lang=en&region=us"
+      },
+      "statistics": {
+        "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/types/2/athletes/5008017/statistics?lang=en&region=us"
+      }
+    },
+    "5079687": {
+      "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/athletes/5079687?lang=en&region=us",
+      "id": "5079687",
+      "fullName": "Jordan Shipp",
+      "team": {
+        "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/teams/153?lang=en&region=us"
+      },
+      "statistics": {
+        "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/types/2/athletes/5079687/statistics?lang=en&region=us"
+      }
+    }
+  }
+}
