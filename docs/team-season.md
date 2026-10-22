@@ -136,3 +136,17 @@ Minimized Texas and North Carolina captures and original-source hashes are recor
 `tests/fixtures/season-leaders-provenance.json`. Capture date is October22; provider
 data freshness is unknown. The stale banner describes retrieval time, never source
 update time. Captures and browser fixtures do not prove current hosted availability.
+
+## Bounded source diagnostics
+
+Each uncached optional pipeline emits at most one `team_season_leaders` terminal
+server log record. It reports a fixed stage/reason, actual numeric HTTP status only
+when observed, an allowlisted error class, response content-type class (json/html/other),
+bounded elapsed/budget milliseconds, read bytes, request and selected/validated row
+counts. The first failure is retained; `stopCause` separately distinguishes a real
+optional deadline or root abort from normal completion. Cleanup aborts are never
+reported as deadline failures. No URL, Location, arbitrary header/error text, body,
+athlete name/yard total, credentials or preferences enter the record. Logging errors
+are swallowed and do not change the result or issue more requests. These are server
+observations, not new client fields or a live-source guarantee. A successful API
+response with unavailable leaders still does not meet the named-leader outcome.
