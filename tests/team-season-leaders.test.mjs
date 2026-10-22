@@ -126,3 +126,52 @@ test("late discovery leaves only remaining root budget minus return margin for o
   const result=await service.get("150");
   assert.ok(Date.now()-start<500,"remaining 50ms allowance, not a new 3-second budget");assert.equal(result.status,200);assert.equal(optionalCalls,1);assert.equal(result.season.leaders,null);assert.equal(result.season.regular.entries.length,12);
 });
+
+test("one bounded diagnostic summary distinguishes transport, HTTP, body/JSON, timeout and success without payload logs", async t => {
+  const messages=[]; t.mock.method(console,"info",message=>messages.push(message));
+  async function run(fetcher,budget=1000){
+    messages.length=0;
+    const result=await loadSeasonLeaders(fetcher,"251",2026,signal(),budget);
+    assert.equal(messages.length,1,"exactly one terminal record per pipeline");
+    const raw=messages[0],record=JSON.parse(raw);
+    assert.deepEqual(Object.keys(record),["event","stage","reason","status","errorClass","stopCause","leaderStatus","contentType","requests","bytesRead","selected","validated","elapsedMs","budgetMs"]);
+    assert.equal(record.event,"team_season_leaders");
+    assert.ok(raw.length<600);assert.doesNotMatch(raw,/PRIVATE_SENTINEL|Arch Manning|Hollywood Smothers|Ryan Wingo|https?:|Location/);
+    assert.ok(record.requests<=4 && record.validated<=3 && record.selected<=3 && record.bytesRead<=1_024_000 && record.elapsedMs<=60_000 && record.budgetMs<=3000);
+    return {result,record};
+  }
+  let checked=await run(upstream().fetcher);
+  assert.equal(checked.result.passingYards.name,"Arch Manning");
+  assert.deepEqual([checked.record.stage,checked.record.reason,checked.record.requests,checked.record.selected,checked.record.validated,checked.record.leaderStatus,checked.record.contentType,checked.record.stopCause],["complete","ok",4,3,3,200,"other","complete"]);
+  checked=await run(async()=>{throw new TypeError("PRIVATE_SENTINEL https://secret.invalid/");});
+  assert.deepEqual([checked.record.stage,checked.record.reason,checked.record.status,checked.record.errorClass,checked.record.leaderStatus,checked.record.requests],["leaders_fetch","fetch_rejected",null,"TypeError",null,1]);
+  const arbitraryError=new Error("PRIVATE_SENTINEL");arbitraryError.name="PRIVATE_SENTINEL";
+  checked=await run(async()=>{throw arbitraryError;});assert.equal(checked.record.errorClass,"unknown");
+  checked=await run(async()=>new Response("PRIVATE_SENTINEL",{status:403,headers:{"content-type":"text/html"}}));
+  assert.deepEqual([checked.result,checked.record.stage,checked.record.reason,checked.record.status,checked.record.contentType,checked.record.requests],[null,"leaders_http","http_status",403,"html",1]);
+  checked=await run(async()=>new Response("<PRIVATE_SENTINEL>",{headers:{"content-type":"text/html; charset=utf-8"}}));
+  assert.deepEqual([checked.record.stage,checked.record.reason,checked.record.status,checked.record.errorClass,checked.record.contentType],["leaders_json","invalid_json",200,"SyntaxError","html"]);
+  checked=await run(async()=>new Response("PRIVATE_SENTINEL",{headers:{"content-length":"256001"}}));
+  assert.deepEqual([checked.record.stage,checked.record.reason,checked.record.bytesRead],["leaders_body","too_large",0]);
+  checked=await run(async()=>new Response(new ReadableStream({start(c){c.error(new TypeError("PRIVATE_SENTINEL"));}})));
+  assert.deepEqual([checked.record.stage,checked.record.reason,checked.record.status,checked.record.errorClass],["leaders_body","body_read",200,"TypeError"]);
+  checked=await run(()=>new Promise(()=>{}),15);
+  assert.deepEqual([checked.record.stage,checked.record.reason,checked.record.stopCause,checked.record.requests],["deadline","deadline","deadline",1]);
+  assert.equal(checked.result,null);
+  const partial=upstream(TEXAS,"251",url=>url===seasonAthleteUrl("4871053",2026)?new Response("PRIVATE_SENTINEL",{status:503}):undefined);
+  checked=await run(partial.fetcher);
+  assert.equal(checked.result.passingYards.name,"Arch Manning");assert.equal(checked.result.rushingYards,null);
+  assert.deepEqual([checked.record.stage,checked.record.reason,checked.record.status,checked.record.requests,checked.record.validated,checked.record.stopCause],["athlete_http","http_status",503,4,2,"complete"]);
+});
+test("diagnostic logger failure cannot change result or cause extra requests",async t=>{
+  t.mock.method(console,"info",()=>{throw new Error("logger unavailable");});
+  const source=upstream(),result=await loadSeasonLeaders(source.fetcher,"251",2026,signal(),1000);
+  assert.equal(result.passingYards.name,"Arch Manning");assert.equal(result.receivingYards.name,"Ryan Wingo");assert.equal(source.calls.length,4);
+});
+test("real root abort is distinct from normal cleanup in terminal diagnostic",async t=>{
+  const records=[];t.mock.method(console,"info",message=>records.push(JSON.parse(message)));
+  const controller=new AbortController();
+  const pending=loadSeasonLeaders(()=>new Promise(()=>{}),"251",2026,controller.signal,1000);
+  controller.abort();assert.equal(await pending,null);
+  assert.equal(records.length,1);assert.equal(records[0].stopCause,"root_abort");assert.equal(records[0].reason,"root_abort");
+});
