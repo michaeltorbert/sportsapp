@@ -53,3 +53,55 @@ test('authenticated fixed endpoint rejects all unauthenticated or nonempty/param
  const request=(query='',body='',auth=true)=>new Request('https://owned.test/api/internal/team-rankings-refresh'+query,{method:'POST',body,headers:auth?{Authorization:'Bearer admin-fixture'}:{}});
  assert.equal((await rank.handleRankingsRefresh(request('', '',false),env,fetcher)).status,401);for(const [q,b]of [['?force=1',''],['','x']])assert.equal((await rank.handleRankingsRefresh(request(q,b),env,fetcher)).status,400);assert.equal(kv.ops.length,0);
 });
+
+const CANARY='PRIVATE_KEY_HEADER_BODY_URL_ERROR_CANARY';
+async function diagnostics(run){const lines=[],original=console.warn;console.warn=line=>lines.push(JSON.parse(line));try{return {result:await run(),lines};}finally{console.warn=original;}}
+function safeDiagnostic(record){const raw=JSON.stringify(record);assert.ok(!raw.includes(CANARY));assert.deepEqual(Object.keys(record).sort(),['diagnostic','event']);assert.equal(record.event,'team_rankings_refresh_failed');assert.ok(Object.keys(record.diagnostic).every(k=>['stage','reason','httpStatus','sourceBlocked'].includes(k)));}
+test('SYNTHETIC failure diagnostics distinguish both source phases without leaking remote text, values, headers or key',async()=>{
+ for(const failingStage of ['membership','stats'])for(const kind of ['http','transport','json','content-type','body','read','size']){
+  const x=input(),kv=storage();let calls=0;
+  const fetcher=async()=>{calls++;if(failingStage==='stats'&&calls===1)return json(x.ids);
+   if(kind==='transport')throw Error(CANARY);
+   if(kind==='http')return new Response(JSON.stringify({private:CANARY}),{status:502,headers:{'content-type':'application/json','private':CANARY}});
+   if(kind==='json')return new Response('{'+CANARY,{headers:{'content-type':'application/json'}});
+   if(kind==='content-type')return new Response(CANARY,{headers:{'content-type':'text/plain'}});
+   if(kind==='body')return new Response(null,{headers:{'content-type':'application/json'}});
+   if(kind==='read')return new Response(new ReadableStream({pull(){throw Error(CANARY);}}),{headers:{'content-type':'application/json'}});
+   return new Response(CANARY,{headers:{'content-type':'application/json','content-length':'8000001'}});
+  };
+  const {result,lines}=await diagnostics(()=>rank.refreshTeamRankings({SEASON_LEADERS_KV:kv,CFBD_API_KEY:CANARY},fetcher,()=>now));
+  assert.equal(result.status,'failed');assert.equal(result.diagnostic.stage,failingStage);assert.equal(result.diagnostic.reason,{'http':'source-response','transport':'source-transport','json':'source-json','content-type':'source-content-type','body':'source-body','read':'source-read','size':'source-size'}[kind]);
+  if(kind==='transport')assert.equal(result.diagnostic.httpStatus,undefined);else assert.equal(result.diagnostic.httpStatus,kind==='http'?502:200);
+  assert.equal(calls,failingStage==='stats'?2:1);assert.equal(lines.length,1);assert.deepEqual(lines[0].diagnostic,result.diagnostic);safeDiagnostic(lines[0]);assert.ok(!JSON.stringify(result).includes(CANARY));
+ }
+});
+test('SYNTHETIC validation, final snapshot storage and pre-source KV boundaries have distinct safe diagnostics and retain last-good',async()=>{
+ for(const failing of ['block-read','attempt-read','attempt-write','snapshot-validation','snapshot-write']){
+  const x=input(),kv=storage(),get=kv.get.bind(kv),put=kv.put.bind(kv);kv.map.set(rank.RANKINGS_SNAPSHOT_KEY,'last-good');let calls=0;
+  kv.get=async k=>{if(failing==='block-read'&&k===shared.COMMON_CFBD_BLOCK||failing==='attempt-read'&&k.endsWith(':attempt'))throw Error(CANARY);return get(k);};
+  kv.put=async(k,v)=>{if(failing==='attempt-write'&&k.endsWith(':attempt')||failing==='snapshot-write'&&k===rank.RANKINGS_SNAPSHOT_KEY)throw Error(CANARY);return put(k,v);};
+  const {result,lines}=await diagnostics(()=>rank.refreshTeamRankings({SEASON_LEADERS_KV:kv,CFBD_API_KEY:CANARY},async()=>{calls++;return json(calls===1?(failing==='snapshot-validation'?{private:CANARY}:x.ids):x.rows);},()=>now));
+  assert.equal(result.status,'failed');assert.equal(result.diagnostic.stage,failing);assert.equal(result.diagnostic.reason,failing==='snapshot-validation'?'snapshot-invalid':'storage-unavailable');assert.equal(result.diagnostic.httpStatus,undefined);assert.equal(calls,failing.startsWith('snapshot-')?2:0);assert.equal(kv.map.get(rank.RANKINGS_SNAPSHOT_KEY),'last-good');assert.equal(lines.length,1);safeDiagnostic(lines[0]);
+ }
+});
+test('SYNTHETIC rejecting, throwing or nonsettling denial cleanup cannot mask block or request another source',async()=>{
+ for(const mode of ['reject','throw','never']){
+  const kv=storage();let calls=0;
+  const fetcher=async()=>{calls++;return {status:403,headers:new Headers({'content-type':'text/html'}),body:{cancel(){if(mode==='throw')throw Error(CANARY);if(mode==='reject')return Promise.reject(Error(CANARY));return new Promise(()=>{});}}};};
+  const observed=await diagnostics(()=>Promise.race([rank.refreshTeamRankings({SEASON_LEADERS_KV:kv,CFBD_API_KEY:CANARY},fetcher,()=>now),new Promise((_,reject)=>setTimeout(()=>reject(Error('cleanup held result')),500))]));
+  assert.equal(observed.result.status,'blocked');assert.deepEqual(observed.result.diagnostic,{stage:'membership',reason:'source-blocked',httpStatus:403});assert.ok(kv.map.has(shared.COMMON_CFBD_BLOCK));assert.equal(calls,1);safeDiagnostic(observed.lines[0]);
+  assert.equal((await leader.refreshSeasonLeaders({SEASON_LEADERS_KV:kv,CFBD_API_KEY:CANARY},fetcher,()=>now)).status,'blocked');assert.equal(calls,1);
+ }
+});
+test('SYNTHETIC failed common-block persistence retains observed denial and stops later source calls',async()=>{
+ const kv=storage(),put=kv.put.bind(kv);kv.put=async(k,v)=>{if(k===shared.COMMON_CFBD_BLOCK)throw Error(CANARY);return put(k,v);};let calls=0;
+ const {result,lines}=await diagnostics(()=>rank.refreshTeamRankings({SEASON_LEADERS_KV:kv,CFBD_API_KEY:CANARY},async()=>{calls++;return new Response('',{status:429});},()=>now));
+ assert.equal(result.status,'failed');assert.equal(result.reason,'storage-unavailable');assert.deepEqual(result.diagnostic,{stage:'block-write',reason:'storage-unavailable',sourceBlocked:true,httpStatus:429});assert.equal(kv.map.has(shared.COMMON_CFBD_BLOCK),false);assert.equal(calls,1);safeDiagnostic(lines[0]);
+});
+test('SYNTHETIC authenticated admin JSON receives exactly the safe private-warning diagnostic; unauthorized still has no detail',async()=>{
+ const kv=storage(),env={SEASON_LEADERS_KV:kv,CFBD_API_KEY:CANARY,CFBD_REFRESH_TOKEN:'admin-fixture'};
+ const request=auth=>new Request('https://owned.test/api/internal/team-rankings-refresh',{method:'POST',headers:auth?{Authorization:'Bearer admin-fixture'}:{}});
+ const fetcher=async()=>{throw Error(CANARY);};const no=await rank.handleRankingsRefresh(request(false),env,fetcher);assert.equal(no.status,401);assert.equal((await no.json()).diagnostic,undefined);assert.equal(kv.ops.length,0);
+ const {result:response,lines}=await diagnostics(()=>rank.handleRankingsRefresh(request(true),env,fetcher));assert.equal(response.status,503);const body=await response.json();assert.deepEqual(body.diagnostic,lines[0].diagnostic);safeDiagnostic(lines[0]);assert.ok(!JSON.stringify(body).includes(CANARY));
+ const controller=new AbortController();controller.abort();await assert.rejects(shared.sourceJson('https://fixed.invalid',CANARY,fetcher,controller.signal),e=>e.reason==='source-aborted'&&e.httpStatus===undefined);
+});
