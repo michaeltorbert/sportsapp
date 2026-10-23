@@ -125,11 +125,33 @@ export async function refreshSeasonLeaders(env: LeadersEnv, fetcher: typeof fetc
     } finally { clearTimeout(timer); }
   } catch { return { status: "failed", reason: "storage-unavailable" }; }
 }
+// Transport-empty POSTs may expose a non-null stream. Check bytes, never buffer a body.
+async function emptyRefreshBody(request: Request): Promise<boolean> {
+  if (!request.body) return true;
+  const reader = request.body.getReader();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 1000); });
+  try {
+    // A finite chunk allowance also bounds adversarial streams of empty chunks.
+    for (let chunks = 0; chunks < 8; chunks++) {
+      const result = await Promise.race([reader.read(), timeout]);
+      if (!result) return false;
+      if (result.done) return true;
+      if (result.value.byteLength !== 0) return false;
+    }
+    return false;
+  } catch { return false; }
+  finally {
+    if (timer !== undefined) clearTimeout(timer);
+    // Cancel is best-effort: an uncooperative stream cannot hold the answer open.
+    void reader.cancel().catch(() => {});
+  }
+}
 export async function handleLeadersRefresh(request: Request, env: LeadersEnv, fetcher: typeof fetch = fetch): Promise<Response> {
   const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
   // Authenticate before any KV operation or source call. Fixed request, no force/year/team parameters.
   if (!env.CFBD_REFRESH_TOKEN || request.headers.get("authorization") !== `Bearer ${env.CFBD_REFRESH_TOKEN}`) return Response.json({ error: "Unauthorized" }, { status: 401, headers });
-  if (request.method !== "POST" || new URL(request.url).search || request.body !== null) return Response.json({ error: "Use an empty POST." }, { status: 400, headers });
+  if (request.method !== "POST" || new URL(request.url).search || !(await emptyRefreshBody(request))) return Response.json({ error: "Use an empty POST." }, { status: 400, headers });
   const result = await refreshSeasonLeaders(env, fetcher);
   return Response.json(result, { status: result.status === "failed" ? 503 : result.status === "blocked" ? 409 : 200, headers });
 }

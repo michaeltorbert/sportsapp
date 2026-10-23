@@ -89,3 +89,12 @@ test('SYNTHETIC fast base plus never-resolving KV cannot exceed3s optional deadl
  const duke=fixture('espn-team-season-duke-2026');const fetcher=async(url)=>json(url===teamScheduleUrl('150')?duke.default:url===teamStatsUrl('150',2026)?duke.stats:duke.postseason);
  const start=Date.now(),result=await createTeamSeasonService(fetcher,()=>T0,()=>new Promise(()=>{})).get('150');assert.equal(result.status,200);assert.ok(result.season.stats);assert.equal(result.season.leaders,null);assert.ok(Date.now()-start<3500);
 });
+
+test('SYNTHETIC refresh byte validation accepts transport-empty stream; rejects body/timeout withoutKV/source; auth stays first',async()=>{
+ const kv=storage();let calls=0;const env={SEASON_LEADERS_KV:kv,CFBD_REFRESH_TOKEN:'test-admin'},fetcher=async()=>{calls++;throw Error('noegress');};
+ const request=(body,authorized=true)=>new Request('https://app.test/api/internal/season-leaders-refresh',{method:'POST',headers:authorized?{Authorization:'Bearer test-admin'}:{},body,duplex:'half'});
+ const empty=request(new ReadableStream({start(c){c.close();}}));const accepted=await handleLeadersRefresh(empty,env,fetcher);assert.equal(accepted.status,503);assert.deepEqual(await accepted.json(),{status:'failed',reason:'configuration'});
+ for(const body of ['x',new ReadableStream({start(c){c.enqueue(new Uint8Array([1]));c.close();}})])assert.equal((await handleLeadersRefresh(request(body),env,fetcher)).status,400);
+ let cancel=false;const hung=new ReadableStream({pull(){return new Promise(()=>{});},cancel(){cancel=true;}}),start=Date.now();assert.equal((await handleLeadersRefresh(request(hung),env,fetcher)).status,400);assert.ok(Date.now()-start<1500);assert.equal(cancel,true);
+ const untrusted=new ReadableStream({pull(){return new Promise(()=>{});}});assert.equal((await handleLeadersRefresh(request(untrusted,false),env,fetcher)).status,401);assert.equal(kv.ops.length,0);assert.equal(calls,0);
+});

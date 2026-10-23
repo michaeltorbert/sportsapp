@@ -128,3 +128,9 @@ independent check date, approved three-row layout at 320/390px, existing average
 schedule navigation, protected/incomplete Duke aggregates, unauthorized admin rejection,
 and zero public CFBD requests. Record any runtime/resource visibility limits. Repeat
 current data/version/commit and unchanged alert readiness checks in production.
+
+The admin empty-POST protocol validates zero actual bytes, including normal HTTP
+empty-body streams, after authentication. Nonempty, unreadable or slow bodies are
+rejected with a bounded one-second check and no body buffering. This correction
+does not explain or resolve an independently observed, unattributed hosted HTTP403;
+that affected hosted request method remains stopped pending classification.
