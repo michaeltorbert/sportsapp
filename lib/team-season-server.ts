@@ -1,4 +1,4 @@
-import type { SeasonLeaders } from "./team-season";
+import type { SeasonLeaders, SeasonRankings } from "./team-season";
 import { normalizeScoreboard } from "./espn-data";
 import { easternDate } from "./football";
 import { validEventId } from "./game-stats";
@@ -128,7 +128,7 @@ const MAX_BYTES = 2_000_000, CACHE_LIMIT = 16, MAX_ACTIVE = 2, STALE_LIMIT_MS = 
  * each miss runs its own reads under one deadline (discovery, then the remaining reads in parallel).
  * A refresh failure may return the last completed season for that team, marked stale.
  */
-export function createTeamSeasonService(fetcher: typeof fetch = fetch, now = () => Date.now(), leaderReader: (teamId: string, year: number, name: string, shortName: string) => Promise<SeasonLeaders | null> = async () => null) {
+export function createTeamSeasonService(fetcher: typeof fetch = fetch, now = () => Date.now(), leaderReader: (teamId: string, year: number, name: string, shortName: string) => Promise<SeasonLeaders | null> = async () => null, rankingReader: (teamId: string, year: number, name: string, shortName: string) => Promise<SeasonRankings | null> = async () => null) {
   const cache = new Map<string, Entry>();
   let active = 0;
   async function json(url: string, signal: AbortSignal) {
@@ -194,21 +194,24 @@ export function createTeamSeasonService(fetcher: typeof fetch = fetch, now = () 
     const result = await getBase(teamId);
     if (result.status !== 200) return result;
     const { season } = result;
-    let leaders: SeasonLeaders | null = null;
+    let leaders: SeasonLeaders | null = null, rankings: SeasonRankings | null = null;
     const allowance = Math.min(3000, Math.max(0, deadlineAt - performance.now()));
     if (allowance > 0) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         // KV reads have no abort API. A detached optional result cannot hold the base answer
         // or mutate it after the original root deadline (including noncooperative readers).
-        leaders = await Promise.race([
-          leaderReader(teamId, season.season.year, season.team.name, season.team.shortName),
-          new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), allowance); }),
+        const args = [teamId, season.season.year, season.team.name, season.team.shortName] as const;
+        const safe = <T>(read: () => Promise<T>): Promise<T | null> => Promise.resolve().then(read).catch(() => null);
+        const timeout = new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), allowance); });
+        [leaders, rankings] = await Promise.all([
+          Promise.race([safe(() => leaderReader(...args)), timeout]),
+          Promise.race([safe(() => rankingReader(...args)), timeout]),
         ]);
       } catch { /* Optional KV failure preserves the base season. */ }
       finally { if (timer !== undefined) clearTimeout(timer); }
     }
-    return { status: 200, season: { ...season, leaders } };
+    return { status: 200, season: { ...season, leaders, rankings } };
   }
   return { get, size: () => cache.size };
 }

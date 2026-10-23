@@ -1,5 +1,6 @@
-export const VERSION = "1.22.0";
+export const VERSION = "1.23.0";
 export const releases = [
+  { version: "1.23.0", date: "October 23, 2026", changes: "Team seasons add FBS statistical rankings for total, net passing and rushing yards per game, for offense and defense allowed. Each value shows its rank among 138 teams, reported game count and check time, separately from the existing regular-season averages. Missing or delayed data stays explicit, and Duke spoiler protection covers ranks." },
   { version: "1.22.0", date: "October 23, 2026", changes: "Team seasons now show the passing, rushing and receiving yard leader, with full names and regular-season total yards, above the existing averages and schedule. Missing leaders stay labeled unavailable, and Duke spoiler protection covers season statistics." },
   { version: "1.21.2", date: "October 21, 2026", changes: "Limit toolbar hover highlighting to a hover-capable mouse or trackpad. Keep keyboard focus indicators and panel controls working as before. Confirmation of the lingering highlight fix on iPhone is still pending." },
   { version: "1.21.1", date: "October 21, 2026", changes: "Keep a game’s category and delayed One-score history when its home/away designations are corrected. Saved betting lines still require the same ordered matchup and kickoff." },

@@ -473,3 +473,34 @@ test("incomplete coverage and hidden started Duke omit every new name and number
   expect(await teamScreen(page).textContent()).not.toMatch(/Arch Manning|Daylan Smothers|Ryan Wingo|1,298/);
   await expect(teamScreen(page).locator(".team-leader-row")).toHaveCount(0);
 });
+
+// #189: genuine captured Texas totals and independently verified current ranks;
+// transport/stale/unavailable/privacy variations are SYNTHETIC, never hosted proof.
+const TEXAS_RANKINGS = { year: 2026, games: 6, population: 138, checkedAt: '2026-10-23T19:51:58.000Z', stale: false, metrics: Object.fromEntries(['totalYards','netPassingYards','rushingYards','totalYardsOpponent','netPassingYardsOpponent','rushingYardsOpponent'].map((k,i)=>[k,{total:[2168,1361,807,1635,997,638][i],games:6,rank:[93,74,102,11,12,27][i],population:138,coverage:138,tied:false}])) };
+for (const [width, zoom] of [[320, false], [390, false], [390, true]]) {
+  test(`separate FBS rankings preserve current team flow at ${width}px${zoom ? ' large text' : ''}`, async ({ page, harness }, info) => {
+    serveCandidate(harness,()=>({...TEXAS_SEASON,rankings:TEXAS_RANKINGS}));
+    await page.setViewportSize({width,height:900});
+    await harness.open({path:'/?team=251',now:'2026-10-23T20:00:00Z',waitForScores:false});
+    await verifyFixtureMute(page);
+    if(zoom)await page.addStyleTag({content:ZOOM});
+    const section=teamScreen(page).locator('.team-rankings');
+    await expect(section).toContainText('2026 season · yards per game');
+    await expect(section).toContainText('6 games reported by CFBD for Texas');
+    await expect(section.locator('.rank-cell b')).toHaveText(['361.3','272.5','226.8','166.2','134.5','106.3']);
+    await expect(section.locator('.rank-cell small')).toHaveText(['93 of 138','11 of 138','74 of 138','12 of 138','102 of 138','27 of 138']);
+    const before=await teamScreen(page).locator('[aria-labelledby="team-averages-h"]').boundingBox(),after=await section.boundingBox();
+    expect(before.y+before.height).toBeLessThanOrEqual(after.y+1);
+    await section.getByText('How these rankings work',{exact:true}).click();
+    await expect(section.locator('details')).toHaveAttribute('open','');
+    await expect(section).toContainText('statistical ranks, not poll rankings');
+    expect(await noOverflow(page)).toBe(true);
+    await expect(teamScreen(page).locator('a.sched-row')).toHaveCount(12);
+    await page.screenshot({path:info.outputPath(`rankings-${width}${zoom?'-zoom200':''}.png`),fullPage:true,animations:'disabled'});
+  });
+}
+test('incomplete Duke schedule omits ranking values and methodology from all rendered markup',async({page,harness})=>{
+ serveCandidate(harness,()=>({...TEXAS_SEASON,rankings:TEXAS_RANKINGS,postseason:{status:'unavailable'}}));
+ await harness.open({path:'/?team=251',now:'2026-10-23T20:00:00Z',waitForScores:false});await verifyFixtureMute(page);
+ await expect(teamScreen(page).locator('.team-rankings')).toHaveCount(0);await expect(teamScreen(page)).not.toContainText('93 of 138');
+});

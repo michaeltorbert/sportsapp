@@ -30,6 +30,21 @@ export const TEAM_LEADER_ROWS = [
 export type TeamLeaderKey = typeof TEAM_LEADER_ROWS[number][0];
 export type SeasonLeader = { athleteId: string; name: string; yards: number };
 export type SeasonLeaders = { year: number; seasonType: 2; checkedAt?: string; stale?: boolean } & Record<TeamLeaderKey, SeasonLeader | null>;
+export const RANKING_ROWS = [["totalYards", "Total yards"], ["netPassingYards", "Passing yards (net)"], ["rushingYards", "Rushing yards"]] as const;
+export const RANKING_KEYS = ["totalYards", "netPassingYards", "rushingYards", "totalYardsOpponent", "netPassingYardsOpponent", "rushingYardsOpponent"] as const;
+export type RankingKey = typeof RANKING_KEYS[number];
+export type RankingMetric = { total: number; games: number; rank: number | null; population: number; coverage: number; tied: boolean };
+export type SeasonRankings = { year: number; games: number | null; population: number; checkedAt: string; stale: boolean; metrics: Record<RankingKey, RankingMetric | null> };
+/** Optional data fails closed independently of the retained ESPN season. */
+export function parseSeasonRankings(raw: unknown, year: number, now = Date.now()): SeasonRankings | null {
+  const metric = z.object({ total: z.number().int().min(-10_000_000).max(10_000_000), games: z.number().int().min(1).max(20), rank: z.number().int().min(1).max(138).nullable(), population: z.literal(138), coverage: z.number().int().min(1).max(138), tied: z.boolean() });
+  const parsed = z.object({ year: z.literal(2026), games: z.number().int().min(1).max(20).nullable(), population: z.literal(138), checkedAt: z.string().datetime(), metrics: z.object({ totalYards: metric.nullable(), netPassingYards: metric.nullable(), rushingYards: metric.nullable(), totalYardsOpponent: metric.nullable(), netPassingYardsOpponent: metric.nullable(), rushingYardsOpponent: metric.nullable() }) }).safeParse(raw);
+  if (!parsed.success || parsed.data.year !== year) return null;
+  const data = parsed.data, age = now - Date.parse(data.checkedAt);
+  if (!Number.isFinite(age) || age < 0 || age > 259_200_000) return null;
+  for (const row of Object.values(data.metrics)) if (row && (row.games !== data.games || (row.rank !== null && row.coverage !== row.population) || (row.rank === null && (row.coverage === row.population || row.tied)) || (row.tied && row.rank === row.population))) return null;
+  return { ...data, stale: age > 86_400_000 };
+}
 export type StatPair = [string | null, string | null];
 // The existing season-metric shape: signed, up to two decimals. Anything else is unavailable, never zero.
 export const STAT_FORMAT = /^-?\d{1,5}(?:\.\d{1,2})?$/;
@@ -42,6 +57,7 @@ export type ScheduleSection = { status: "complete"; entries: ScheduleEntry[] } |
 export type TeamSeason = {
   v: 1; team: TeamSeasonTeam; season: { year: number };
   leaders?: SeasonLeaders | null;
+  rankings?: SeasonRankings | null;
   record: string | null; stats: Record<TeamStatKey, StatPair> | null;
   regular: ScheduleSection; postseason: ScheduleSection;
   checkedAt: string; stale?: boolean;
@@ -126,6 +142,7 @@ export function parseTeamSeason(body: unknown, teamId: string): TeamSeason | nul
   const parsed = seasonSchema.safeParse(body);
   if (!parsed.success || parsed.data.team.id !== teamId) return null;
   const season = parsed.data as unknown as TeamSeason;
+  season.rankings = parseSeasonRankings((body as Record<string, unknown>).rankings, season.season.year);
   season.leaders = parseLeaders((body as Record<string, unknown>).leaders, season.season.year);
   // Every listed game must include the team, once, in the section its season type names.
   const ids = new Set<string>();

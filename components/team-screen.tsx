@@ -2,7 +2,7 @@
 import { useState, type MouseEvent, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, CloudOff, RefreshCw, Signal, Tv } from "lucide-react";
 import { dukeHidden, type DukePreferences } from "@/lib/duke-visibility";
-import { seasonAggregates, TEAM_LEADER_ROWS, TEAM_STAT_ROWS, type ScheduleEntry, type ScheduleSection, type TeamSeason, type TeamSeasonTeam } from "@/lib/team-season";
+import { seasonAggregates, RANKING_ROWS, type RankingKey, type RankingMetric, TEAM_LEADER_ROWS, TEAM_STAT_ROWS, type ScheduleEntry, type ScheduleSection, type TeamSeason, type TeamSeasonTeam } from "@/lib/team-season";
 // Relative, like the page's own import, so page tests bundle the real game screen helpers.
 import { gameDay } from "./game-screen";
 
@@ -80,6 +80,24 @@ function Section({ title, section, team, prefs, nextId, gameHref, onOpenGame, on
   </>;
 }
 
+function RankingValue({ metric, side }: { metric: RankingMetric | null; side: string }) {
+  return <div className="rank-cell"><span>{side}</span>{metric ? <><b>{(metric.total / metric.games).toFixed(1)}</b><small>{metric.rank === null ? "National rank unavailable" : `${metric.tied ? "Tied " : ""}${metric.rank} of ${metric.population}`}</small></> : <small>Value unavailable</small>}</div>;
+}
+function TeamRankings({ season }: { season: TeamSeason }) {
+  const rankings = season.rankings;
+  return <section className="team-block team-rankings" aria-labelledby="team-rankings-h"><h2 id="team-rankings-h">FBS statistical rankings</h2>
+    {!rankings ? <div className="rank-state"><strong>Rankings unavailable</strong><p>They couldn’t be loaded. The rest of this page is still available.</p></div> : <>
+      <p className="rank-basis">{rankings.year} season · yards per game<br />{rankings.games === null ? "Games reported unavailable" : `${rankings.games} games reported by CFBD for ${season.team.shortName}`}</p>
+      {rankings.stale && <p className="rank-note">Refresh delayed — showing the last checked data.</p>}
+      <dl className="rank-list">{RANKING_ROWS.map(([key, label]) => <div className="rank-row" key={key}><dt>{label}</dt><dd><RankingValue metric={rankings.metrics[key]} side="Offense" /><RankingValue metric={rankings.metrics[`${key}Opponent` as RankingKey]} side="Defense · allowed" /></dd></div>)}</dl>
+      {Object.values(rankings.metrics).some(metric => !metric || metric.rank === null) && <p className="rank-note">Some statistics are incomplete. National ranks are shown only when all {rankings.population} FBS teams have data for that statistic.</p>}
+      <p className="rank-note">Higher offense and lower allowed yardage rank first.</p>
+      <details className="rank-explainer"><summary>How these rankings work</summary><p>Saturday Signal calculates statistical ranks among {rankings.population} FBS teams from CFBD’s {rankings.year} season totals divided by each team’s reported games. Equal unrounded averages share a rank; the next rank skips tied places. These are statistical ranks, not poll rankings.</p><p>CFBD’s game coverage and net passing definition may differ from the ESPN regular-season averages above. No regular-season or postseason-only scope is claimed for this section.</p></details>
+      <p className="team-fresh">Rankings checked {checkedTime(rankings.checkedAt)}. Source update time unknown.</p>
+    </>}
+  </section>;
+}
+
 export type TeamScreenProps = {
   teamId: string; season: TeamSeason | null; pending: boolean; failed: boolean; online: boolean; prefs: DukePreferences | null;
   back: { title: string; detail: string; label: string }; onBack: () => void; onRetry: () => void;
@@ -150,6 +168,7 @@ export function TeamScreen({ teamId, season, pending, failed, online, prefs, bac
           {TEAM_LEADER_ROWS.some(([key]) => !season.leaders?.[key]) && <div className="team-leaders-status"><p>{season.leaders && TEAM_LEADER_ROWS.some(([key]) => season.leaders?.[key]) ? "Some season leaders couldn’t be loaded." : "Season leaders couldn’t be loaded."}</p><button type="button" className="notice-button" data-focus-key="leaders-retry" onClick={onRetry} disabled={pending || !online}>{pending ? "Retrying…" : "Retry"}</button></div>}
         </section>}
         <section className="team-block" aria-labelledby="team-averages-h"><h2 id="team-averages-h">Season averages</h2>{averages}</section>
+        {aggregates.shown && <TeamRankings season={season} />}
       </div>
       <div className="team-main">
         <section className="team-block" aria-labelledby="team-schedule-h">

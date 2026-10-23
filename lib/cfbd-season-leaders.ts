@@ -1,3 +1,4 @@
+import { SourceFailure, sourceJson, emptyRefreshBody, cfbdBlocked, blockCfbd } from "./cfbd-source-state";
 import { TEAM_LEADER_ROWS, type SeasonLeaders, type SeasonLeader, type TeamLeaderKey } from "./team-season";
 
 export const LEADERS_YEAR = 2026;
@@ -5,7 +6,7 @@ export const LEADERS_INTERVAL_MS = 12 * 60 * 60 * 1000;
 export const LEADERS_MAX_AGE_MS = 36 * 60 * 60 * 1000;
 export const SNAPSHOT_KEY = `season-leaders:v1:${LEADERS_YEAR}:regular`;
 const ATTEMPT_KEY = `${SNAPSHOT_KEY}:attempt`, BLOCKED_KEY = `${SNAPSHOT_KEY}:blocked`;
-const MAX_BYTES = 8_000_000, REFRESH_TIMEOUT_MS = 90_000;
+const REFRESH_TIMEOUT_MS = 90_000;
 export interface LeadersKV { get(key: string): Promise<string | null>; put(key: string, value: string): Promise<void> }
 export type LeadersEnv = { SEASON_LEADERS_KV?: LeadersKV; CFBD_API_KEY?: string; CFBD_REFRESH_TOKEN?: string };
 type Team = { id: string; school: string; mascot: string; leaders: SeasonLeaders };
@@ -79,32 +80,13 @@ export async function readSeasonLeaders(kv: LeadersKV | undefined, teamId: strin
   } catch { return null; }
 }
 
-class SourceFailure extends Error { constructor(readonly reason: string, readonly blocked = false) { super(reason); } }
-async function sourceJson(url: string, key: string, fetcher: typeof fetch, signal: AbortSignal) {
-  const response = await fetcher(url, { headers: { Accept: "application/json", Authorization: `Bearer ${key}` }, redirect: "manual", signal });
-  const contentType = response.headers.get("content-type") ?? "";
-  if ([401,403,429].includes(response.status) || /\bhtml\b/i.test(contentType)) { await response.body?.cancel(); throw new SourceFailure("source-blocked", true); }
-  if (!response.ok || !/\bapplication\/(?:[\w.+-]+\+)?json\b/i.test(contentType)) { await response.body?.cancel(); throw new SourceFailure("source-response"); }
-  if (Number(response.headers.get("content-length")) > MAX_BYTES) { await response.body?.cancel(); throw new SourceFailure("source-size"); }
-  const reader = response.body?.getReader();
-  if (!reader) throw new SourceFailure("source-body");
-  const chunks: Uint8Array[] = []; let bytes = 0;
-  try {
-    for (;;) { const result = await reader.read(); if (result.done) break; bytes += result.value.byteLength; if (bytes > MAX_BYTES) throw new SourceFailure("source-size"); chunks.push(result.value); }
-  } catch (error) { await reader.cancel().catch(() => {}); throw error; }
-  const all = new Uint8Array(bytes); let offset = 0;
-  for (const chunk of chunks) { all.set(chunk, offset); offset += chunk.byteLength; }
-  const body = new TextDecoder().decode(all);
-  if (/^\s*</.test(body)) throw new SourceFailure("source-blocked", true);
-  return JSON.parse(body) as unknown;
-}
 export type RefreshResult = { status: "refreshed" | "skipped" | "blocked" | "failed"; reason?: string; checkedAt?: string; teams?: number };
 /** KV pacing is deliberately NOT an atomic lock or an account-wide hard quota guarantee. */
 export async function refreshSeasonLeaders(env: LeadersEnv, fetcher: typeof fetch = fetch, now = () => Date.now()): Promise<RefreshResult> {
   const kv = env.SEASON_LEADERS_KV;
   if (!kv || !env.CFBD_API_KEY) return { status: "failed", reason: "configuration" };
   try {
-    if (await kv.get(BLOCKED_KEY)) return { status: "blocked", reason: "source-blocked" };
+    if (await cfbdBlocked(kv)) return { status: "blocked", reason: "source-blocked" };
     const slot = Math.floor(now() / LEADERS_INTERVAL_MS), attempt = await kv.get(ATTEMPT_KEY);
     if (attempt && Number(attempt) >= slot) return { status: "skipped", reason: "refresh-slot" };
     await kv.put(ATTEMPT_KEY, String(slot)); // Persist before first paid/quota-limited source call.
@@ -118,34 +100,13 @@ export async function refreshSeasonLeaders(env: LeadersEnv, fetcher: typeof fetc
       return { status: "refreshed", checkedAt, teams: Object.keys(snapshot.teams).length };
     } catch (error) {
       if (error instanceof SourceFailure && error.blocked) {
+        await blockCfbd(kv, new Date(now()).toISOString());
         await kv.put(BLOCKED_KEY, JSON.stringify({ reason: "source-blocked", checkedAt: new Date(now()).toISOString() })); // No expiration; operator intervention required.
         return { status: "blocked", reason: "source-blocked" };
       }
       return { status: "failed", reason: "source-unavailable" };
     } finally { clearTimeout(timer); }
   } catch { return { status: "failed", reason: "storage-unavailable" }; }
-}
-// Transport-empty POSTs may expose a non-null stream. Check bytes, never buffer a body.
-async function emptyRefreshBody(request: Request): Promise<boolean> {
-  if (!request.body) return true;
-  const reader = request.body.getReader();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 1000); });
-  try {
-    // A finite chunk allowance also bounds adversarial streams of empty chunks.
-    for (let chunks = 0; chunks < 8; chunks++) {
-      const result = await Promise.race([reader.read(), timeout]);
-      if (!result) return false;
-      if (result.done) return true;
-      if (result.value.byteLength !== 0) return false;
-    }
-    return false;
-  } catch { return false; }
-  finally {
-    if (timer !== undefined) clearTimeout(timer);
-    // Cancel is best-effort: an uncooperative stream cannot hold the answer open.
-    void reader.cancel().catch(() => {});
-  }
 }
 export async function handleLeadersRefresh(request: Request, env: LeadersEnv, fetcher: typeof fetch = fetch): Promise<Response> {
   const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };

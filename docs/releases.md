@@ -134,3 +134,8 @@ empty-body streams, after authentication. Nonempty, unreadable or slow bodies ar
 rejected with a bounded one-second check and no body buffering. This correction
 does not explain or resolve an independently observed, unattributed hosted HTTP403;
 that affected hosted request method remains stopped pending classification.
+
+
+### 1.23.0 rankings candidate acceptance
+
+Before releasing this candidate, require a fresh exact-artifact review, current required checks, actual authenticated preview rankings publication, and unmocked Texas/UNC API plus 320/390px visual agreement with independent complete raw-source calculations. Configure only the existing CFBD_REFRESH_TOKEN if needed; preserve CFBD_API_KEY, old attempts/blocks and all alert/D1/VAPID/subscription state. A consumed daily slot waits until its next legitimate slot; never reset or force it. Confirm preview before production bootstrap. Verify production values/pixels/version/commit and preserved alert configuration after the immutable paired release. This paragraph is an acceptance procedure, not a deployment or completion claim.

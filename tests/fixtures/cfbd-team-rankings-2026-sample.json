@@ -1,0 +1,120 @@
+{
+  "identities": [
+    {
+      "abbreviation": "UNC",
+      "classification": "fbs",
+      "conference": "ACC",
+      "id": 153,
+      "mascot": "Tar Heels",
+      "school": "North Carolina"
+    },
+    {
+      "abbreviation": "TEX",
+      "classification": "fbs",
+      "conference": "SEC",
+      "id": 251,
+      "mascot": "Longhorns",
+      "school": "Texas"
+    }
+  ],
+  "rows": [
+    {
+      "conference": "ACC",
+      "season": 2026,
+      "statName": "games",
+      "statValue": 6,
+      "team": "North Carolina"
+    },
+    {
+      "conference": "ACC",
+      "season": 2026,
+      "statName": "netPassingYards",
+      "statValue": 1281,
+      "team": "North Carolina"
+    },
+    {
+      "conference": "ACC",
+      "season": 2026,
+      "statName": "netPassingYardsOpponent",
+      "statValue": 1270,
+      "team": "North Carolina"
+    },
+    {
+      "conference": "ACC",
+      "season": 2026,
+      "statName": "rushingYards",
+      "statValue": 697,
+      "team": "North Carolina"
+    },
+    {
+      "conference": "ACC",
+      "season": 2026,
+      "statName": "rushingYardsOpponent",
+      "statValue": 884,
+      "team": "North Carolina"
+    },
+    {
+      "conference": "ACC",
+      "season": 2026,
+      "statName": "totalYards",
+      "statValue": 1978,
+      "team": "North Carolina"
+    },
+    {
+      "conference": "ACC",
+      "season": 2026,
+      "statName": "totalYardsOpponent",
+      "statValue": 2154,
+      "team": "North Carolina"
+    },
+    {
+      "conference": "SEC",
+      "season": 2026,
+      "statName": "games",
+      "statValue": 6,
+      "team": "Texas"
+    },
+    {
+      "conference": "SEC",
+      "season": 2026,
+      "statName": "netPassingYards",
+      "statValue": 1361,
+      "team": "Texas"
+    },
+    {
+      "conference": "SEC",
+      "season": 2026,
+      "statName": "netPassingYardsOpponent",
+      "statValue": 997,
+      "team": "Texas"
+    },
+    {
+      "conference": "SEC",
+      "season": 2026,
+      "statName": "rushingYards",
+      "statValue": 807,
+      "team": "Texas"
+    },
+    {
+      "conference": "SEC",
+      "season": 2026,
+      "statName": "rushingYardsOpponent",
+      "statValue": 638,
+      "team": "Texas"
+    },
+    {
+      "conference": "SEC",
+      "season": 2026,
+      "statName": "totalYards",
+      "statValue": 2168,
+      "team": "Texas"
+    },
+    {
+      "conference": "SEC",
+      "season": 2026,
+      "statName": "totalYardsOpponent",
+      "statValue": 1635,
+      "team": "Texas"
+    }
+  ]
+}
