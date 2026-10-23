@@ -23,7 +23,27 @@
     "preview": {
       "name": "saturday-signal-preview",
       "workers_dev": true,
-      "preview_urls": false
+      "preview_urls": false,
+      "kv_namespaces": [
+        {
+          "binding": "SEASON_LEADERS_KV",
+          "id": "3844e1c06f7540ebb1707c697fd76d65"
+        }
+      ],
+      "triggers": {
+        "crons": []
+      }
     }
+  },
+  "kv_namespaces": [
+    {
+      "binding": "SEASON_LEADERS_KV",
+      "id": "0092777d9645406a852177c251fcdffd"
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "0 5,17 * * *"
+    ]
   }
 }

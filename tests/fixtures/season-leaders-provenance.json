@@ -1,44 +1,108 @@
 {
-  "capturedDate": "2026-10-22",
-  "sourceFreshness": "unknown; retrieval does not establish sports-data freshness",
-  "source": "Public ESPN Core HTTP 200 captures; HTTP identity refs, HTTPS transport. Minimized to first passing/rushing/receiving rows and athlete identity/name, no biography. Fixtures are captured evidence, not live availability proof.",
-  "captures": [
+  "source": "CFBD authenticated Free API; capture authorization and credentials held by coordinator",
+  "basis": "year=2026; seasonType=regular; teams/fbs?year=2026; national stats/player/season categories passing/rushing/receiving",
+  "sourceUpdateTime": "not exposed; capture time is retrieval only",
+  "fixtureCompleteness": "EXCERPT: actual source fields/rows minimized as described per file; values unchanged. Original FULL captures retained in authorized external evidence; no fabricated data.",
+  "files": [
     {
-      "source": "texas-athlete-4870906.json",
-      "sha256": "794287d5a83869deda7947baa9d72429fa711eb298437d97535f4558917b27b7"
+      "fixture": "cfbd-03-fbs-identities.json",
+      "label": "EXCERPT",
+      "source_capture": "03-fbs-identities.json",
+      "bytes": 228,
+      "sha256": "a7746388c5e1df6f64879f0d29df7696d69fd1d4b4ad8ab878201e34c6864133",
+      "minimization": "Texas/North Carolina/Duke identity fields only",
+      "original_bytes": 202966,
+      "original_sha256": "15611e4d36965423f96b01f58fbe1ea9de04f88c2909a490ddbfcab4511ea2c2",
+      "source_retrieved_at": "2026-10-23T01:05:17.082953+00:00",
+      "source_path": "/teams/fbs",
+      "source_params": {
+        "year": 2026
+      }
     },
     {
-      "source": "texas-athlete-4871053.json",
-      "sha256": "cdd16e183ff49d162c9c9ecc36f1c201c16ab06069f3307f53bfce5cec743387"
+      "fixture": "cfbd-11-national-passing.json",
+      "label": "EXCERPT",
+      "source_capture": "11-national-passing.json",
+      "bytes": 1038,
+      "sha256": "0ffe5dd4ee091e43c2103ee6f7f4bfcd4652cad29ce0908855c09eafbc9fd11a",
+      "minimization": "Texas/North Carolina/Duke YDS rows only; seven normalization fields; no bulk national redistribution",
+      "original_bytes": 1037994,
+      "original_sha256": "2f5ba88b0921be0d64ec25cf674a3466c21ebfc72b728f313026c7aec543df6f",
+      "source_retrieved_at": "2026-10-23T01:05:40.225557+00:00",
+      "source_path": "/stats/player/season",
+      "source_params": {
+        "category": "passing",
+        "seasonType": "regular",
+        "year": 2026
+      }
     },
     {
-      "source": "texas-athlete-5218633.json",
-      "sha256": "a784c58045f487eb5b7b6dc60b53ca880f72013096973003d45378677fca08b1"
+      "fixture": "cfbd-12-national-rushing.json",
+      "label": "EXCERPT",
+      "source_capture": "12-national-rushing.json",
+      "bytes": 3635,
+      "sha256": "7dd69f0677d00ca7745c384fc38d001796604416863c1019b400942865308475",
+      "minimization": "Texas/North Carolina/Duke YDS rows only; seven normalization fields; no bulk national redistribution",
+      "original_bytes": 2486825,
+      "original_sha256": "36b361bf6a4511b829cabad75a2b90805dd79c3220f7de655202a7749f4d5bfe",
+      "source_retrieved_at": "2026-10-23T01:05:46.305160+00:00",
+      "source_path": "/stats/player/season",
+      "source_params": {
+        "category": "rushing",
+        "seasonType": "regular",
+        "year": 2026
+      }
     },
     {
-      "source": "texas-leaders.json",
-      "sha256": "8471cdda45315040eea18e39ff11266b726eea137f2c888f4754f73898421b4b"
+      "fixture": "cfbd-13-national-receiving.json",
+      "label": "EXCERPT",
+      "source_capture": "13-national-receiving.json",
+      "bytes": 5025,
+      "sha256": "ffbafa6e661b8fbc974a8441ad877fa1ecaf0b69bfcc5a493be5f809164f8062",
+      "minimization": "Texas/North Carolina/Duke YDS rows only; seven normalization fields; no bulk national redistribution",
+      "original_bytes": 3410592,
+      "original_sha256": "3379d73164151ccdbe69860457423b58060cae46002658c32262dcb6df20679e",
+      "source_retrieved_at": "2026-10-23T01:05:50.929834+00:00",
+      "source_path": "/stats/player/season",
+      "source_params": {
+        "category": "receiving",
+        "seasonType": "regular",
+        "year": 2026
+      }
     },
     {
-      "source": "athlete-4592532.json",
-      "sha256": "a160115da092c2eac86f7c60d14e8b6b1886e6a21f75aa75c74f178be8469874"
+      "fixture": "cfbd-01-texas-2026-playerseason.json",
+      "label": "EXCERPT",
+      "source_capture": "01-texas-2026-playerseason.json",
+      "bytes": 3760,
+      "sha256": "b4ef05fdf7359cae5d2c13d51a180f57315307a0ca1de086a9cad131ce2604f1",
+      "minimization": "Texas/North Carolina/Duke YDS rows only; seven normalization fields; no bulk national redistribution",
+      "original_bytes": 74963,
+      "original_sha256": "c642f495020d5777c69f46348a60d9965e11a1796df7f00949a585dbbf917caa",
+      "source_retrieved_at": "2026-10-23T01:05:14.355693+00:00",
+      "source_path": "/stats/player/season",
+      "source_params": {
+        "seasonType": "regular",
+        "team": "Texas",
+        "year": 2026
+      }
     },
     {
-      "source": "athlete-5008017.json",
-      "sha256": "18ff123c89adf50deff39d202a39619c9bcc7f23c8a555d0faac33d6589339d7"
-    },
-    {
-      "source": "athlete-5079687.json",
-      "sha256": "bf54a708b4817de0e017938628541e1f3e6d084fcd97e020149d7f48d4e6f00a"
-    },
-    {
-      "source": "season-leaders.json",
-      "sha256": "f387a451c72d9e0a1076f49ace1c2bc3322f47ce80b424a41a2706d70626a96c"
-    },
-    {
-      "source": "texas-team.json",
-      "sha256": "4d9a2e2ecd282c1cc12ef817eb83401793c920b3be43274f39171d4b7b8c52cf",
-      "kind": "Existing app normalized v1 response, complete published schedule; not raw upstream schedule."
+      "fixture": "cfbd-09-unc-2026-playerseason.json",
+      "label": "EXCERPT",
+      "source_capture": "09-unc-2026-playerseason.json",
+      "bytes": 4837,
+      "sha256": "90a57352b0bdb6c5b104210c17dd02a6b5ae211712fa2d1e542159f7cfe9a8de",
+      "minimization": "Texas/North Carolina/Duke YDS rows only; seven normalization fields; no bulk national redistribution",
+      "original_bytes": 82055,
+      "original_sha256": "2e995b0014543090456c6d918b2e34f45ece31ec50ad4e9019e85029d6319808",
+      "source_retrieved_at": "2026-10-23T01:05:29.647899+00:00",
+      "source_path": "/stats/player/season",
+      "source_params": {
+        "seasonType": "regular",
+        "team": "North Carolina",
+        "year": 2026
+      }
     }
   ]
 }

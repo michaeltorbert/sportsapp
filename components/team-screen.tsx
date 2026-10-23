@@ -146,6 +146,7 @@ export function TeamScreen({ teamId, season, pending, failed, online, prefs, bac
             return <div className="team-leader-row" key={key}><dt><span className="team-leader-category">{label}</span><span className={`team-leader-name${row ? "" : " team-leader-missing"}`}>{row ? row.name : "Leader unavailable"}</span></dt>
               <dd>{row && <><strong>{row.yards.toLocaleString("en-US")}</strong><span>total yards</span></>}</dd></div>;
           })}</dl>
+          {season.leaders?.checkedAt && <p className="team-fresh">Leaders checked {checkedTime(season.leaders.checkedAt)}{season.leaders.stale ? " · Refresh delayed" : ""}. Source update time unknown.</p>}
           {TEAM_LEADER_ROWS.some(([key]) => !season.leaders?.[key]) && <div className="team-leaders-status"><p>{season.leaders && TEAM_LEADER_ROWS.some(([key]) => season.leaders?.[key]) ? "Some season leaders couldn’t be loaded." : "Season leaders couldn’t be loaded."}</p><button type="button" className="notice-button" data-focus-key="leaders-retry" onClick={onRetry} disabled={pending || !online}>{pending ? "Retrying…" : "Retry"}</button></div>}
         </section>}
         <section className="team-block" aria-labelledby="team-averages-h"><h2 id="team-averages-h">Season averages</h2>{averages}</section>

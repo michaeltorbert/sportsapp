@@ -1,177 +1,91 @@
-import test from "node:test";
-import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { bundle } from "./helpers.mjs";
-const { selectSeasonLeaders, seasonLeaderAthlete, loadSeasonLeaders, teamLeadersUrl, seasonAthleteUrl } = await bundle("lib/team-season-leaders-server.ts");
-const { createTeamSeasonService, teamScheduleUrl, teamStatsUrl } = await bundle("lib/team-season-server.ts");
-const { parseTeamSeason, seasonTtl, TEAM_SEASON_LIVE_TTL_MS } = await bundle("lib/team-season.ts");
-const fixture = name => JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), "utf8"));
-const TEXAS = fixture("espn-season-leaders-texas-2026"), UNC = fixture("espn-season-leaders-unc-2026"), DUKE = fixture("espn-team-season-duke-2026");
-const json = body => new Response(JSON.stringify(body));
-const signal = () => new AbortController().signal;
-function upstream(data = TEXAS, team = "251", change = () => undefined) {
-  const calls = [];
-  return { calls, fetcher: async (url, init) => {
-    calls.push(url); assert.equal(init.redirect, "manual"); assert.equal(init.headers.Accept, "application/json");
-    const override = change(url, init); if (override !== undefined) return override;
-    if (url === teamLeadersUrl(team, 2026)) return json(data.leaders);
-    for (const [id, a] of Object.entries(data.athletes)) if (url === seasonAthleteUrl(id, 2026)) return json(a);
-    throw new Error(`unexpected constructed URL ${url}`);
-  } };
-}
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { bundle } from './helpers.mjs';
+const { createLeadersSnapshot, readSeasonLeaders, refreshSeasonLeaders, handleLeadersRefresh, CFBD_URLS, SNAPSHOT_KEY, LEADERS_INTERVAL_MS, LEADERS_MAX_AGE_MS } = await bundle('lib/cfbd-season-leaders.ts');
+const { createTeamSeasonService, teamScheduleUrl, teamStatsUrl } = await bundle('lib/team-season-server.ts');
+const { parseTeamSeason } = await bundle('lib/team-season.ts');
+const fixture = n => JSON.parse(readFileSync(new URL(`./fixtures/${n}.json`,import.meta.url),'utf8'));
+const identities = fixture('cfbd-03-fbs-identities'), categories = ['11-national-passing','12-national-rushing','13-national-receiving'].map(n=>fixture('cfbd-'+n));
+const T0=Date.parse('2026-10-23T05:00:00Z');
+const stamp=new Date(T0).toISOString();
+const snapshot=()=>createLeadersSnapshot(identities,categories,stamp);
+function storage(){ const map=new Map(), ops=[];return {map,ops,async get(k){ops.push(['get',k]);return map.get(k)??null;},async put(k,v){ops.push(['put',k]);map.set(k,v);}};}
+const json=b=>new Response(JSON.stringify(b),{headers:{'content-type':'application/json'}});
 
-test("minimized actual two-team captures prove full-name, year/team/regular-season integer-yard mapping", async () => {
-  for (const [data, team] of [[TEXAS, "251"], [UNC, "153"]]) {
-    const { calls, fetcher } = upstream(data, team), result = await loadSeasonLeaders(fetcher, team, 2026, signal(), 1000);
-    assert.equal(result.year, 2026); assert.equal(result.seasonType, 2); assert.equal(calls.length, 4);
-    const selected = selectSeasonLeaders(data.leaders, team, 2026);
-    for (const key of ["passingYards", "rushingYards", "receivingYards"]) {
-      assert.deepEqual(result[key], { ...selected[key], name: data.athletes[selected[key].athleteId].fullName });
-      assert.ok(Number.isInteger(result[key].yards));
-    }
-    if (team === "251") assert.deepEqual([result.passingYards.name, result.passingYards.yards, result.rushingYards.name, result.rushingYards.yards, result.receivingYards.name, result.receivingYards.yards], ["Arch Manning",1295,"Hollywood Smothers",289,"Ryan Wingo",345]);
+test('Observed national YDS captures select maxima and match independently captured Texas and UNC team rows',()=>{
+ const snap=snapshot();assert.equal(Object.keys(snap.teams).length,3);
+ for(const [team,n]of [['251','01-texas-2026-playerseason'],['153','09-unc-2026-playerseason']]){
+  const direct=fixture('cfbd-'+n);
+  for(const [i,key]of ['passingYards','rushingYards','receivingYards'].entries()){
+   const rows=direct.filter(r=>r.category===['passing','rushing','receiving'][i]&&r.statType==='YDS').sort((a,b)=>Number(b.stat)-Number(a.stat));
+   assert.equal(snap.teams[team].leaders[key].yards,Number(rows[0].stat));assert.equal(snap.teams[team].leaders[key].name,rows[0].player);
   }
+ }
+ assert.deepEqual(snap.teams['251'].leaders.rushingYards,{athleteId:'4871053',name:'Daylan Smothers',yards:289});
 });
-test("SYNTHETIC malformed first/category/identity/value never promotes a runner-up or substitutes a season", () => {
-  const good = TEXAS.leaders;
-  for (const mutate of [
-    b => b.type = "event", b => b.$ref = b.$ref.replace("2026", "2025"), b => b.$ref = b.$ref.replace("teams/251", "teams/153"),
-    b => b.categories.push(structuredClone(b.categories[0])),
-    b => b.categories[0].leaders[0].value = 12.5, b => b.categories[0].leaders[0].value = 1_000_000,
-    b => b.categories[0].leaders[0].rel = [],
-    b => b.categories[0].leaders[0].team.$ref = b.categories[0].leaders[0].team.$ref.replace("251", "153"),
-    b => b.categories[0].leaders[0].statistics.$ref = b.categories[0].leaders[0].statistics.$ref.replace("types/2", "types/3"),
-    b => { b.categories[0].leaders.unshift({ value: 50 }); },
-  ]) { const b = structuredClone(good); mutate(b); assert.equal(selectSeasonLeaders(b, "251", 2026).passingYards, null); }
-  for (const raw of ["https://evil.test/x", good.$ref.replace("sports.core.api.espn.com", "sports.core.api.espn.com.evil.test"), good.$ref.replace("http://", "http://user@"), good.$ref + "#x", good.$ref + "&other=x", good.$ref + "&lang=en", good.$ref.replace(".com/", ".com:8080/")]) {
-    const b = { ...good, $ref: raw }; assert.equal(selectSeasonLeaders(b,"251",2026).passingYards,null,raw);
-  }
-  for (const value of [0,-10]) { const b=structuredClone(good); b.categories[0].leaders[0].value=value; assert.equal(selectSeasonLeaders(b,"251",2026).passingYards.yards,value); }
-  const chosen=selectSeasonLeaders(good,"251",2026).passingYards;
-  for (const mutate of [a=>a.id="1",a=>a.fullName="",a=>a.fullName="A\nB",a=>a.team.$ref=a.team.$ref.replace("251","153"),a=>a.statistics.$ref=a.statistics.$ref.replace("types/2","types/3"),a=>a.$ref=a.$ref.replace("2026","2025")]) {
-    const a=structuredClone(TEXAS.athletes[chosen.athleteId]);mutate(a);assert.equal(seasonLeaderAthlete(a,chosen,"251",2026),null);
-  }
+test('SYNTHETIC invalid maxima do not promote runner-up; zero/negative valid; ties deterministic and ambiguity fails',()=>{
+ const teams=[{id:251,school:'Texas',mascot:'Longhorns',classification:'fbs'}];
+ const row=(playerId,player,stat)=>({season:2026,team:'Texas',category:'passing',statType:'YDS',playerId,player,stat});
+ const make=rows=>createLeadersSnapshot(teams,[rows,[{...row('1','Rusher','0'),category:'rushing'}],[{...row('2','Receiver','-2'),category:'receiving'}]],stamp).teams['251'].leaders;
+ assert.equal(make([row('1','Valid','0')]).passingYards.yards,0);assert.equal(make([row('1','Valid','-4')]).passingYards.yards,-4);
+ for(const invalid of [row('2','','200'),row('2','Bad','1.5'),row('2','Bad','1000000'),{...row('2','Bad','200'),season:2025}])assert.equal(make([row('1','Lower','10'),invalid]).passingYards,null);
+ const a=row('20','A','100'),b=row('10','B','100');assert.deepEqual(make([a,b]),make([b,a]));assert.equal(make([a,b]).passingYards.athleteId,'10');
+ assert.equal(make([a,{...a,stat:'101'}]).passingYards,null);
+ assert.throws(()=>createLeadersSnapshot([...teams,...teams],categories,stamp),/identity/);
 });
-test("compound Leader categories cannot satisfy canonical yard metrics (SYNTHETIC source)", () => {
-  const body=structuredClone(TEXAS.leaders);
-  const compound=["passingLeader","rushingLeader","receivingLeader"];
-  body.categories.forEach((c,i)=>c.name=compound[i]);
-  assert.deepEqual(selectSeasonLeaders(body,"251",2026), { passingYards:null,rushingYards:null,receivingYards:null });
+test('public KV reader requires matching year/id/canonical school/name, preserves independent age and expires after36h',async()=>{
+ const kv=storage();await kv.put(SNAPSHOT_KEY,JSON.stringify(snapshot()));
+ const read=(time=T0,year=2026,id='251',name='Texas Longhorns',short='Texas')=>readSeasonLeaders(kv,id,year,name,short,time);
+ assert.equal((await read()).rushingYards.name,'Daylan Smothers');assert.equal((await read()).checkedAt,stamp);
+ assert.equal((await read(T0+LEADERS_INTERVAL_MS+1)).stale,true);
+ assert.equal(await read(T0+LEADERS_MAX_AGE_MS+1),null);assert.equal(await read(T0-1),null);
+ for(const args of [[T0,2025],[T0,2026,'999999'],[T0,2026,'251','Texas A&M Aggies'],[T0,2026,'251','Texas Longhorns','TEX']])assert.equal(await read(...args),null);
+ assert.equal(kv.ops.filter(x=>x[0]==='put').length,1,'reader never writes');
 });
-test("two completed athlete rows survive a third timeout, and late completion cannot mutate returned snapshot", async () => {
-  let release;
-  const hung=new Promise(resolve=>{release=resolve;});
-  const source=upstream(TEXAS,"251",url=>url===seasonAthleteUrl("4871053",2026)?hung:undefined);
-  const result=await loadSeasonLeaders(source.fetcher,"251",2026,signal(),50);
-  assert.equal(result.passingYards.name,"Arch Manning");assert.equal(result.receivingYards.name,"Ryan Wingo");assert.equal(result.rushingYards,null);
-  const frozen=JSON.stringify(result);
-  release(json(TEXAS.athletes["4871053"]));
-  await new Promise(resolve=>setTimeout(resolve,10));
-  assert.equal(JSON.stringify(result),frozen,"late response cannot change already returned/cached rows");
+test('fixed controlled publisher makes4serial reads once/slot, auth beforeKV, public cache hits/misses make zeroCFBD calls',async()=>{
+ const kv=storage();let now=T0,calls=[];
+ const fetcher=async(url,init)=>{assert.equal(kv.map.has(SNAPSHOT_KEY+':attempt'),true);assert.equal(init.redirect,'manual');assert.equal(init.headers.Authorization,'Bearer test-source');calls.push(url);return json([identities,...categories][CFBD_URLS.indexOf(url)]);};
+ const env={SEASON_LEADERS_KV:kv,CFBD_API_KEY:'test-source',CFBD_REFRESH_TOKEN:'test-admin'};
+ const no=new Request('https://app.test/api/internal/season-leaders-refresh',{method:'POST'});
+ assert.equal((await handleLeadersRefresh(no,env,fetcher)).status,401);assert.equal(kv.ops.length,0);
+ assert.equal((await refreshSeasonLeaders(env,fetcher,()=>now)).status,'refreshed');assert.deepEqual(calls,CFBD_URLS);
+ assert.equal((await refreshSeasonLeaders(env,fetcher,()=>now)).status,'skipped');assert.equal(calls.length,4);
+ await readSeasonLeaders(kv,'251',2026,'Texas Longhorns','Texas',T0);await readSeasonLeaders(kv,'999999',2026,'Unknown','Unknown',T0);assert.equal(calls.length,4);
+ now+=LEADERS_INTERVAL_MS;assert.equal((await refreshSeasonLeaders(env,fetcher,()=>now)).status,'refreshed');assert.equal(calls.length,8);
 });
-test("athlete failure is partial; invalid source refs cannot trigger foreign requests; repeated athlete is deduplicated", async () => {
-  const partial=upstream(TEXAS,"251",url=>url===seasonAthleteUrl("4871053",2026)?new Response("{}",{status:503}):undefined);
-  const result=await loadSeasonLeaders(partial.fetcher,"251",2026,signal(),1000);
-  assert.equal(result.rushingYards,null);assert.equal(result.passingYards.name,"Arch Manning");assert.equal(result.receivingYards.name,"Ryan Wingo");
-  const data=structuredClone(TEXAS), pass=data.leaders.categories[0].leaders[0];
-  data.leaders.categories[1].leaders=[{...structuredClone(pass),value:108}];
-  const duplicate=upstream(data), dedup=await loadSeasonLeaders(duplicate.fetcher,"251",2026,signal(),1000);
-  assert.equal(duplicate.calls.length,3);assert.equal(dedup.rushingYards.name,"Arch Manning");assert.equal(dedup.rushingYards.yards,108);
-  data.leaders.categories[0].leaders[0].athlete.$ref="https://evil.test/steal";
-  const bad=upstream(data);await loadSeasonLeaders(bad.fetcher,"251",2026,signal(),1000);assert.ok(bad.calls.every(u=>u.startsWith("https://sports.core.api.espn.com/")));
+test('SYNTHETIC denial/html persists permanent block, cancels rest, future cron/admin skips even nextslot; errors preserve lastgood',async()=>{
+ for(const response of [()=>new Response('',{status:401}),()=>new Response('',{status:403}),()=>new Response('',{status:429}),()=>new Response('<html>',{headers:{'content-type':'text/html'}}),()=>new Response('<html>',{headers:{'content-type':'application/json'}})]){
+  const kv=storage();kv.map.set(SNAPSHOT_KEY,JSON.stringify(snapshot()));let calls=0;
+  const env={SEASON_LEADERS_KV:kv,CFBD_API_KEY:'test-source'};
+  const fetcher=async()=>{calls++;return response();};
+  assert.equal((await refreshSeasonLeaders(env,fetcher,()=>T0)).status,'blocked');
+  assert.equal((await refreshSeasonLeaders(env,fetcher,()=>T0+LEADERS_INTERVAL_MS*3)).status,'blocked');assert.equal(calls,1);assert.ok(kv.map.has(SNAPSHOT_KEY+':blocked'));assert.equal(JSON.parse(kv.map.get(SNAPSHOT_KEY)).checkedAt,stamp);
+ }
+ for(const response of [()=>new Response('',{status:302,headers:{location:'https://other.invalid'}}),()=>new Response('x',{headers:{'content-type':'application/json','content-length':'8000001'}}),()=>json({wrong:'shape'})]){
+  const kv=storage();let calls=0;assert.equal((await refreshSeasonLeaders({SEASON_LEADERS_KV:kv,CFBD_API_KEY:'test-source'},async()=>{calls++;return response();},()=>T0)).status,'failed');assert.ok(calls<=4);assert.equal(kv.map.has(SNAPSHOT_KEY),false);
+ }
+ const bad={get:async()=>null,put:async()=>{throw Error('disk');}};let calls=0;assert.equal((await refreshSeasonLeaders({SEASON_LEADERS_KV:bad,CFBD_API_KEY:'source'},async()=>{calls++;return json([]);},()=>T0)).status,'failed');assert.equal(calls,0);
 });
-test("optional deadline settles abort-ignoring fetch and body and cancels readers; zero budget starts no reads", async () => {
-  let aborted=false;
-  const start=performance.now();
-  assert.equal(await loadSeasonLeaders((url,init)=>{init.signal.addEventListener("abort",()=>aborted=true);return new Promise(()=>{});},"251",2026,signal(),25),null);
-  assert.ok(performance.now()-start<500);assert.equal(aborted,true);
-  let canceled=false;
-  const body = new ReadableStream({ pull(){return new Promise(()=>{});},cancel(){canceled=true;} });
-  assert.equal(await loadSeasonLeaders(async()=>new Response(body),"251",2026,signal(),25),null);assert.equal(canceled,true);
-  assert.equal(await loadSeasonLeaders(()=>{throw new Error("must skip");},"251",2026,signal(),0),null);
-  const controller=new AbortController();const pending=loadSeasonLeaders(()=>new Promise(()=>{}),"251",2026,controller.signal,1000);controller.abort();assert.equal(await pending,null);
-});
-test("stream byte cap works without Content-Length; redirects/status/malformed JSON are optional unavailable", async () => {
-  let canceled=false;
-  const oversized = new ReadableStream({start(c){c.enqueue(new Uint8Array(128001));c.enqueue(new Uint8Array(128001));},cancel(){canceled=true;}});
-  assert.equal(await loadSeasonLeaders(async()=>new Response(oversized),"251",2026,signal(),1000),null);assert.equal(canceled,true);
-  for (const response of [new Response("{}",{status:302}),new Response("not json"),new Response("{}",{headers:{"content-length":"256001"}})]) assert.equal(await loadSeasonLeaders(async()=>response,"251",2026,signal(),1000),null);
-});
-test("legacy v1 and malformed optional rows preserve good base; incomplete leaders use short cadence", async () => {
-  const baseFetch=async url=>url===teamScheduleUrl("150")?json(DUKE.default):url===teamStatsUrl("150",2026)?json(DUKE.stats):url===teamScheduleUrl("150",{year:2026,type:3})?json(DUKE.postseason):new Response("{}",{status:503});
-  const result=await createTeamSeasonService(baseFetch).get("150"); assert.equal(result.status,200);
-  const old=structuredClone(result.season);delete old.leaders;assert.ok(parseTeamSeason(old,"150"));
-  const rows=await loadSeasonLeaders(upstream().fetcher,"251",2026,signal(),1000);
-  const value={...old,leaders:rows};assert.equal(parseTeamSeason(value,"150").leaders.passingYards.name,"Arch Manning");
-  const malformed={...value,leaders:{...rows,rushingYards:{...rows.rushingYards,yards:"289"}}};const parsed=parseTeamSeason(malformed,"150");assert.ok(parsed.stats);assert.equal(parsed.leaders.rushingYards,null);assert.equal(parsed.leaders.passingYards.name,"Arch Manning");assert.equal(seasonTtl(parsed),TEAM_SEASON_LIVE_TTL_MS);
-  for (const leaders of [{...rows,year:2025},{...rows,seasonType:3},"bad"]) {const p=parseTeamSeason({...value,leaders},"150");assert.ok(p.stats);assert.equal(p.leaders,null);}
-});
-test("service preserves good base and releases admission when optional fetch ignores abort (real 3s cutoff)", async () => {
-  const fetcher=async url=>url===teamScheduleUrl("150")?json(DUKE.default):url===teamStatsUrl("150",2026)?json(DUKE.stats):url===teamScheduleUrl("150",{year:2026,type:3})?json(DUKE.postseason):new Promise(()=>{});
-  const service=createTeamSeasonService(fetcher),start=performance.now();
-  const result=await service.get("150");assert.ok(performance.now()-start<4000);assert.equal(result.status,200);assert.ok(result.season.stats);assert.equal(result.season.regular.entries.length,12);assert.equal(result.season.leaders,null);
-  assert.equal((await service.get("150")).status,200,"cache is available after optional timeout");
-});
-test("late discovery leaves only remaining root budget minus return margin for optional work", async t => {
-  let elapsed=0;
-  t.mock.method(performance,"now",()=>elapsed);
-  let optionalCalls=0;
-  const fetcher=async url=>{
-    if(url===teamScheduleUrl("150")){elapsed=8850;return json(DUKE.default);}
-    if(url===teamStatsUrl("150",2026))return json(DUKE.stats);
-    if(url===teamScheduleUrl("150",{year:2026,type:3}))return json(DUKE.postseason);
-    optionalCalls++;return new Promise(()=>{});
-  };
-  const start=Date.now(),service=createTeamSeasonService(fetcher);
-  const result=await service.get("150");
-  assert.ok(Date.now()-start<500,"remaining 50ms allowance, not a new 3-second budget");assert.equal(result.status,200);assert.equal(optionalCalls,1);assert.equal(result.season.leaders,null);assert.equal(result.season.regular.entries.length,12);
+test('base season and cached/stale retries read only optionalKV; ESPN never calls retiredCore; parser metadata survives',async()=>{
+ const duke=fixture('espn-team-season-duke-2026');let calls=[],reads=0;
+ const fetcher=async(url)=>{calls.push(url);if(url===teamScheduleUrl('150'))return json(duke.default);if(url===teamScheduleUrl('150',{year:2026,type:3}))return json(duke.postseason);if(url===teamStatsUrl('150',2026))return json(duke.stats);throw Error('unexpected');};
+ const kv=storage();kv.map.set(SNAPSHOT_KEY,JSON.stringify(snapshot()));
+ const service=createTeamSeasonService(fetcher,()=>T0,async(...args)=>{reads++;return readSeasonLeaders(kv,...args,T0);});
+ const first=await service.get('150'),second=await service.get('150');assert.equal(first.status,200);assert.equal(calls.length,3);assert.equal(reads,2);assert.ok(first.season.stats);assert.ok(second.season.regular.entries.length);assert.equal(calls.some(u=>u.includes('core.api')),false);
+ const parsed=parseTeamSeason(first.season,'150');assert.equal(parsed.leaders.checkedAt,stamp);assert.equal(parsed.leaders.year,2026);
 });
 
-test("one bounded diagnostic summary distinguishes transport, HTTP, body/JSON, timeout and success without payload logs", async t => {
-  const messages=[]; t.mock.method(console,"info",message=>messages.push(message));
-  async function run(fetcher,budget=1000){
-    messages.length=0;
-    const result=await loadSeasonLeaders(fetcher,"251",2026,signal(),budget);
-    assert.equal(messages.length,1,"exactly one terminal record per pipeline");
-    const raw=messages[0],record=JSON.parse(raw);
-    assert.deepEqual(Object.keys(record),["event","stage","reason","status","errorClass","stopCause","leaderStatus","contentType","requests","bytesRead","selected","validated","elapsedMs","budgetMs"]);
-    assert.equal(record.event,"team_season_leaders");
-    assert.ok(raw.length<600);assert.doesNotMatch(raw,/PRIVATE_SENTINEL|Arch Manning|Hollywood Smothers|Ryan Wingo|https?:|Location/);
-    assert.ok(record.requests<=4 && record.validated<=3 && record.selected<=3 && record.bytesRead<=1_024_000 && record.elapsedMs<=60_000 && record.budgetMs<=3000);
-    return {result,record};
-  }
-  let checked=await run(upstream().fetcher);
-  assert.equal(checked.result.passingYards.name,"Arch Manning");
-  assert.deepEqual([checked.record.stage,checked.record.reason,checked.record.requests,checked.record.selected,checked.record.validated,checked.record.leaderStatus,checked.record.contentType,checked.record.stopCause],["complete","ok",4,3,3,200,"other","complete"]);
-  checked=await run(async()=>{throw new TypeError("PRIVATE_SENTINEL https://secret.invalid/");});
-  assert.deepEqual([checked.record.stage,checked.record.reason,checked.record.status,checked.record.errorClass,checked.record.leaderStatus,checked.record.requests],["leaders_fetch","fetch_rejected",null,"TypeError",null,1]);
-  const arbitraryError=new Error("PRIVATE_SENTINEL");arbitraryError.name="PRIVATE_SENTINEL";
-  checked=await run(async()=>{throw arbitraryError;});assert.equal(checked.record.errorClass,"unknown");
-  checked=await run(async()=>new Response("PRIVATE_SENTINEL",{status:403,headers:{"content-type":"text/html"}}));
-  assert.deepEqual([checked.result,checked.record.stage,checked.record.reason,checked.record.status,checked.record.contentType,checked.record.requests],[null,"leaders_http","http_status",403,"html",1]);
-  checked=await run(async()=>new Response("<PRIVATE_SENTINEL>",{headers:{"content-type":"text/html; charset=utf-8"}}));
-  assert.deepEqual([checked.record.stage,checked.record.reason,checked.record.status,checked.record.errorClass,checked.record.contentType],["leaders_json","invalid_json",200,"SyntaxError","html"]);
-  checked=await run(async()=>new Response("PRIVATE_SENTINEL",{headers:{"content-length":"256001"}}));
-  assert.deepEqual([checked.record.stage,checked.record.reason,checked.record.bytesRead],["leaders_body","too_large",0]);
-  checked=await run(async()=>new Response(new ReadableStream({start(c){c.error(new TypeError("PRIVATE_SENTINEL"));}})));
-  assert.deepEqual([checked.record.stage,checked.record.reason,checked.record.status,checked.record.errorClass],["leaders_body","body_read",200,"TypeError"]);
-  checked=await run(()=>new Promise(()=>{}),15);
-  assert.deepEqual([checked.record.stage,checked.record.reason,checked.record.stopCause,checked.record.requests],["deadline","deadline","deadline",1]);
-  assert.equal(checked.result,null);
-  const partial=upstream(TEXAS,"251",url=>url===seasonAthleteUrl("4871053",2026)?new Response("PRIVATE_SENTINEL",{status:503}):undefined);
-  checked=await run(partial.fetcher);
-  assert.equal(checked.result.passingYards.name,"Arch Manning");assert.equal(checked.result.rushingYards,null);
-  assert.deepEqual([checked.record.stage,checked.record.reason,checked.record.status,checked.record.requests,checked.record.validated,checked.record.stopCause],["athlete_http","http_status",503,4,2,"complete"]);
+test('SYNTHETIC hung optional KV reader respects remaining original root allowance; late rows cannot mutate answer',async(t)=>{
+ const duke=fixture('espn-team-season-duke-2026');let clock=0,release;
+ t.mock.method(performance,'now',()=>clock);
+ const fetcher=async(url)=>{clock=8990;if(url===teamScheduleUrl('150'))return json(duke.default);if(url===teamScheduleUrl('150',{year:2026,type:3}))return json(duke.postseason);if(url===teamStatsUrl('150',2026))return json(duke.stats);throw Error('unexpected');};
+ const hung=new Promise(resolve=>{release=resolve;});
+ const service=createTeamSeasonService(fetcher,()=>T0,()=>hung),start=Date.now();
+ const result=await service.get('150');assert.equal(result.status,200);assert.ok(Date.now()-start<500,'only10ms original allowance, not a new3s timeout');assert.equal(result.season.leaders,null);assert.ok(result.season.stats);assert.equal(result.season.regular.entries.length,12);
+ const frozen=JSON.stringify(result);release(snapshot().teams['150'].leaders);await new Promise(resolve=>setTimeout(resolve,1));assert.equal(JSON.stringify(result),frozen);
 });
-test("diagnostic logger failure cannot change result or cause extra requests",async t=>{
-  t.mock.method(console,"info",()=>{throw new Error("logger unavailable");});
-  const source=upstream(),result=await loadSeasonLeaders(source.fetcher,"251",2026,signal(),1000);
-  assert.equal(result.passingYards.name,"Arch Manning");assert.equal(result.receivingYards.name,"Ryan Wingo");assert.equal(source.calls.length,4);
-});
-test("real root abort is distinct from normal cleanup in terminal diagnostic",async t=>{
-  const records=[];t.mock.method(console,"info",message=>records.push(JSON.parse(message)));
-  const controller=new AbortController();
-  const pending=loadSeasonLeaders(()=>new Promise(()=>{}),"251",2026,controller.signal,1000);
-  controller.abort();assert.equal(await pending,null);
-  assert.equal(records.length,1);assert.equal(records[0].stopCause,"root_abort");assert.equal(records[0].reason,"root_abort");
+test('SYNTHETIC fast base plus never-resolving KV cannot exceed3s optional deadline',async()=>{
+ const duke=fixture('espn-team-season-duke-2026');const fetcher=async(url)=>json(url===teamScheduleUrl('150')?duke.default:url===teamStatsUrl('150',2026)?duke.stats:duke.postseason);
+ const start=Date.now(),result=await createTeamSeasonService(fetcher,()=>T0,()=>new Promise(()=>{})).get('150');assert.equal(result.status,200);assert.ok(result.season.stats);assert.equal(result.season.leaders,null);assert.ok(Date.now()-start<3500);
 });

@@ -103,50 +103,45 @@ games are never passed to the Duke observation writer.
 
 ## Optional season leaders (#181, first slice)
 
-After discovering the active year, a fixed Core HTTPS `seasons/<year>/types/2/teams/<id>/leaders?lang=en&region=us`
-read selects exactly the first supplied passingYards, rushingYards and receivingYards row.
-A malformed first row never promotes a runner-up. At most three distinct fixed
-`seasons/<year>/athletes/<athlete>?lang=en&region=us` reads supply fullName. The self,
-team, athlete and statistics references must name the exact year/team/regular-season
-basis. References are identity evidence, never request destinations. Athlete-document
-statistics refs are teamless; leader-row statistics refs include team and `/0`.
-Only bounded signed integer yard totals are accepted, including real zero.
+The denied ESPN Core method is retired completely. The retained ESPN live feeds,
+team schedule and four averages are unchanged. Only a server publisher calls CFBD.
+It reads four fixed authenticated Free API resources serially: the configured 2026
+FBS identities and national passing/rushing/receiving player-season statistics,
+explicitly `seasonType=regular`. Only exact YDS rows are considered. No prior-year
+fallback exists. The maximum signed integer yard total wins; malformed rows or
+conflicting duplicate athlete records withhold that team's category rather than
+promoting an unreliable lower result. Equal maxima use a deterministic athlete-ID
+representative; the singular row does not claim a sole leader.
 
-The pipeline uses redirect:manual and rejects non-OK responses (including 3xx) without
-following Location. workerd does not implement redirect:error: its native RequestInit
-rejects that mode before outbound fetch. A pinned-runtime fixture regression verifies
-manual mode, named rows and no-follow/no-retry behavior, with all egress intercepted.
-It uses a streaming 256KB per-response limit, no retries,
-and its own 3-second settle deadline capped by the remaining monotonic 9-second root
-budget less a 100ms return margin. Abort-ignoring optional fetches/bodies cannot hold
-the result or service admission open past that optional cutoff. Outstanding readers
-are canceled and requests aborted; JavaScript cannot forcibly end a noncooperative promise.
-Validated rows completed before an optional timeout are returned in a detached snapshot;
-only unfinished athlete rows stay unavailable, and late responses cannot mutate the result.
-No independent athlete cache is retained. Partial/missing rows trigger the existing
-one-minute incomplete cadence; optional failures preserve the base season.
+The normalized snapshot contains all returned FBS identities. Public `/api/team`
+reads only shared KV for leaders, including cache misses, Retry and unknown IDs.
+It joins the requested ESPN canonical ID, school/location and full school/mascot
+name exactly. Ambiguous or differing names remain unavailable; no fuzzy name guesses
+or assumption that every provider ID is universally equivalent. Active ESPN year
+must equal the configured source year. KV failures preserve the base season.
 
-The v1 response adds optional leaders with year, seasonType:2 and three nullable rows
-(athleteId, name, numeric yards). Legacy v1 responses remain usable. Browser validation
-degrades malformed optional rows alone and rejects an incorrect leader basis without
-discarding schedule or averages. The unchanged seasonAggregates verdict controls names
-and totals as well as record/averages; withheld leaders are omitted from the DOM.
+Each snapshot has its own retrieval `checkedAt`, independent of the ESPN season
+check. The UI labels leader checks and states that source update time is unknown.
+After 12h it says refresh delayed; after 36h rows become unavailable. A newer schedule
+check never redates leaders. Spoiler withholding remains unchanged and removes
+names, values and check metadata from the DOM whenever aggregates are protected.
 
-Minimized Texas and North Carolina captures and original-source hashes are recorded in
-`tests/fixtures/season-leaders-provenance.json`. Capture date is October22; provider
-data freshness is unknown. The stale banner describes retrieval time, never source
-update time. Captures and browser fixtures do not prove current hosted availability.
+Production cron runs at 05:00/17:00 UTC. Preview has a separate namespace and no cron.
+The same publisher supports a fixed empty authenticated POST bootstrap. No public
+request can refresh the source. A 12h attempt slot is persisted before calls; denied
+401/403/429 or HTML responses persist a nonexpiring blocked marker and stop all
+future scheduled/admin attempts until operator intervention. Remaining reads stop
+on any source error, no redirects/retries/alternate endpoints. Each source response
+has an 8MB streaming ceiling and the whole refresh has a 90s abort deadline.
+KV is eventually consistent and markers are not atomic locks: this is operational
+pacing, not a hard account-wide spending guarantee. Normal operation uses 4 reads
+per refresh, 248 in a 31-day month, plus bounded preview/bootstrap use.
 
-## Bounded source diagnostics
-
-Each uncached optional pipeline emits at most one `team_season_leaders` terminal
-server log record. It reports a fixed stage/reason, actual numeric HTTP status only
-when observed, an allowlisted error class, response content-type class (json/html/other),
-bounded elapsed/budget milliseconds, read bytes, request and selected/validated row
-counts. The first failure is retained; `stopCause` separately distinguishes a real
-optional deadline or root abort from normal completion. Cleanup aborts are never
-reported as deadline failures. No URL, Location, arbitrary header/error text, body,
-athlete name/yard total, credentials or preferences enter the record. Logging errors
-are swallowed and do not change the result or issue more requests. These are server
-observations, not new client fields or a live-source guarantee. A successful API
-response with unavailable leaders still does not meet the named-leader outcome.
+`tests/fixtures/season-leaders-provenance.json` records exact source retrieval
+metadata, original hashes and minimized fixture hashes. All included fields are
+actual source values; synthetic fault/tie/privacy variations are labeled in tests.
+The external full-payload native workerd proof exercises the actual captured bulk
+responses. Neither local check proves hosted Free CPU/memory acceptance: a real
+hosted publisher and real current browser pixels remain release gates. The broader
+team/player/game statistics issues, complete provider coverage and native-device
+acceptance remain separate outcomes.

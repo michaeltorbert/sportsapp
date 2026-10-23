@@ -1,51 +1,31 @@
-import test from "node:test";
-import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { build } from "esbuild";
-import { Miniflare, convertV4MiniflareOptions, Response as SyntheticResponse } from "miniflare";
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {build} from 'esbuild';
+import {Miniflare,convertV4MiniflareOptions,Response as SyntheticResponse} from 'miniflare';
+const root=fileURLToPath(new URL('..',import.meta.url));
+const fixture=n=>JSON.parse(readFileSync(new URL(`./fixtures/cfbd-${n}.json`,import.meta.url),'utf8'));
+const sources=[fixture('03-fbs-identities'),...['11-national-passing','12-national-rushing','13-national-receiving'].map(fixture)];
 
-// Unlike an injected Node fetch mock, this runs the real helper through workerd's native
-// RequestInit boundary. EVERY outbound request terminates in the synthetic handler below;
-// no handler uses Node fetch, DNS or live provider access. Metadata fetch/telemetry are off.
-const root = fileURLToPath(new URL("..", import.meta.url));
-const fixture = JSON.parse(readFileSync(new URL("./fixtures/espn-season-leaders-texas-2026.json", import.meta.url), "utf8"));
-const base = "https://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/";
-const leaderUrl = `${base}types/2/teams/251/leaders?lang=en&region=us`;
-const routes = new Map([[leaderUrl, fixture.leaders], ...Object.entries(fixture.athletes).map(([id, athlete]) => [`${base}athletes/${id}?lang=en&region=us`, athlete])]);
-
-test("native Worker fetch accepts leaders and refuses redirects/denials without following or retrying", { timeout: 20_000 }, async () => {
-  const output = await build({
-    stdin: { contents: `import {loadSeasonLeaders} from './lib/team-season-leaders-server.ts';
-      export default {async fetch(){return Response.json(await loadSeasonLeaders(fetch,'251',2026,new AbortController().signal,1000));}};`, resolveDir: root, loader: "ts" },
-    bundle: true, platform: "browser", format: "esm", write: false,
-  });
-  let scenario = "good", calls = [], unexpected = [];
-  const outboundService = request => {
-    calls.push(request.url);
-    if (!routes.has(request.url)) { unexpected.push(request.url); return new SyntheticResponse("unexpected outbound blocked", { status: 599 }); }
-    // SYNTHETIC access/redirect responses test semantics; they are not observed provider states.
-    if (scenario === "redirect") return new SyntheticResponse("", { status: 302, headers: { Location: "https://reserved.invalid/never-follow" } });
-    if (scenario === "denied") return new SyntheticResponse("synthetic forbidden", { status: 403 });
-    return new SyntheticResponse(JSON.stringify(routes.get(request.url)), { headers: { "content-type": "application/json" } });
-  };
-  // Installed v5 public converter translates supported script/modules/outboundService v4 options.
-  // Compatibility date/flag match the application; no config or dependency is modified by this test.
-  const mf = new Miniflare(convertV4MiniflareOptions({
-    name: "season-leaders-offline", script: output.outputFiles[0].text, modules: true,
-    compatibilityDate: "2026-09-01", compatibilityFlags: ["nodejs_compat"],
-    cf: false, telemetry: { enabled: false }, outboundService,
-  }));
-  try {
-    const success = await (await mf.dispatchFetch("https://worker.invalid/")).json();
-    assert.deepEqual([success.passingYards.name, success.passingYards.yards, success.rushingYards.name, success.rushingYards.yards, success.receivingYards.name, success.receivingYards.yards], ["Arch Manning", 1295, "Hollywood Smothers", 289, "Ryan Wingo", 345]);
-    assert.deepEqual(new Set(calls), new Set(routes.keys()));
-    assert.equal(calls.length, 4, "one leaders + three distinct athlete requests");
-    for (const mode of ["redirect", "denied"]) {
-      scenario = mode; calls = [];
-      assert.equal(await (await mf.dispatchFetch("https://worker.invalid/")).json(), null);
-      assert.deepEqual(calls, [leaderUrl], `${mode}: exactly one attempt, no follow/retry/athlete requests`);
-    }
-    assert.deepEqual(unexpected, [], "all egress is fixture-only and the redirect target was never requested");
-  } finally { await mf.dispose(); }
+test('native workerd publisher+KV binding parses minimized real payloads; public reader has zero egress and denied source stays blocked', {timeout:30000},async()=>{
+ const output=await build({stdin:{contents:`import {readSeasonLeaders} from './lib/cfbd-season-leaders.ts';
+ import {POST} from './app/api/internal/season-leaders-refresh/route.ts';
+ export default {async fetch(request,env){const url=new URL(request.url);if(url.pathname==='/refresh')return POST(new Request(request.url,{method:'POST',headers:{Authorization:'Bearer test-admin'}}));return Response.json(await readSeasonLeaders(env.SEASON_LEADERS_KV,'251',2026,'Texas Longhorns','Texas'));}}`,resolveDir:root,loader:'ts'},bundle:true,platform:'browser',format:'esm',write:false,external:['cloudflare:workers']});
+ let calls=[],deny=false;
+ const outboundService=request=>{calls.push(request.url);assert.equal(request.headers.get('authorization'),'Bearer synthetic-test-secret');
+  if(deny)return new SyntheticResponse('<html>',{status:403,headers:{'content-type':'text/html'}});
+  const category=new URL(request.url).searchParams.get('category'),index=category?['passing','rushing','receiving'].indexOf(category)+1:0;
+  return new SyntheticResponse(JSON.stringify(sources[index]),{headers:{'content-type':'application/json'}});
+ };
+ const mf=new Miniflare(convertV4MiniflareOptions({name:'cfbd-offline',script:output.outputFiles[0].text,modules:true,kvNamespaces:['SEASON_LEADERS_KV'],bindings:{CFBD_API_KEY:'synthetic-test-secret',CFBD_REFRESH_TOKEN:'test-admin'},compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat'],cf:false,telemetry:{enabled:false},outboundService}));
+ try{
+  assert.equal(await(await mf.dispatchFetch('https://worker.invalid/read')).json(),null);assert.equal(calls.length,0);
+  const result=await(await mf.dispatchFetch('https://worker.invalid/refresh')).json();assert.equal(result.status,'refreshed');assert.equal(result.teams,3);assert.equal(calls.length,4);
+  const leaders=await(await mf.dispatchFetch('https://worker.invalid/read')).json();assert.equal(leaders.passingYards.yards,1298);assert.equal(leaders.rushingYards.name,'Daylan Smothers');assert.equal(calls.length,4);
+  assert.equal((await(await mf.dispatchFetch('https://worker.invalid/refresh')).json()).status,'skipped');assert.equal(calls.length,4);
+  const kv=await mf.getKVNamespace('SEASON_LEADERS_KV');await kv.delete('season-leaders:v1:2026:regular:attempt');deny=true;
+  assert.equal((await(await mf.dispatchFetch('https://worker.invalid/refresh')).json()).status,'blocked');assert.equal(calls.length,5);
+  await kv.delete('season-leaders:v1:2026:regular:attempt');assert.equal((await(await mf.dispatchFetch('https://worker.invalid/refresh')).json()).status,'blocked');assert.equal(calls.length,5);
+ }finally{await mf.dispose();}
 });

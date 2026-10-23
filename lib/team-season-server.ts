@@ -1,4 +1,4 @@
-import { loadSeasonLeaders } from "./team-season-leaders-server";
+import type { SeasonLeaders } from "./team-season";
 import { normalizeScoreboard } from "./espn-data";
 import { easternDate } from "./football";
 import { validEventId } from "./game-stats";
@@ -128,7 +128,7 @@ const MAX_BYTES = 2_000_000, CACHE_LIMIT = 16, MAX_ACTIVE = 2, STALE_LIMIT_MS = 
  * each miss runs its own reads under one deadline (discovery, then the remaining reads in parallel).
  * A refresh failure may return the last completed season for that team, marked stale.
  */
-export function createTeamSeasonService(fetcher: typeof fetch = fetch, now = () => Date.now()) {
+export function createTeamSeasonService(fetcher: typeof fetch = fetch, now = () => Date.now(), leaderReader: (teamId: string, year: number, name: string, shortName: string) => Promise<SeasonLeaders | null> = async () => null) {
   const cache = new Map<string, Entry>();
   let active = 0;
   async function json(url: string, signal: AbortSignal) {
@@ -144,12 +144,11 @@ export function createTeamSeasonService(fetcher: typeof fetch = fetch, now = () 
     const cached = cache.get(teamId);
     return cached && now() - Date.parse(cached.season.checkedAt) < STALE_LIMIT_MS ? { ...cached.season, stale: true } : null;
   }
-  async function get(teamId: string): Promise<TeamSeasonResult> {
+  async function getBase(teamId: string): Promise<TeamSeasonResult> {
     const cached = cache.get(teamId);
     if (cached && cached.expires > now()) { cache.delete(teamId); cache.set(teamId, cached); return { status: 200, season: cached.season }; }
     if (active >= MAX_ACTIVE) { const old = stale(teamId); return old ? { status: 200, season: old } : { status: 503, error: "Team seasons are busy. Please retry.", retryAfter: 5 }; }
     active++;
-    const deadlineAt = performance.now() + TEAM_SEASON_WORKER_BUDGET_MS;
     const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), TEAM_SEASON_WORKER_BUDGET_MS);
     try {
       const discovery = await json(teamScheduleUrl(teamId), controller.signal);
@@ -157,11 +156,10 @@ export function createTeamSeasonService(fetcher: typeof fetch = fetch, now = () 
       const { year, type } = activeSeason(discovery, teamId);
       const settled = (promise: Promise<unknown>) => promise.then(value => ({ ok: true as const, value }), () => ({ ok: false as const }));
       // The current answer doubles as the regular season only when that is what it reports.
-      const [regular, postseason, stats, leaders] = await Promise.all([
+      const [regular, postseason, stats] = await Promise.all([
         type === 2 ? Promise.resolve({ ok: true as const, value: discovery }) : settled(json(teamScheduleUrl(teamId, { year, type: 2 }), controller.signal)),
         settled(json(teamScheduleUrl(teamId, { year, type: 3 }), controller.signal)),
         settled(json(teamStatsUrl(teamId, year), controller.signal)),
-        loadSeasonLeaders(fetcher, teamId, year, controller.signal, Math.min(3000, Math.max(0, deadlineAt - performance.now() - 100))),
       ]);
       if (controller.signal.aborted) throw new TeamSeasonSourceError("team season deadline expired");
       const body = object(discovery), team = object(body.team);
@@ -169,7 +167,7 @@ export function createTeamSeasonService(fetcher: typeof fetch = fetch, now = () 
       if (!name || !shortName) throw new TeamSeasonSourceError("team name");
       const season: TeamSeason = {
         v: 1, team: { id: teamId, name, shortName, abbreviation: text(team.abbreviation, 16) ?? "", logo: typeof team.logo === "string" && /^https:\/\/[a-z0-9.-]+\.espncdn\.com\//.test(team.logo) && team.logo.length <= 300 ? team.logo : null },
-        season: { year }, leaders, record: overallRecord(discovery),
+        season: { year }, record: overallRecord(discovery),
         stats: stats.ok ? seasonStats(stats.value, teamId, year) : null,
         regular: regular.ok ? scheduleSection(regular.value, teamId, year, 2, checkedAt) : { status: "unavailable" },
         postseason: postseason.ok ? scheduleSection(postseason.value, teamId, year, 3, checkedAt) : { status: "unavailable" },
@@ -190,6 +188,27 @@ export function createTeamSeasonService(fetcher: typeof fetch = fetch, now = () 
       clearTimeout(timeout);
       active--;
     }
+  }
+  async function get(teamId: string): Promise<TeamSeasonResult> {
+    const deadlineAt = performance.now() + TEAM_SEASON_WORKER_BUDGET_MS;
+    const result = await getBase(teamId);
+    if (result.status !== 200) return result;
+    const { season } = result;
+    let leaders: SeasonLeaders | null = null;
+    const allowance = Math.min(3000, Math.max(0, deadlineAt - performance.now()));
+    if (allowance > 0) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        // KV reads have no abort API. A detached optional result cannot hold the base answer
+        // or mutate it after the original root deadline (including noncooperative readers).
+        leaders = await Promise.race([
+          leaderReader(teamId, season.season.year, season.team.name, season.team.shortName),
+          new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), allowance); }),
+        ]);
+      } catch { /* Optional KV failure preserves the base season. */ }
+      finally { if (timer !== undefined) clearTimeout(timer); }
+    }
+    return { status: 200, season: { ...season, leaders } };
   }
   return { get, size: () => cache.size };
 }
