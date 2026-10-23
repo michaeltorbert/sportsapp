@@ -92,3 +92,39 @@ For a targeted website-only rollback, use the Cloudflare dashboard or `wrangler 
 - [Cloudflare provider addresses](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)
 - [Worker rollback behavior and limitations](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/)
 - [GitHub workflow trigger behavior](https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-when-your-workflow-runs/triggering-a-workflow)
+
+## Season leader snapshot operations (1.22.0)
+
+The website now requires `SEASON_LEADERS_KV`, independently declared in each
+environment. Production namespace is `0092777d9645406a852177c251fcdffd`;
+preview is `3844e1c06f7540ebb1707c697fd76d65`, both in the existing account.
+The alert Worker, D1, subscriptions and VAPID secrets are unaffected.
+
+Configure server secrets `CFBD_API_KEY` and a separate random `CFBD_REFRESH_TOKEN`
+through Wrangler secret-put stdin in each intended environment. Never place values
+in source, browser environment, argv, files, logs or release evidence. The coordinator's
+external secret bridge holds both only in memory, disables child logs/telemetry,
+denies HTTP redirects and submits only to the fixed intended deployment. Configure
+and prove preview before configuring or refreshing production.
+
+Bootstrap with an empty POST to `/api/internal/season-leaders-refresh`, authorized
+with `Bearer <CFBD_REFRESH_TOKEN>` through a secret-safe client. Auth is checked before
+KV/source access; query/body overrides are rejected. GET/public team requests cannot
+refresh. A successful response reports `refreshed`, check time and team count; a
+same-slot request reports `skipped`. No bypass/force endpoint exists. Production has
+only the two website cron triggers (`0 5,17 * * *`); preview declares no triggers.
+
+A source denial/challenge returns `blocked` and writes a permanent KV blocked marker.
+Stop the affected method; do not delete the marker or retry under this release task.
+If its persistence fails (`storage-unavailable`), disable operational scheduling before
+acceptance and investigate storage separately. Other failed refreshes retain the last
+good snapshot, which stops displaying after 36h. Confirm the publisher actually runs
+within the current Free Worker CPU/memory allowance with the full responses before
+production. No paid-plan/billing change is authorized by this setup. The 12h KV attempt
+marker is non-atomic operational pacing, never a hard global quota guarantee.
+
+Before release verify real named Texas and North Carolina leaders in preview, their
+independent check date, approved three-row layout at 320/390px, existing averages and
+schedule navigation, protected/incomplete Duke aggregates, unauthorized admin rejection,
+and zero public CFBD requests. Record any runtime/resource visibility limits. Repeat
+current data/version/commit and unchanged alert readiness checks in production.

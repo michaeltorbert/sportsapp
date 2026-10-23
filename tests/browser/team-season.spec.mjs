@@ -398,13 +398,12 @@ for (const [width, height, zoom, wide] of [[375, 812, false], [1440, 1000, false
   });
 }
 
-// #181 leaders slice: actual captured Texas normalized base + minimized Core source rows.
-// All partial, stale and protection variations below are explicitly SYNTHETIC behavior fixtures.
-const { selectSeasonLeaders, seasonLeaderAthlete } = await bundle("lib/team-season-leaders-server.ts");
+// #181 leaders slice: Minimized CFBD YDS captures; all state variations below are SYNTHETIC.
+const { createLeadersSnapshot } = await bundle("lib/cfbd-season-leaders.ts");
 const TEXAS_BASE = JSON.parse(readFileSync(new URL("../fixtures/espn-team-season-texas-2026-normalized.json", import.meta.url), "utf8"));
-const TEXAS_SOURCE = JSON.parse(readFileSync(new URL("../fixtures/espn-season-leaders-texas-2026.json", import.meta.url), "utf8"));
-const chosenTexas = selectSeasonLeaders(TEXAS_SOURCE.leaders, "251", 2026);
-const TEXAS_SEASON = { ...TEXAS_BASE, leaders: { year: 2026, seasonType: 2, ...Object.fromEntries(Object.entries(chosenTexas).map(([key, row]) => [key, seasonLeaderAthlete(TEXAS_SOURCE.athletes[row.athleteId], row, "251", 2026)])) } };
+const cfbdFixture = name => JSON.parse(readFileSync(new URL(`../fixtures/cfbd-${name}.json`, import.meta.url), "utf8"));
+const CFBD = createLeadersSnapshot(cfbdFixture("03-fbs-identities"), ["11-national-passing", "12-national-rushing", "13-national-receiving"].map(cfbdFixture), "2026-10-23T01:05:44.000Z");
+const TEXAS_SEASON = { ...TEXAS_BASE, leaders: { ...CFBD.teams["251"].leaders, checkedAt: CFBD.checkedAt, stale: false } };
 async function verifyFixtureMute(page) {
   // Verify the fixture's real media mute listener before any UI interaction; do not play audio.
   expect(await page.evaluate(() => { const audio = document.createElement("audio"); document.body.append(audio); audio.dispatchEvent(new Event("loadstart", { bubbles: true })); const muted = audio.muted; audio.remove(); return muted; })).toBe(true);
@@ -419,8 +418,8 @@ for (const [width, zoom] of [[320, false], [390, false], [390, true], [1440, fal
     await harness.open({ path: "/?team=251", waitForScores: false });
     await verifyFixtureMute(page);
     if (zoom) await page.addStyleTag({ content: ZOOM });
-    await expect(teamScreen(page).locator(".team-leader-name")).toHaveText(["Arch Manning", "Hollywood Smothers", "Ryan Wingo"]);
-    await expect(teamScreen(page).locator(".team-leader-row dd strong")).toHaveText(["1,295", "289", "345"]);
+    await expect(teamScreen(page).locator(".team-leader-name")).toHaveText(["Arch Manning", "Daylan Smothers", "Ryan Wingo"]);
+    await expect(teamScreen(page).locator(".team-leader-row dd strong")).toHaveText(["1,298", "289", "345"]);
     await expect(teamScreen(page).locator(".team-leader-row dd span")).toHaveText(["total yards", "total yards", "total yards"]);
     await expect(teamScreen(page).locator(".team-leaders-heading")).toContainText("Regular season");
     await expect(teamScreen(page).locator("a.sched-row")).toHaveCount(12);
@@ -448,7 +447,7 @@ test("partial/stale leader data is honest and Retry restores only missing conten
   await page.screenshot({ path: info.outputPath("leaders-partial-stale-320.png"), fullPage: true, animations: "disabled" });
   candidate = TEXAS_SEASON;
   await teamScreen(page).locator('[data-focus-key="leaders-retry"]').click();
-  await expect(teamScreen(page).locator(".team-leader-name")).toHaveText(["Arch Manning", "Hollywood Smothers", "Ryan Wingo"]);
+  await expect(teamScreen(page).locator(".team-leader-name")).toHaveText(["Arch Manning", "Daylan Smothers", "Ryan Wingo"]);
 });
 test("incomplete coverage and hidden started Duke omit every new name and number from DOM and accessible text", async ({ page, harness }, info) => {
   // SYNTHETIC injected leader sentinels on existing Duke fixture solely exercise aggregate withholding.
@@ -464,13 +463,13 @@ test("incomplete coverage and hidden started Duke omit every new name and number
     localStorage.setItem(key, value); dispatchEvent(new StorageEvent("storage", { key, newValue: value }));
   }, TULANE_GAME);
   await expect(teamScreen(page).getByText("Record and season statistics hidden")).toBeVisible();
-  expect(await teamScreen(page).textContent()).not.toMatch(/Arch Manning|Hollywood Smothers|Ryan Wingo|1,295/);
-  expect(await teamScreen(page).ariaSnapshot()).not.toMatch(/Arch Manning|Hollywood Smothers|Ryan Wingo|1,295/);
+  expect(await teamScreen(page).textContent()).not.toMatch(/Arch Manning|Daylan Smothers|Ryan Wingo|1,298/);
+  expect(await teamScreen(page).ariaSnapshot()).not.toMatch(/Arch Manning|Daylan Smothers|Ryan Wingo|1,298/);
   await expect(teamScreen(page).locator(".team-leader-row")).toHaveCount(0);
   await page.screenshot({ path: info.outputPath("leaders-protected-320.png"), fullPage: true, animations: "disabled" });
   candidate = { ...TEXAS_SEASON, postseason: { status: "unavailable" } };
   await page.goto("/?team=251");
   await expect(teamScreen(page).getByText("Record and season statistics not shown yet")).toBeVisible();
-  expect(await teamScreen(page).textContent()).not.toMatch(/Arch Manning|Hollywood Smothers|Ryan Wingo|1,295/);
+  expect(await teamScreen(page).textContent()).not.toMatch(/Arch Manning|Daylan Smothers|Ryan Wingo|1,298/);
   await expect(teamScreen(page).locator(".team-leader-row")).toHaveCount(0);
 });

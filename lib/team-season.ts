@@ -29,7 +29,7 @@ export const TEAM_LEADER_ROWS = [
 ] as const;
 export type TeamLeaderKey = typeof TEAM_LEADER_ROWS[number][0];
 export type SeasonLeader = { athleteId: string; name: string; yards: number };
-export type SeasonLeaders = { year: number; seasonType: 2 } & Record<TeamLeaderKey, SeasonLeader | null>;
+export type SeasonLeaders = { year: number; seasonType: 2; checkedAt?: string; stale?: boolean } & Record<TeamLeaderKey, SeasonLeader | null>;
 export type StatPair = [string | null, string | null];
 // The existing season-metric shape: signed, up to two decimals. Anything else is unavailable, never zero.
 export const STAT_FORMAT = /^-?\d{1,5}(?:\.\d{1,2})?$/;
@@ -54,7 +54,7 @@ export function findScheduleGame(season: TeamSeason | null, id: string) { return
 export function hasLiveGame(season: TeamSeason) { return seasonEntries(season).some(({ game }) => game.state === "live" || (game.state === "delayed" && game.started)); }
 export function seasonTtl(season: TeamSeason) {
   // Incomplete answers are retried sooner so a recovered source shows up quickly.
-  return hasLiveGame(season) || !season.leaders || TEAM_LEADER_ROWS.some(([key]) => !season.leaders?.[key]) || !season.stats || season.regular.status !== "complete" || season.postseason.status !== "complete" ? TEAM_SEASON_LIVE_TTL_MS : TEAM_SEASON_TTL_MS;
+  return hasLiveGame(season) || !season.stats || season.regular.status !== "complete" || season.postseason.status !== "complete" ? TEAM_SEASON_LIVE_TTL_MS : TEAM_SEASON_TTL_MS;
 }
 
 /**
@@ -108,7 +108,8 @@ function parseLeaders(raw: unknown, year: number): SeasonLeaders | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const value = raw as Record<string, unknown>;
   if (value.year !== year || value.seasonType !== 2) return null;
-  return { year, seasonType: 2, ...Object.fromEntries(TEAM_LEADER_ROWS.map(([key]) => { const row = leaderSchema.safeParse(value[key]); return [key, row.success ? row.data : null]; })) } as SeasonLeaders;
+  const metadata = z.object({ checkedAt: z.string().datetime(), stale: z.boolean() }).safeParse(value);
+  return { year, seasonType: 2, ...(metadata.success ? metadata.data : {}), ...Object.fromEntries(TEAM_LEADER_ROWS.map(([key]) => { const row = leaderSchema.safeParse(value[key]); return [key, row.success ? row.data : null]; })) } as SeasonLeaders;
 }
 const seasonSchema = z.object({
   v: z.literal(1),

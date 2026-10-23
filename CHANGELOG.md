@@ -1,9 +1,9 @@
 # Saturday Signal releases
 
-## 1.22.0 · 2026-10-22
+## 1.22.0 · 2026-10-23
 
 - Add three named regular-season yard leaders above the existing team averages and schedule (#181): passing, rushing and receiving, with full player names and total yards. Missing or partial data stays labeled unavailable and can be retried.
-- Leaders follow the existing season aggregate spoiler gate. Fixed, bounded optional source reads preserve a usable season when leader data fails.
+- Leaders follow the existing season aggregate spoiler gate. A shared CFBD regular-season snapshot refreshes twice daily, with its own check date; delayed or unavailable data stays explicit. Visitor requests and Retry read the saved snapshot without using provider quota.
 - This is the approved leaders-first slice; full season player tables and the broader statistics issue remain open.
 
 ## 1.21.2 · 2026-10-21

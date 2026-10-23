@@ -14,7 +14,11 @@ const runtime = JSON.parse(readFileSync(new URL("node_modules/workerd/package.js
 
 test("generated Worker declarations match wrangler.jsonc bindings and the pinned runtime", () => {
   const env = /interface __BaseEnv_Env \{\n([\s\S]*?)\}/.exec(declarations)?.[1].trim();
-  assert.equal(env, `${config.assets.binding}: Fetcher;`, "the website declares only its assets binding");
+  assert.equal(env, `${config.kv_namespaces[0].binding}: KVNamespace;\n\t${config.assets.binding}: Fetcher;`, "website bindings match assets and normalized season snapshot KV");
+  assert.equal(config.env.preview.kv_namespaces[0].binding, "SEASON_LEADERS_KV");
+  assert.notEqual(config.env.preview.kv_namespaces[0].id, config.kv_namespaces[0].id);
+  assert.deepEqual(config.env.preview.triggers.crons, []);
+  assert.deepEqual(config.triggers.crons, ["0 5,17 * * *"]);
   assert.equal(config.d1_databases, undefined, "the production website has no database binding");
   assert.match(declarations, new RegExp(`Runtime types generated with workerd@${runtime.replaceAll(".", "\\.")} ${config.compatibility_date} ${config.compatibility_flags.join(" ")}\\n`));
   assert.match(declarations, /declare module 'cloudflare:workers'/);
