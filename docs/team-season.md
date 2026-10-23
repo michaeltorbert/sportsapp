@@ -145,3 +145,20 @@ responses. Neither local check proves hosted Free CPU/memory acceptance: a real
 hosted publisher and real current browser pixels remain release gates. The broader
 team/player/game statistics issues, complete provider coverage and native-device
 acceptance remain separate outcomes.
+
+
+## FBS statistical yardage rankings (1.23.0 candidate)
+
+The separate section after ESPN averages shows total, net passing and rushing yards per game for offense and defense allowed. Saturday Signal computes these ranks from CFBD 2026 season aggregates divided by each team's provider-reported games, using the fixed year's 138 FBS membership. It does not claim regular/postseason-only scope, official NCAA ranking, poll standing, adjusted strength, or live data. CFBD definitions and coverage can differ from the adjacent ESPN regular-season averages. Underlying sports-update timing is unknown; checkedAt is retrieval only.
+
+Exact integer cross-products determine competition ranks before display rounding: higher offense/lower allowed is better, equal ratios share rank, and the next rank skips tied places. Each metric needs trustworthy data for every member. Missing/conflicting/malformed member rows withhold that category's national ranks for everyone while preserving valid own values; zero/negative yardage is valid, games must be positive. Incomplete or duplicate membership fails publication. The 2026 expected membership is 138; a source membership change requires explicit review.
+
+`team-rankings:v1:2026` is a distinct snapshot with a pre-call daily attempt slot. The fixed publisher requests only `/teams/fbs?year=2026` and `/stats/season?year=2026&classification=fbs`. Production's existing cron orchestrates leaders then rankings serially. Preview has no automatic cron. Normal production budget is248 leader reads plus62 rank reads per 31-day month, 310 before probes/bootstrap/other consumers. KV pacing remains non-atomic and is not an account quota guarantee. No billing/reset behavior is added.
+
+Both publishers honor `cfbd:v1:blocked` plus the unchanged legacy leaders blocked key. Denials 401/403/429, redirects and HTML/challenges persist shared denial state; no retries, alternate source or marker resets. Leaders additionally preserve their legacy marker. Storage errors prevent dependent scheduled source work. Rankings have a 45s abort deadline and 8MB per-response limit. Failed publication retains the last snapshot.
+
+Public `/api/team` reads leaders and ranks concurrently from existing KV within one shared optional 3s allowance bounded by the original root deadline. A hung or invalid optional response cannot hold or mutate the base season; a fast leader read remains usable if ranks time out. No public request, cache miss or Retry calls CFBD. Identity/year/numerators/games/rank/population/freshness are validated; ranks stale after 24h and expire after 72h independently from leaders. The entire new section shares the existing Duke aggregate gate, including inaccessible/control content.
+
+`POST /api/internal/team-rankings-refresh` requires the existing refresh-token secret before storage/source access, an actually empty byte stream within 1s and no query parameters. It changes no leaders slot, source key, alert binding, subscription or preference. The external reviewed operator may configure only CFBD_REFRESH_TOKEN and call this fixed endpoint once per candidate; no force/replay path exists.
+
+Minimal real fixture provenance is recorded in `tests/fixtures/cfbd-team-rankings-provenance.json`; synthetic population/fault tests are labeled. Current full national independent derivation and direct Texas/UNC comparisons are external acceptance evidence. Local fixtures/browser checks do not prove hosted access, production display or native-device behavior. Issues 189/181 stay open for broader player coverage/navigation and other original outcomes; player issue 190 and leaders-browser issue 192 remain distinct.

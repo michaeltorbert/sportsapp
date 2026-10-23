@@ -1,0 +1,10 @@
+{
+  "kind": "EXCERPT",
+  "source": "CFBD2026 FBS identities and national season stats",
+  "retrievedAt": "2026-10-23T19:51:50.773983+00:00",
+  "complete": false,
+  "scope": "Two actual identities and seven required stats per team. Not national population proof. Tests create explicitly synthetic remaining identities/rows.",
+  "sourceBodySha256": "20eb662ed91bdffbac546bccd5932dfc69a43ced3b797ccaef59363123ea98c3",
+  "sampleSha256": "121e06f206cdbcce36c500d80d6e0539aa4d46285871666c221341c0dac35165",
+  "underlyingUpdateTime": "unknown"
+}

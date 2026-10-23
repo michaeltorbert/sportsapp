@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.23.0 · 2026-10-23
+
+- Add a separate team-season FBS statistical rankings section after existing averages: total, net passing and rushing yards per game, offense and defense allowed, with actual values and ranks among 138 teams. Saturday Signal computes competition ranks from CFBD season totals divided by reported games; these are not poll rankings.
+- Keep leaders, ESPN regular-season averages, schedules, navigation and spoiler protection. Rankings show their own check time, unknown source-update timing, and delayed/partial/unavailable states.
+- A fixed daily shared snapshot uses two source reads; public views and Retry read KV only. Both statistics publishers honor persistent shared provider denial state and the existing leaders block. Broader player coverage and navigation in #189/#190 remain open.
+
 ## 1.22.0 · 2026-10-23
 
 - Add three named regular-season yard leaders above the existing team averages and schedule (#181): passing, rushing and receiving, with full player names and total yards. Missing or partial data stays labeled unavailable and can be retried.

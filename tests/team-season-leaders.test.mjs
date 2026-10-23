@@ -55,14 +55,14 @@ test('fixed controlled publisher makes4serial reads once/slot, auth beforeKV, pu
  now+=LEADERS_INTERVAL_MS;assert.equal((await refreshSeasonLeaders(env,fetcher,()=>now)).status,'refreshed');assert.equal(calls.length,8);
 });
 test('SYNTHETIC denial/html persists permanent block, cancels rest, future cron/admin skips even nextslot; errors preserve lastgood',async()=>{
- for(const response of [()=>new Response('',{status:401}),()=>new Response('',{status:403}),()=>new Response('',{status:429}),()=>new Response('<html>',{headers:{'content-type':'text/html'}}),()=>new Response('<html>',{headers:{'content-type':'application/json'}})]){
+ for(const response of [()=>new Response('',{status:302,headers:{location:'https://other.invalid'}}),()=>new Response('',{status:401}),()=>new Response('',{status:403}),()=>new Response('',{status:429}),()=>new Response('<html>',{headers:{'content-type':'text/html'}}),()=>new Response('<html>',{headers:{'content-type':'application/json'}})]){
   const kv=storage();kv.map.set(SNAPSHOT_KEY,JSON.stringify(snapshot()));let calls=0;
   const env={SEASON_LEADERS_KV:kv,CFBD_API_KEY:'test-source'};
   const fetcher=async()=>{calls++;return response();};
   assert.equal((await refreshSeasonLeaders(env,fetcher,()=>T0)).status,'blocked');
   assert.equal((await refreshSeasonLeaders(env,fetcher,()=>T0+LEADERS_INTERVAL_MS*3)).status,'blocked');assert.equal(calls,1);assert.ok(kv.map.has(SNAPSHOT_KEY+':blocked'));assert.equal(JSON.parse(kv.map.get(SNAPSHOT_KEY)).checkedAt,stamp);
  }
- for(const response of [()=>new Response('',{status:302,headers:{location:'https://other.invalid'}}),()=>new Response('x',{headers:{'content-type':'application/json','content-length':'8000001'}}),()=>json({wrong:'shape'})]){
+ for(const response of [()=>new Response('x',{headers:{'content-type':'application/json','content-length':'8000001'}}),()=>json({wrong:'shape'})]){
   const kv=storage();let calls=0;assert.equal((await refreshSeasonLeaders({SEASON_LEADERS_KV:kv,CFBD_API_KEY:'test-source'},async()=>{calls++;return response();},()=>T0)).status,'failed');assert.ok(calls<=4);assert.equal(kv.map.has(SNAPSHOT_KEY),false);
  }
  const bad={get:async()=>null,put:async()=>{throw Error('disk');}};let calls=0;assert.equal((await refreshSeasonLeaders({SEASON_LEADERS_KV:bad,CFBD_API_KEY:'source'},async()=>{calls++;return json([]);},()=>T0)).status,'failed');assert.equal(calls,0);
@@ -97,4 +97,11 @@ test('SYNTHETIC refresh byte validation accepts transport-empty stream; rejects 
  for(const body of ['x',new ReadableStream({start(c){c.enqueue(new Uint8Array([1]));c.close();}})])assert.equal((await handleLeadersRefresh(request(body),env,fetcher)).status,400);
  let cancel=false;const hung=new ReadableStream({pull(){return new Promise(()=>{});},cancel(){cancel=true;}}),start=Date.now();assert.equal((await handleLeadersRefresh(request(hung),env,fetcher)).status,400);assert.ok(Date.now()-start<1500);assert.equal(cancel,true);
  const untrusted=new ReadableStream({pull(){return new Promise(()=>{});}});assert.equal((await handleLeadersRefresh(request(untrusted,false),env,fetcher)).status,401);assert.equal(kv.ops.length,0);assert.equal(calls,0);
+});
+test('parallel optional readers share one deadline; a hung ranking read preserves fast leaders and cannot mutate cached base',async()=>{
+ const duke=fixture('espn-team-season-duke-2026');const fetcher=async url=>json(url===teamScheduleUrl('150')?duke.default:url===teamStatsUrl('150',2026)?duke.stats:duke.postseason);
+ const expected=snapshot().teams['251'].leaders;let resolveRank;const hung=new Promise(resolve=>resolveRank=resolve);
+ const service=createTeamSeasonService(fetcher,()=>T0,async()=>expected,()=>hung),started=Date.now();
+ const answer=await service.get('150');assert.equal(answer.status,200);assert.deepEqual(answer.season.leaders,expected);assert.equal(answer.season.rankings,null);assert.ok(Date.now()-started<3500);
+ resolveRank({shouldNeverAppear:true});await Promise.resolve();assert.equal(answer.season.rankings,null);
 });

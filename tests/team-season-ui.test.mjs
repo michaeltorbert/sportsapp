@@ -192,3 +192,18 @@ test("every aggregate withholding reason omits leader names and totals from all 
   const dukeFree = { ...full, regular: { status: "complete", entries: [] } };
   assert.match(render(dukeFree, { p: null }), /Arch Manning/);
 });
+
+// SYNTHETIC transport state with genuine Texas numerator/game values; full national
+// ordinal correctness is checked separately from current complete raw source capture.
+const rankRows={year:2026,games:6,population:138,checkedAt:CHECKED,stale:false,metrics:Object.fromEntries(['totalYards','netPassingYards','rushingYards','totalYardsOpponent','netPassingYardsOpponent','rushingYardsOpponent'].map((k,i)=>[k,{total:[2168,1361,807,1635,997,638][i],games:6,rank:[93,74,102,11,12,27][i],population:138,coverage:138,tied:false}]))};
+test('separate yardage ranking section follows ESPN averages, with units/source/basis, delayed and partial states',()=>{
+ const s=season('150',{rankings:rankRows}),html=render(s);
+ assert.ok(html.indexOf('Season averages')<html.indexOf('FBS statistical rankings'));assert.ok(html.indexOf('FBS statistical rankings')<html.indexOf('id="team-schedule-h"'));
+ const words=text(html);assert.match(words,/2026 season · yards per game 6 games reported by CFBD/);assert.match(words,/Total yards Offense 361.3 93 of 138 Defense · allowed 272.5 11 of 138/);assert.match(words,/Passing yards \(net\)/);assert.match(words,/statistical ranks, not poll rankings/);assert.match(words,/Source update time unknown/);assert.match(html,/<details class="rank-explainer"><summary>How these rankings work<\/summary>/);
+ const partial=structuredClone(rankRows);partial.metrics.rushingYards.rank=null;partial.metrics.rushingYards.coverage=137;partial.stale=true;assert.match(text(render(season('150',{rankings:partial}))),/Refresh delayed.*National rank unavailable.*Some statistics are incomplete/);
+ assert.match(text(render(season('150',{rankings:null}))),/Rankings unavailable/);
+});
+test('all aggregate gate reasons omit every rankings value/control from rendered and assistive markup',()=>{
+ const s=season('150',{rankings:rankRows});
+ for(const [value,p]of [[s,null],[s,prefs({rules:[{from:0,mode:'hide'}]})],[{...s,postseason:{status:'unavailable'}},prefs()]])assert.doesNotMatch(render(value,{p}),/FBS statistical rankings|361.3|93 of 138|rank-cell|How these rankings work/);
+});
