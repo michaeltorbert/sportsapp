@@ -105,3 +105,8 @@ test('parallel optional readers share one deadline; a hung ranking read preserve
  const answer=await service.get('150');assert.equal(answer.status,200);assert.deepEqual(answer.season.leaders,expected);assert.equal(answer.season.rankings,null);assert.ok(Date.now()-started<3500);
  resolveRank({shouldNeverAppear:true});await Promise.resolve();assert.equal(answer.season.rankings,null);
 });
+test('SYNTHETIC shared denial cleanup rejection preserves the leaders legacy and common persistent blocks',async()=>{
+ const kv=storage();let calls=0;
+ const result=await refreshSeasonLeaders({SEASON_LEADERS_KV:kv,CFBD_API_KEY:'offline-fixture'},async()=>{calls++;return {status:403,headers:new Headers({'content-type':'text/html'}),body:{cancel:()=>Promise.reject(Error('private error must stay private'))}};},()=>T0);
+ assert.equal(result.status,'blocked');assert.equal(calls,1);assert.ok(kv.map.has(SNAPSHOT_KEY+':blocked'));assert.ok(kv.map.has('cfbd:v1:blocked'));
+});

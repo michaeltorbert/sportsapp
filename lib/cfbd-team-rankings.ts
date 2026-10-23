@@ -1,6 +1,6 @@
 import { RANKING_KEYS, parseSeasonRankings, type SeasonRankings, type RankingKey, type RankingMetric } from "./team-season";
 import type { LeadersEnv, LeadersKV, RefreshResult } from "./cfbd-season-leaders";
-import { cfbdBlocked, blockCfbd, sourceJson, SourceFailure, emptyRefreshBody } from "./cfbd-source-state";
+import { cfbdBlocked, blockCfbd, sourceJson, SourceFailure, emptyRefreshBody, type SourceReason } from "./cfbd-source-state";
 export const RANKINGS_YEAR = 2026, RANKINGS_INTERVAL_MS = 86_400_000, RANKINGS_MAX_AGE_MS = 259_200_000;
 export const RANKINGS_SNAPSHOT_KEY = `team-rankings:v1:${RANKINGS_YEAR}`;
 const ATTEMPT_KEY = `${RANKINGS_SNAPSHOT_KEY}:attempt`, EXPECTED_FBS = 138;
@@ -60,26 +60,53 @@ export async function readTeamRankings(kv: LeadersKV | undefined, teamId: string
     return parseSeasonRankings(team.rankings, year, now);
   } catch { return null; }
 }
-export async function refreshTeamRankings(env: LeadersEnv, fetcher: typeof fetch = fetch, now = () => Date.now()): Promise<RefreshResult> {
+export type RankingDiagnostic = {
+  stage: "block-read" | "attempt-read" | "attempt-write" | "membership" | "stats" | "snapshot-validation" | "snapshot-write" | "block-write";
+  reason: SourceReason | "source-unavailable" | "snapshot-invalid" | "storage-unavailable";
+  httpStatus?: number; sourceBlocked?: true;
+};
+export type RankingsRefreshResult = RefreshResult & { diagnostic?: RankingDiagnostic };
+function diagnosed(result: RefreshResult, diagnostic: RankingDiagnostic): RankingsRefreshResult {
+  console.warn(JSON.stringify({ event: "team_rankings_refresh_failed", diagnostic }));
+  return { ...result, diagnostic };
+}
+export async function refreshTeamRankings(env: LeadersEnv, fetcher: typeof fetch = fetch, now = () => Date.now()): Promise<RankingsRefreshResult> {
   const kv = env.SEASON_LEADERS_KV;
   if (!kv || !env.CFBD_API_KEY) return { status: "failed", reason: "configuration" };
+  let stage: RankingDiagnostic["stage"] = "block-read";
   try {
     if (await cfbdBlocked(kv)) return { status: "blocked", reason: "source-blocked" };
+    stage = "attempt-read";
     const slot = Math.floor(now() / RANKINGS_INTERVAL_MS), prior = await kv.get(ATTEMPT_KEY);
     if (prior && Number(prior) >= slot) return { status: "skipped", reason: "refresh-slot" };
+    stage = "attempt-write";
     await kv.put(ATTEMPT_KEY, String(slot));
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 45_000);
     try {
+      stage = "membership";
       const identity = await sourceJson(RANKINGS_URLS[0], env.CFBD_API_KEY, fetcher, controller.signal);
+      stage = "stats";
       const stats = await sourceJson(RANKINGS_URLS[1], env.CFBD_API_KEY, fetcher, controller.signal);
+      stage = "snapshot-validation";
       const checkedAt = new Date(now()).toISOString(), snapshot = createRankingsSnapshot(identity, stats, checkedAt);
+      stage = "snapshot-write";
       await kv.put(RANKINGS_SNAPSHOT_KEY, JSON.stringify(snapshot));
       return { status: "refreshed", checkedAt, teams: Object.keys(snapshot.teams).length };
     } catch (error) {
-      if (error instanceof SourceFailure && error.blocked) { await blockCfbd(kv, new Date(now()).toISOString()); return { status: "blocked", reason: "source-blocked" }; }
-      return { status: "failed", reason: "source-unavailable" };
+      const source = error instanceof SourceFailure ? error : null;
+      const observed = source?.httpStatus === undefined ? {} : { httpStatus: source.httpStatus };
+      if (source?.blocked) {
+        const failureStage = stage;
+        stage = "block-write";
+        try { await blockCfbd(kv, new Date(now()).toISOString()); }
+        catch { return diagnosed({ status: "failed", reason: "storage-unavailable" }, { stage, reason: "storage-unavailable", sourceBlocked: true, ...observed }); }
+        // A successful persistent block reports the original source phase, not block-write.
+        return diagnosed({ status: "blocked", reason: "source-blocked" }, { stage: failureStage, reason: source.reason, ...observed });
+      }
+      const storage = stage === "snapshot-write";
+      return diagnosed({ status: "failed", reason: storage ? "storage-unavailable" : "source-unavailable" }, { stage, reason: storage ? "storage-unavailable" : stage === "snapshot-validation" ? "snapshot-invalid" : source?.reason ?? "source-unavailable", ...observed });
     } finally { clearTimeout(timer); }
-  } catch { return { status: "failed", reason: "storage-unavailable" }; }
+  } catch { return diagnosed({ status: "failed", reason: "storage-unavailable" }, { stage, reason: "storage-unavailable" }); }
 }
 export async function handleRankingsRefresh(request: Request, env: LeadersEnv, fetcher: typeof fetch = fetch): Promise<Response> {
   const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };

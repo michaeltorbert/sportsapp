@@ -162,3 +162,17 @@ Public `/api/team` reads leaders and ranks concurrently from existing KV within 
 `POST /api/internal/team-rankings-refresh` requires the existing refresh-token secret before storage/source access, an actually empty byte stream within 1s and no query parameters. It changes no leaders slot, source key, alert binding, subscription or preference. The external reviewed operator may configure only CFBD_REFRESH_TOKEN and call this fixed endpoint once per candidate; no force/replay path exists.
 
 Minimal real fixture provenance is recorded in `tests/fixtures/cfbd-team-rankings-provenance.json`; synthetic population/fault tests are labeled. Current full national independent derivation and direct Texas/UNC comparisons are external acceptance evidence. Local fixtures/browser checks do not prove hosted access, production display or native-device behavior. Issues 189/181 stay open for broader player coverage/navigation and other original outcomes; player issue 190 and leaders-browser issue 192 remain distinct.
+
+### Controlled failure diagnostics
+
+The authenticated rankings refresh response and private Worker warning share a small
+allowlisted diagnostic: operation stage, fixed reason, and observed numeric source
+HTTP status when available. They distinguish source reads, snapshot validation and
+snapshot storage without publishing source bodies, headers, URLs or exception text.
+Public team responses are unchanged. Failed common-block persistence is reported as
+storage failure with the observed source denial retained; it never claims the block
+was saved. Best-effort cancellation cannot replace or indefinitely delay a detected
+denial. This corrects diagnostic behavior, not the still-unknown historical preview
+503 cause. The new reviewed maintenance client preserves the original stopped
+client/evidence and refuses refresh before the next legitimate UTC daily slot;
+time alone does not authorize execution or override a persistent source block.
