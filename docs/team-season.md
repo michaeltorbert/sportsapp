@@ -155,7 +155,7 @@ Exact integer cross-products determine competition ranks before display rounding
 
 `team-rankings:v1:2026` is a distinct snapshot with a pre-call daily attempt slot. The fixed publisher requests only `/teams/fbs?year=2026` and `/stats/season?year=2026&classification=fbs`. Production's existing cron orchestrates leaders then rankings serially. Preview has no automatic cron. Normal production budget is248 leader reads plus62 rank reads per 31-day month, 310 before probes/bootstrap/other consumers. KV pacing remains non-atomic and is not an account quota guarantee. No billing/reset behavior is added.
 
-Both publishers honor `cfbd:v1:blocked` plus the unchanged legacy leaders blocked key. Denials 401/403/429, redirects and HTML/challenges persist shared denial state; no retries, alternate source or marker resets. Leaders additionally preserve their legacy marker. Storage errors prevent dependent scheduled source work. Rankings have a 45s abort deadline and 8MB per-response limit. Failed publication retains the last snapshot.
+Both publishers honor `cfbd:v1:blocked` plus the unchanged legacy leaders blocked key. Denials 401/403/429, redirects and HTML/challenges persist shared denial state; no retries, alternate source or marker resets. Leaders additionally preserve their legacy marker. Storage errors prevent dependent scheduled source work. Each of the two sequential rankings source operations has its own 45s abort allowance through response headers and body, with finally cleanup and an 8MB per-response limit. The combined source allowance is up to 90s; KV, validation and other work are separate, so this is not a hard whole-invocation bound. Failed publication retains the last snapshot.
 
 Public `/api/team` reads leaders and ranks concurrently from existing KV within one shared optional 3s allowance bounded by the original root deadline. A hung or invalid optional response cannot hold or mutate the base season; a fast leader read remains usable if ranks time out. No public request, cache miss or Retry calls CFBD. Identity/year/numerators/games/rank/population/freshness are validated; ranks stale after 24h and expire after 72h independently from leaders. The entire new section shares the existing Duke aggregate gate, including inaccessible/control content.
 
@@ -176,3 +176,14 @@ denial. This corrects diagnostic behavior, not the still-unknown historical prev
 503 cause. The new reviewed maintenance client preserves the original stopped
 client/evidence and refuses refresh before the next legitimate UTC daily slot;
 time alone does not authorize execution or override a persistent source block.
+
+
+The reviewed phase-budget maintenance client uses a 105s socket timeout and 110s
+outer deadline. Its authenticated-only sourceTiming fields are fixed numeric
+requestLimitMs, membershipMs, statsMs and summed totalMs; each elapsed phase is
+rounded and clamped to 0–3,600,000ms. These measure the owned source operation,
+not provider internal execution or sports freshness. They are absent from public
+team/snapshot payloads. Independent phase timers prevent slow membership from
+shrinking the stats allowance, but do not establish the historical abort cause
+or actual hosted success. The current daily slot remains consumed; no replay,
+reset, source-key change or early publisher invocation is permitted.

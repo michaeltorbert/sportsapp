@@ -65,15 +65,30 @@ export type RankingDiagnostic = {
   reason: SourceReason | "source-unavailable" | "snapshot-invalid" | "storage-unavailable";
   httpStatus?: number; sourceBlocked?: true;
 };
-export type RankingsRefreshResult = RefreshResult & { diagnostic?: RankingDiagnostic };
-function diagnosed(result: RefreshResult, diagnostic: RankingDiagnostic): RankingsRefreshResult {
-  console.warn(JSON.stringify({ event: "team_rankings_refresh_failed", diagnostic }));
-  return { ...result, diagnostic };
+export type SourceTiming = { requestLimitMs: 45000; membershipMs?: number; statsMs?: number; totalMs: number };
+export type RankingsRefreshResult = RefreshResult & { diagnostic?: RankingDiagnostic; sourceTiming?: SourceTiming };
+function diagnosed(result: RefreshResult, diagnostic: RankingDiagnostic, sourceTiming?: SourceTiming): RankingsRefreshResult {
+  console.warn(JSON.stringify({ event: "team_rankings_refresh_failed", diagnostic, ...(sourceTiming ? { sourceTiming } : {}) }));
+  return { ...result, diagnostic, ...(sourceTiming ? { sourceTiming } : {}) };
 }
-export async function refreshTeamRankings(env: LeadersEnv, fetcher: typeof fetch = fetch, now = () => Date.now()): Promise<RankingsRefreshResult> {
+export async function refreshTeamRankings(env: LeadersEnv, fetcher: typeof fetch = fetch, now = () => Date.now(), monotonic = () => performance.now()): Promise<RankingsRefreshResult> {
   const kv = env.SEASON_LEADERS_KV;
   if (!kv || !env.CFBD_API_KEY) return { status: "failed", reason: "configuration" };
   let stage: RankingDiagnostic["stage"] = "block-read";
+  let sourceTiming: SourceTiming | undefined;
+  // Private operation timings only. Each full sourceJson (headers AND body) owns its timer.
+  const elapsed = (start: number) => { const ms = monotonic() - start; return Number.isFinite(ms) ? Math.min(3_600_000, Math.max(0, Math.round(ms))) : 0; };
+  const readSource = async (url: string, phase: "membership" | "stats") => {
+    sourceTiming ??= { requestLimitMs: 45000, totalMs: 0 };
+    const controller = new AbortController(), started = monotonic();
+    const timer = setTimeout(() => controller.abort(), 45_000);
+    try { return await sourceJson(url, env.CFBD_API_KEY!, fetcher, controller.signal); }
+    finally {
+      clearTimeout(timer);
+      sourceTiming[phase === "membership" ? "membershipMs" : "statsMs"] = elapsed(started);
+      sourceTiming.totalMs = (sourceTiming.membershipMs ?? 0) + (sourceTiming.statsMs ?? 0);
+    }
+  };
   try {
     if (await cfbdBlocked(kv)) return { status: "blocked", reason: "source-blocked" };
     stage = "attempt-read";
@@ -81,17 +96,16 @@ export async function refreshTeamRankings(env: LeadersEnv, fetcher: typeof fetch
     if (prior && Number(prior) >= slot) return { status: "skipped", reason: "refresh-slot" };
     stage = "attempt-write";
     await kv.put(ATTEMPT_KEY, String(slot));
-    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 45_000);
     try {
       stage = "membership";
-      const identity = await sourceJson(RANKINGS_URLS[0], env.CFBD_API_KEY, fetcher, controller.signal);
+      const identity = await readSource(RANKINGS_URLS[0], "membership");
       stage = "stats";
-      const stats = await sourceJson(RANKINGS_URLS[1], env.CFBD_API_KEY, fetcher, controller.signal);
+      const stats = await readSource(RANKINGS_URLS[1], "stats");
       stage = "snapshot-validation";
       const checkedAt = new Date(now()).toISOString(), snapshot = createRankingsSnapshot(identity, stats, checkedAt);
       stage = "snapshot-write";
       await kv.put(RANKINGS_SNAPSHOT_KEY, JSON.stringify(snapshot));
-      return { status: "refreshed", checkedAt, teams: Object.keys(snapshot.teams).length };
+      return { status: "refreshed", checkedAt, teams: Object.keys(snapshot.teams).length, sourceTiming };
     } catch (error) {
       const source = error instanceof SourceFailure ? error : null;
       const observed = source?.httpStatus === undefined ? {} : { httpStatus: source.httpStatus };
@@ -99,14 +113,14 @@ export async function refreshTeamRankings(env: LeadersEnv, fetcher: typeof fetch
         const failureStage = stage;
         stage = "block-write";
         try { await blockCfbd(kv, new Date(now()).toISOString()); }
-        catch { return diagnosed({ status: "failed", reason: "storage-unavailable" }, { stage, reason: "storage-unavailable", sourceBlocked: true, ...observed }); }
+        catch { return diagnosed({ status: "failed", reason: "storage-unavailable" }, { stage, reason: "storage-unavailable", sourceBlocked: true, ...observed }, sourceTiming); }
         // A successful persistent block reports the original source phase, not block-write.
-        return diagnosed({ status: "blocked", reason: "source-blocked" }, { stage: failureStage, reason: source.reason, ...observed });
+        return diagnosed({ status: "blocked", reason: "source-blocked" }, { stage: failureStage, reason: source.reason, ...observed }, sourceTiming);
       }
       const storage = stage === "snapshot-write";
-      return diagnosed({ status: "failed", reason: storage ? "storage-unavailable" : "source-unavailable" }, { stage, reason: storage ? "storage-unavailable" : stage === "snapshot-validation" ? "snapshot-invalid" : source?.reason ?? "source-unavailable", ...observed });
-    } finally { clearTimeout(timer); }
-  } catch { return diagnosed({ status: "failed", reason: "storage-unavailable" }, { stage, reason: "storage-unavailable" }); }
+      return diagnosed({ status: "failed", reason: storage ? "storage-unavailable" : "source-unavailable" }, { stage, reason: storage ? "storage-unavailable" : stage === "snapshot-validation" ? "snapshot-invalid" : source?.reason ?? "source-unavailable", ...observed }, sourceTiming);
+    }
+  } catch { return diagnosed({ status: "failed", reason: "storage-unavailable" }, { stage, reason: "storage-unavailable" }, sourceTiming); }
 }
 export async function handleRankingsRefresh(request: Request, env: LeadersEnv, fetcher: typeof fetch = fetch): Promise<Response> {
   const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
