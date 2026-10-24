@@ -56,7 +56,7 @@ test('authenticated fixed endpoint rejects all unauthenticated or nonempty/param
 
 const CANARY='PRIVATE_KEY_HEADER_BODY_URL_ERROR_CANARY';
 async function diagnostics(run){const lines=[],original=console.warn;console.warn=line=>lines.push(JSON.parse(line));try{return {result:await run(),lines};}finally{console.warn=original;}}
-function safeDiagnostic(record){const raw=JSON.stringify(record);assert.ok(!raw.includes(CANARY));assert.deepEqual(Object.keys(record).sort(),['diagnostic','event']);assert.equal(record.event,'team_rankings_refresh_failed');assert.ok(Object.keys(record.diagnostic).every(k=>['stage','reason','httpStatus','sourceBlocked'].includes(k)));}
+function safeDiagnostic(record){const raw=JSON.stringify(record);assert.ok(!raw.includes(CANARY));assert.ok(Object.keys(record).every(k=>['diagnostic','event','sourceTiming'].includes(k)));if(record.sourceTiming)assertTiming(record.sourceTiming);assert.equal(record.event,'team_rankings_refresh_failed');assert.ok(Object.keys(record.diagnostic).every(k=>['stage','reason','httpStatus','sourceBlocked'].includes(k)));}
 test('SYNTHETIC failure diagnostics distinguish both source phases without leaking remote text, values, headers or key',async()=>{
  for(const failingStage of ['membership','stats'])for(const kind of ['http','transport','json','content-type','body','read','size']){
   const x=input(),kv=storage();let calls=0;
@@ -104,4 +104,46 @@ test('SYNTHETIC authenticated admin JSON receives exactly the safe private-warni
  const fetcher=async()=>{throw Error(CANARY);};const no=await rank.handleRankingsRefresh(request(false),env,fetcher);assert.equal(no.status,401);assert.equal((await no.json()).diagnostic,undefined);assert.equal(kv.ops.length,0);
  const {result:response,lines}=await diagnostics(()=>rank.handleRankingsRefresh(request(true),env,fetcher));assert.equal(response.status,503);const body=await response.json();assert.deepEqual(body.diagnostic,lines[0].diagnostic);safeDiagnostic(lines[0]);assert.ok(!JSON.stringify(body).includes(CANARY));
  const controller=new AbortController();controller.abort();await assert.rejects(shared.sourceJson('https://fixed.invalid',CANARY,fetcher,controller.signal),e=>e.reason==='source-aborted'&&e.httpStatus===undefined);
+});
+
+
+function assertTiming(value) {
+ assert.equal(value.requestLimitMs,45000);
+ assert.ok(Object.keys(value).every(k=>['requestLimitMs','membershipMs','statsMs','totalMs'].includes(k)));
+ for(const n of Object.values(value))assert.ok(Number.isSafeInteger(n)&&n>=0&&n<=7200000);
+ assert.equal(value.totalMs,(value.membershipMs??0)+(value.statsMs??0));
+}
+async function flushClock(){for(let i=0;i<40;i++)await Promise.resolve();}
+function fakeSourceClock(t,delays,{bodyHang=false}={}) {
+ t.mock.timers.enable({apis:['setTimeout']});let elapsed=0,calls=0;const signals=[],x=input();
+ const advance=async ms=>{elapsed+=ms;t.mock.timers.tick(ms);await flushClock();};
+ const fetcher=async(_url,{signal})=>{
+  const index=calls++;signals.push(signal);assert.equal(signal.aborted,false);
+  if(bodyHang&&index===1)return new Response(new ReadableStream({start(controller){signal.addEventListener('abort',()=>controller.error(Error(CANARY)),{once:true});}}),{headers:{'content-type':'application/json'}});
+  return new Promise((resolve,reject)=>{
+   const timer=setTimeout(()=>resolve(json(index===0?x.ids:x.rows)),delays[index]);
+   signal.addEventListener('abort',()=>{clearTimeout(timer);reject(Error(CANARY));},{once:true});
+  });
+ };
+ return {fetcher,advance,monotonic:()=>elapsed,signals,calls:()=>calls};
+}
+test('SYNTHETIC old shared45s starves43s membership plus3s stats; per-operation45s succeeds without extra calls',async t=>{
+ const clock=fakeSourceClock(t,[43000,3000]),controller=new AbortController();const timer=setTimeout(()=>controller.abort(),45000);
+ const old=(async()=>{try{await shared.sourceJson(rank.RANKINGS_URLS[0],CANARY,clock.fetcher,controller.signal);await shared.sourceJson(rank.RANKINGS_URLS[1],CANARY,clock.fetcher,controller.signal);return'success';}catch(e){return e.reason;}finally{clearTimeout(timer);}})();
+ await flushClock();await clock.advance(43000);assert.equal(clock.calls(),2);await clock.advance(2000);assert.equal(await old,'source-aborted');
+ t.mock.timers.reset();
+ const fresh=fakeSourceClock(t,[43000,3000]),kv=storage();const pending=rank.refreshTeamRankings({SEASON_LEADERS_KV:kv,CFBD_API_KEY:CANARY},fresh.fetcher,()=>now,fresh.monotonic);
+ await flushClock();await fresh.advance(43000);assert.equal(fresh.calls(),2);assert.notEqual(fresh.signals[0],fresh.signals[1]);await fresh.advance(3000);
+ const result=await pending;assert.equal(result.status,'refreshed');assert.deepEqual(result.sourceTiming,{requestLimitMs:45000,membershipMs:43000,statsMs:3000,totalMs:46000});assert.equal(fresh.calls(),2);assert.ok(!kv.map.get(rank.RANKINGS_SNAPSHOT_KEY).includes('sourceTiming'));
+ await fresh.advance(100000);assert.ok(fresh.signals.every(s=>!s.aborted),'cleared phase timers cannot abort completed phases');
+});
+test('SYNTHETIC each operation receives45s through pending headers/body; failure stops later calls and preserves last-good',async t=>{
+ for(const shape of ['membership','stats','stats-body']){
+  if(shape!=='membership')t.mock.timers.reset();
+  const clock=fakeSourceClock(t,shape==='membership'?[999999,0]:[43000,999999],{bodyHang:shape==='stats-body'}),kv=storage();kv.map.set(rank.RANKINGS_SNAPSHOT_KEY,'last-good');
+  const observed=diagnostics(()=>rank.refreshTeamRankings({SEASON_LEADERS_KV:kv,CFBD_API_KEY:CANARY},clock.fetcher,()=>now,clock.monotonic));
+  await flushClock();if(shape!=='membership'){await clock.advance(43000);assert.equal(clock.calls(),2);await clock.advance(44999);assert.equal(clock.signals[1].aborted,false);await clock.advance(1);}else await clock.advance(45000);
+  const {result,lines}=await observed;assert.equal(result.status,'failed');assert.equal(result.diagnostic.stage,shape==='membership'?'membership':'stats');assert.equal(result.diagnostic.reason,'source-aborted');assert.equal(result.diagnostic.httpStatus,shape==='stats-body'?200:undefined);assert.equal(clock.calls(),shape==='membership'?1:2);assert.equal(kv.map.get(rank.RANKINGS_SNAPSHOT_KEY),'last-good');assertTiming(result.sourceTiming);assert.deepEqual(lines[0].sourceTiming,result.sourceTiming);safeDiagnostic(lines[0]);
+  if(shape==='membership')assert.deepEqual(result.sourceTiming,{requestLimitMs:45000,membershipMs:45000,totalMs:45000});else assert.deepEqual(result.sourceTiming,{requestLimitMs:45000,membershipMs:43000,statsMs:45000,totalMs:88000});
+ }
 });
