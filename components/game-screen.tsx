@@ -1,4 +1,5 @@
 "use client";
+import type { PlayerLinkFactory } from "./game-stats";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ChevronLeft, ChevronRight, CloudOff, Signal, TriangleAlert, Tv, Zap } from "lucide-react";
 import { classify, type Game, type Scoreboard, type Team } from "@/lib/football";
@@ -157,13 +158,13 @@ function useLayout(root: RefObject<HTMLDivElement | null>, id: string | undefine
 export type GameScreenProps = {
   game: Game | null; loading: boolean; board: Scoreboard | null; scopeError: boolean; backLabel: string;
   section: Section; onSection: (section: Section) => void; onBack: () => void;
-  warning?: string; onRetryScores?: () => void; refreshing?: boolean; notice?: ReactNode;
+  unavailableDetail?: string; warning?: string; onRetryScores?: () => void; refreshing?: boolean; notice?: ReactNode;
   // Where Back goes when it is not the scoreboard (a team's schedule). Defaults to Scores.
   back?: { title: string; detail: string; label: string };
-  teamLinks?: TeamLink[]; onOpenTeam?: (id: string) => void;
+  playerLink?: PlayerLinkFactory; teamLinks?: TeamLink[]; onOpenTeam?: (id: string) => void;
 };
 /** The dedicated game screen. It renders nothing about a game until that game is eligible on the protected boards or a validated team schedule. */
-export function GameScreen({ game, loading, board, scopeError, backLabel, section, onSection, onBack, warning, onRetryScores, refreshing = false, notice, back: target, teamLinks, onOpenTeam }: GameScreenProps) {
+export function GameScreen({ game, loading, board, scopeError, backLabel, section, onSection, onBack, warning, onRetryScores, refreshing = false, notice, back: target, teamLinks, onOpenTeam, playerLink, unavailableDetail }: GameScreenProps) {
   const root = useRef<HTMLDivElement>(null);
   const id = game?.id;
   const layout = useLayout(root, id);
@@ -243,7 +244,7 @@ export function GameScreen({ game, loading, board, scopeError, backLabel, sectio
       {notice}
       <div className="game-body">{loading
         ? <div className="stats-loading unavailable" role="status"><p>Loading game…</p></div>
-        : <div className="stats-empty unavailable"><h2>This game isn’t available</h2><p>{target ? "It isn’t on this team’s schedule, or it’s hidden by your settings." : "It isn’t on the scoreboard, or it’s hidden by your settings."}</p><button type="button" className="notice-button" data-focus-key="back-2" onClick={onBack}>{target ? `Back to ${target.title}` : "Back to scores"}</button></div>}</div>
+        : <div className="stats-empty unavailable"><h2>This game isn’t available</h2><p>{unavailableDetail ?? (target ? "It isn’t on this team’s schedule, or it’s hidden by your settings." : "It isn’t on the scoreboard, or it’s hidden by your settings.")}</p><button type="button" className="notice-button" data-focus-key="back-2" onClick={onBack}>{target ? `Back to ${target.title}` : "Back to scores"}</button></div>}</div>
     </>;
   } else {
     const [away, home] = game.teams, scored = game.started && away.score !== null && home.score !== null;
@@ -262,7 +263,7 @@ export function GameScreen({ game, loading, board, scopeError, backLabel, sectio
       {teamLinks && teamLinks.length > 0 && onOpenTeam && <TeamLinks links={teamLinks} onOpen={onOpenTeam} />}
       {notice}
       {warning && <div className="feed-banner game-feed" role="alert"><CloudOff size={18} aria-hidden="true" /><span>{warning} Displayed scores may be out of date.</span>{onRetryScores && <button type="button" onClick={onRetryScores} disabled={refreshing}>Retry</button>}</div>}
-      <GameStatsScreen key={game.id} game={game} section={section} onSection={changeSection} jump={jump} onJump={toCategory} />
+      <GameStatsScreen key={game.id} game={game} section={section} onSection={changeSection} jump={jump} onJump={toCategory} playerLink={playerLink} />
     </>;
   }
   return <div ref={root} className={classes.replace(/\s+/g, " ").trim()}>{content}</div>;

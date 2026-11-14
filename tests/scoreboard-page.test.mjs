@@ -12,7 +12,7 @@ const { retainFinalCategories, shiftDate } = await bundle("lib/football.ts");
 const output = await build({
   entryPoints: ["app/page.tsx"], bundle: true, platform: "node", format: "esm", jsx: "automatic", write: false,
   plugins: [{ name: "score-page-runtime", setup(build) {
-    build.onResolve({ filter: /^(next\/link|react(?:\/jsx-runtime)?|lucide-react|@\/components\/.*|@\/lib\/(?:use-scoreboard|use-app-update|use-duke-visibility|use-team-season))$/ }, args => ({ path: args.path, namespace: "page-test" }));
+    build.onResolve({ filter: /^(next\/link|react(?:\/jsx-runtime)?|lucide-react|@\/components\/.*|@\/lib\/(?:use-scoreboard|use-app-update|use-duke-visibility|use-team-season|use-player-season))$/ }, args => ({ path: args.path, namespace: "page-test" }));
     build.onLoad({ filter: /.*/, namespace: "page-test" }, args => {
       if (args.path === "@/components/halftime-status") return { contents: "export const HalftimeStatus=()=>\"Halftime\";" };
       if (args.path === "next/link") return { contents: "export default ({children,...props})=>globalThis.scorePageTest.element('a',props,children);" };
@@ -20,6 +20,7 @@ const output = await build({
       if (args.path === "react/jsx-runtime") return { contents: "export const jsx=(...a)=>globalThis.scorePageTest.jsx(...a),jsxs=(...a)=>globalThis.scorePageTest.jsxs(...a),Fragment=globalThis.scorePageTest.Fragment;" };
       if (args.path === "@/lib/use-duke-visibility") return { contents: "export const useDukeVisibility=()=>({prefs:null,storageWarning:'',setHidden(){},setMode(){}});" };
       // Controlled like the other data hooks: no team page or team context in these scoreboard cases.
+      if (args.path === "@/lib/use-player-season") return { contents: "export const usePlayerSeason=()=>({season:null,identity:null,pending:false,failed:false,online:true,retry(){}});" };
       if (args.path === "@/lib/use-team-season") return { contents: "export const useTeamSeason=()=>({season:null,pending:false,failure:null,online:true,retry(){}});" };
       if (args.path === "@/lib/use-app-update") return { contents: "export const LOADED_COMMIT=undefined,useAppUpdate=()=>({target:null,status:'',refreshing:false,check(){},refresh(){},dismiss(){}});" };
       if (args.path === "@/lib/use-scoreboard") return { contents: "export const useScoreboard=scope=>globalThis.scorePageTest.scoreboard(scope);" };
@@ -54,16 +55,17 @@ function fixtures() {
   };
 }
 
-// Home's useState order: selection, period, hideFinals, focusedGame, open game screen route, open intent,
-// team page, team origin, All FBS scope, then the swipe pager's revealed side and leaving view (#172).
+// Home's useState order: selection, period, hideFinals, focusedGame, game route, open intent, player route,
+// team page, team-from-player flag, team origin, All FBS scope, then the swipe pager's side/leaving/held games.
+// Data hooks are neutral stubs above; their private hook slots are not part of this page fixture.
 // Unset slots keep their initial values.
-const SLOTS = { hideFinals: 2, focusedGame: 3, openIntent: 5, allFbs: 8 };
+const SLOTS = { hideFinals: 2, focusedGame: 3, openIntent: 5, allFbs: 10 };
 function render(selection, { period = "day", hideFinals = false, focusedGame = "", route, allFbs = false, showHelp = false, boards = fixtures(), stale = false, effects = [], changes = [], weekDate = null, week = weekDate ? { start: weekDate, end: shiftDate(weekDate, 4) } : { start: "2026-09-03", end: "2026-09-07" }, pager = [], neighbors = {}, neighborFailed = false } = {}) {
   let state = 0, selectedScope;
   globalThis.scorePageTest = {
     ...jsxRuntime, showHelp, element: React.createElement,
     effect(fn) { effects.push(fn); },
-    useState(initial) { const slot = state++; return [[selection, period, hideFinals, focusedGame, route, undefined, undefined, undefined, allFbs, ...pager][slot] ?? initial, value => changes.push({ slot, value })]; },
+    useState(initial) { const slot = state++; return [[selection, period, hideFinals, focusedGame, route, undefined, undefined, undefined, undefined, undefined, allFbs, ...pager][slot] ?? initial, value => changes.push({ slot, value })]; },
     scoreboard(scope) { selectedScope = scope; return { date: "2026-08-29", today: "2026-09-05", boards, data: boards[scope] && (stale ? boards[scope] : { ...boards[scope], fetchedAt: new Date().toISOString() }), error: "", refreshing: false, online: true, now: Date.now(), timezone: "EDT", refresh() {}, setDate() {}, followToday: true, week, weekDate, setWeek() {}, followWeek: weekDate === null, peek: (s, start, end) => ({ board: neighbors[`${s}:${start}:${end}`] ?? null, failed: neighborFailed }), preview() {} }; },
   };
   try { return { html: renderToStaticMarkup(React.createElement(Home)), scope: selectedScope }; }

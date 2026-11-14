@@ -68,7 +68,8 @@ function Notice({ title, children, detail, warning = false, live = false, retry,
     {action}
   </div>;
 }
-function Players({ game, stats }: { game: Game; stats: GameStats }) {
+export type PlayerLinkFactory = (athleteId: string, teamId: string, sourceSeason?: number) => { href: string; open: () => void } | null;
+function Players({ game, stats, playerLink }: { game: Game; stats: GameStats; playerLink?: PlayerLinkFactory }) {
   const players = stats.players;
   if (!("teams" in players)) return <Notice title="Player stats unavailable">{players.unavailable === "too-large" ? "The player box score is too large to show here. Team stats remain available." : "Player stats were not supplied for this game. Team stats remain available."}</Notice>;
   // Negative source IDs are team-attributed entries; the source supplies their name.
@@ -90,7 +91,7 @@ function Players({ game, stats }: { game: Game; stats: GameStats }) {
               <div className="player-table-wrap" role="region" aria-label={`${team.name} ${category} statistics`} tabIndex={0} data-focus-key={`stats-${category}-${i}`}>
                 <table className="player-table"><caption className="sr-only">{team.name} · {meta.title}</caption>
                   <thead><tr><th scope="col">Player</th>{meta.columns.map(([short, long]) => <th scope="col" key={short}><abbr title={long}>{short}</abbr></th>)}</tr></thead>
-                  <tbody>{rows.rows.map((row, r) => <tr key={`${row.athleteId}-${r}`} className={row.athleteId.startsWith("-") ? "team-entry" : undefined}><th scope="row">{row.name ?? <span className="stat-missing">Name unavailable</span>}</th>{labels.map(label => <td key={label}><Value value={row.values[label]} /></td>)}</tr>)}</tbody>
+                  <tbody>{rows.rows.map((row, r) => <tr key={`${row.athleteId}-${r}`} className={row.athleteId.startsWith("-") ? "team-entry" : undefined}><th scope="row">{row.name ? (() => { const link = /^[1-9]\d{0,11}$/.test(row.athleteId) ? playerLink?.(row.athleteId, team.id, stats.sourceSeason) : null; return link ? <a href={link.href} data-focus-key={`player-${row.athleteId}-${team.id}`} onClick={e => { if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) { e.preventDefault(); link.open(); } }}>{row.name}</a> : row.name; })() : <span className="stat-missing">Name unavailable</span>}</th>{labels.map(label => <td key={label}><Value value={row.values[label]} /></td>)}</tr>)}</tbody>
                 </table>
               </div>
               {rows.unaligned ? <p className="stats-footnote">These {category} values could not be matched to their columns, so they are shown as unavailable (—).</p>
@@ -104,14 +105,14 @@ function Players({ game, stats }: { game: Game; stats: GameStats }) {
 }
 
 /** Hook wrapper: mounted only on the game screen of an eligible game, so the board does no stats work. */
-export function GameStatsScreen({ game, section, onSection, jump, onJump }: { game: Game; section: Section; onSection: (section: Section, focusHeading?: boolean) => void; jump?: PlayerCategory; onJump?: (category: PlayerCategory) => void }) {
+export function GameStatsScreen({ game, section, onSection, jump, onJump, playerLink }: { game: Game; section: Section; onSection: (section: Section, focusHeading?: boolean) => void; jump?: PlayerCategory; onJump?: (category: PlayerCategory) => void; playerLink?: PlayerLinkFactory }) {
   const { state, now, online, retry } = useGameStats(game, true);
-  return <GameStatsView game={game} state={state} now={now} online={online} retry={retry} section={section} onSection={onSection} jump={jump} onJump={onJump} />;
+  return <GameStatsView game={game} state={state} now={now} online={online} retry={retry} section={section} onSection={onSection} jump={jump} onJump={onJump} playerLink={playerLink} />;
 }
 
-type ViewProps = { game: Game; state: StatsState | null; now: number; online: boolean; retry: () => void; section: Section; onSection?: (section: Section, focusHeading?: boolean) => void; jump?: PlayerCategory; onJump?: (category: PlayerCategory) => void };
+type ViewProps = { game: Game; state: StatsState | null; now: number; online: boolean; retry: () => void; section: Section; onSection?: (section: Section, focusHeading?: boolean) => void; jump?: PlayerCategory; onJump?: (category: PlayerCategory) => void; playerLink?: PlayerLinkFactory };
 /** Pure rendering of one game's stats state: section navigation, Team stats, Scoring and Player stats. */
-export function GameStatsView({ game, state, now, online, retry, section, onSection = () => {}, jump = "passing", onJump = () => {} }: ViewProps) {
+export function GameStatsView({ game, state, now, online, retry, section, onSection = () => {}, jump = "passing", onJump = () => {}, playerLink }: ViewProps) {
   const expected = expectedPhase(game), [away, home] = game.teams, matchup = `${away.name} vs ${home.name}`;
   // Exceptional states are status-first and make no stats request.
   if (expected === null) {
@@ -194,7 +195,7 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
           {head("players-h", "Player stats")}
           {expected === "pregame"
             ? <div className="stats-empty"><h3>Player stats start after kickoff</h3><p>Before kickoff, Team stats shows each team’s season averages.</p></div>
-            : <>{status}{hasBody && <Players game={game} stats={snapshot!} />}</>}
+            : <>{status}{hasBody && <Players game={game} stats={snapshot!} playerLink={playerLink} />}</>}
         </>}
       </section>
     </div>

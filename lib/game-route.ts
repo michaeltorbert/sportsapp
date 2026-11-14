@@ -1,3 +1,4 @@
+import { parsePlayerRequest, type PlayerRequest } from "./player-season";
 import { gameId, viewSearch, weekParam, weekSearch } from "./app-update";
 import { validDate } from "./football";
 import { normalizeSelection, type Period, type Selection } from "./scoreboard-views";
@@ -11,7 +12,8 @@ import { normalizeSelection, type Period, type Selection } from "./scoreboard-vi
 export type Section = "team" | "scoring" | "players";
 const SECTIONS: readonly Section[] = ["team", "scoring", "players"];
 export function isSection(value: unknown): value is Section { return typeof value === "string" && (SECTIONS as readonly string[]).includes(value); }
-export type GameRoute = { id: string; section: Section; team?: string };
+export type GameRoute = { id: string; section: Section; team?: string; player?: PlayerRequest };
+export type PlayerRoute = PlayerRequest;
 export type TeamRoute = { team: string };
 export function teamParam(value: unknown): string { return typeof value === "string" && /^\d{1,6}$/.test(value) ? value : ""; }
 // `weekDate` is the chosen Week (#172); absent or null is the current week, as in pre-1.20 records.
@@ -19,10 +21,11 @@ export type BoardView = { date: string | null; selection: Selection; period: Per
 export type BoardSnapshot = BoardView & { scrollY: number; origin: string };
 export type BoardEntry = { v: 1; kind: "board"; key: string; snapshot?: BoardSnapshot; consumed?: string };
 // `from`: an entry of ours (the scoreboard, or the team page for a game with `team`) sits directly behind this one.
-export type GameEntry = { v: 1; kind: "game"; key: string; id: string; section: Section; from: boolean; team?: string };
+export type GameEntry = { v: 1; kind: "game"; key: string; id: string; section: Section; from: boolean; team?: string; player?: PlayerRequest };
 // `from`: the game screen `origin` sits directly behind this team page.
-export type TeamEntry = { v: 1; kind: "team"; key: string; team: string; from: boolean; origin?: string };
-export type RouteEntry = BoardEntry | GameEntry | TeamEntry;
+export type TeamEntry = { v: 1; kind: "team"; key: string; team: string; from: boolean; origin?: string; playerOrigin?: true };
+export type PlayerEntry = { v: 1; kind: "player"; key: string; player: PlayerRequest; from: boolean };
+export type RouteEntry = BoardEntry | GameEntry | TeamEntry | PlayerEntry;
 export type UrlView = { date: string; followToday: boolean; selection: Selection; period: Period; weekDate?: string | null };
 
 const TRANSIENT = ["_ss_update", "_ss_hide_finals", "_ss_all_fbs", "_ss_focus", "_ss_open"];
@@ -30,15 +33,46 @@ const MAX_SCROLL = 10_000_000;
 
 // A repeated parameter is ambiguous, so it identifies nothing.
 const single = (params: URLSearchParams, key: string) => { const values = params.getAll(key); return values.length === 1 ? values[0] : null; };
+export const PLAYER_ROUTE_KEYS = ["player", "playerTeam", "anchorSeason", "season", "fromPlayer", "playerSeason", "stintTeam", "witnessTeam", "witnessEvent"];
+function playerContext(params: URLSearchParams, game = false): PlayerRequest | null {
+  const mapping: Record<string, string> = { id: game ? "fromPlayer" : "player", team: "playerTeam", anchorYear: "anchorSeason", year: game ? "playerSeason" : "season", stintTeam: "stintTeam", witnessTeam: "witnessTeam", witnessEvent: "witnessEvent" };
+  const api = new URLSearchParams();
+  for (const [key, source] of Object.entries(mapping)) {
+    const values = params.getAll(source); if (values.length > 1) return null;
+    if (values.length) api.set(key, values[0]);
+  }
+  return parsePlayerRequest(api);
+}
+export function parsePlayerRoute(search: string | null): PlayerRequest | null {
+  const p = new URLSearchParams(search || "");
+  if (p.has("event") || p.has("team") || p.has("fromPlayer") || p.has("playerSeason") || p.has("section")) return null;
+  return playerContext(p);
+}
+function setPlayerContext(url: URL, r: PlayerRequest, game = false) {
+  url.searchParams.set(game ? "fromPlayer" : "player", r.id);
+  url.searchParams.set("playerTeam", r.team); url.searchParams.set("anchorSeason", String(r.anchorYear));
+  url.searchParams.set(game ? "playerSeason" : "season", String(r.year));
+  if (r.stintTeam) url.searchParams.set("stintTeam", r.stintTeam);
+  if (r.witnessTeam && r.witnessEvent) { url.searchParams.set("witnessTeam", r.witnessTeam); url.searchParams.set("witnessEvent", r.witnessEvent); }
+}
+export function playerUrl(href: string, request: PlayerRequest, view: UrlView) {
+  const url = new URL(href); for (const k of ["event", "section", "team", ...PLAYER_ROUTE_KEYS, ...TRANSIENT]) url.searchParams.delete(k);
+  applyView(url, view); setPlayerContext(url, request); if (/^#game-/.test(url.hash)) url.hash = ""; return url.href;
+}
+export function playerHref(request: PlayerRequest, view: UrlView) { const u = new URL(playerUrl("https://app.invalid/", request, view)); return u.pathname + u.search; }
 export function parseGameRoute(search: string | null): GameRoute | null {
   const params = new URLSearchParams(search || ""), id = gameId(params.get("event"));
   const section = params.get("section"), team = teamParam(single(params, "team"));
-  return id ? { id, section: section !== "team" && isSection(section) ? section : "team", ...(team ? { team } : {}) } : null;
+  if (params.has("player") || params.has("season")) return null;
+  const hasContext = PLAYER_ROUTE_KEYS.some(k => params.has(k));
+  const player = hasContext ? playerContext(params, true) : null;
+  if (hasContext && (!player || params.has("team") || params.getAll("event").length !== 1 || (params.getAll("section").length > 1 || (params.has("section") && !isSection(section))))) return null;
+  return id ? { ...(player ? { player } : {}), id, section: section !== "team" && isSection(section) ? section : "team", ...(team ? { team } : {}) } : null;
 }
 /** A team page: `team` with no event. An event always makes the URL a game route. */
 export function parseTeamRoute(search: string | null): TeamRoute | null {
   const params = new URLSearchParams(search || "");
-  if (params.has("event")) return null;
+  if (params.has("event") || PLAYER_ROUTE_KEYS.some(k => params.has(k))) return null;
   const team = teamParam(single(params, "team"));
   return team ? { team } : null;
 }
@@ -51,18 +85,19 @@ function applyView(url: URL, view: UrlView) {
 /** The game destination. Unrelated parameters survive; a legacy `#game-` hash and update keys do not. */
 export function gameUrl(href: string, route: GameRoute, view: UrlView): string {
   const url = new URL(href);
-  for (const key of ["event", "section", "team", ...TRANSIENT]) url.searchParams.delete(key);
+  for (const key of ["event", "section", "team", ...PLAYER_ROUTE_KEYS, ...TRANSIENT]) url.searchParams.delete(key);
   applyView(url, view);
   const params = new URLSearchParams({ event: route.id, ...(route.section !== "team" ? { section: route.section } : {}), ...(route.team ? { team: route.team } : {}) });
   for (const [key, value] of url.searchParams) params.append(key, value);
   url.search = params.toString();
+  if (route.player) setPlayerContext(url, route.player, true);
   if (/^#game-/.test(url.hash)) url.hash = "";
   return url.href;
 }
 /** The team page destination, keeping the scoreboard view for its own Back fallback. */
 export function teamUrl(href: string, team: string, view: UrlView): string {
   const url = new URL(href);
-  for (const key of ["event", "section", "team", ...TRANSIENT]) url.searchParams.delete(key);
+  for (const key of ["event", "section", "team", ...PLAYER_ROUTE_KEYS, ...TRANSIENT]) url.searchParams.delete(key);
   applyView(url, view);
   const params = new URLSearchParams({ team });
   for (const [key, value] of url.searchParams) params.append(key, value);
@@ -87,7 +122,7 @@ export function sectionUrl(href: string, section: Section): string {
 /** The scoreboard fallback for a game entry with no scoreboard entry of ours behind it. */
 export function boardUrl(href: string, view: UrlView): string {
   const url = new URL(href);
-  for (const key of ["event", "section", "team", ...TRANSIENT]) url.searchParams.delete(key);
+  for (const key of ["event", "section", "team", ...PLAYER_ROUTE_KEYS, ...TRANSIENT]) url.searchParams.delete(key);
   applyView(url, view);
   return url.href;
 }
@@ -135,16 +170,23 @@ export function readEntry(state: unknown): RouteEntry | null {
     if (snapshot === null || consumed === "") return null;
     return { v: 1, kind: "board", key: e.key, ...(snapshot ? { snapshot } : {}), ...(consumed ? { consumed } : {}) };
   }
+  if (e.kind === "player") {
+    const raw = record(e.player); if (!raw || typeof e.from !== "boolean" || typeof raw.id !== "string" || typeof raw.team !== "string" || typeof raw.year !== "number" || typeof raw.anchorYear !== "number" || (raw.stintTeam !== undefined && typeof raw.stintTeam !== "string") || ((raw.witnessTeam !== undefined || raw.witnessEvent !== undefined) && (typeof raw.witnessTeam !== "string" || typeof raw.witnessEvent !== "string"))) return null;
+    const p = playerContext(new URLSearchParams({ player: String(raw.id), playerTeam: String(raw.team), anchorSeason: String(raw.anchorYear), season: String(raw.year), ...(typeof raw.stintTeam === "string" ? { stintTeam: raw.stintTeam } : {}), ...(typeof raw.witnessTeam === "string" && typeof raw.witnessEvent === "string" ? { witnessTeam: raw.witnessTeam, witnessEvent: raw.witnessEvent } : {}) }));
+    return p ? { v: 1, kind: "player", key: e.key, player: p, from: e.from } : null;
+  }
   if (e.kind === "game") {
     const id = gameId(typeof e.id === "string" ? e.id : null);
     const team = e.team === undefined ? undefined : teamParam(e.team);
     if (!id || !isSection(e.section) || typeof e.from !== "boolean" || team === "") return null;
-    return { v: 1, kind: "game", key: e.key, id, section: e.section, from: e.from, ...(team ? { team } : {}) };
+    const p = e.player === undefined ? undefined : readEntry({ ss: { v: 1, kind: "player", key: e.key, player: e.player, from: false } });
+    if (e.player !== undefined && (!p || p.kind !== "player" || team)) return null;
+    return { v: 1, kind: "game", key: e.key, id, section: e.section, from: e.from, ...(team ? { team } : {}), ...(p?.kind === "player" ? { player: p.player } : {}) };
   }
   if (e.kind === "team") {
     const team = teamParam(e.team), origin = e.origin === undefined ? undefined : gameId(typeof e.origin === "string" ? e.origin : null);
-    if (!team || typeof e.from !== "boolean" || origin === "") return null;
-    return { v: 1, kind: "team", key: e.key, team, from: e.from, ...(origin ? { origin } : {}) };
+    if (!team || typeof e.from !== "boolean" || origin === "" || (e.playerOrigin !== undefined && e.playerOrigin !== true)) return null;
+    return { v: 1, kind: "team", key: e.key, team, from: e.from, ...(origin ? { origin } : {}), ...(e.playerOrigin === true ? { playerOrigin: true } : {}) };
   }
   return null;
 }

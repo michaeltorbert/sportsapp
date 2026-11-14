@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.24.0 · 2026-11-14
+
+- Open player pages from team season leaders and individual game box rows, with regular-season totals, the full team-game log, explicit earlier seasons and historical team choices. Missing player rows remain distinct from missing game statistics; no DNP or zero is inferred.
+- Keep historical game navigation inside the app, preserving entry anchor, selected year, Back/Forward/reload context and Duke spoiler settings.
+- Use admitted shared team/year source caches and exact identity metadata, with 24/day and 400/rolling31-day best-effort player-path pacing. Other provider consumers share the same free account; these are not atomic account-wide caps or billing cutoffs. Existing team/leader/ranking paths and alerts are preserved.
+
 ## 1.23.0 · 2026-10-23
 
 - Add a separate team-season FBS statistical rankings section after existing averages: total, net passing and rushing yards per game, offense and defense allowed, with actual values and ranks among 138 teams. Saturday Signal computes competition ranks from CFBD season totals divided by reported games; these are not poll rankings.

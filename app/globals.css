@@ -766,3 +766,45 @@ body:has(.game-screen)::before { background: #0d1626; }
 /* Separate CFBD statistical ranks; existing averages retain their ESPN basis. */
 .team-screen .rank-basis{margin:6px 0 12px;color:var(--muted);font-size:.8125rem}.team-screen .rank-list{margin:0}.team-screen .rank-row{padding:14px 0;border-top:1px solid var(--line)}.team-screen .rank-row dt{font-size:.9375rem;font-weight:650;margin-bottom:8px}.team-screen .rank-row dd{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:0}.team-screen .rank-cell span,.team-screen .rank-cell b,.team-screen .rank-cell small{display:block}.team-screen .rank-cell span{font-size:.8125rem;color:var(--muted);margin-bottom:3px}.team-screen .rank-cell b{font-size:1.25rem;font-weight:750;line-height:1.2}.team-screen .rank-cell small{margin-top:3px;font-size:.8125rem;color:var(--muted)}.team-screen .rank-explainer{margin-top:10px;color:var(--muted);font-size:.8125rem}.team-screen .rank-explainer summary{min-height:44px;display:flex;align-items:center;cursor:pointer;color:var(--text);font-weight:650}.team-screen .rank-explainer summary::before{content:'＋';margin-right:8px}.team-screen .rank-explainer[open] summary::before{content:'−'}.team-screen .rank-explainer p+p{margin-top:8px}.team-screen .rank-note{margin:10px 0;color:var(--muted);font-size:.8125rem}.team-screen .rank-state{padding:14px 0;color:var(--muted);font-size:.875rem}.team-screen .rank-state strong{display:block;color:var(--text);margin-bottom:4px}
 @container team (max-width: 16rem) { .team-screen .rank-row dd { grid-template-columns: minmax(0, 1fr); } }
+
+/* Player pages reuse the approved game/team palette and continuous document. */
+.player-screen { container: player / inline-size; padding-bottom: 36px; }
+.player-screen .player-head { padding: 24px 0 16px; }
+.player-screen .player-title { font-size: 1.65rem; line-height: 1.15; letter-spacing: -.025em; font-weight: 750; overflow-wrap: anywhere; }
+.player-screen .player-title:focus { outline: none; }
+.player-screen .player-meta { margin: 6px 0 0; color: var(--muted); font-size: .9375rem; }
+.player-screen .player-team-link { display: inline-flex; align-items: center; min-height: 44px; gap: 3px; color: var(--lime); font-size: .875rem; }
+.player-screen .player-season-choice { padding-bottom: 20px; }
+.player-screen .player-season-choice label { display: block; font-size: .875rem; font-weight: 650; margin: 0 0 7px; }
+.player-screen .player-season-choice select { display: block; width: 100%; min-height: 44px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--bg-raised); color: var(--text); font: inherit; padding: 9px 12px; }
+.player-screen .player-season-choice p { margin: 8px 0 0; color: var(--muted); font-size: .875rem; }
+.player-screen .player-season-choice p + label { margin-top: 14px; }
+.player-screen .player-block { border-top: 1px solid var(--line); padding: 19px 0 22px; }
+.player-screen h2 { font-size: 1.25rem; font-weight: 750; letter-spacing: -.01em; margin: 0; }
+.player-screen .player-category { margin-top: 15px; }
+.player-screen .player-category h3 { color: var(--text); font-size: .9375rem; font-weight: 700; margin: 0 0 6px; }
+.player-screen dl, .player-screen dd { margin: 0; }
+.player-screen .player-metrics > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 12px; padding: 5px 0; }
+.player-screen .player-metrics dt { color: var(--muted); font-size: .9375rem; }
+.player-screen .player-metrics dd { font-size: 1.0625rem; font-weight: 650; text-align: right; }
+.player-screen .player-game-metrics { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.player-screen .player-game-metrics > div { display: flex; flex-wrap: wrap; gap: 5px; font-size: .875rem; line-height: 1.6; }
+.player-screen .player-game-metrics dt { color: var(--muted); }
+.player-screen .player-game-metrics dd { font-weight: 650; }
+.player-screen .player-extra summary { min-height: 36px; display: flex; align-items: center; color: var(--muted); font-size: .8125rem; cursor: pointer; margin-top: 6px; }
+.player-screen .player-coverage, .player-screen .player-fresh { color: var(--muted); font-size: .8125rem; line-height: 1.5; margin-top: 8px; }
+.player-screen .player-notice { border-left: 2px solid var(--amber); padding: 4px 0 4px 12px; margin: 16px 0; font-size: .9375rem; }
+.player-screen .player-notice p { color: var(--muted); margin: 5px 0 0; }
+.player-screen .player-notice button { display: block; min-height: 44px; margin-top: 8px; }
+.player-screen .player-filters { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 16px; }
+.player-screen .player-filters button { min-height: 44px; padding: 7px 10px; border-bottom: 2px solid transparent; color: var(--muted); font-size: .875rem; }
+.player-screen .player-filters button[aria-pressed="true"] { color: var(--lime); border-bottom-color: var(--lime); font-weight: 700; }
+.player-screen .player-log { list-style: none; margin: 12px 0 0; padding: 0; }
+.player-screen .player-log > li { border-top: 1px solid var(--line); padding: 18px 0; }
+.player-screen .player-date, .player-screen .player-result { font-size: .8125rem; color: var(--muted); margin: 0; }
+.player-screen .player-game-link { display: flex; min-height: 44px; justify-content: space-between; align-items: center; gap: 12px; font-weight: 650; }
+.player-screen .player-game-link svg { color: var(--muted); flex: none; }
+.player-screen .player-game-link small { color: var(--muted); font-size: .8125rem; font-weight: 450; margin-right: 6px; }
+.player-screen .player-empty { color: var(--muted); font-size: .9375rem; margin: 7px 0 0; }
+.team-screen .team-leader-name a, .game-screen .player-table th a { color: var(--lime); display: inline-flex; align-items: center; min-height: 44px; }
+@container player (max-width: 15rem) { .player-screen .player-metrics > div { grid-template-columns: minmax(0, 1fr); gap: 2px; } .player-screen .player-metrics dd { text-align: left; } }

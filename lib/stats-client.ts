@@ -43,7 +43,7 @@ export async function loadGameStats(request: StatsRequest, deadline: number, sig
   let remaining = deadline - now();
   if (remaining < MIN_ATTEMPT_MS) return { kind: "failed", reason: "expired" };
   // `scoring=1` asks for the additive scoring summary; a Worker from before it ignores the parameter.
-  const query = new URLSearchParams({ event: request.eventId, phase: request.phase, refresh: request.refresh ? "1" : "0", scoring: "1" });
+  const query = new URLSearchParams({ event: request.eventId, phase: request.phase, refresh: request.refresh ? "1" : "0", scoring: "1", playerContext: "1" });
   let fallbackEligible: StatsOutcome;
   try {
     const result = await bounded(signal, Math.min(STATS_WORKER_BUDGET_MS, remaining), async inner => {
