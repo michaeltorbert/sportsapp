@@ -81,7 +81,11 @@ test("scope error suppresses while unrelated overnight errors leave a healthy ti
     if (url.searchParams.get("dates") === "20260904") return route.fulfill({ status: 503, body: "failed overnight" });
     return route.fallback();
   });
-  await harness.open({ now }); await expect(status(page)).toHaveText("Halftime 12:55");
+  // Load with running timers before the exact observation time, then pause at
+  // the original now: 1200s - 425s = 775s, exactly 12:55 despite startup latency.
+  await harness.open({ now: new Date(Date.parse(now) - 10_000).toISOString() });
+  await page.clock.pauseAt(new Date(now));
+  await expect(status(page)).toHaveText("Halftime 12:55");
   await expect(page.locator(".feed-banner")).toBeVisible();
   harness.state.failScores = true;
   await page.getByRole("button", { name: "Refresh scores", exact: true }).click();
