@@ -393,9 +393,10 @@ export default function Home() {
     const controller = routeHistory.current;
     if (!controller || (!route && !playerPage)) return;
     const entry = controller.current();
-    rememberFocus();
+    // Preserve the existing game→team Back target (the game heading). Only
+    // the new player→current-team flow restores its own originating link.
     if (entry?.kind === "player") { playerScroll.set(entry.key, Math.round(window.scrollY)); routeFocus.set(entry.key, "player-current-team"); }
-    if (entry?.kind === "game") gameScroll.set(entry.key, Math.round(window.scrollY));
+    if (entry?.kind === "game") { gameScroll.set(entry.key, Math.round(window.scrollY)); routeFocus.delete(entry.key); }
     else if (route) controller.replace({ v: 1, kind: "game", key: newKey(), ...route, from: false }, location.href);
     controller.push({ v: 1, kind: "team", key: newKey(), team, from: true, ...(route ? { origin: route.id } : {}), ...(playerPage ? { playerOrigin: true } : {}) }, teamUrl(location.href, team, urlView), 0);
     show(null, team, route?.id ?? null, null, !!playerPage);

@@ -1,12 +1,14 @@
+import { readAvailableSeasonLeaders } from "@/lib/player-pack-leaders";
 import { readTeamRankings } from "@/lib/cfbd-team-rankings";
 import { validTeamId } from "@/lib/team-season";
-import { readSeasonLeaders, type LeadersEnv } from "@/lib/cfbd-season-leaders";
+import { type LeadersEnv } from "@/lib/cfbd-season-leaders";
 import { createTeamSeasonService } from "@/lib/team-season-server";
 export const dynamic = "force-dynamic";
 // Load runtime bindings only while handling a request: Node prerender imports route modules too.
 const service = createTeamSeasonService(fetch, Date.now, async (id, year, name, shortName) => {
   const { env } = await import("cloudflare:workers");
-  return readSeasonLeaders((env as LeadersEnv).SEASON_LEADERS_KV, id, year, name, shortName);
+  const kv = (env as LeadersEnv).SEASON_LEADERS_KV;
+  return readAvailableSeasonLeaders(kv, id, year, name, shortName);
 }, async (id, year, name, shortName) => {
   const { env } = await import("cloudflare:workers");
   return readTeamRankings((env as LeadersEnv).SEASON_LEADERS_KV, id, year, name, shortName);

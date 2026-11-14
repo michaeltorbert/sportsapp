@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Game } from "./football";
 import { dukeHidden, isDuke, type DukePreferences } from "./duke-visibility";
 export const PLAYER_YEAR = 2026;
+export const PLAYER_UNKNOWN_GAME_STATUS = "Game state unavailable";
 export const PLAYER_CATEGORIES = ["passing", "rushing", "receiving"] as const;
 export type PlayerCategory = typeof PLAYER_CATEGORIES[number];
 export const PLAYER_FIELDS = {
@@ -56,7 +57,11 @@ export function playerGameHidden(game: Game, prefs: DukePreferences | null) {
   if (!isDuke(game)) return false;
   if (!prefs) return true;
   if (Object.hasOwn(prefs.manual, game.id)) return dukeHidden(game, prefs);
-  return game.state === "other" || dukeHidden(game, prefs);
+  // Unknown CFBD state is not proof of pregame. Evaluate the possibly-underway
+  // case through the existing timeline/waiting/venue rules, without changing the
+  // source game or hiding safe home/neutral/Always-show/manual-show cases.
+  // An authoritative board call-off remains its real other state under ORD020.
+  return dukeHidden(game.state === "other" && game.status === PLAYER_UNKNOWN_GAME_STATUS ? { ...game, state: "live", started: true } : game, prefs);
 }
 export function playerAggregates(season: PlayerSeason, prefs: DukePreferences | null) {
   if (!prefs) return { shown: false, reason: "checking" as const };

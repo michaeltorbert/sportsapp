@@ -1,11 +1,12 @@
+import { projectPackLeaders, type PackLeaderProjection } from "./player-pack-leaders";
 import type { Game, Team } from "./football";
-import { PLAYER_CATEGORIES, PLAYER_FIELDS, PLAYER_YEAR, playerId, playerTeamId, playerYear, type PlayerCategory, type PlayerRequest, type PlayerSeason, type PlayerStats } from "./player-season";
+import { PLAYER_CATEGORIES, PLAYER_FIELDS, PLAYER_YEAR, PLAYER_UNKNOWN_GAME_STATUS, playerId, playerTeamId, playerYear, type PlayerCategory, type PlayerRequest, type PlayerSeason, type PlayerStats } from "./player-season";
 import { SNAPSHOT_KEY, type LeadersEnv, type LeadersKV } from "./cfbd-season-leaders";
 import { blockCfbd, cfbdBlocked, sourceJson, SourceFailure } from "./cfbd-source-state";
 
 export type CanonicalTeam = { id: string; name: string };
 type Person = { name: string; position: string | null; stats: PlayerStats };
-export type PlayerPack = { v: 1; team: CanonicalTeam; year: number; checkedAt: string; scheduleComplete: boolean; people: Record<string, Person>;
+export type PlayerPack = { v: 1; basis: "regular"; leaderProjection?: PackLeaderProjection | null; team: CanonicalTeam; year: number; checkedAt: string; scheduleComplete: boolean; people: Record<string, Person>;
   games: { game: Game; players: Record<string, PlayerStats>; boxSupplied: boolean }[];
   witnesses: Record<string, { team: CanonicalTeam; classification: string | null; people: Record<string, string>; gameIds: string[]; gamePeople: Record<string, Record<string, string>> }> };
 export type PlayerIdentity = { id: string; name: string; position: string | null; checkedAt: string; currentTeam: string;
@@ -38,14 +39,14 @@ function teamGame(r: Record<string, unknown>): Game {
   const final = r.completed === true;
   return { id: id(r.id), date: r.startDate, timeValid: r.startTimeTBD === false,
     ...(typeof r.neutralSite === "boolean" ? { neutralSite: r.neutralSite } : {}), state: final ? "final" : "other",
-    status: final ? "Final" : "Game state unavailable", period: 0, clock: 0, clockKnown: false, started: final,
+    status: final ? "Final" : PLAYER_UNKNOWN_GAME_STATUS, period: 0, clock: 0, clockKnown: false, started: final,
     teams: [make("away"), make("home")], broadcast: "", possession: null, downDistance: "", redZone: false, url: "" };
 }
 /** Fixed source basis; full selected-team schedule, including non-FBS opponents. No sums/DNP guesses. */
 export function createPlayerPack(team: CanonicalTeam, year: number, stats: unknown, schedule: unknown, boxes: unknown, checkedAt: string): PlayerPack {
   requireValue(playerTeamId(team.id) && text(team.name) && playerYear(year) && Number.isFinite(Date.parse(checkedAt)));
   const statRows = array(stats, 50_000);
-  const out: PlayerPack = { v: 1, team, year, checkedAt, scheduleComplete: false, people: {}, games: [], witnesses: {} };
+  const out: PlayerPack = { v: 1, basis: "regular", leaderProjection: projectPackLeaders(team, year, statRows, checkedAt), team, year, checkedAt, scheduleComplete: false, people: {}, games: [], witnesses: {} };
   for (const raw of statRows) {
     const r = obj(raw); requireValue(r.team === team.name && r.season === year);
     if (!category(r.category) || !field(r.category, String(r.statType))) continue;

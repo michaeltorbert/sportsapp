@@ -89,7 +89,7 @@ test('existing Duke rules gate whole aggregates/direct game/logs; no subtraction
  const {defaultDukePreferences}=await bundle('lib/duke-visibility.ts');const p=pack('153:2026'),s=S.playerFromPack(p,'4592532',identity('4592532',p.team,2026),false,[]);const prefs=defaultDukePreferences();
  assert.equal(M.playerAggregates(s,prefs).shown,true,'automatic away-only final remains visible');assert.equal(M.playerAggregates(s,null).shown,false);
  const game=s.logs.find(l=>l.game.id==='401858266').game;prefs.manual[game.id]=true;assert.equal(M.playerGameHidden(game,prefs),true);assert.equal(M.playerGame(s,game.id,prefs),null);assert.equal(M.playerAggregates(s,prefs).shown,false);
- prefs.manual[game.id]=false;assert.equal(M.playerGameHidden({...game,state:'other',started:false},prefs),false,'explicit manual show is preserved');delete prefs.manual[game.id];assert.equal(M.playerGameHidden({...game,state:'other',started:false},prefs),true);
+ prefs.manual[game.id]=false;assert.equal(M.playerGameHidden({...game,state:'other',started:false},prefs),false,'explicit manual show is preserved');delete prefs.manual[game.id];assert.equal(M.playerGameHidden({...game,state:'other',started:false},prefs),false,'known Duke home remains visible under away default');
 });
 
 test('C190-R1: real UNC totals with empty schedule are incomplete and never bypass a hidden Duke contribution',async()=>{
@@ -118,4 +118,29 @@ test('a genuinely empty selected historical season retains identity/year/team wi
  const r=await t.service.get(req('4592532',2025,'153'));
  assert.equal(r.status,200);assert.equal(r.season.name,'Billy Edwards');assert.equal(r.season.year,2025);assert.equal(r.season.team.name,'Wisconsin');
  assert.equal(r.season.totalsAvailable,false);assert.deepEqual(r.season.totals,{});assert.deepEqual(r.season.logs,[]);assert.equal(r.season.scheduleComplete,true);
+});
+
+
+test('C190-R3: unknown source state preserves Duke home/show/manual/timeline rules while protecting eligible away uncertainty',async()=>{
+ const {defaultDukePreferences,dukeHidden}=await bundle('lib/duke-visibility.ts');
+ const raw=pack('153:2026'),season=S.playerFromPack(raw,'4592532',identity('4592532',raw.team,2026),false,[]);
+ const home=season.logs.find(l=>l.game.id==='401858266').game;
+ const unknown={...home,state:'other',status:'Game state unavailable',started:false};
+ const prefs=defaultDukePreferences();
+ assert.equal(home.teams[1].id,'150');assert.equal(dukeHidden(unknown,prefs),false);assert.equal(M.playerGameHidden(unknown,prefs),false);
+ const withUnknown={...season,logs:season.logs.map(l=>l.game.id===home.id?{...l,game:unknown}:l)};
+ assert.equal(M.playerAggregates(withUnknown,prefs).shown,true,'safe known-home contribution does not suppress totals');
+ const show={...prefs,rules:[{from:0,mode:'show'}]};assert.equal(M.playerGameHidden(unknown,show),false);assert.equal(M.playerAggregates(withUnknown,show).shown,true);
+ const away={...unknown,teams:[home.teams[1],home.teams[0]],neutralSite:false};
+ assert.equal(M.playerGameHidden(away,prefs),true,'possibly underway known away remains protected');
+ assert.equal(M.playerGameHidden(away,show),false);assert.equal(M.playerGameHidden({...away,neutralSite:true},prefs),false);
+ const hidden={...prefs,manual:{[home.id]:true}};assert.equal(M.playerGameHidden(unknown,hidden),true);
+ const manualShow={...prefs,manual:{[home.id]:false}};assert.equal(M.playerGameHidden(away,manualShow),false);
+ const timeline={...prefs,rules:[{from:0,mode:'hide'},{from:Date.parse(home.date)+1000,mode:'show'}],waiting:{}};
+ assert.equal(M.playerGameHidden(away,timeline),dukeHidden({...away,state:'live',started:true},timeline),'existing kickoff timeline remains authoritative');
+ timeline.waiting[home.id]=2;assert.equal(M.playerGameHidden(away,timeline),false,'existing observed-waiting rule preserves later show choice');
+ const source={...season,logs:season.logs.map(l=>l.game.id===home.id?{...l,game:away}:l)};
+ assert.equal(M.playerGame(source,home.id,prefs),null);assert.equal(M.playerGame(source,home.id,prefs,{...away,state:'final',started:true})?.state,'final','matching authoritative board final can safely refine uncertainty');
+ for(const status of ['Cancelled','Postponed','No contest','Forfeit']){const calledOff={...away,status};assert.equal(M.playerGameHidden(calledOff,prefs),dukeHidden(calledOff,prefs),'authoritative called-off state retains ORD020 visibility');assert.equal(M.playerGameHidden(calledOff,prefs),false);assert.equal(M.playerGame(source,home.id,prefs,calledOff)?.status,status,'matching board call-off replaces unknown state');}
+ assert.equal(unknown.state,'other');assert.equal(unknown.started,false,'conservative evaluation never mutates source state or invents actual live evidence');
 });
