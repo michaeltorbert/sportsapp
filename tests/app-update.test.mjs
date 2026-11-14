@@ -388,3 +388,12 @@ test("explicit refresh still announces when verification finds the loaded commit
   assert.equal(states.at(-1).refreshing, false);
   assert.deepEqual(navigations, []);
 });
+
+test('updates preserve exact canonical player and historical-game anchors/stints/witnesses without a new open intent',()=>{
+ const context='player=5164309&playerTeam=2193&anchorSeason=2026&season=2025&stintTeam=Louisville&witnessTeam=153&witnessEvent=401858218';
+ const view={date:'2026-11-13',followToday:true,selection:[],period:'day',hideFinals:false,allFbs:false,focusedGame:'',openGame:''};
+ for(const query of [context,context.replace('player=5164309','event=401628331&fromPlayer=5164309').replace('season=2025','playerSeason=2025')]){
+  const url=new URL(refreshUrl('https://app.test/?'+query,A,view));for(const[k,v]of new URLSearchParams(query))assert.equal(url.searchParams.get(k),v);
+  assert.equal(url.searchParams.get('_ss_open'),'0');
+ }
+});

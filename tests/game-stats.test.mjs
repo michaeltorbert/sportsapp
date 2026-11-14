@@ -275,3 +275,11 @@ test("gates: live stats enabled on genuine-capture + actual probe evidence; dire
   assert.equal(DIRECT_STATS_FALLBACK, false);
   assert.equal(expectedPhase(game({ state: "live" })), "started");
 });
+
+test('player context: only authoritative header season year, January does not choose a year and old bodies remain valid',()=>{
+ const raw=fixture('final');raw.header.competitions[0].date='2027-01-04T01:00:00Z';raw.header.season={year:2026};
+ const s=normalize(raw);assert.equal(s.sourceSeason,2026);assert.equal(parseGameStats(s).sourceSeason,2026);
+ for(const year of [undefined,null,'2026',NaN,2026.5,1999,2101]){raw.header.season={year};assert.equal('sourceSeason' in normalize(raw),false);}
+ delete raw.header.season;assert.ok(parseGameStats(normalize(raw)));assert.equal('sourceSeason' in normalize(raw),false);
+ const old=stats.gameStatsForClient(s,true,false);assert.equal('sourceSeason' in old,false);assert.equal(stats.gameStatsForClient(s,true,true).sourceSeason,2026);
+});

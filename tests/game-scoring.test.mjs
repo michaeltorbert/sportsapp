@@ -8,7 +8,7 @@ import { bundle } from "./helpers.mjs";
 let upstream = async () => { throw new Error("unexpected upstream request"); };
 globalThis.fetch = (...args) => upstream(...args);
 const route = await bundle("app/api/stats/route.ts");
-const { normalizeGameStats, parseGameStats, snapshotBytes, withoutScoring, STATS_MAX_BYTES } = await bundle("lib/game-stats.ts");
+const { normalizeGameStats, parseGameStats, snapshotBytes, withoutScoring, gameStatsForClient, STATS_MAX_BYTES } = await bundle("lib/game-stats.ts");
 const { scoringDisplay, SCORING_MAX_PLAYS } = await bundle("lib/game-scoring.ts");
 const { loadGameStats } = await bundle("lib/stats-client.ts");
 
@@ -43,7 +43,7 @@ test("genuine live (COMPOSED): supplied quarters only, real zeros, source-order 
   assert.deepEqual(s.scoring.plays.items[1], { team: 1, period: 2, clock: "14:11", type: "Blocked Punt Touchdown", text: "Punt blocked by D. Okoye, recovered by D. Fields for a TD (T. Sandell KICK)", away: 7, home: 7 });
   assert.equal(s.scoring.plays.omitted, undefined); assert.equal(s.scoring.plays.inconsistent, undefined);
   // The released Team and Players sections are exactly what the boxscore alone produces.
-  assert.deepEqual(withoutScoring(s), normalize(fixture("live")));
+  assert.deepEqual(gameStatsForClient(s, false, false), normalize(fixture("live")));
   assert.ok(parseGameStats(JSON.parse(JSON.stringify(s))));
   assert.equal(scoringDisplay(s, "started").mode, "scoring");
   // Season-only Team stats or a different expected phase never relabel scoring.
@@ -218,7 +218,7 @@ test("client: asks for scoring once on the same request; accepts an older Worker
   const full = normalize(composed("live", "live")), urls = [];
   const fetcher = body => async url => { urls.push(String(url)); return json(body); };
   const ok = await loadGameStats(request, Date.now() + 8000, new AbortController().signal, fetcher(full));
-  assert.deepEqual(urls, ["/api/stats?event=401856717&phase=started&refresh=0&scoring=1"]);
+  assert.deepEqual(urls, ["/api/stats?event=401856717&phase=started&refresh=0&scoring=1&playerContext=1"]);
   assert.deepEqual(ok.stats.scoring, JSON.parse(JSON.stringify(full.scoring)));
   const old = await loadGameStats(request, Date.now() + 8000, new AbortController().signal, fetcher(withoutScoring(full)));
   assert.equal(old.kind, "ok"); assert.equal(old.stats.scoring, undefined);

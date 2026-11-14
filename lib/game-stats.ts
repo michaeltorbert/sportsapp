@@ -67,7 +67,7 @@ export type PlayerTeam = { teamId: string; categories: Record<PlayerCategory, Ca
 export type TeamSection = { kind: "game" | "season"; rows: Record<string, Pair> } | Unavailable;
 export type PlayersSection = { teams: [PlayerTeam, PlayerTeam] } | Unavailable;
 export type GameStats = {
-  v: 1; eventId: string; teamIds: [string, string]; sourceDate: string | null; sourcePhase: SourcePhase;
+  v: 1; sourceSeason?: number; eventId: string; teamIds: [string, string]; sourceDate: string | null; sourcePhase: SourcePhase;
   sourceStatus: { state: string; name: string; detail: string | null; period: number | null; displayClock: string | null };
   checkedAt: string; team: TeamSection; players: PlayersSection;
   // Sent only to clients that ask for it (`scoring=1`); absent means unavailable.
@@ -222,7 +222,7 @@ export function normalizeGameStats(raw: unknown, eventId: string, checkedAt: str
   const clock = typeof status.displayClock === "string" && /^\d{1,2}:\d{2}$/.test(status.displayClock) ? status.displayClock : null;
   const box = object(body.boxscore);
   const stats: GameStats = {
-    v: 1, eventId, teamIds: [away, home],
+    v: 1, ...(typeof object(header.season).year === "number" && Number.isInteger(object(header.season).year) && Number(object(header.season).year) >= 2000 && Number(object(header.season).year) <= 2100 ? { sourceSeason: Number(object(header.season).year) } : {}), eventId, teamIds: [away, home],
     sourceDate: typeof date === "string" && Number.isFinite(Date.parse(date)) && date.length <= 40 ? date : null,
     sourcePhase, sourceStatus: { state, name, detail: text(type.shortDetail) || text(type.detail), period, displayClock: clock },
     checkedAt, team: teamSection(box.teams, away, home), players: playersSection(box.players, away, home),
@@ -250,7 +250,7 @@ const playerTeamSchema = z.union([
   unavailable.extend({ teamId: z.string() }).strict(),
 ]);
 const statsSchema = z.object({
-  v: z.literal(1), eventId: z.string().regex(/^\d{6,12}$/), teamIds: z.tuple([z.string().regex(/^\d{1,12}$/), z.string().regex(/^\d{1,12}$/)]),
+  v: z.literal(1), sourceSeason: z.number().int().min(2000).max(2100).optional(), eventId: z.string().regex(/^\d{6,12}$/), teamIds: z.tuple([z.string().regex(/^\d{1,12}$/), z.string().regex(/^\d{1,12}$/)]),
   sourceDate: z.string().max(40).nullable(), sourcePhase: z.enum(["pregame", "started", "final", "other"]),
   sourceStatus: z.object({ state: z.string().max(16), name: z.string().max(64), detail: cell, period: z.number().int().min(0).max(20).nullable(), displayClock: z.string().max(5).nullable() }).strict(),
   checkedAt: z.string().max(40).refine(value => Number.isFinite(Date.parse(value))),
@@ -265,6 +265,12 @@ export function withoutScoring(stats: GameStats): GameStats {
   const base = { ...stats };
   delete base.scoring;
   return base;
+}
+/** Additive player context is opt-in: deployed strict v1.23 parsers reject it. */
+export function gameStatsForClient(stats: GameStats, scoring: boolean, playerContext: boolean): GameStats {
+  const body = scoring ? { ...stats } : { ...withoutScoring(stats) };
+  if (!playerContext) delete body.sourceSeason;
+  return body;
 }
 export function parseGameStats(value: unknown): GameStats | null {
   const parsed = statsSchema.safeParse(value);

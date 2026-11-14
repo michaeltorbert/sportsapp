@@ -324,3 +324,17 @@ test("board → game → team → schedule game: each Back and Forward is an own
   }
   routes.dispose();
 });
+
+test('player routes preserve explicit inactive anchor, selected stint and FCS witness across profile/game/history; unrelated routes strip them',async()=>{
+ const p=await bundle('lib/game-route.ts');const context={id:'5164309',team:'2193',anchorYear:2026,year:2025,stintTeam:'Louisville',witnessTeam:'153',witnessEvent:'401858218'};
+ const profile=p.playerUrl('https://app.test/?team=153&event=401858218#game-401858218',context,view());assert.deepEqual(p.parsePlayerRoute(new URL(profile).search),context);assert.equal(p.parseGameRoute(new URL(profile).search),null);
+ const url=p.gameUrl(profile,{id:'401628331',section:'players',player:context},view());assert.deepEqual(p.parseGameRoute(new URL(url).search),{id:'401628331',section:'players',player:context});assert.equal(p.parsePlayerRoute(new URL(url).search),null);
+ assert.deepEqual(p.parseGameRoute(new URL(p.sectionUrl(url,'scoring')).search).player,context);
+ const entry={v:1,kind:'player',key:'player1',player:context,from:true};assert.deepEqual(p.readEntry(p.withEntry(null,entry)),entry);
+ assert.deepEqual(p.readEntry(p.withEntry(null,{v:1,kind:'game',key:'game1',id:'401628331',section:'players',from:true,player:context})).player,context);
+ for(const destination of [p.boardUrl(url,view()),p.teamUrl(url,'251',view()),p.gameUrl(url,{id:'401000001',section:'team'},view())])for(const k of p.PLAYER_ROUTE_KEYS)assert.equal(new URL(destination).searchParams.has(k),false,k);
+ for(const tail of ['&playerTeam=251','&anchorSeason=2025','&team=153','&event=401000001'])assert.equal(p.parsePlayerRoute(new URL(profile+tail).search),null);
+ assert.equal(p.parsePlayerRoute('?player=1&playerTeam=251&season=2026'),null,'missing anchor season never repaired');
+ assert.equal(p.parseGameRoute(new URL(url+'&team=153').search),null);
+ assert.equal(p.readEntry(p.withEntry(null,{...entry,player:{...context,anchorYear:undefined}})),null);
+});

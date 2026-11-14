@@ -138,7 +138,7 @@ export const test = base.extend({
     appendEvidence(serverDiagnosticsDir, "test-timeline.jsonl", { event: "start", utc: startedAt, title: testInfo.title, file: testInfo.file, workerIndex: testInfo.workerIndex });
     const state = {
       events: standardEvents(), failScores: false, ready: true, failConfig: false,
-      active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 0, preferencesVersion: 1, sampleVersion: 1, failSave: false, conflict: false, alertRequests: [], scoreRequests: [], scoreRequestCount: 0, holdAfterInitialProbe: false, failAfterInitialProbe: false, heldScoreReleases: [], releaseScores() { this.holdAfterInitialProbe = false; for (const release of this.heldScoreReleases.splice(0)) release(); }, cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], hostedScoreResponse: null, statsRequests: [], teamRequests: [], logoRequests: [], unexpectedExternal: [], errors: [],
+      active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 0, preferencesVersion: 1, sampleVersion: 1, failSave: false, conflict: false, alertRequests: [], scoreRequests: [], scoreRequestCount: 0, holdAfterInitialProbe: false, failAfterInitialProbe: false, heldScoreReleases: [], releaseScores() { this.holdAfterInitialProbe = false; for (const release of this.heldScoreReleases.splice(0)) release(); }, cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], hostedScoreResponse: null, statsRequests: [], teamRequests: [], playerRequests: [], logoRequests: [], unexpectedExternal: [], errors: [],
     };
     const lifecycle = [];
     const recordLifecycle = event => {
@@ -213,6 +213,12 @@ export const test = base.extend({
           state.teamRequests.push(url.search);
           return state.team ? state.team(url, route) : route.fulfill({ status: 503, contentType: "application/json", headers: { "Cache-Control": "no-store", "Retry-After": "300" }, body: JSON.stringify({ error: "simulated team season unavailable" }) });
         }
+        // New player reads can fill a server-side CFBD cache. Always intercept
+        // before the Worker, including unavailable/default cases and future subpaths.
+        if (url.pathname === "/api/player" || url.pathname.startsWith("/api/player/")) {
+          state.playerRequests.push(url.search);
+          return state.player ? state.player(url, route) : route.fulfill({ status: 503, contentType: "application/json", headers: { "Cache-Control": "no-store", "Retry-After": "300" }, body: JSON.stringify({ error: "simulated player season unavailable" }) });
+        }
         return route.continue();
       }
       // Team logos named by the genuine team-season fixtures (#166). Expected and recorded, then answered
@@ -266,7 +272,7 @@ export const test = base.extend({
       runtimeErrors: state.errors,
       simulated: ["ESPN responses", "alert-service responses", "notification permission", "PushManager", "service-worker registration", "installed standalone state"],
       // Even fake owner tokens stay out of attached evidence.
-      alertRequests: state.alertRequests.map(r => ({ ...r, authorization: r.authorization ? "[redacted]" : null })), scoreRequests: state.scoreRequests, cdnRequests: state.cdnRequests, hostedScoreRequests: state.hostedScoreRequests, statsRequests: state.statsRequests, teamRequests: state.teamRequests, logoRequests: state.logoRequests, unexpectedExternal: state.unexpectedExternal,
+      alertRequests: state.alertRequests.map(r => ({ ...r, authorization: r.authorization ? "[redacted]" : null })), scoreRequests: state.scoreRequests, cdnRequests: state.cdnRequests, hostedScoreRequests: state.hostedScoreRequests, statsRequests: state.statsRequests, teamRequests: state.teamRequests, playerRequests: state.playerRequests, logoRequests: state.logoRequests, unexpectedExternal: state.unexpectedExternal,
     }, null, 2) });
     // Soft assertions still fail the test while allowing every crash/runtime
     // check to report its evidence instead of stopping at the first failure.

@@ -99,12 +99,12 @@ function TeamRankings({ season }: { season: TeamSeason }) {
 }
 
 export type TeamScreenProps = {
-  teamId: string; season: TeamSeason | null; pending: boolean; failed: boolean; online: boolean; prefs: DukePreferences | null;
+  playerLink?: (id: string, year: number) => { href: string; open: () => void }; teamId: string; season: TeamSeason | null; pending: boolean; failed: boolean; online: boolean; prefs: DukePreferences | null;
   back: { title: string; detail: string; label: string }; onBack: () => void; onRetry: () => void;
   gameHref: (id: string) => string; onOpenGame: (id: string) => void; notice?: ReactNode;
 };
 /** A team's current season: record, three yard leaders, averages and the published schedule. */
-export function TeamScreen({ teamId, season, pending, failed, online, prefs, back, onBack, onRetry, gameHref, onOpenGame, notice }: TeamScreenProps) {
+export function TeamScreen({ teamId, season, pending, failed, online, prefs, back, onBack, onRetry, gameHref, onOpenGame, notice, playerLink }: TeamScreenProps) {
   const backButton = <button type="button" className="back-button" data-focus-key="back" aria-label={back.label} onClick={onBack}><ChevronLeft size={22} aria-hidden="true" /><span className="back-text" aria-hidden="true"><span>{back.title}</span><small>{back.detail}</small></span></button>;
   const bar = <header className="game-bar">{backButton}<span className="team-bar-title" aria-hidden="true">{season?.team.abbreviation}</span><span className="bar-brand" aria-hidden="true"><span className="brand-icon"><Signal size={17} strokeWidth={3} /></span></span></header>;
   if (!season) {
@@ -161,7 +161,7 @@ export function TeamScreen({ teamId, season, pending, failed, online, prefs, bac
           <p className="team-leaders-intro">{team.shortName}’s yard leaders.</p>
           <dl className="team-leader-list">{TEAM_LEADER_ROWS.map(([key, label]) => {
             const row = season.leaders?.[key];
-            return <div className="team-leader-row" key={key}><dt><span className="team-leader-category">{label}</span><span className={`team-leader-name${row ? "" : " team-leader-missing"}`}>{row ? row.name : "Leader unavailable"}</span></dt>
+            return <div className="team-leader-row" key={key}><dt><span className="team-leader-category">{label}</span><span className={`team-leader-name${row ? "" : " team-leader-missing"}`}>{row ? (() => { const link = playerLink?.(row.athleteId, season.season.year); return link ? <a href={link.href} data-focus-key={`player-${row.athleteId}-${teamId}`} onClick={event => { if (plainClick(event)) { event.preventDefault(); link.open(); } }}>{row.name}</a> : row.name; })() : "Leader unavailable"}</span></dt>
               <dd>{row && <><strong>{row.yards.toLocaleString("en-US")}</strong><span>total yards</span></>}</dd></div>;
           })}</dl>
           {season.leaders?.checkedAt && <p className="team-fresh">Leaders checked {checkedTime(season.leaders.checkedAt)}{season.leaders.stale ? " · Refresh delayed" : ""}. Source update time unknown.</p>}

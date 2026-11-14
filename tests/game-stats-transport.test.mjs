@@ -222,7 +222,7 @@ test("TWO-LAYER kickoff: a warm 5-minute pregame Worker entry is revalidated whe
   assert.equal(card.state.snapshot, null, "season averages are not carried into the started generation");
   await h.clock.advance(0);
   // Both the advisory phase and the client-observed status correction revalidate.
-  assert.deepEqual(h.workerCalls.at(-1), { event: "401100001", phase: "started", refresh: "1", scoring: "1" });
+  assert.deepEqual(h.workerCalls.at(-1), { event: "401100001", phase: "started", refresh: "1", scoring: "1", playerContext: "1" });
   assert.equal(h.upstreamCalls.length, 2, "Worker went upstream instead of serving the pregame entry");
   assert.equal(card.state.snapshot.sourcePhase, "started");
 });
@@ -261,20 +261,20 @@ test("TWO-LAYER final-to-live correction and same-phase matchup/date correction 
   card.update(open(g)); await h.clock.advance(0);
   // Final → live correction: new generation with started hint and refresh.
   card.update(open({ ...g, state: "live" })); await h.clock.advance(0);
-  assert.deepEqual(h.workerCalls.at(-1), { event: "401100006", phase: "started", refresh: "1", scoring: "1" });
+  assert.deepEqual(h.workerCalls.at(-1), { event: "401100006", phase: "started", refresh: "1", scoring: "1", playerContext: "1" });
   assert.equal(h.upstreamCalls.length, 2);
   // Back to final within the five-minute TTL: the first final is not restored; the
   // warm final Worker entry is bypassed.
   card.update(open(g));
   assert.equal(card.state.snapshot, null);
   await h.clock.advance(0);
-  assert.deepEqual(h.workerCalls.at(-1), { event: "401100006", phase: "final", refresh: "1", scoring: "1" });
+  assert.deepEqual(h.workerCalls.at(-1), { event: "401100006", phase: "final", refresh: "1", scoring: "1", playerContext: "1" });
   assert.equal(h.upstreamCalls.length, 3);
   // A same-phase date correction also uses refresh=1.
   card.update(open({ ...g, date: "2026-10-10T23:30Z" }));
   assert.equal(card.state.snapshot, null);
   await h.clock.advance(0);
-  assert.deepEqual(h.workerCalls.at(-1), { event: "401100006", phase: "final", refresh: "1", scoring: "1" });
+  assert.deepEqual(h.workerCalls.at(-1), { event: "401100006", phase: "final", refresh: "1", scoring: "1", playerContext: "1" });
   assert.equal(h.upstreamCalls.length, 4);
   assert.equal(statsGeneration({ ...g, date: "2026-10-10T23:30Z" }) === statsGeneration(g), false);
 });
@@ -463,7 +463,7 @@ test("opening several cards adds no scoreboard requests and holds at most two lo
   cards.forEach((card, i) => card.update(open(cardGame(String(401100060 + i), FINAL_IDS, { state: "final", started: true }))));
   await flush();
   assert.deepEqual(h.scheduler.stats(), { active: 2, queued: 3 });
-  assert.equal(h.workerCalls.every(c => Object.keys(c).join() === "event,phase,refresh,scoring" && c.scoring === "1"), true);
+  assert.equal(h.workerCalls.every(c => Object.keys(c).join() === "event,phase,refresh,scoring,playerContext" && c.scoring === "1" && c.playerContext === "1"), true);
   while (resolvers.length) { resolvers.shift()(); await flush(); }
   assert.equal(cards.every(card => card.state.snapshot), true);
 });
