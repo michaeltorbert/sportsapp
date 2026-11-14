@@ -5,7 +5,7 @@ import { blockCfbd, cfbdBlocked, sourceJson, SourceFailure } from "./cfbd-source
 
 export type CanonicalTeam = { id: string; name: string };
 type Person = { name: string; position: string | null; stats: PlayerStats };
-export type PlayerPack = { v: 1; team: CanonicalTeam; year: number; checkedAt: string; people: Record<string, Person>;
+export type PlayerPack = { v: 1; team: CanonicalTeam; year: number; checkedAt: string; scheduleComplete: boolean; people: Record<string, Person>;
   games: { game: Game; players: Record<string, PlayerStats>; boxSupplied: boolean }[];
   witnesses: Record<string, { team: CanonicalTeam; classification: string | null; people: Record<string, string>; gameIds: string[]; gamePeople: Record<string, Record<string, string>> }> };
 export type PlayerIdentity = { id: string; name: string; position: string | null; checkedAt: string; currentTeam: string;
@@ -44,8 +44,9 @@ function teamGame(r: Record<string, unknown>): Game {
 /** Fixed source basis; full selected-team schedule, including non-FBS opponents. No sums/DNP guesses. */
 export function createPlayerPack(team: CanonicalTeam, year: number, stats: unknown, schedule: unknown, boxes: unknown, checkedAt: string): PlayerPack {
   requireValue(playerTeamId(team.id) && text(team.name) && playerYear(year) && Number.isFinite(Date.parse(checkedAt)));
-  const out: PlayerPack = { v: 1, team, year, checkedAt, people: {}, games: [], witnesses: {} };
-  for (const raw of array(stats, 50_000)) {
+  const statRows = array(stats, 50_000);
+  const out: PlayerPack = { v: 1, team, year, checkedAt, scheduleComplete: false, people: {}, games: [], witnesses: {} };
+  for (const raw of statRows) {
     const r = obj(raw); requireValue(r.team === team.name && r.season === year);
     if (!category(r.category) || !field(r.category, String(r.statType))) continue;
     const pid = id(r.playerId); if (!playerId(pid)) continue; // Negative Team rows are never people.
@@ -93,6 +94,9 @@ export function createPlayerPack(team: CanonicalTeam, year: number, stats: unkno
     }
     requireValue(sides.size === 2);
   }
+  // Empty is valid only when the source also supplies no season stat rows.
+  // Totals with no usable schedule cannot rule out a protected contribution.
+  out.scheduleComplete = out.games.length > 0 || statRows.length === 0;
   out.games.sort((a, b) => a.game.date.localeCompare(b.game.date) || a.game.id.localeCompare(b.game.id));
   return out;
 }
@@ -108,7 +112,7 @@ export function playerFromPack(pack: PlayerPack, pid: string, identity: PlayerId
   const choices = identity ? Array.from({ length: identity.end - identity.start + 1 }, (_, i) => identity.end - i).map(year => ({ year, teams: [...new Set(identity.stints.filter(s => s.start <= year && s.end >= year).map(s => s.team))] })).filter(c => c.teams.length) : [{ year: pack.year, teams: [pack.team.name] }];
   const current = identity ? catalog.find(t => t.name === identity.currentTeam) ?? (identity.currentTeam === pack.team.name ? pack.team : null) : null;
   return { v: 1, id: pid, anchor: { team: anchorTeam, year: anchorYear }, needsTeamChoice: false, name: p.name, position: p.position ?? identity?.position ?? null, year: pack.year, team: pack.team, currentTeam: current, basis: "regular", checkedAt: pack.checkedAt, stale, choices,
-    totals: p.stats, totalsAvailable: Object.keys(p.stats).length > 0, logs: pack.games.map(g => ({ game: g.game, stats: g.players[pid] ?? {}, boxSupplied: g.boxSupplied })), scheduleComplete: true, historyAvailable: !!identity };
+    totals: p.stats, totalsAvailable: Object.keys(p.stats).length > 0, logs: pack.games.map(g => ({ game: g.game, stats: g.players[pid] ?? {}, boxSupplied: g.boxSupplied })), scheduleComplete: pack.scheduleComplete === true, historyAvailable: !!identity };
 }
 
 const PREFIX = "player:v1:", DAY = 86_400_000, HISTORY_TTL = 30 * DAY;
@@ -271,7 +275,7 @@ export function createPlayerSeasonService(env: LeadersEnv, fetcher: typeof fetch
       if (!chosen.value.people[request.id]) {
         // Preserve verified identity/year even when that year supplies no player rows.
         const base = playerFromPack(anchorPack.value, request.id, info, anchorPack.stale, teams, request.anchorYear, request.team);
-        return { status: 200, season: { ...base, year: request.year, team: selected, totals: {}, totalsAvailable: false, checkedAt: chosen.value.checkedAt, stale: chosen.stale, logs: chosen.value.games.map(g => ({ game: g.game, stats: {}, boxSupplied: g.boxSupplied })) } };
+        return { status: 200, season: { ...base, year: request.year, team: selected, totals: {}, totalsAvailable: false, checkedAt: chosen.value.checkedAt, stale: chosen.stale, scheduleComplete: chosen.value.scheduleComplete === true, logs: chosen.value.games.map(g => ({ game: g.game, stats: {}, boxSupplied: g.boxSupplied })) } };
       }
       return { status: 200, season: playerFromPack(chosen.value, request.id, info, chosen.stale, teams, request.anchorYear, request.team) };
     } catch (error) { return error instanceof PlayerFailure ? { status: error.status, error: error.reason } : { status: 503, error: "player-unavailable" }; }

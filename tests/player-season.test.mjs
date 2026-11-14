@@ -91,3 +91,31 @@ test('existing Duke rules gate whole aggregates/direct game/logs; no subtraction
  const game=s.logs.find(l=>l.game.id==='401858266').game;prefs.manual[game.id]=true;assert.equal(M.playerGameHidden(game,prefs),true);assert.equal(M.playerGame(s,game.id,prefs),null);assert.equal(M.playerAggregates(s,prefs).shown,false);
  prefs.manual[game.id]=false;assert.equal(M.playerGameHidden({...game,state:'other',started:false},prefs),false,'explicit manual show is preserved');delete prefs.manual[game.id];assert.equal(M.playerGameHidden({...game,state:'other',started:false},prefs),true);
 });
+
+test('C190-R1: real UNC totals with empty schedule are incomplete and never bypass a hidden Duke contribution',async()=>{
+ const {defaultDukePreferences}=await bundle('lib/duke-visibility.ts');
+ const raw=F.packs['153:2026'];const p=S.createPlayerPack(raw.team,raw.year,raw.stats,[],[],stamp);
+ const s=S.playerFromPack(p,'4592532',identity('4592532',raw.team,2026),false,[],2026,'153');
+ assert.equal(s.totals.passing.YDS,2126,'source totals are retained, not replaced with zero/subtracted');
+ assert.equal(s.logs.length,0);assert.equal(p.scheduleComplete,false);assert.equal(s.scheduleComplete,false);
+ const prefs=defaultDukePreferences();prefs.manual['401858266']=true;
+ assert.deepEqual(M.playerAggregates(s,prefs),{shown:false,reason:'incomplete'});
+ assert.deepEqual(M.playerAggregates(s,null),{shown:false,reason:'checking'});
+ assert.equal(M.playerAggregates({...s,scheduleComplete:true},prefs).shown,false,'consumer also guards contradictory retained/API flags');
+ assert.equal(M.parsePlayerSeason({...s,scheduleComplete:true},req('4592532',2026,'153')).scheduleComplete,false);
+ const empty=S.createPlayerPack(raw.team,2025,[],[],[],stamp);
+ assert.equal(empty.scheduleComplete,true,'genuinely empty/no-stat season remains distinct from inconsistent nonempty totals');
+ assert.equal(empty.games.length,0);assert.deepEqual(empty.people,{});
+});
+
+test('a genuinely empty selected historical season retains identity/year/team without borrowing anchor numbers',async()=>{
+ const t=setup({fetchOverride:async url=>{
+  const u=new URL(url);
+  if(u.pathname==='/player/search')return json(F.identities['4592532']);
+  if(u.searchParams.get('year')==='2025')return json([]);
+  const p=F.packs['153:2026'];return json(p[{'/stats/player/season':'stats','/games':'games','/games/players':'boxes'}[u.pathname]]);
+ }});
+ const r=await t.service.get(req('4592532',2025,'153'));
+ assert.equal(r.status,200);assert.equal(r.season.name,'Billy Edwards');assert.equal(r.season.year,2025);assert.equal(r.season.team.name,'Wisconsin');
+ assert.equal(r.season.totalsAvailable,false);assert.deepEqual(r.season.totals,{});assert.deepEqual(r.season.logs,[]);assert.equal(r.season.scheduleComplete,true);
+});

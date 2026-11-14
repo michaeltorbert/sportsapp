@@ -49,7 +49,7 @@ export function parsePlayerSeason(raw: unknown, request: PlayerRequest): PlayerS
   if (!parsed.success) return null;
   const s = parsed.data as PlayerSeason;
   if (s.id !== request.id || s.year !== request.year || s.anchor.team !== request.team || s.anchor.year !== request.anchorYear || new Set(s.logs.map(l => l.game.id)).size !== s.logs.length || s.logs.some(l => !s.team || !l.game.teams.some(t => t.id === s.team!.id)) || new Set(s.choices.map(c => c.year)).size !== s.choices.length) return null;
-  return s;
+  return s.totalsAvailable && !s.logs.length ? { ...s, scheduleComplete: false } : s;
 }
 /** Historical data never writes observations. Unknown potentially protected game state fails closed. */
 export function playerGameHidden(game: Game, prefs: DukePreferences | null) {
@@ -60,7 +60,7 @@ export function playerGameHidden(game: Game, prefs: DukePreferences | null) {
 }
 export function playerAggregates(season: PlayerSeason, prefs: DukePreferences | null) {
   if (!prefs) return { shown: false, reason: "checking" as const };
-  if (!season.scheduleComplete) return { shown: false, reason: "incomplete" as const };
+  if (!season.scheduleComplete || (season.totalsAvailable && !season.logs.length)) return { shown: false, reason: "incomplete" as const };
   if (season.logs.some(l => playerGameHidden(l.game, prefs))) return { shown: false, reason: "hidden" as const };
   return { shown: true };
 }
