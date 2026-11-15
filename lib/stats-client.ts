@@ -34,6 +34,25 @@ function identity(stats: GameStats, request: StatsRequest): StatsOutcome {
   return { kind: "ok", stats };
 }
 
+// A valid mismatched identity is authoritative even if an additive section is malformed.
+// This rejects the response; it never admits data before full contract validation.
+function workerIdentityMismatch(value: unknown, request: StatsRequest): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const body = value as Record<string, unknown>;
+  if (typeof body.eventId === "string" && /^\d{6,12}$/.test(body.eventId) && body.eventId !== request.eventId) return true;
+  const pair = (value: unknown): value is [string, string] => Array.isArray(value) && value.length === 2 && value.every(id => typeof id === "string" && /^\d{1,12}$/.test(id));
+  if (pair(body.teamIds) && body.teamIds.some((id, i) => id !== request.teamIds[i])) return true;
+  const extension = body.boxscore;
+  if (extension && typeof extension === "object" && !Array.isArray(extension)) {
+    const teams = (extension as Record<string, unknown>).teams;
+    if (Array.isArray(teams) && teams.length === 2) {
+      const ids = teams.map(team => team && typeof team === "object" ? (team as Record<string, unknown>).teamId : undefined);
+      if (pair(ids) && ids.some((id, i) => id !== request.teamIds[i])) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Worker-first stats load bounded by an absolute deadline that already
  * includes any queue wait. Authoritative Worker answers (busy, 400, upstream
@@ -43,7 +62,7 @@ export async function loadGameStats(request: StatsRequest, deadline: number, sig
   let remaining = deadline - now();
   if (remaining < MIN_ATTEMPT_MS) return { kind: "failed", reason: "expired" };
   // `scoring=1` asks for the additive scoring summary; a Worker from before it ignores the parameter.
-  const query = new URLSearchParams({ event: request.eventId, phase: request.phase, refresh: request.refresh ? "1" : "0", scoring: "1", playerContext: "1" });
+  const query = new URLSearchParams({ event: request.eventId, phase: request.phase, refresh: request.refresh ? "1" : "0", scoring: "1", playerContext: "1", boxscore: "1" });
   let fallbackEligible: StatsOutcome;
   try {
     const result = await bounded(signal, Math.min(STATS_WORKER_BUDGET_MS, remaining), async inner => {
@@ -53,6 +72,7 @@ export async function loadGameStats(request: StatsRequest, deadline: number, sig
       if (!response.ok) return { kind: "failed", reason: "upstream", retryAfter: retryAfterSeconds(response.headers.get("Retry-After")) } as StatsOutcome;
       let body: unknown;
       try { body = await response.json(); } catch { return null; }
+      if (workerIdentityMismatch(body, request)) return { kind: "failed", reason: "identity" } as StatsOutcome;
       const stats = parseGameStats(body);
       return stats ? identity(stats, request) : null;
     });

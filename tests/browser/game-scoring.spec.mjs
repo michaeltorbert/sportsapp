@@ -82,7 +82,7 @@ test("Scoring: genuine live scoring in the third section, on the one stats reque
   // The masthead keeps the scoreboard's score; scoring never rewrites it.
   await expect(screen(page).locator(".mh-score")).toHaveText(["14", "21"]);
   // One request served Team stats and Scoring; switching sections fetched nothing.
-  expect(harness.state.statsRequests).toEqual([`?event=${LIVE.id}&phase=started&refresh=0&scoring=1&playerContext=1`]);
+  expect(harness.state.statsRequests).toEqual([`?event=${LIVE.id}&phase=started&refresh=0&scoring=1&playerContext=1&boxscore=1`]);
   for (const b of await sections(page)) expect(b.height).toBeGreaterThanOrEqual(44);
   expect(await noOverflow(page)).toBe(true);
   await page.screenshot({ path: info.outputPath("scoring-live-390.png"), animations: "disabled" });
@@ -98,7 +98,7 @@ test("Scoring: genuine live scoring in the third section, on the one stats reque
   await expect(scoring).toHaveAttribute("aria-pressed", "true");
   await expect(scoring).toBeFocused();
   // No player category jumps outside Player stats.
-  await expect(screen(page).locator(".jump-links")).toHaveCount(0);
+  await expect(screen(page).locator(".category-choice")).toHaveCount(0);
   // Section switches replace the entry: Back returns straight to the scoreboard; Forward restores Scoring.
   await page.goBack();
   await expect(page.locator(".scores-view")).toBeVisible();

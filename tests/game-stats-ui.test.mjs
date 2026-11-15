@@ -22,7 +22,10 @@ function card(name, changes = {}) {
   const g = game({ id: raw.header.id, ...changes });
   g.teams[0] = { ...g.teams[0], id: away.team.id, abbreviation: away.team.abbreviation, name: `${away.team.abbreviation} name` };
   g.teams[1] = { ...g.teams[1], id: home.team.id, abbreviation: home.team.abbreviation, name: `${home.team.abbreviation} name` };
-  return { g, stats: ui.normalizeGameStats(raw, raw.header.id, CHECKED) };
+  // Existing regression cases explicitly exercise an older Worker without the extension.
+  const stats = ui.normalizeGameStats(raw, raw.header.id, CHECKED);
+  delete stats.boxscore;
+  return { g, stats };
 }
 const state = (expected, snapshot, extra = {}) => ({ mode: "active", expected, snapshot, pending: null, failure: null, retryAt: 0, ...extra });
 // A state belongs to the rendered game's generation unless a test supplies another.
@@ -77,7 +80,8 @@ test("Player stats: one continuous document with every participant, legends and 
   assert.deepEqual(teamRows(team).find(r => r[0] === "Fourth-down conversions"), ["Fourth-down conversions", "1-1", "0-0"]);
   const html = render(g, state("started", stats), { section: "players" });
   assert.match(html, /aria-pressed="true">Player stats<\/button>/);
-  assert.match(html, /<div class="jump-links" role="group" aria-label="Jump to player category"><button type="button" data-jump="passing" data-focus-key="jump-passing" aria-current="true">Passing<\/button><button type="button" data-jump="rushing" data-focus-key="jump-rushing">Rushing<\/button>/);
+  assert.match(html, /<label for="game-stat-category">Category<\/label><select id="game-stat-category" data-focus-key="category-select"><option value="passing" selected="">Passing<\/option><option value="rushing">Rushing<\/option><option value="receiving">Receiving<\/option>/);
+  assert.match(html, /Full box score unavailable. Showing limited passing, rushing and receiving stats/);
   assert.match(html, /<section class="panel" id="panel-team" aria-label="Team stats" hidden=""><\/section>/);
   assert.match(html, /<h2 id="players-h" tabindex="-1">Player stats<\/h2><span class="stats-phase">This game<\/span>/);
   for (const name of ["passing", "rushing", "receiving"]) {
@@ -180,13 +184,39 @@ test("failure, stale age, offline and partial states stay explicit and keep vali
   // A misaligned category keeps its identifiable participants with unavailable values and a note.
   const playersRaw = fixture("final"), receiving = playersRaw.boxscore.players[1].statistics.find(c => c.name === "receiving"); receiving.labels.reverse();
   const misaligned = ui.normalizeGameStats(playersRaw, "401858481", CHECKED);
-  const players = render(g, state("final", misaligned), { section: "players" });
+  // Legacy fallback keeps its original whole-category alignment behavior and copy.
+  const legacyMisaligned = structuredClone(misaligned); delete legacyMisaligned.boxscore;
+  const players = render(g, state("final", legacyMisaligned), { section: "players" });
   assert.match(players, /aria-label="NEB name receiving statistics"/);
   for (const athlete of receiving.athletes) assert.match(players, new RegExp(`<th scope="row">${athlete.athlete.displayName}</th><td><span class="stat-missing"`));
   assert.match(players, /These receiving values could not be matched to their columns/);
   assert.match(players, /NEB name passing statistics/);
   assert.match(render(g, state("final", misaligned)), /Total yards/, "team stats stay available");
   assert.match(players, /All participants supplied for these categories are shown/);
+  // Expanded alignment preserves independently confirmed cells instead of blanking the whole vector.
+  const expandedReceiving = misaligned.boxscore.teams[1].categories.receiving;
+  assert.equal(expandedReceiving.unaligned, true);
+  assert.equal(expandedReceiving.rows.length, receiving.athletes.length);
+  for (const [i, row] of expandedReceiving.rows.entries()) assert.deepEqual(row.values, [null, null, receiving.athletes[i].stats[2], null, null]);
+  const expandedPartial = render(g, state("final", misaligned), { section: "players" });
+  assert.match(expandedPartial, /Some values could not be matched to their columns and are unavailable/);
+  assert.match(expandedPartial, /Some box-score details are unavailable/);
+  assert.doesNotMatch(expandedPartial, /All participants supplied for these categories are shown/);
+  assert.match(expandedPartial, /NEB name passing statistics/);
+  // Legacy section failures do not hide a valid independent extension.
+  for (const reason of ["too-large", "missing"]) {
+    const independent = render(g, state("final", { ...misaligned, players: { unavailable: reason } }), { section: "players" });
+    assert.match(independent, /class="player-table box-table"/);
+    assert.match(independent, /NEB name receiving statistics/);
+    assert.doesNotMatch(independent, /Player stats were not supplied|The player box score is too large/);
+  }
+  // Unavailable full extension falls back honestly while preserving usable legacy rows.
+  for (const reason of ["too-large", "missing"]) {
+    const limited = render(g, state("final", { ...misaligned, boxscore: { unavailable: reason } }), { section: "players" });
+    assert.match(limited, /Showing limited passing, rushing and receiving stats/);
+    assert.match(limited, /NEB name passing statistics/);
+    assert.doesNotMatch(limited, /class="player-table box-table"/);
+  }
   // Whole Players too large: explicit, team data intact.
   const big = { ...stats, players: { unavailable: "too-large" } };
   const tooLarge = render(g, state("final", big), { section: "players" });
@@ -232,13 +262,15 @@ test("Players footer only claims completeness when every category is listed", ()
   const { g } = card("final", { state: "final" });
   const over = fixture("final"); over.boxscore.players[0].statistics.find(c => c.name === "receiving").athletes = Array.from({ length: 257 }, (_, i) => ({ athlete: { id: String(500 + i), displayName: `P${i}` }, stats: ["1", "2", "2.0", "0", "2"] }));
   const overflowStats = ui.normalizeGameStats(over, "401858481", CHECKED);
+  delete overflowStats.boxscore; // Explicit old-Worker fallback regression.
   const overflow = render(g, state("final", overflowStats), { section: "players" });
   assert.match(overflow, /IU name receiving unavailable/);
   assert.doesNotMatch(overflow, /All participants supplied for these categories are shown/);
   assert.match(overflow, /Categories marked unavailable are not shown/);
   assert.match(overflow, /IU name passing statistics/); assert.match(render(g, state("final", overflowStats)), /Total yards/);
   const anon = fixture("final"); delete anon.boxscore.players[1].statistics.find(c => c.name === "rushing").athletes[0].athlete.id;
-  const malformed = render(g, state("final", ui.normalizeGameStats(anon, "401858481", CHECKED)), { section: "players" });
+  const anonStats = ui.normalizeGameStats(anon, "401858481", CHECKED); delete anonStats.boxscore;
+  const malformed = render(g, state("final", anonStats), { section: "players" });
   assert.match(malformed, /NEB name rushing unavailable/);
   assert.doesNotMatch(malformed, /All participants supplied for these categories are shown/);
 });
@@ -270,7 +302,10 @@ function scoringCard(raw, changes) {
   const g = game({ id: raw.header.id, ...changes });
   g.teams[0] = { ...g.teams[0], id: away.team.id, abbreviation: away.team.abbreviation, name: away.team.displayName };
   g.teams[1] = { ...g.teams[1], id: home.team.id, abbreviation: home.team.abbreviation, name: home.team.displayName };
-  return { g, stats: ui.normalizeGameStats(raw, raw.header.id, CHECKED) };
+  // Existing regression cases explicitly exercise an older Worker without the extension.
+  const stats = ui.normalizeGameStats(raw, raw.header.id, CHECKED);
+  delete stats.boxscore;
+  return { g, stats };
 }
 const periodRows = html => [...html.matchAll(/<tr><th scope="row" class="scoring-team"><span>([^<]+)<\/span>.*?<\/th>(.*?)<\/tr>/g)].map(m => [m[1], ...[...m[2].matchAll(/<td[^>]*>(.*?)<\/td>/g)].map(c => text(c[1]).trim())]);
 const plays = html => [...html.matchAll(/<li class="scoring-play">(.*?)<\/li>/g)].map(m => text(m[1].replace(/<span class="sr-only">.*?<\/span>/g, "")).trim());
@@ -406,4 +441,29 @@ test("a remounted screen's first paint shows the remembered failed-refresh warni
   // A different generation is never seeded.
   assert.equal(ui.rememberedStats({ ...g, date: "2026-10-11T00:00Z" }, memory, true), null);
   assert.equal(ui.rememberedStats({ ...g, state: "other" }, memory, true), null);
+});
+
+test('full genuine box score renders ten continuous categories, every source participant and total, explicit empty/QBR and useful plain defense names',()=>{
+ const raw=JSON.parse(readFileSync(new URL('./fixtures/espn-summary-full-final.json',import.meta.url),'utf8'));
+ const g=game({id:raw.header.id,state:'final',started:true});g.teams[0]={...g.teams[0],id:'145',name:'Ole Miss'};g.teams[1]={...g.teams[1],id:'201',name:'Oklahoma'};
+ const stats=ui.normalizeGameStats(raw,raw.header.id,CHECKED), s={...state('final',stats),generation:ui.statsGeneration(g)};
+ const links=[];
+ const html=ui.renderToStaticMarkup(ui.createElement(ui.GameStatsView,{game:g,state:s,now:Date.parse(CHECKED),online:true,retry(){},section:'players',playerLink(id,team,year){links.push([id,team,year]);return{href:`/?player=${id}&team=${team}&season=${year}`,open(){}};}}));
+ assert.equal((html.match(/<section class="category"/g)||[]).length,10);
+ assert.equal((html.match(/<option value=/g)||[]).length,10);
+ const tableBodies=[...html.matchAll(/<tbody>(.*?)<\/tbody>/g)].map(m=>m[1]);
+ assert.equal(tableBodies.reduce((n,body)=>n+(body.match(/<tr/g)||[]).length,0),74);
+ assert.equal((html.match(/<tfoot>/g)||[]).length,raw.boxscore.players.flatMap(t=>t.statistics).filter(c=>c.totals.length).length);
+ for(const team of raw.boxscore.players)for(const category of team.statistics)for(const row of category.athletes)assert.ok(text(html).includes(row.athlete.displayName.trim().replace(/'/g,'&#x27;')) || text(html).includes(row.athlete.displayName.trim()),row.athlete.displayName);
+ assert.match(html,/No entries supplied/);assert.match(html,/Total QBR \(0–100\)/);assert.match(html,/QBR was not supplied/);
+ assert.match(html,/<td>33\.0<\/td>/);assert.match(html,/<td>33\.3<\/td>/);assert.match(html,/<td>1\.5<\/td>/);assert.match(html,/<td>-3\.0<\/td>/);
+ assert.match(html,/class="player-table box-table"/);assert.match(html,/width:var\(--box-name-width, 10rem\)/);
+ assert.ok(links.length>0);assert.ok(links.every(([, ,year])=>year===2026));assert.ok(!links.some(([id])=>id==='5142694'),'defender has no unsupported link');
+ assert.doesNotMatch(html,/saved source snapshot|Design proposal|concept|modelUsage|capture|Gamecast|sportsbook/);
+ const defenseOnly=structuredClone(stats);defenseOnly.team={unavailable:'missing'};defenseOnly.players={unavailable:'missing'};
+ const independent=render(g,state('final',defenseOnly),{section:'players'});assert.match(independent,/Tah&#x27;j Butler/);assert.doesNotMatch(independent,/No stats available yet/);
+ const partial=structuredClone(stats);partial.boxscore.partial=true;partial.boxscore.teams[0].categories.defensive={unavailable:'missing'};
+ assert.match(render(g,state('final',partial),{section:'players'}),/Some box-score details are unavailable/);
+ const wrong=structuredClone(stats);wrong.boxscore.teams[0].teamId='999';
+ assert.doesNotMatch(render(g,state('final',wrong),{section:'players'}),/Tah&#x27;j Butler/);
 });
