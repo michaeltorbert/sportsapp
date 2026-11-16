@@ -686,5 +686,5 @@ test("sticky bars, condensed title, category jumps and keyboard path; nothing st
   await expect.poll(() => screen(page).locator(".game-bar").evaluate(el => getComputedStyle(el).position)).toBe("static");
   expect(await screen(page).locator(".view-nav").evaluate(el => getComputedStyle(el).position)).toBe("static");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: info.outputPath("players-393-zoom200.png"), fullPage: true, animations: "disabled" });
+  await page.screenshot({ path: info.outputPath("players-393-zoom200.png"), fullPage: true, scale: "css", animations: "disabled" });
 });

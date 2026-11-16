@@ -86,7 +86,14 @@ test.describe('category reading with a desktop pointer',()=>{
   await page.mouse.wheel(0,20000);
   await expect.poll(()=>page.evaluate(()=>innerHeight+scrollY>=document.documentElement.scrollHeight-3)).toBe(true);
   await expect(select).toHaveValue('punting');
-  await page.mouse.wheel(0,-20000);
+  // One native wheel gesture has platform-dependent travel; retain real input and require progress.
+  const upwardDeadline = Date.now() + 12_000;
+  for (let gesture = 0; gesture < 40 && Date.now() < upwardDeadline; gesture++) {
+   const before = await page.evaluate(() => scrollY);
+   if (before === 0) break;
+   await page.mouse.wheel(0, -20000);
+   await expect.poll(() => page.evaluate(() => scrollY), { timeout: 1000, message: 'Each upward wheel gesture advances the document' }).toBeLessThan(before);
+  }
   await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(0);
   await expect(select).toHaveValue('passing');
  });
