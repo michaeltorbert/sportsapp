@@ -1,5 +1,6 @@
-export const VERSION = "1.25.0";
+export const VERSION = "1.25.1";
 export const releases = [
+  { version: "1.25.1", date: "November 16, 2026", changes: "Improve season-leader refresh handling." },
   { version: "1.25.0", date: "November 15, 2026", changes: "Game box scores add the supplied defense, fumbles, interceptions, returns, kicking and punting rows alongside expanded passing, rushing and receiving fields and team totals. Use Category to jump between groups. Full names stay visible while wider tables scroll, and missing values and empty categories remain clear." },
   { version: "1.24.0", date: "November 14, 2026", changes: "Player pages connect season leaders and individual game rows to regular-season totals, full game logs and explicit previous seasons. Historical teams and missing statistics stay clear, with shared source caching and Duke spoiler protection across player and game navigation." },
   { version: "1.23.0", date: "October 23, 2026", changes: "Team seasons add FBS statistical rankings for total, net passing and rushing yards per game, for offense and defense allowed. Each value shows its rank among 138 teams, reported game count and check time, separately from the existing regular-season averages. Missing or delayed data stays explicit, and Duke spoiler protection covers ranks." },

@@ -1,5 +1,10 @@
 # Saturday Signal releases
 
+## 1.25.1 · 2026-11-16
+
+- Improve season-leader refresh failure reporting with private fixed stages, observed source HTTP status and source-phase timings in the existing authenticated maintenance result and scheduled logs.
+- Stop downstream statistics refresh work after a leader snapshot storage failure. Keep a detected source denial explicit when saving its permanent block fails, and stop downstream work in that case as well.
+
 ## 1.25.0 · 2026-11-15
 
 - Expand game player box scores to all ten supported source groups: passing, rushing, receiving, fumbles, defense, interceptions, kick returns, punt returns, kicking and punting. Show supplied fields and participant rows for both teams, with independent team totals, fractional defensive values and explicit missing or empty details. Total QBR is shown only when supplied; it is never calculated.
