@@ -110,3 +110,69 @@ test('SYNTHETIC shared denial cleanup rejection preserves the leaders legacy and
  const result=await refreshSeasonLeaders({SEASON_LEADERS_KV:kv,CFBD_API_KEY:'offline-fixture'},async()=>{calls++;return {status:403,headers:new Headers({'content-type':'text/html'}),body:{cancel:()=>Promise.reject(Error('private error must stay private'))}};},()=>T0);
  assert.equal(result.status,'blocked');assert.equal(calls,1);assert.ok(kv.map.has(SNAPSHOT_KEY+':blocked'));assert.ok(kv.map.has('cfbd:v1:blocked'));
 });
+
+const DIAGNOSTIC_CANARY='private-test-canary-must-never-escape';
+function safeLeaderDiagnostic(result){
+ assert.ok(!JSON.stringify(result).includes(DIAGNOSTIC_CANARY));
+ if(result.diagnostic)assert.ok(Object.keys(result.diagnostic).every(k=>['stage','reason','httpStatus','sourceBlocked'].includes(k)));
+ if(result.sourceTiming){assert.equal(result.sourceTiming.sharedLimitMs,90000);for(const n of Object.values(result.sourceTiming))assert.ok(Number.isSafeInteger(n)&&n>=0&&n<=14400000);}
+}
+test('SYNTHETIC safe leader diagnostics identify every source phase/status without arbitrary source or exception text',async()=>{
+ for(const [index,phase] of ['membership','passing','rushing','receiving'].entries()){
+  for(const mode of ['http','transport','json']){
+   const kv=storage();let calls=0;
+   const result=await refreshSeasonLeaders({SEASON_LEADERS_KV:kv,CFBD_API_KEY:DIAGNOSTIC_CANARY},async()=>{
+    const current=calls++;if(current!==index)return json([identities,...categories][current]);
+    if(mode==='transport')throw Error(DIAGNOSTIC_CANARY);
+    return mode==='http'?new Response(DIAGNOSTIC_CANARY,{status:502}):new Response(DIAGNOSTIC_CANARY,{headers:{'content-type':'application/json'}});
+   },()=>T0);
+   assert.equal(result.status,'failed');assert.equal(result.diagnostic.stage,phase);assert.equal(result.diagnostic.reason,mode==='http'?'source-response':mode==='transport'?'source-transport':'source-json');assert.equal(result.diagnostic.httpStatus,mode==='transport'?undefined:mode==='http'?502:200);assert.equal(calls,index+1);safeLeaderDiagnostic(result);
+  }
+ }
+});
+test('SYNTHETIC leader storage/validation boundaries retain old snapshot and cannot misclassify snapshot write as source failure',async()=>{
+ for(const failing of ['block-read','attempt-read','attempt-write','snapshot-validation','snapshot-write']){
+  const kv=storage(),get=kv.get.bind(kv),put=kv.put.bind(kv);kv.map.set(SNAPSHOT_KEY,'last-good');let calls=0;
+  kv.get=async k=>{if(failing==='block-read'&&k==='cfbd:v1:blocked'||failing==='attempt-read'&&k.endsWith(':attempt'))throw Error(DIAGNOSTIC_CANARY);return get(k);};
+  kv.put=async(k,v)=>{if(failing==='attempt-write'&&k.endsWith(':attempt')||failing==='snapshot-write'&&k===SNAPSHOT_KEY)throw Error(DIAGNOSTIC_CANARY);return put(k,v);};
+  const result=await refreshSeasonLeaders({SEASON_LEADERS_KV:kv,CFBD_API_KEY:DIAGNOSTIC_CANARY},async()=>{const i=calls++;return json(failing==='snapshot-validation'&&i===0?{private:DIAGNOSTIC_CANARY}:[identities,...categories][i]);},()=>T0);
+  assert.equal(result.diagnostic.stage,failing);assert.equal(result.diagnostic.reason,failing==='snapshot-validation'?'snapshot-invalid':'storage-unavailable');assert.equal(result.reason,failing==='snapshot-validation'?'source-unavailable':'storage-unavailable');assert.equal(calls,failing.startsWith('snapshot-')?4:0);assert.equal(kv.map.get(SNAPSHOT_KEY),'last-good');safeLeaderDiagnostic(result);
+ }
+});
+test('SYNTHETIC known403 survives either block-write failure with storage stop and private denial marker',async()=>{
+ for(const key of ['cfbd:v1:blocked',SNAPSHOT_KEY+':blocked']){
+  const kv=storage(),put=kv.put.bind(kv);let calls=0;kv.put=async(k,v)=>{if(k===key)throw Error(DIAGNOSTIC_CANARY);return put(k,v);};
+  const result=await refreshSeasonLeaders({SEASON_LEADERS_KV:kv,CFBD_API_KEY:DIAGNOSTIC_CANARY},async()=>{calls++;return new Response('',{status:403});},()=>T0);
+  assert.equal(calls,1);assert.equal(result.reason,'storage-unavailable');assert.deepEqual(result.diagnostic,{stage:'block-write',reason:'storage-unavailable',sourceBlocked:true,httpStatus:403});safeLeaderDiagnostic(result);
+ }
+});
+async function flushLeaderClock(){for(let i=0;i<50;i++)await Promise.resolve();}
+test('SYNTHETIC unchanged shared90s includes headers and body; phase timings explain abort and timers clean up',async t=>{
+ for(const mode of ['headers','body','success']){
+  if(mode!=='headers')t.mock.timers.reset();t.mock.timers.enable({apis:['setTimeout']});
+  let clock=0,calls=0;const signals=[],kv=storage();kv.map.set(SNAPSHOT_KEY,'last-good');
+  const fetcher=async(_url,{signal})=>{
+   const i=calls++;signals.push(signal);
+   if(i===1&&mode==='body')return new Response(new ReadableStream({start(c){signal.addEventListener('abort',()=>c.error(Error(DIAGNOSTIC_CANARY)),{once:true});}}),{headers:{'content-type':'application/json'}});
+   if(i===1&&mode==='headers')return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(Error(DIAGNOSTIC_CANARY)),{once:true}));
+   return new Promise(resolve=>setTimeout(()=>resolve(json([identities,...categories][i])),i===0?43000:1000));
+  };
+  const pending=refreshSeasonLeaders({SEASON_LEADERS_KV:kv,CFBD_API_KEY:DIAGNOSTIC_CANARY},fetcher,()=>T0,()=>clock);
+  const advance=async ms=>{clock+=ms;t.mock.timers.tick(ms);await flushLeaderClock();};
+  await flushLeaderClock();await advance(43000);assert.equal(calls,2);assert.equal(signals[0],signals[1],'one shared controller, no deadline ownership change');
+  if(mode==='success'){
+   await advance(1000);await advance(1000);await advance(1000);const result=await pending;assert.equal(result.status,'refreshed');assert.deepEqual(result.sourceTiming,{sharedLimitMs:90000,membershipMs:43000,passingMs:1000,rushingMs:1000,receivingMs:1000,totalMs:46000});assert.ok(!kv.map.get(SNAPSHOT_KEY).includes('sourceTiming'));
+   await advance(100000);assert.ok(signals.every(s=>!s.aborted),'cleared shared timer never aborts completed publisher');
+  }else{
+   await advance(46999);assert.equal(signals[1].aborted,false);await advance(1);const result=await pending;assert.equal(result.diagnostic.stage,'passing');assert.equal(result.diagnostic.reason,'source-aborted');assert.equal(result.diagnostic.httpStatus,mode==='body'?200:undefined);assert.equal(calls,2);assert.deepEqual(result.sourceTiming,{sharedLimitMs:90000,membershipMs:43000,passingMs:47000,totalMs:90000});assert.equal(kv.map.get(SNAPSHOT_KEY),'last-good');safeLeaderDiagnostic(result);
+  }
+ }
+});
+test('SYNTHETIC leader auth gates diagnostics; public snapshot and reader never expose private source timing',async()=>{
+ const kv=storage(),env={SEASON_LEADERS_KV:kv,CFBD_API_KEY:DIAGNOSTIC_CANARY,CFBD_REFRESH_TOKEN:'private-admin'};let calls=0;
+ const fetcher=async()=>{calls++;throw Error(DIAGNOSTIC_CANARY);};
+ const request=auth=>new Request('https://owned.test/api/internal/season-leaders-refresh',{method:'POST',headers:auth?{Authorization:'Bearer private-admin'}:{}});
+ const unauthorized=await handleLeadersRefresh(request(false),env,fetcher);assert.equal(unauthorized.status,401);assert.equal((await unauthorized.json()).diagnostic,undefined);assert.equal(kv.ops.length,0);assert.equal(calls,0);
+ const failure=await handleLeadersRefresh(request(true),env,fetcher);assert.equal(failure.status,503);const body=await failure.json();assert.equal(body.diagnostic.stage,'membership');safeLeaderDiagnostic(body);
+ kv.map.set(SNAPSHOT_KEY,JSON.stringify(snapshot()));const publicRows=await readSeasonLeaders(kv,'251',2026,'Texas Longhorns','Texas',T0);assert.ok(!('diagnostic'in publicRows));assert.ok(!('sourceTiming'in publicRows));
+});

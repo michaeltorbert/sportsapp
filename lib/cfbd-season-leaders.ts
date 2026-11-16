@@ -1,4 +1,4 @@
-import { SourceFailure, sourceJson, emptyRefreshBody, cfbdBlocked, blockCfbd } from "./cfbd-source-state";
+import { SourceFailure, sourceJson, emptyRefreshBody, cfbdBlocked, blockCfbd, type SourceReason } from "./cfbd-source-state";
 import { TEAM_LEADER_ROWS, type SeasonLeaders, type SeasonLeader, type TeamLeaderKey } from "./team-season";
 
 export const LEADERS_YEAR = 2026;
@@ -81,32 +81,70 @@ export async function readSeasonLeaders(kv: LeadersKV | undefined, teamId: strin
 }
 
 export type RefreshResult = { status: "refreshed" | "skipped" | "blocked" | "failed"; reason?: string; checkedAt?: string; teams?: number };
+export type LeadersDiagnostic = {
+  stage: "block-read" | "attempt-read" | "attempt-write" | "membership" | "passing" | "rushing" | "receiving" | "snapshot-validation" | "snapshot-write" | "block-write";
+  reason: SourceReason | "source-unavailable" | "snapshot-invalid" | "storage-unavailable";
+  httpStatus?: number; sourceBlocked?: true;
+};
+export type LeadersSourceTiming = { sharedLimitMs: 90000; membershipMs?: number; passingMs?: number; rushingMs?: number; receivingMs?: number; totalMs: number };
+export type LeadersRefreshResult = RefreshResult & { diagnostic?: LeadersDiagnostic; sourceTiming?: LeadersSourceTiming };
 /** KV pacing is deliberately NOT an atomic lock or an account-wide hard quota guarantee. */
-export async function refreshSeasonLeaders(env: LeadersEnv, fetcher: typeof fetch = fetch, now = () => Date.now()): Promise<RefreshResult> {
+export async function refreshSeasonLeaders(env: LeadersEnv, fetcher: typeof fetch = fetch, now = () => Date.now(), monotonic = () => performance.now()): Promise<LeadersRefreshResult> {
   const kv = env.SEASON_LEADERS_KV;
   if (!kv || !env.CFBD_API_KEY) return { status: "failed", reason: "configuration" };
+  let stage: LeadersDiagnostic["stage"] = "block-read";
+  let sourceTiming: LeadersSourceTiming | undefined;
+  // Private diagnostics travel only through the authenticated result and existing cron log.
+  // Keep the original shared deadline: timings measure complete sourceJson headers AND body.
+  const diagnosed = (result: RefreshResult, diagnostic: LeadersDiagnostic): LeadersRefreshResult => ({ ...result, diagnostic, ...(sourceTiming ? { sourceTiming } : {}) });
+  const elapsed = (start: number) => { const ms = monotonic() - start; return Number.isFinite(ms) ? Math.min(3_600_000, Math.max(0, Math.round(ms))) : 0; };
   try {
     if (await cfbdBlocked(kv)) return { status: "blocked", reason: "source-blocked" };
+    stage = "attempt-read";
     const slot = Math.floor(now() / LEADERS_INTERVAL_MS), attempt = await kv.get(ATTEMPT_KEY);
     if (attempt && Number(attempt) >= slot) return { status: "skipped", reason: "refresh-slot" };
+    stage = "attempt-write";
     await kv.put(ATTEMPT_KEY, String(slot)); // Persist before first paid/quota-limited source call.
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS);
-    try {
-      const identity = await sourceJson(CFBD_URLS[0], env.CFBD_API_KEY, fetcher, controller.signal);
-      const categories: unknown[] = [];
-      for (const url of CFBD_URLS.slice(1)) categories.push(await sourceJson(url, env.CFBD_API_KEY, fetcher, controller.signal));
-      const checkedAt = new Date(now()).toISOString(), snapshot = createLeadersSnapshot(identity, categories, checkedAt);
-      await kv.put(SNAPSHOT_KEY, JSON.stringify(snapshot));
-      return { status: "refreshed", checkedAt, teams: Object.keys(snapshot.teams).length };
-    } catch (error) {
-      if (error instanceof SourceFailure && error.blocked) {
-        await blockCfbd(kv, new Date(now()).toISOString());
-        await kv.put(BLOCKED_KEY, JSON.stringify({ reason: "source-blocked", checkedAt: new Date(now()).toISOString() })); // No expiration; operator intervention required.
-        return { status: "blocked", reason: "source-blocked" };
+    const readSource = async (url: string, phase: "membership" | "passing" | "rushing" | "receiving") => {
+      stage = phase;
+      sourceTiming ??= { sharedLimitMs: 90000, totalMs: 0 };
+      const started = monotonic();
+      try { return await sourceJson(url, env.CFBD_API_KEY!, fetcher, controller.signal); }
+      finally {
+        const ms = elapsed(started);
+        sourceTiming[`${phase}Ms`] = ms;
+        sourceTiming.totalMs += ms;
       }
-      return { status: "failed", reason: "source-unavailable" };
+    };
+    try {
+      const identity = await readSource(CFBD_URLS[0], "membership");
+      const categories: unknown[] = [];
+      for (const [index, phase] of (["passing", "rushing", "receiving"] as const).entries()) categories.push(await readSource(CFBD_URLS[index + 1], phase));
+      stage = "snapshot-validation";
+      const checkedAt = new Date(now()).toISOString(), snapshot = createLeadersSnapshot(identity, categories, checkedAt);
+      stage = "snapshot-write";
+      await kv.put(SNAPSHOT_KEY, JSON.stringify(snapshot));
+      return { status: "refreshed", checkedAt, teams: Object.keys(snapshot.teams).length, sourceTiming };
+    } catch (error) {
+      const source = error instanceof SourceFailure ? error : null;
+      const observed = source?.httpStatus === undefined ? {} : { httpStatus: source.httpStatus };
+      if (source?.blocked) {
+        const failureStage = stage;
+        stage = "block-write";
+        try {
+          await blockCfbd(kv, new Date(now()).toISOString());
+          await kv.put(BLOCKED_KEY, JSON.stringify({ reason: "source-blocked", checkedAt: new Date(now()).toISOString() })); // No expiration; operator intervention required.
+        } catch {
+          // Existing worker stops on storage-unavailable even if no permanent block could be saved.
+          return diagnosed({ status: "failed", reason: "storage-unavailable" }, { stage, reason: "storage-unavailable", sourceBlocked: true, ...observed });
+        }
+        return diagnosed({ status: "blocked", reason: "source-blocked" }, { stage: failureStage, reason: source.reason, ...observed });
+      }
+      const storage = stage === "snapshot-write";
+      return diagnosed({ status: "failed", reason: storage ? "storage-unavailable" : "source-unavailable" }, { stage, reason: storage ? "storage-unavailable" : stage === "snapshot-validation" ? "snapshot-invalid" : source?.reason ?? "source-unavailable", ...observed });
     } finally { clearTimeout(timer); }
-  } catch { return { status: "failed", reason: "storage-unavailable" }; }
+  } catch { return diagnosed({ status: "failed", reason: "storage-unavailable" }, { stage, reason: "storage-unavailable" }); }
 }
 export async function handleLeadersRefresh(request: Request, env: LeadersEnv, fetcher: typeof fetch = fetch): Promise<Response> {
   const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };

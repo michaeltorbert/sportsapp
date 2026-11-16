@@ -46,3 +46,44 @@ test('full compiled vinext entry accepts a real transport-empty authenticatedPOS
   assert.equal(calls,0,'compiled entry checks never issue source requests');
  }finally{await mf.dispose();}
 });
+
+// Bundle the actual scheduled source, replacing only vinext's unrelated fetch renderer.
+// Fake KV failures are deliberately confined to this process; no real bindings or egress.
+test('actual scheduled source stops rankings after failed leader snapshot write or known denial+failed block persistence',async()=>{
+ const output=await build({entryPoints:[root+'/worker/index.ts'],bundle:true,platform:'browser',format:'esm',write:false,plugins:[{name:'offline-fetch-renderer-only',setup(b){b.onResolve({filter:/^vinext\/server\/app-router-entry$/},()=>({path:'offline-app',namespace:'offline'}));b.onLoad({filter:/.*/,namespace:'offline'},()=>({contents:'export default {fetch(){return new Response("offline")}}',loader:'js'}));}}]});
+ const worker=(await import('data:text/javascript;base64,'+Buffer.from(output.outputFiles[0].text).toString('base64'))).default;
+ for(const failing of ['snapshot','common-block','legacy-block']){
+  const map=new Map([['season-leaders:v1:2026:regular','last-good']]),logs=[];let calls=0;
+  const failKey=failing==='snapshot'?'season-leaders:v1:2026:regular':failing==='common-block'?'cfbd:v1:blocked':'season-leaders:v1:2026:regular:blocked';
+  const kv={async get(k){return map.get(k)??null;},async put(k,v){if(k===failKey)throw Error('private-worker-canary');map.set(k,v);}};
+  const savedFetch=globalThis.fetch,savedLog=console.log;
+  globalThis.fetch=async()=>{const i=calls++;return failing==='snapshot'?Response.json(sources[i]):new Response('',{status:403});};
+  console.log=line=>logs.push(JSON.parse(line));
+  try{
+   let task;worker.scheduled({cron:'0 5,17 * * *'},{SEASON_LEADERS_KV:kv,CFBD_API_KEY:'private-worker-canary'},{waitUntil(p){task=p;}});await task;
+   assert.equal(calls,failing==='snapshot'?4:1);assert.equal(logs.length,1);assert.equal(logs[0].event,'season_leaders_refresh');assert.equal(logs[0].reason,'storage-unavailable');assert.equal(logs[0].diagnostic.stage,failing==='snapshot'?'snapshot-write':'block-write');assert.equal(logs[0].diagnostic.sourceBlocked,failing==='snapshot'?undefined:true);assert.equal(logs[0].diagnostic.httpStatus,failing==='snapshot'?undefined:403);assert.equal(map.get('season-leaders:v1:2026:regular'),'last-good');assert.ok(!JSON.stringify(logs).includes('private-worker-canary'));assert.equal(map.has('team-rankings:v1:2026:attempt'),false);
+  }finally{globalThis.fetch=savedFetch;console.log=savedLog;}
+ }
+});
+
+// npm test builds first. Exercise the exact emitted scheduled hook, not a hand-written wrapper.
+test('full compiled scheduled entry publishes shared leaders with isolated KV, no player pack and zero repeat-slot egress',{timeout:30000},async()=>{
+ const moduleRoot=root+'/dist/server';const names=readdirSync(moduleRoot,{recursive:true}).filter(n=>n.endsWith('.js'));
+ names.sort((a,b)=>a==='index.js'?-1:b==='index.js'?1:a.localeCompare(b));
+ const modules=names.map(n=>({type:'ESModule',path:moduleRoot+'/'+n,contents:readFileSync(moduleRoot+'/'+n,'utf8')}));let calls=[];
+ const mf=new Miniflare(convertV4MiniflareOptions({name:'compiled-scheduled-offline',modules,modulesRoot:moduleRoot,kvNamespaces:['SEASON_LEADERS_KV'],bindings:{CFBD_API_KEY:'synthetic-scheduled-only'},compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat'],cf:false,telemetry:{enabled:false},outboundService:request=>{
+  calls.push(request.url);assert.equal(request.headers.get('authorization'),'Bearer synthetic-scheduled-only');
+  const category=new URL(request.url).searchParams.get('category'),i=category?['passing','rushing','receiving'].indexOf(category)+1:0;
+  return new SyntheticResponse(JSON.stringify(sources[i]),{headers:{'content-type':'application/json'}});
+ }}));
+ try{
+  const kv=await mf.getKVNamespace('SEASON_LEADERS_KV');
+  await kv.put('team-rankings:v1:2026:attempt',String(Math.floor(Date.now()/86400000)));
+  const worker=await mf.getWorker();
+  await worker.scheduled({scheduledTime:Date.now(),cron:'0 5,17 * * *'});
+  const raw=await kv.get('season-leaders:v1:2026:regular');assert.ok(raw);const published=JSON.parse(raw);
+  assert.equal(published.teams['251'].leaders.passingYards.name,'Arch Manning');assert.equal(published.teams['251'].leaders.passingYards.yards,1298);assert.equal(Object.keys(published.teams).length,3);assert.equal(calls.length,4);assert.ok(!raw.includes('sourceTiming'));assert.ok(!raw.includes('diagnostic'));
+  assert.deepEqual(calls.map(u=>new URL(u).searchParams.get('category')),[null,'passing','rushing','receiving']);
+  await worker.scheduled({scheduledTime:Date.now(),cron:'0 5,17 * * *'});assert.equal(calls.length,4);
+ }finally{await mf.dispose();}
+});
