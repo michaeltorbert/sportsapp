@@ -51,7 +51,7 @@ test("first tap opens the dedicated screen with the final team comparison; Playe
   await expect(screen(page).locator("table.compare-table tbody tr")).toHaveCount(15);
   await expect(screen(page).getByRole("row", { name: /Fourth-down conversions/ })).toBeVisible();
   await expect(screen(page).getByText("Stats checked at")).toBeVisible();
-  expect(harness.state.statsRequests).toEqual([`?event=${FINAL.id}&phase=final&refresh=0&scoring=1&playerContext=1`]);
+  expect(harness.state.statsRequests).toEqual([`?event=${FINAL.id}&phase=final&refresh=0&scoring=1&playerContext=1&boxscore=1`]);
   // Game details stay in the app: score and status, with no external Gamecast link (user request).
   await expect(screen(page).locator(".mh-score")).toHaveText(["20", "17"]);
   // The only links are the in-app team pages (issue #166), outside the score header.
@@ -78,7 +78,7 @@ test("first tap opens the dedicated screen with the final team comparison; Playe
   await expect(players).toHaveAttribute("aria-pressed", "true");
   await expect(players).toBeFocused();
   expect(harness.state.statsRequests).toHaveLength(1);
-  await page.screenshot({ path: info.outputPath("final-stats.png"), fullPage: true, animations: "disabled" });
+  await page.screenshot({ path: info.outputPath("final-stats.png"), fullPage: true, scale: "css", animations: "disabled" });
 });
 
 test("pregame season averages are labeled per game and Player stats waits for kickoff", async ({ page, harness }) => {
@@ -92,7 +92,7 @@ test("pregame season averages are labeled per game and Player stats waits for ki
   await view(page, "Player stats").tap();
   await expect(screen(page).getByText("Player stats start after kickoff")).toBeVisible();
   await expect(screen(page).locator(".player-table")).toHaveCount(0);
-  expect(harness.state.statsRequests).toEqual([`?event=${PREGAME.id}&phase=pregame&refresh=0&scoring=1&playerContext=1`]);
+  expect(harness.state.statsRequests).toEqual([`?event=${PREGAME.id}&phase=pregame&refresh=0&scoring=1&playerContext=1&boxscore=1`]);
 });
 
 test("live stats: opening loads started totals, the source status shows separately, it polls every 30s while open and stops on Back", async ({ page, harness }) => {
@@ -105,7 +105,7 @@ test("live stats: opening loads started totals, the source status shows separate
   await expect(screen(page).getByRole("row", { name: /Total yards/ })).toContainText("235");
   await expect(screen(page).getByText("Source reports 3:48 - 3rd")).toBeVisible();
   await expect(screen(page).locator("a.gamecast, a[target=\"_blank\"]")).toHaveCount(0);
-  expect(harness.state.statsRequests).toEqual([`?event=${LIVE.id}&phase=started&refresh=0&scoring=1&playerContext=1`]);
+  expect(harness.state.statsRequests).toEqual([`?event=${LIVE.id}&phase=started&refresh=0&scoring=1&playerContext=1&boxscore=1`]);
   await page.clock.fastForward(31_000);
   await expect.poll(() => harness.state.statsRequests.length).toBe(2);
   // Leaving the screen stops polling.
@@ -130,14 +130,14 @@ test("started Team stats keeps its context and comparison at phone size and actu
   await expect(screen(page).getByRole("row", { name: /Total yards/ })).toContainText("235");
   await expect(screen(page).getByText("Source reports 3:48 - 3rd")).toBeVisible();
   expect(await noOverflow(page)).toBe(true);
-  await page.screenshot({ path: info.outputPath("started-team-phone-393x852.png"), fullPage: true, animations: "disabled" });
+  await page.screenshot({ path: info.outputPath("started-team-phone-393x852.png"), fullPage: true, scale: "css", animations: "disabled" });
   await page.addStyleTag({ content: ZOOM });
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).zoom)).toBe("2");
   await expect(screen(page).getByRole("heading", { name: "Team stats", level: 2 })).toBeVisible();
   await expect(screen(page).locator("#panel-team .panel-head .stats-phase")).toHaveCount(0);
   await expect(screen(page).getByRole("row", { name: /Total yards/ })).toContainText("235");
   expect(await noOverflow(page)).toBe(true);
-  await page.screenshot({ path: info.outputPath("started-team-phone-393x852-zoom200.png"), fullPage: true, animations: "disabled" });
+  await page.screenshot({ path: info.outputPath("started-team-phone-393x852-zoom200.png"), fullPage: true, scale: "css", animations: "disabled" });
   await view(page, "Player stats").tap();
   await expect(screen(page).locator("#panel-players .panel-head .stats-phase")).toHaveText("This game");
   await view(page, "Scoring").tap();
@@ -192,7 +192,7 @@ for (const [width, height, zoom, wide] of [[393, 852, false], [440, 956, false],
     await openGame(page, FINAL.id);
     await expect(screen(page).getByRole("row", { name: /Fumbles lost/ })).toBeVisible();
     expect(await noOverflow(page)).toBe(true);
-    await page.screenshot({ path: info.outputPath(`team-${width}x${height}${zoom ? "-zoom200" : ""}${wide ? "-wide" : ""}.png`), fullPage: true, animations: "disabled" });
+    await page.screenshot({ path: info.outputPath(`team-${width}x${height}${zoom ? "-zoom200" : ""}${wide ? "-wide" : ""}.png`), fullPage: true, scale: "css", animations: "disabled" });
     await view(page, "Player stats").tap();
     await expect(screen(page).getByRole("region", { name: /receiving statistics$/ }).first()).toBeVisible();
     expect(await noOverflow(page)).toBe(true);
@@ -201,7 +201,7 @@ for (const [width, height, zoom, wide] of [[393, 852, false], [440, 956, false],
       expect(await region.evaluate(el => getComputedStyle(el).overflowX)).toBe("auto");
       expect(await region.getAttribute("tabindex")).toBe("0");
     }
-    await page.screenshot({ path: info.outputPath(`players-${width}x${height}${zoom ? "-zoom200" : ""}${wide ? "-wide" : ""}.png`), fullPage: true, animations: "disabled" });
+    await page.screenshot({ path: info.outputPath(`players-${width}x${height}${zoom ? "-zoom200" : ""}${wide ? "-wide" : ""}.png`), fullPage: true, scale: "css", animations: "disabled" });
   });
 }
 

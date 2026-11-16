@@ -241,7 +241,7 @@ test("betting boundary: injected odds, pickcenter, predictor, win probability an
   raw.boxscore.teams[0].odds = { spread: 1 };
   const s = normalize(raw), json = JSON.stringify(s);
   assert.doesNotMatch(json, /odds|pickcenter|predictor|winprob|againstTheSpread|moneyline|overUnder|51\.5|-150|spread/i);
-  assert.deepEqual(Object.keys(s).sort(), ["checkedAt", "eventId", "players", "sourceDate", "sourcePhase", "sourceStatus", "team", "teamIds", "v"]);
+  assert.deepEqual(Object.keys(s).sort(), ["boxscore", "checkedAt", "eventId", "players", "sourceDate", "sourcePhase", "sourceStatus", "team", "teamIds", "v"]);
   // The public validator rejects extra keys added after normalization.
   assert.equal(parseGameStats({ ...JSON.parse(json), odds: [] }), null);
   assert.equal(parseGameStats({ ...JSON.parse(json), team: { ...s.team, moneyline: 1 } }), null);

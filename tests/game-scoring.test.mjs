@@ -43,7 +43,7 @@ test("genuine live (COMPOSED): supplied quarters only, real zeros, source-order 
   assert.deepEqual(s.scoring.plays.items[1], { team: 1, period: 2, clock: "14:11", type: "Blocked Punt Touchdown", text: "Punt blocked by D. Okoye, recovered by D. Fields for a TD (T. Sandell KICK)", away: 7, home: 7 });
   assert.equal(s.scoring.plays.omitted, undefined); assert.equal(s.scoring.plays.inconsistent, undefined);
   // The released Team and Players sections are exactly what the boxscore alone produces.
-  assert.deepEqual(gameStatsForClient(s, false, false), normalize(fixture("live")));
+  assert.deepEqual(gameStatsForClient(s, false, false), gameStatsForClient(normalize(fixture("live")), false, false));
   assert.ok(parseGameStats(JSON.parse(JSON.stringify(s))));
   assert.equal(scoringDisplay(s, "started").mode, "scoring");
   // Season-only Team stats or a different expected phase never relabel scoring.
@@ -136,7 +136,7 @@ test("SYNTHETIC plays: unknown teams omitted, missing fields null, conflicting d
 
 // Grows the Players section with supplied-looking rows until the snapshot without scoring is `gap` bytes under the bound.
 function nearLimit(gap) {
-  const raw = composed("final", "final"), base = () => snapshotBytes(withoutScoring(normalize(raw)));
+  const raw = composed("final", "final"), base = () => snapshotBytes(gameStatsForClient(normalize(raw), false, true));
   const rows = raw.boxscore.players.flatMap(t => t.statistics).filter(c => ["passing", "rushing", "receiving"].includes(c.name));
   const added = [];
   for (let i = 0; base() < STATS_MAX_BYTES - gap - 200; i++) {
@@ -161,20 +161,20 @@ test("budget: Team and Players are decided first; scoring uses only what remains
   const plain = structuredClone(tight); delete plain.scoringPlays;
   for (const c of plain.header.competitions[0].competitors) delete c.linescores;
   assert.deepEqual(withoutScoring(t), normalize(plain));
-  assert.ok(snapshotBytes(t) <= STATS_MAX_BYTES);
+  assert.ok(snapshotBytes(gameStatsForClient(t, true, true)) <= STATS_MAX_BYTES);
   assert.equal(scoringDisplay(t, "final").mode, "unavailable");
   // 20 bytes left: not even the marker fits, so scoring is absent (read as unavailable) and nothing else changes.
   const full = normalize(nearLimit(20));
   assert.equal("scoring" in full, false);
   assert.ok("teams" in full.players);
-  assert.equal(snapshotBytes(full), STATS_MAX_BYTES - 20);
+  assert.equal(snapshotBytes(gameStatsForClient(full, true, true)), STATS_MAX_BYTES - 20);
   // Players already too large without scoring are dropped exactly as released; scoring may then fit.
   const huge = composed("final", "final");
   for (const team of huge.boxscore.players) for (const c of team.statistics) c.athletes = Array.from({ length: 250 }, (_, i) => ({ athlete: { id: String(1e6 + i), displayName: `Participant with a long name ${i}` }, stats: c.athletes[0].stats }));
   const h = normalize(huge);
   assert.deepEqual(h.players, { unavailable: "too-large" });
   assert.ok("periods" in h.scoring);
-  assert.ok(snapshotBytes(h) <= STATS_MAX_BYTES);
+  assert.ok(snapshotBytes(gameStatsForClient(h, true, true)) <= STATS_MAX_BYTES);
 });
 
 test("contract: strict scoring schema, optional for older Workers, and the released body for clients that don't ask", () => {
@@ -218,7 +218,7 @@ test("client: asks for scoring once on the same request; accepts an older Worker
   const full = normalize(composed("live", "live")), urls = [];
   const fetcher = body => async url => { urls.push(String(url)); return json(body); };
   const ok = await loadGameStats(request, Date.now() + 8000, new AbortController().signal, fetcher(full));
-  assert.deepEqual(urls, ["/api/stats?event=401856717&phase=started&refresh=0&scoring=1&playerContext=1"]);
+  assert.deepEqual(urls, ["/api/stats?event=401856717&phase=started&refresh=0&scoring=1&playerContext=1&boxscore=1"]);
   assert.deepEqual(ok.stats.scoring, JSON.parse(JSON.stringify(full.scoring)));
   const old = await loadGameStats(request, Date.now() + 8000, new AbortController().signal, fetcher(withoutScoring(full)));
   assert.equal(old.kind, "ok"); assert.equal(old.stats.scoring, undefined);

@@ -1,0 +1,1976 @@
+{
+  "header": {
+    "id": "401856887",
+    "season": {
+      "year": 2026,
+      "type": 2
+    },
+    "competitions": [
+      {
+        "id": "401856887",
+        "date": "2026-11-15T18:00Z",
+        "status": {
+          "type": {
+            "id": "3",
+            "name": "STATUS_FINAL",
+            "state": "post",
+            "completed": true,
+            "description": "Final",
+            "detail": "Final",
+            "shortDetail": "Final"
+          }
+        },
+        "competitors": [
+          {
+            "homeAway": "home",
+            "score": "24",
+            "team": {
+              "id": "201",
+              "uid": "s:20~l:23~t:201",
+              "name": "Sooners",
+              "displayName": "Oklahoma Sooners",
+              "abbreviation": "OU"
+            }
+          },
+          {
+            "homeAway": "away",
+            "score": "17",
+            "team": {
+              "id": "145",
+              "uid": "s:20~l:23~t:145",
+              "name": "Rebels",
+              "displayName": "Ole Miss Rebels",
+              "abbreviation": "MISS"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "boxscore": {
+    "teams": [
+      {
+        "team": {
+          "id": "145",
+          "uid": "s:20~l:23~t:145",
+          "name": "Rebels",
+          "displayName": "Ole Miss Rebels",
+          "shortDisplayName": "Ole Miss",
+          "abbreviation": "MISS"
+        },
+        "statistics": [
+          {
+            "name": "firstDowns",
+            "label": "1st Downs",
+            "displayValue": "19",
+            "value": 19
+          },
+          {
+            "name": "thirdDownEff",
+            "label": "3rd down efficiency",
+            "displayValue": "4-12",
+            "value": 0.3333333333
+          },
+          {
+            "name": "fourthDownEff",
+            "label": "4th down efficiency",
+            "displayValue": "0-1",
+            "value": 0
+          },
+          {
+            "name": "totalYards",
+            "label": "Total Yards",
+            "displayValue": "306",
+            "value": "-"
+          },
+          {
+            "name": "netPassingYards",
+            "label": "Passing",
+            "displayValue": "127",
+            "value": 127
+          },
+          {
+            "name": "completionAttempts",
+            "label": "Comp/Att",
+            "displayValue": "14/28",
+            "value": "-"
+          },
+          {
+            "name": "yardsPerPass",
+            "label": "Yards per pass",
+            "displayValue": "4.5",
+            "value": 4.536
+          },
+          {
+            "name": "rushingYards",
+            "label": "Rushing",
+            "displayValue": "179",
+            "value": 179
+          },
+          {
+            "name": "rushingAttempts",
+            "label": "Rushing Attempts",
+            "displayValue": "31",
+            "value": 31
+          },
+          {
+            "name": "yardsPerRushAttempt",
+            "label": "Yards per rush",
+            "displayValue": "5.8",
+            "value": 5.774
+          },
+          {
+            "name": "totalPenaltiesYards",
+            "label": "Penalties",
+            "displayValue": "7-47",
+            "value": "-"
+          },
+          {
+            "name": "turnovers",
+            "label": "Turnovers",
+            "displayValue": "0",
+            "value": "-"
+          },
+          {
+            "name": "fumblesLost",
+            "label": "Fumbles lost",
+            "displayValue": "0",
+            "value": 0
+          },
+          {
+            "name": "interceptions",
+            "label": "Interceptions thrown",
+            "displayValue": "0",
+            "value": 0
+          },
+          {
+            "name": "possessionTime",
+            "label": "Possession",
+            "displayValue": "23:29",
+            "value": 1409
+          }
+        ]
+      },
+      {
+        "team": {
+          "id": "201",
+          "uid": "s:20~l:23~t:201",
+          "name": "Sooners",
+          "displayName": "Oklahoma Sooners",
+          "shortDisplayName": "Oklahoma",
+          "abbreviation": "OU"
+        },
+        "statistics": [
+          {
+            "name": "firstDowns",
+            "label": "1st Downs",
+            "displayValue": "19",
+            "value": 19
+          },
+          {
+            "name": "thirdDownEff",
+            "label": "3rd down efficiency",
+            "displayValue": "9-16",
+            "value": 0.5625
+          },
+          {
+            "name": "fourthDownEff",
+            "label": "4th down efficiency",
+            "displayValue": "1-2",
+            "value": 0.5
+          },
+          {
+            "name": "totalYards",
+            "label": "Total Yards",
+            "displayValue": "299",
+            "value": "-"
+          },
+          {
+            "name": "netPassingYards",
+            "label": "Passing",
+            "displayValue": "111",
+            "value": 111
+          },
+          {
+            "name": "completionAttempts",
+            "label": "Comp/Att",
+            "displayValue": "10/19",
+            "value": "-"
+          },
+          {
+            "name": "yardsPerPass",
+            "label": "Yards per pass",
+            "displayValue": "5.8",
+            "value": 5.842
+          },
+          {
+            "name": "rushingYards",
+            "label": "Rushing",
+            "displayValue": "188",
+            "value": 188
+          },
+          {
+            "name": "rushingAttempts",
+            "label": "Rushing Attempts",
+            "displayValue": "49",
+            "value": 49
+          },
+          {
+            "name": "yardsPerRushAttempt",
+            "label": "Yards per rush",
+            "displayValue": "3.8",
+            "value": 3.837
+          },
+          {
+            "name": "totalPenaltiesYards",
+            "label": "Penalties",
+            "displayValue": "4-39",
+            "value": "-"
+          },
+          {
+            "name": "turnovers",
+            "label": "Turnovers",
+            "displayValue": "0",
+            "value": "-"
+          },
+          {
+            "name": "fumblesLost",
+            "label": "Fumbles lost",
+            "displayValue": "0",
+            "value": 0
+          },
+          {
+            "name": "interceptions",
+            "label": "Interceptions thrown",
+            "displayValue": "0",
+            "value": 0
+          },
+          {
+            "name": "possessionTime",
+            "label": "Possession",
+            "displayValue": "36:31",
+            "value": 2191
+          }
+        ]
+      }
+    ],
+    "players": [
+      {
+        "team": {
+          "id": "145",
+          "uid": "s:20~l:23~t:145",
+          "name": "Rebels",
+          "displayName": "Ole Miss Rebels",
+          "shortDisplayName": "Ole Miss",
+          "abbreviation": "MISS"
+        },
+        "statistics": [
+          {
+            "name": "passing",
+            "text": "Ole Miss Passing",
+            "keys": [
+              "completions/passingAttempts",
+              "passingYards",
+              "yardsPerPassAttempt",
+              "passingTouchdowns",
+              "interceptions",
+              "adjQBR"
+            ],
+            "labels": [
+              "C/ATT",
+              "YDS",
+              "AVG",
+              "TD",
+              "INT"
+            ],
+            "descriptions": [
+              "Completions/Attempts",
+              "Yards",
+              "Yards Per Pass Attempt",
+              "Touchdowns",
+              "Interceptions"
+            ],
+            "totals": [
+              "14/28",
+              "127",
+              "4.5",
+              "1",
+              "0"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "4911529",
+                  "displayName": "Trinidad Chambliss"
+                },
+                "stats": [
+                  "14/27",
+                  "127",
+                  "4.7",
+                  "1",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "-7034",
+                  "displayName": " Team"
+                },
+                "stats": [
+                  "0/1",
+                  "0",
+                  "0.0",
+                  "0",
+                  "0"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "rushing",
+            "text": "Ole Miss Rushing",
+            "keys": [
+              "rushingAttempts",
+              "rushingYards",
+              "yardsPerRushAttempt",
+              "rushingTouchdowns",
+              "longRushing"
+            ],
+            "labels": [
+              "CAR",
+              "YDS",
+              "AVG",
+              "TD",
+              "LONG"
+            ],
+            "descriptions": [
+              "Rushing Attempts",
+              "Yards",
+              "Yards Per Rushing Attempt",
+              "Touchdowns",
+              "Longest Run"
+            ],
+            "totals": [
+              "31",
+              "179",
+              "5.8",
+              "1",
+              "32"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "4911529",
+                  "displayName": "Trinidad Chambliss"
+                },
+                "stats": [
+                  "11",
+                  "84",
+                  "7.6",
+                  "0",
+                  "32"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5125900",
+                  "displayName": "Joshua Dye"
+                },
+                "stats": [
+                  "11",
+                  "58",
+                  "5.3",
+                  "1",
+                  "19"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5214395",
+                  "displayName": "Shekai Mills-Knight"
+                },
+                "stats": [
+                  "8",
+                  "40",
+                  "5.0",
+                  "0",
+                  "14"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5152158",
+                  "displayName": "Deuce Alexander"
+                },
+                "stats": [
+                  "1",
+                  "-3",
+                  "-3.0",
+                  "0",
+                  "0"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "receiving",
+            "text": "Ole Miss Receiving",
+            "keys": [
+              "receptions",
+              "receivingYards",
+              "yardsPerReception",
+              "receivingTouchdowns",
+              "longReception"
+            ],
+            "labels": [
+              "REC",
+              "YDS",
+              "AVG",
+              "TD",
+              "LONG"
+            ],
+            "descriptions": [
+              "Receptions",
+              "Yards",
+              "Yards Per Reception",
+              "Touchdowns",
+              "Longest Reception"
+            ],
+            "totals": [
+              "14",
+              "127",
+              "9.1",
+              "1",
+              "26"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "5079647",
+                  "displayName": "Caleb Odom"
+                },
+                "stats": [
+                  "4",
+                  "56",
+                  "14.0",
+                  "1",
+                  "26"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5125900",
+                  "displayName": "Joshua Dye"
+                },
+                "stats": [
+                  "4",
+                  "29",
+                  "7.3",
+                  "0",
+                  "15"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5152158",
+                  "displayName": "Deuce Alexander"
+                },
+                "stats": [
+                  "2",
+                  "18",
+                  "9.0",
+                  "0",
+                  "9"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4870912",
+                  "displayName": "Traylon Ray"
+                },
+                "stats": [
+                  "1",
+                  "10",
+                  "10.0",
+                  "0",
+                  "10"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5214395",
+                  "displayName": "Shekai Mills-Knight"
+                },
+                "stats": [
+                  "2",
+                  "9",
+                  "4.5",
+                  "0",
+                  "8"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4711408",
+                  "displayName": "Horatio Fields"
+                },
+                "stats": [
+                  "1",
+                  "5",
+                  "5.0",
+                  "0",
+                  "5"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "fumbles",
+            "text": "Ole Miss Fumbles",
+            "keys": [
+              "fumbles",
+              "fumblesLost",
+              "fumblesRecovered"
+            ],
+            "labels": [
+              "FUM",
+              "LOST",
+              "REC"
+            ],
+            "descriptions": [
+              "Fumbles",
+              "Fumbles Lost",
+              "Fumbles Recovered"
+            ],
+            "totals": [
+              "1",
+              "0",
+              "0"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "5125900",
+                  "displayName": "Joshua Dye"
+                },
+                "stats": [
+                  "1",
+                  "0",
+                  "0"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "defensive",
+            "text": "Ole Miss Defense",
+            "keys": [
+              "totalTackles",
+              "soloTackles",
+              "sacks",
+              "tacklesForLoss",
+              "passesDefended",
+              "hurries",
+              "defensiveTouchdowns"
+            ],
+            "labels": [
+              "TOT",
+              "SOLO",
+              "SACKS",
+              "TFL",
+              "PD",
+              "QB HUR",
+              "TD"
+            ],
+            "descriptions": [
+              "Tackles",
+              "Solo Tackles",
+              "Sacks",
+              "Tackles For Loss",
+              "Passes Defended",
+              "Quarterback Hurries",
+              "Touchdowns"
+            ],
+            "totals": [
+              "85",
+              "29",
+              "3",
+              "5",
+              "2",
+              "2",
+              "0"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "5142694",
+                  "displayName": "Tah'j Butler"
+                },
+                "stats": [
+                  "15",
+                  "6",
+                  "1.5",
+                  "1.5",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4918093",
+                  "displayName": "Jaylon Braxton"
+                },
+                "stats": [
+                  "10",
+                  "3",
+                  "0",
+                  "0",
+                  "1",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5139216",
+                  "displayName": "Luke Ferrelli"
+                },
+                "stats": [
+                  "9",
+                  "5",
+                  "0",
+                  "0",
+                  "0",
+                  "1",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4870588",
+                  "displayName": "Joenel Aguero"
+                },
+                "stats": [
+                  "8",
+                  "3",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4870961",
+                  "displayName": "Blake Purchase"
+                },
+                "stats": [
+                  "6",
+                  "2",
+                  "0.5",
+                  "0.5",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4870700",
+                  "displayName": "Sharif Denson"
+                },
+                "stats": [
+                  "4",
+                  "2",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4708488",
+                  "displayName": "Antonio Kite"
+                },
+                "stats": [
+                  "4",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4870967",
+                  "displayName": "Suntarine Perkins"
+                },
+                "stats": [
+                  "4",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4917327",
+                  "displayName": "Jonathan Maldonado"
+                },
+                "stats": [
+                  "4",
+                  "1",
+                  "0",
+                  "0.5",
+                  "0",
+                  "1",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5079347",
+                  "displayName": "Jalyn Crawford"
+                },
+                "stats": [
+                  "3",
+                  "1",
+                  "0",
+                  "0",
+                  "1",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5146887",
+                  "displayName": "Michai Boireau"
+                },
+                "stats": [
+                  "3",
+                  "0",
+                  "0",
+                  "1",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5218778",
+                  "displayName": "Will Echoles"
+                },
+                "stats": [
+                  "3",
+                  "0",
+                  "0",
+                  "0.5",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4685487",
+                  "displayName": "Jehiem Oatis"
+                },
+                "stats": [
+                  "2",
+                  "2",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5268746",
+                  "displayName": "Landon Barnes"
+                },
+                "stats": [
+                  "2",
+                  "1",
+                  "1",
+                  "1",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4870640",
+                  "displayName": "Jamarious Brown"
+                },
+                "stats": [
+                  "2",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4873763",
+                  "displayName": "Nick Cull"
+                },
+                "stats": [
+                  "2",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5218770",
+                  "displayName": "Cedrick Beavers"
+                },
+                "stats": [
+                  "1",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4870975",
+                  "displayName": "Jordan Renaud"
+                },
+                "stats": [
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5150437",
+                  "displayName": "Mark Trigg Jr."
+                },
+                "stats": [
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5158962",
+                  "displayName": "Dorian Barney"
+                },
+                "stats": [
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "interceptions",
+            "text": "Ole Miss Interceptions",
+            "keys": [
+              "interceptions",
+              "interceptionYards",
+              "interceptionTouchdowns"
+            ],
+            "labels": [
+              "INT",
+              "YDS",
+              "TD"
+            ],
+            "descriptions": [
+              "Interceptions",
+              "Yards",
+              "Touchdowns"
+            ],
+            "totals": [],
+            "athletes": []
+          },
+          {
+            "name": "kickReturns",
+            "text": "Ole Miss Kick Returns",
+            "keys": [
+              "kickReturns",
+              "kickReturnYards",
+              "yardsPerKickReturn",
+              "longKickReturn",
+              "kickReturnTouchdowns"
+            ],
+            "labels": [
+              "NO",
+              "YDS",
+              "AVG",
+              "LONG",
+              "TD"
+            ],
+            "descriptions": [
+              "Kick Returns",
+              "Yards",
+              "Yards Per Kick Return",
+              "Longest Kick Return",
+              "Touchdowns"
+            ],
+            "totals": [
+              "2",
+              "41",
+              "20.5",
+              "27",
+              "0"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "4870656",
+                  "displayName": "Johntay Cook II"
+                },
+                "stats": [
+                  "2",
+                  "41",
+                  "20.5",
+                  "27",
+                  "0"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "puntReturns",
+            "text": "Ole Miss Punt Returns",
+            "keys": [
+              "puntReturns",
+              "puntReturnYards",
+              "yardsPerPuntReturn",
+              "longPuntReturn",
+              "puntReturnTouchdowns"
+            ],
+            "labels": [
+              "NO",
+              "YDS",
+              "AVG",
+              "LONG",
+              "TD"
+            ],
+            "descriptions": [
+              "Punt Returns",
+              "Yards",
+              "Yards Per Punt Return",
+              "Longest Punt Return",
+              "Touchdowns"
+            ],
+            "totals": [],
+            "athletes": []
+          },
+          {
+            "name": "kicking",
+            "text": "Ole Miss Kicking",
+            "keys": [
+              "fieldGoalsMade/fieldGoalAttempts",
+              "fieldGoalPct",
+              "longFieldGoalMade",
+              "extraPointsMade/extraPointAttempts",
+              "totalKickingPoints"
+            ],
+            "labels": [
+              "FG",
+              "PCT",
+              "LONG",
+              "XP",
+              "PTS"
+            ],
+            "descriptions": [
+              "Field Goals Made/Attempts",
+              "Field Goal Percentage",
+              "Longest Field Goal Made",
+              "Extra Points Made/Attempts",
+              "Kicking Points"
+            ],
+            "totals": [
+              "1/1",
+              "100.0",
+              "41",
+              "2/2",
+              "5"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "5092504",
+                  "displayName": "Lucas Carneiro"
+                },
+                "stats": [
+                  "1/1",
+                  "100.0",
+                  "41",
+                  "2/2",
+                  "5"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "punting",
+            "text": "Ole Miss Punting",
+            "keys": [
+              "punts",
+              "puntYards",
+              "grossAvgPuntYards",
+              "touchbacks",
+              "puntsInside20",
+              "longPunt"
+            ],
+            "labels": [
+              "NO",
+              "YDS",
+              "AVG",
+              "TB",
+              "In 20",
+              "LONG"
+            ],
+            "descriptions": [
+              "Punts",
+              "Yards",
+              "Average Punt Yards",
+              "Touchbacks",
+              "Punts Inside 20",
+              "Longest Punt"
+            ],
+            "totals": [
+              "5",
+              "191",
+              "38.2",
+              "0",
+              "0",
+              "41"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "5294445",
+                  "displayName": "Oscar Bird"
+                },
+                "stats": [
+                  "5",
+                  "191",
+                  "38.2",
+                  "0",
+                  "0",
+                  "41"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "team": {
+          "id": "201",
+          "uid": "s:20~l:23~t:201",
+          "name": "Sooners",
+          "displayName": "Oklahoma Sooners",
+          "shortDisplayName": "Oklahoma",
+          "abbreviation": "OU"
+        },
+        "statistics": [
+          {
+            "name": "passing",
+            "text": "Oklahoma Passing",
+            "keys": [
+              "completions/passingAttempts",
+              "passingYards",
+              "yardsPerPassAttempt",
+              "passingTouchdowns",
+              "interceptions",
+              "adjQBR"
+            ],
+            "labels": [
+              "C/ATT",
+              "YDS",
+              "AVG",
+              "TD",
+              "INT"
+            ],
+            "descriptions": [
+              "Completions/Attempts",
+              "Yards",
+              "Yards Per Pass Attempt",
+              "Touchdowns",
+              "Interceptions"
+            ],
+            "totals": [
+              "10/19",
+              "111",
+              "5.8",
+              "0",
+              "0"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "4915980",
+                  "displayName": "John Mateer"
+                },
+                "stats": [
+                  "10/19",
+                  "111",
+                  "5.8",
+                  "0",
+                  "0"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "rushing",
+            "text": "Oklahoma Rushing",
+            "keys": [
+              "rushingAttempts",
+              "rushingYards",
+              "yardsPerRushAttempt",
+              "rushingTouchdowns",
+              "longRushing"
+            ],
+            "labels": [
+              "CAR",
+              "YDS",
+              "AVG",
+              "TD",
+              "LONG"
+            ],
+            "descriptions": [
+              "Rushing Attempts",
+              "Yards",
+              "Yards Per Rushing Attempt",
+              "Touchdowns",
+              "Longest Run"
+            ],
+            "totals": [
+              "49",
+              "188",
+              "3.8",
+              "2",
+              "22"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "4915980",
+                  "displayName": "John Mateer"
+                },
+                "stats": [
+                  "16",
+                  "70",
+                  "4.4",
+                  "1",
+                  "22"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5141386",
+                  "displayName": "Tory Blaylock"
+                },
+                "stats": [
+                  "9",
+                  "48",
+                  "5.3",
+                  "0",
+                  "10"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5079298",
+                  "displayName": "Lloyd Avant"
+                },
+                "stats": [
+                  "15",
+                  "46",
+                  "3.1",
+                  "0",
+                  "9"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5159029",
+                  "displayName": "Jonathan Hatton Jr."
+                },
+                "stats": [
+                  "5",
+                  "18",
+                  "3.6",
+                  "1",
+                  "7"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5218767",
+                  "displayName": "Jacob Jordan"
+                },
+                "stats": [
+                  "1",
+                  "7",
+                  "7.0",
+                  "0",
+                  "7"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5122554",
+                  "displayName": "Xavier Robinson"
+                },
+                "stats": [
+                  "2",
+                  "3",
+                  "1.5",
+                  "0",
+                  "3"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "-7026",
+                  "displayName": " Team"
+                },
+                "stats": [
+                  "1",
+                  "-4",
+                  "-4.0",
+                  "0",
+                  "0"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "receiving",
+            "text": "Oklahoma Receiving",
+            "keys": [
+              "receptions",
+              "receivingYards",
+              "yardsPerReception",
+              "receivingTouchdowns",
+              "longReception"
+            ],
+            "labels": [
+              "REC",
+              "YDS",
+              "AVG",
+              "TD",
+              "LONG"
+            ],
+            "descriptions": [
+              "Receptions",
+              "Yards",
+              "Yards Per Reception",
+              "Touchdowns",
+              "Longest Reception"
+            ],
+            "totals": [
+              "10",
+              "111",
+              "11.1",
+              "0",
+              "22"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "4907786",
+                  "displayName": "Rocky Beers"
+                },
+                "stats": [
+                  "4",
+                  "39",
+                  "9.8",
+                  "0",
+                  "12"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5079298",
+                  "displayName": "Lloyd Avant"
+                },
+                "stats": [
+                  "1",
+                  "22",
+                  "22.0",
+                  "0",
+                  "22"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5079556",
+                  "displayName": "Parker Livingstone"
+                },
+                "stats": [
+                  "1",
+                  "17",
+                  "17.0",
+                  "0",
+                  "17"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5293827",
+                  "displayName": "Manny Choice"
+                },
+                "stats": [
+                  "1",
+                  "15",
+                  "15.0",
+                  "0",
+                  "15"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5218767",
+                  "displayName": "Jacob Jordan"
+                },
+                "stats": [
+                  "1",
+                  "9",
+                  "9.0",
+                  "0",
+                  "9"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5141386",
+                  "displayName": "Tory Blaylock"
+                },
+                "stats": [
+                  "1",
+                  "6",
+                  "6.0",
+                  "0",
+                  "6"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5080703",
+                  "displayName": "Isaiah Sategna III"
+                },
+                "stats": [
+                  "1",
+                  "3",
+                  "3.0",
+                  "0",
+                  "3"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "fumbles",
+            "text": "Oklahoma Fumbles",
+            "keys": [
+              "fumbles",
+              "fumblesLost",
+              "fumblesRecovered"
+            ],
+            "labels": [
+              "FUM",
+              "LOST",
+              "REC"
+            ],
+            "descriptions": [
+              "Fumbles",
+              "Fumbles Lost",
+              "Fumbles Recovered"
+            ],
+            "totals": [],
+            "athletes": []
+          },
+          {
+            "name": "defensive",
+            "text": "Oklahoma Defense",
+            "keys": [
+              "totalTackles",
+              "soloTackles",
+              "sacks",
+              "tacklesForLoss",
+              "passesDefended",
+              "hurries",
+              "defensiveTouchdowns"
+            ],
+            "labels": [
+              "TOT",
+              "SOLO",
+              "SACKS",
+              "TFL",
+              "PD",
+              "QB HUR",
+              "TD"
+            ],
+            "descriptions": [
+              "Tackles",
+              "Solo Tackles",
+              "Sacks",
+              "Tackles For Loss",
+              "Passes Defended",
+              "Quarterback Hurries",
+              "Touchdowns"
+            ],
+            "totals": [
+              "60",
+              "28",
+              "2",
+              "6",
+              "7",
+              "3",
+              "1"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "4711065",
+                  "displayName": "Kip Lewis"
+                },
+                "stats": [
+                  "14",
+                  "7",
+                  "0",
+                  "0.5",
+                  "1",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5081928",
+                  "displayName": "Owen Heinecke"
+                },
+                "stats": [
+                  "9",
+                  "3",
+                  "0",
+                  "0.5",
+                  "0",
+                  "1",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5079337",
+                  "displayName": "Eli Bowen"
+                },
+                "stats": [
+                  "6",
+                  "5",
+                  "0",
+                  "1",
+                  "2",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5207928",
+                  "displayName": "Courtland Guillory"
+                },
+                "stats": [
+                  "5",
+                  "2",
+                  "0",
+                  "0",
+                  "2",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5132635",
+                  "displayName": "Jayden Jackson"
+                },
+                "stats": [
+                  "5",
+                  "0",
+                  "0",
+                  "0.5",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5147138",
+                  "displayName": "Michael Boganowski"
+                },
+                "stats": [
+                  "4",
+                  "4",
+                  "1",
+                  "1",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5110453",
+                  "displayName": "Danny Okoye"
+                },
+                "stats": [
+                  "4",
+                  "1",
+                  "0",
+                  "1",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5079711",
+                  "displayName": "David Stone"
+                },
+                "stats": [
+                  "3",
+                  "2",
+                  "1",
+                  "1",
+                  "1",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5143274",
+                  "displayName": "Reggie Powers III"
+                },
+                "stats": [
+                  "3",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4900756",
+                  "displayName": "Tate Sandell"
+                },
+                "stats": [
+                  "1",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5091796",
+                  "displayName": "Jaydon Southard"
+                },
+                "stats": [
+                  "1",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5293826",
+                  "displayName": "Trystan Haynes"
+                },
+                "stats": [
+                  "1",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4870625",
+                  "displayName": "Peyton Bowen"
+                },
+                "stats": [
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5114314",
+                  "displayName": "Taylor Wein"
+                },
+                "stats": [
+                  "1",
+                  "0",
+                  "0",
+                  "0.5",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5141654",
+                  "displayName": "Omarion Robinson"
+                },
+                "stats": [
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5159099",
+                  "displayName": "Jake Kreul"
+                },
+                "stats": [
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "1",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "4899363",
+                  "displayName": "Adepoju Adebawore"
+                },
+                "stats": [
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "1",
+                  "0"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5080703",
+                  "displayName": "Isaiah Sategna III"
+                },
+                "stats": [
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "1"
+                ]
+              },
+              {
+                "athlete": {
+                  "id": "5144965",
+                  "displayName": "Cole Sullivan"
+                },
+                "stats": [
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "1",
+                  "0",
+                  "0"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "interceptions",
+            "text": "Oklahoma Interceptions",
+            "keys": [
+              "interceptions",
+              "interceptionYards",
+              "interceptionTouchdowns"
+            ],
+            "labels": [
+              "INT",
+              "YDS",
+              "TD"
+            ],
+            "descriptions": [
+              "Interceptions",
+              "Yards",
+              "Touchdowns"
+            ],
+            "totals": [],
+            "athletes": []
+          },
+          {
+            "name": "kickReturns",
+            "text": "Oklahoma Kick Returns",
+            "keys": [
+              "kickReturns",
+              "kickReturnYards",
+              "yardsPerKickReturn",
+              "longKickReturn",
+              "kickReturnTouchdowns"
+            ],
+            "labels": [
+              "NO",
+              "YDS",
+              "AVG",
+              "LONG",
+              "TD"
+            ],
+            "descriptions": [
+              "Kick Returns",
+              "Yards",
+              "Yards Per Kick Return",
+              "Longest Kick Return",
+              "Touchdowns"
+            ],
+            "totals": [
+              "1",
+              "26",
+              "26.0",
+              "26",
+              "0"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "5079298",
+                  "displayName": "Lloyd Avant"
+                },
+                "stats": [
+                  "1",
+                  "26",
+                  "26.0",
+                  "26",
+                  "0"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "puntReturns",
+            "text": "Oklahoma Punt Returns",
+            "keys": [
+              "puntReturns",
+              "puntReturnYards",
+              "yardsPerPuntReturn",
+              "longPuntReturn",
+              "puntReturnTouchdowns"
+            ],
+            "labels": [
+              "NO",
+              "YDS",
+              "AVG",
+              "LONG",
+              "TD"
+            ],
+            "descriptions": [
+              "Punt Returns",
+              "Yards",
+              "Yards Per Punt Return",
+              "Longest Punt Return",
+              "Touchdowns"
+            ],
+            "totals": [
+              "2",
+              "77",
+              "38.5",
+              "75",
+              "1"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "5080703",
+                  "displayName": "Isaiah Sategna III"
+                },
+                "stats": [
+                  "2",
+                  "77",
+                  "38.5",
+                  "75",
+                  "1"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "kicking",
+            "text": "Oklahoma Kicking",
+            "keys": [
+              "fieldGoalsMade/fieldGoalAttempts",
+              "fieldGoalPct",
+              "longFieldGoalMade",
+              "extraPointsMade/extraPointAttempts",
+              "totalKickingPoints"
+            ],
+            "labels": [
+              "FG",
+              "PCT",
+              "LONG",
+              "XP",
+              "PTS"
+            ],
+            "descriptions": [
+              "Field Goals Made/Attempts",
+              "Field Goal Percentage",
+              "Longest Field Goal Made",
+              "Extra Points Made/Attempts",
+              "Kicking Points"
+            ],
+            "totals": [
+              "1/3",
+              "33.3",
+              "41",
+              "3/3",
+              "6"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "4900756",
+                  "displayName": "Tate Sandell"
+                },
+                "stats": [
+                  "1/3",
+                  "33.0",
+                  "41",
+                  "3/3",
+                  "6"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "punting",
+            "text": "Oklahoma Punting",
+            "keys": [
+              "punts",
+              "puntYards",
+              "grossAvgPuntYards",
+              "touchbacks",
+              "puntsInside20",
+              "longPunt"
+            ],
+            "labels": [
+              "NO",
+              "YDS",
+              "AVG",
+              "TB",
+              "In 20",
+              "LONG"
+            ],
+            "descriptions": [
+              "Punts",
+              "Yards",
+              "Average Punt Yards",
+              "Touchbacks",
+              "Punts Inside 20",
+              "Longest Punt"
+            ],
+            "totals": [
+              "2",
+              "67",
+              "33.5",
+              "0",
+              "1",
+              "34"
+            ],
+            "athletes": [
+              {
+                "athlete": {
+                  "id": "5154245",
+                  "displayName": "Jacob Ulrich"
+                },
+                "stats": [
+                  "2",
+                  "67",
+                  "33.5",
+                  "0",
+                  "1",
+                  "34"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

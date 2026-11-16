@@ -1,5 +1,6 @@
 "use client";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { BOX_CATEGORIES, BOX_REGISTRY, boxscoreDisplay, type BoxCategory, type BoxRows } from "@/lib/game-boxscore";
 import { ChevronRight, RefreshCw } from "lucide-react";
 import type { Game } from "@/lib/football";
 import type { Section } from "@/lib/game-route";
@@ -69,7 +70,7 @@ function Notice({ title, children, detail, warning = false, live = false, retry,
   </div>;
 }
 export type PlayerLinkFactory = (athleteId: string, teamId: string, sourceSeason?: number) => { href: string; open: () => void } | null;
-function Players({ game, stats, playerLink }: { game: Game; stats: GameStats; playerLink?: PlayerLinkFactory }) {
+function LegacyPlayers({ game, stats, playerLink }: { game: Game; stats: GameStats; playerLink?: PlayerLinkFactory }) {
   const players = stats.players;
   if (!("teams" in players)) return <Notice title="Player stats unavailable">{players.unavailable === "too-large" ? "The player box score is too large to show here. Team stats remain available." : "Player stats were not supplied for this game. Team stats remain available."}</Notice>;
   // Negative source IDs are team-attributed entries; the source supplies their name.
@@ -104,13 +105,81 @@ function Players({ game, stats, playerLink }: { game: Game; stats: GameStats; pl
   return <>{groups}<p className="stats-footnote players-footer">{complete ? "All participants supplied for these categories are shown." : "All participants supplied are shown for the listed categories. Categories marked unavailable are not shown."}{teamEntry && " “Team” is a team-attributed entry from the source."}</p></>;
 }
 
+/** The first column stays visible while numeric columns scroll, including enlarged text. */
+function BoxTable({ game, stats, side, category, data, playerLink }: { game: Game; stats: GameStats; side: number; category: BoxCategory; data: BoxRows; playerLink?: PlayerLinkFactory }) {
+  const region = useRef<HTMLDivElement>(null), hint = useRef<HTMLParagraphElement>(null);
+  const meta = BOX_REGISTRY[category], team = game.teams[side];
+  useLayoutEffect(() => {
+    const element = region.current;
+    if (!element) return;
+    let frame = 0;
+    const fit = () => {
+      frame = 0;
+      const width = `${Math.min(160, element.clientWidth * .45)}px`;
+      if (element.style.getPropertyValue("--box-name-width") !== width) element.style.setProperty("--box-name-width", width);
+      const hidden = element.scrollWidth <= element.clientWidth + 1;
+      if (hint.current && hint.current.hidden !== hidden) hint.current.hidden = hidden;
+    };
+    // The width can change row wrapping and region height. Write outside observer delivery.
+    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(fit); };
+    fit();
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+    observer?.observe(element);
+    return () => { observer?.disconnect(); cancelAnimationFrame(frame); };
+  }, [category, data]);
+  const values = (cells: (string | null)[]) => cells.map((value, i) => <td key={meta.columns[i].key}><Value value={value} /></td>);
+  return <>
+    <p className="box-scroll-hint" id={`box-hint-${team.id}-${category}`} ref={hint}>Scroll table sideways for more columns →</p>
+    <div className="player-table-wrap box-table-wrap" ref={region} role="region" aria-label={`${team.name} ${meta.title.toLowerCase()} statistics`} aria-describedby={`box-hint-${team.id}-${category}`} tabIndex={0} data-focus-key={`stats-${category}-${side}`}>
+      <table className="player-table box-table" style={{ "--box-columns": meta.columns.length } as CSSProperties}>
+        <caption className="sr-only">{team.name} · {meta.title} · this game</caption>
+        <colgroup><col style={{ width: "var(--box-name-width, 10rem)" }} />{meta.columns.map(column => <col key={column.key} style={{ width: "4.25rem" }} />)}</colgroup>
+        <thead><tr><th scope="col">Player</th>{meta.columns.map(column => <th scope="col" key={column.key}><abbr title={column.meaning}>{column.label}</abbr></th>)}</tr></thead>
+        <tbody>{data.rows.map(row => {
+          const link = (category === "passing" || category === "rushing" || category === "receiving") && /^[1-9]\d{0,11}$/.test(row.athleteId) ? playerLink?.(row.athleteId, team.id, stats.sourceSeason) : null;
+          return <tr key={row.athleteId} className={row.athleteId.startsWith("-") ? "team-entry" : undefined}><th scope="row">{row.name ? link ? <a href={link.href} data-focus-key={`player-${row.athleteId}-${team.id}`} onClick={event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); link.open(); } }}>{row.name}</a> : row.name : <span className="stat-missing">Name unavailable</span>}</th>{values(row.values)}</tr>;
+        })}</tbody>
+        {data.totals && <tfoot><tr><th scope="row">Team total</th>{values(data.totals)}</tr></tfoot>}
+      </table>
+    </div>
+  </>;
+}
+function Players({ game, stats, playerLink }: { game: Game; stats: GameStats; playerLink?: PlayerLinkFactory }) {
+  const full = stats.boxscore;
+  if (!full || !("teams" in full) || boxscoreDisplay(stats, stats.sourcePhase) !== "available") return <>
+    <p className="stats-footnote">{full && "unavailable" in full && full.unavailable === "too-large" ? "The full box score is too large to show. Showing limited passing, rushing and receiving stats." : "Full box score unavailable. Showing limited passing, rushing and receiving stats."}</p>
+    <LegacyPlayers game={game} stats={stats} playerLink={playerLink} />
+  </>;
+  return <>
+    {full.partial && <p className="stats-footnote">Some box-score details are unavailable. Supplied values remain below.</p>}
+    {BOX_CATEGORIES.map(category => {
+      const meta = BOX_REGISTRY[category];
+      const qbrMissing = category === "passing" && full.teams.every(team => "categories" in team && "rows" in team.categories.passing && team.categories.passing.rows.every(row => row.values[5] === null));
+      return <section className="category" id={`cat-${category}`} data-category={category} aria-labelledby={`cat-${category}-h`} key={category}>
+        <div className="category-head"><h3 id={`cat-${category}-h`} tabIndex={-1}>{meta.title}</h3><p className="legend">{meta.columns.map(column => `${column.label}: ${column.meaning}`).join(" · ")}{qbrMissing && ". — means QBR was not supplied."}</p></div>
+        <div className="category-teams">{game.teams.map((team, side) => {
+          const entry = full.teams[side], data = "categories" in entry ? entry.categories[category] : entry;
+          return <div className="category-team" key={team.id}><h4 className="player-team-label">{team.name} <small>{side ? "home" : "away"}</small></h4>
+            {!("rows" in data) ? <p className="stats-footnote">{meta.title} unavailable.</p> : <>
+              {!data.rows.length && <p className="stats-footnote">No entries supplied.</p>}
+              {(data.rows.length > 0 || data.totals !== null) && <BoxTable game={game} stats={stats} side={side} category={category} data={data} playerLink={playerLink} />}
+              {data.unaligned || data.totalsUnaligned ? <p className="stats-footnote">Some values could not be matched to their columns and are unavailable (—).</p> : data.partial && <p className="stats-footnote">Some values are unavailable (—).</p>}
+            </>}
+          </div>;
+        })}</div>
+      </section>;
+    })}
+    <p className="stats-footnote players-footer">All participants supplied for the listed categories are shown. “Team” is a team-attributed entry, separate from the supplied team total. — marks an unavailable value.</p>
+  </>;
+}
+
 /** Hook wrapper: mounted only on the game screen of an eligible game, so the board does no stats work. */
-export function GameStatsScreen({ game, section, onSection, jump, onJump, playerLink }: { game: Game; section: Section; onSection: (section: Section, focusHeading?: boolean) => void; jump?: PlayerCategory; onJump?: (category: PlayerCategory) => void; playerLink?: PlayerLinkFactory }) {
+export function GameStatsScreen({ game, section, onSection, jump, onJump, playerLink }: { game: Game; section: Section; onSection: (section: Section, focusHeading?: boolean) => void; jump?: BoxCategory; onJump?: (category: BoxCategory) => void; playerLink?: PlayerLinkFactory }) {
   const { state, now, online, retry } = useGameStats(game, true);
   return <GameStatsView game={game} state={state} now={now} online={online} retry={retry} section={section} onSection={onSection} jump={jump} onJump={onJump} playerLink={playerLink} />;
 }
 
-type ViewProps = { game: Game; state: StatsState | null; now: number; online: boolean; retry: () => void; section: Section; onSection?: (section: Section, focusHeading?: boolean) => void; jump?: PlayerCategory; onJump?: (category: PlayerCategory) => void; playerLink?: PlayerLinkFactory };
+type ViewProps = { game: Game; state: StatsState | null; now: number; online: boolean; retry: () => void; section: Section; onSection?: (section: Section, focusHeading?: boolean) => void; jump?: BoxCategory; onJump?: (category: BoxCategory) => void; playerLink?: PlayerLinkFactory };
 /** Pure rendering of one game's stats state: section navigation, Team stats, Scoring and Player stats. */
 export function GameStatsView({ game, state, now, online, retry, section, onSection = () => {}, jump = "passing", onJump = () => {}, playerLink }: ViewProps) {
   const expected = expectedPhase(game), [away, home] = game.teams, matchup = `${away.name} vs ${home.name}`;
@@ -134,7 +203,10 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
   const retryState: Retry = { onRetry: retry, pending: !!pending, waitMs: retryAt <= 0 ? 0 : now ? Math.max(0, retryAt - now) : null };
   const display = snapshot ? statsDisplay(snapshot, expected) : null;
   const hasBody = !disabled && !!display && (display.mode === "stats" || display.mode === "players-only");
-  const showJumps = players && hasBody && "teams" in snapshot!.players;
+  const boxDisplay = !disabled && snapshot && expected !== "pregame" ? boxscoreDisplay(snapshot, expected) : null;
+  const fullBox = boxDisplay === "available";
+  const showJumps = players && (fullBox || (hasBody && "teams" in snapshot!.players));
+  const jumpCategories: readonly BoxCategory[] = fullBox ? BOX_CATEGORIES : PLAYER_CATEGORIES;
 
   let status: ReactNode;
   if (disabled) status = <div className="stats-empty" role="status"><h3>Live stats are not available yet</h3><p>Stats for games in progress are not shown here. The score and game details are still available.</p></div>;
@@ -142,7 +214,7 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
     if (!online) status = <Notice title="You’re offline" warning live>Stats will load when you reconnect. The score and game details are still available.</Notice>;
     else if (failure && !pending) status = <Notice title="Stats could not be loaded" warning live retry={retryState}>The score and game details are still available. Try again.</Notice>;
     else { const what = scoring ? "scoring" : "team stats"; status = <div className="stats-loading" role="status"><p>{pending === "waiting" ? `Waiting to load ${what}…` : `Loading ${what}…`}</p>{Array.from({ length: 8 }, (_, i) => <div className="skeleton-row" aria-hidden="true" key={i}><span /><span /><span /></div>)}</div>; }
-  } else status = <StatsStatus game={game} stats={snapshot} expected={expected} now={now} online={online} failure={!!failure} retry={retryState} scope={scoring ? "scoring" : "stats"} />;
+  } else status = <StatsStatus game={game} stats={snapshot} expected={expected} now={now} online={online} failure={!!failure} retry={retryState} scope={scoring ? "scoring" : players && fullBox ? "boxscore" : "stats"} />;
   // Scoring has its own availability: it never depends on the Team stats family or on Players.
   const scored = !disabled && snapshot && expected !== "pregame" ? scoringDisplay(snapshot, expected) : null;
 
@@ -156,7 +228,7 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
         <button type="button" data-focus-key="view-scoring" aria-controls="panel-scoring" aria-pressed={scoring} onClick={() => onSection("scoring")}>Scoring</button>
         <button type="button" data-focus-key="view-players" aria-controls="panel-players" aria-pressed={players} onClick={() => onSection("players")}>Player stats</button>
       </div>
-      {showJumps && <div className="jump-links" role="group" aria-label="Jump to player category">{PLAYER_CATEGORIES.map(c => <button type="button" key={c} data-jump={c} data-focus-key={`jump-${c}`} aria-current={jump === c ? "true" : undefined} onClick={() => onJump(c)}>{CATEGORY[c].title}</button>)}</div>}
+      {showJumps && <div className="category-choice"><label htmlFor="game-stat-category">Category</label><select id="game-stat-category" data-focus-key="category-select" value={jumpCategories.includes(jump) ? jump : "passing"} onChange={event => onJump(event.target.value as BoxCategory)}>{jumpCategories.map(category => <option key={category} value={category}>{BOX_REGISTRY[category].title}</option>)}</select></div>}
     </nav>
     <div className="game-body">
       <section className="panel" id="panel-team" aria-labelledby={onTeam ? "team-h" : undefined} aria-label={onTeam ? undefined : heading} hidden={!onTeam}>
@@ -173,7 +245,7 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
             {partial && <p className="stats-footnote">— means this value is unavailable. Supplied zeros remain zero.</p>}
             {team.kind === "season" && <p className="stats-footnote">Season averages supplied before kickoff. These are not game totals.</p>}
             {team.kind === "game" && <p className="stats-footnote">Conversions are made / attempted. 0-0 means no attempts; it is not a calculated percentage.</p>}
-            {expected !== "pregame" && <button type="button" className="next-view" data-focus-key="to-players" onClick={() => onSection("players", true)}><span>Player stats</span><small>Passing · rushing · receiving</small><ChevronRight size={18} aria-hidden="true" /></button>}
+            {expected !== "pregame" && <button type="button" className="next-view" data-focus-key="to-players" onClick={() => onSection("players", true)}><span>Player stats</span><small>{fullBox ? "Offense · defense · special teams" : "Passing · rushing · receiving"}</small><ChevronRight size={18} aria-hidden="true" /></button>}
           </> : <Notice title="Team stats unavailable" action={<button type="button" data-focus-key="notice-players" onClick={() => onSection("players", true)}>View player stats</button>}>Player stats remain available.</Notice>)}
         </>}
       </section>
@@ -195,7 +267,7 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
           {head("players-h", "Player stats")}
           {expected === "pregame"
             ? <div className="stats-empty"><h3>Player stats start after kickoff</h3><p>Before kickoff, Team stats shows each team’s season averages.</p></div>
-            : <>{status}{hasBody && <Players game={game} stats={snapshot!} playerLink={playerLink} />}</>}
+            : <>{status}{(hasBody || fullBox) && <Players game={game} stats={snapshot!} playerLink={playerLink} />}</>}
         </>}
       </section>
     </div>
@@ -204,7 +276,7 @@ export function GameStatsView({ game, state, now, online, retry, section, onSect
 
 // Notices first, then retrieval time and the source's own status, shared by every section.
 // Scoring decides its own availability, so for it only the shared notices and freshness apply.
-function StatsStatus({ game, stats, expected, now, online, failure, retry, scope }: { game: Game; stats: GameStats; expected: StatsPhase; now: number; online: boolean; failure: boolean; retry: Retry; scope: "stats" | "scoring" }) {
+function StatsStatus({ game, stats, expected, now, online, failure, retry, scope }: { game: Game; stats: GameStats; expected: StatsPhase; now: number; online: boolean; failure: boolean; retry: Retry; scope: "stats" | "scoring" | "boxscore" }) {
   const pending = retry.pending;
   const display = statsDisplay(stats, expected), age = Math.max(0, (now || Date.parse(stats.checkedAt)) - Date.parse(stats.checkedAt));
   const pastTtl = age > statsTtl(expected);

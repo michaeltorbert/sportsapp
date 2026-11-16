@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.25.0 · 2026-11-15
+
+- Expand game player box scores to all ten supported source groups: passing, rushing, receiving, fumbles, defense, interceptions, kick returns, punt returns, kicking and punting. Show supplied fields and participant rows for both teams, with independent team totals, fractional defensive values and explicit missing or empty details. Total QBR is shown only when supplied; it is never calculated.
+- A native Category menu jumps through the continuous player document. Full names stay visible while numeric columns scroll within their tables, including enlarged text. Preserve the existing score presentation, team comparisons, Scoring, team and offensive-player navigation, spoiler protection and saved preferences.
+- Negotiate the expanded box score on the existing cached statistics request. Keep released client response projections unchanged and budget the extension independently so it cannot displace existing Team, Players or Scoring data.
+- Candidate preparation only: current changing hosted live-update evidence remains unverified. This entry does not establish a production release, universal source coverage or physical-phone acceptance; issue #191 remains open pending its acceptance gates.
+
 ## 1.24.0 · 2026-11-14
 
 - Open player pages from team season leaders and individual game box rows, with regular-season totals, the full team-game log, explicit earlier seasons and historical team choices. Missing player rows remain distinct from missing game statistics; no DNP or zero is inferred.

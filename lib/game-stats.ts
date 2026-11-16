@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeBoxscore, boxscoreSchema, type Boxscore } from "./game-boxscore";
 import type { Game } from "./football";
 import { normalizeScoring, scoringSchema, type Scoring } from "./game-scoring";
 
@@ -72,6 +73,8 @@ export type GameStats = {
   checkedAt: string; team: TeamSection; players: PlayersSection;
   // Sent only to clients that ask for it (`scoring=1`); absent means unavailable.
   scoring?: Scoring;
+  // Independent budget; sent only when boxscore=1 is requested.
+  boxscore?: Boxscore;
 };
 
 export class StatsSourceError extends Error {}
@@ -238,6 +241,8 @@ export function normalizeGameStats(raw: unknown, eventId: string, checkedAt: str
       if (snapshotBytes({ ...stats, scoring: candidate }) <= STATS_MAX_BYTES) { stats.scoring = candidate; break; }
     }
   }
+  // Admit extension only after the released baseline and Scoring budget decisions.
+  stats.boxscore = normalizeBoxscore(box.players, [away, home]);
   return stats;
 }
 
@@ -258,6 +263,7 @@ const statsSchema = z.object({
   players: z.union([z.object({ teams: z.tuple([playerTeamSchema, playerTeamSchema]) }).strict(), unavailable]),
   // Optional: a Worker from before scoring sends none, and that response stays valid.
   scoring: scoringSchema.optional(),
+  boxscore: boxscoreSchema.optional(),
 }).strict();
 /** The response for a client that did not ask for scoring: the released v1 body, unchanged. */
 export function withoutScoring(stats: GameStats): GameStats {
@@ -267,14 +273,18 @@ export function withoutScoring(stats: GameStats): GameStats {
   return base;
 }
 /** Additive player context is opt-in: deployed strict v1.23 parsers reject it. */
-export function gameStatsForClient(stats: GameStats, scoring: boolean, playerContext: boolean): GameStats {
+export function gameStatsForClient(stats: GameStats, scoring: boolean, playerContext: boolean, boxscore = false): GameStats {
   const body = scoring ? { ...stats } : { ...withoutScoring(stats) };
   if (!playerContext) delete body.sourceSeason;
+  if (!boxscore) delete body.boxscore;
   return body;
 }
 export function parseGameStats(value: unknown): GameStats | null {
   const parsed = statsSchema.safeParse(value);
-  return parsed.success ? parsed.data as GameStats : null;
+  if (!parsed.success) return null;
+  const stats = parsed.data as GameStats;
+  if (stats.boxscore && "teams" in stats.boxscore && stats.boxscore.teams.some((team, i) => team.teamId !== stats.teamIds[i])) return null;
+  return stats;
 }
 
 /** Display decision. Source phase and metric family must agree with the scoreboard. */

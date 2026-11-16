@@ -496,7 +496,7 @@ test("switching from game A to game B never shows A's stats on B's screen", asyn
   await expect(screen(page)).not.toContainText("235");
   release();
   await expect(screen(page).getByRole("row", { name: /Total yards/ })).toContainText("328");
-  expect(harness.state.statsRequests).toEqual([`?event=${LIVE.id}&phase=started&refresh=0&scoring=1&playerContext=1`, `?event=${FINAL.id}&phase=final&refresh=0&scoring=1&playerContext=1`]);
+  expect(harness.state.statsRequests).toEqual([`?event=${LIVE.id}&phase=started&refresh=0&scoring=1&playerContext=1&boxscore=1`, `?event=${FINAL.id}&phase=final&refresh=0&scoring=1&playerContext=1&boxscore=1`]);
 });
 
 test("hiding a Duke game while its screen is open leaves only the generic screen and stops its stats work", async ({ page, harness }, info) => {
@@ -512,7 +512,7 @@ test("hiding a Duke game while its screen is open leaves only the generic screen
   await expect(screen(page).locator("h1.game-title")).toContainText("Duke");
   // The retained snapshot is on screen before the hide.
   await expect(screen(page).getByRole("row", { name: /Total yards/ })).toContainText("235");
-  expect(harness.state.statsRequests).toEqual([`?event=${DUKE.id}&phase=started&refresh=0&scoring=1&playerContext=1`]);
+  expect(harness.state.statsRequests).toEqual([`?event=${DUKE.id}&phase=started&refresh=0&scoring=1&playerContext=1&boxscore=1`]);
   const requests = harness.state.statsRequests.length;
   // Another tab hides it (the Settings sheet is on the scoreboard).
   await page.evaluate(id => {
@@ -666,10 +666,10 @@ test("sticky bars, condensed title, category jumps and keyboard path; nothing st
   await cardLink(page, FINAL.id).focus(); await page.keyboard.press("Enter");
   await expect(screen(page).locator("h1.game-title")).toBeFocused();
   await screen(page).getByRole("button", { name: "Player stats", exact: true }).tap();
-  const receiving = screen(page).getByRole("button", { name: "Receiving", exact: true });
-  await receiving.tap();
+  const receiving = screen(page).getByRole("combobox", { name: "Category", exact: true });
+  await receiving.selectOption("receiving");
   await expect(page.locator("#cat-receiving-h")).toBeFocused();
-  await expect(receiving).toHaveAttribute("aria-current", "true");
+  await expect(receiving).toHaveValue("receiving");
   await expect.poll(() => scrollY(page)).toBeGreaterThan(0);
   const bar = await screen(page).locator(".game-bar").boundingBox(), nav = await screen(page).locator(".view-nav").boundingBox();
   expect(Math.abs(bar.y)).toBeLessThanOrEqual(1);
@@ -677,7 +677,7 @@ test("sticky bars, condensed title, category jumps and keyboard path; nothing st
   await expect(screen(page).locator(".title-score")).toBeVisible();
   await expect(screen(page).locator(".title-score")).toHaveText(/20\s*–\s*17/);
   // Every jump and section control is a 44px target.
-  for (const control of await screen(page).locator(".jump-links button, .view-switch button, .back-button, .gamecast").all()) expect((await control.boundingBox()).height).toBeGreaterThanOrEqual(44);
+  for (const control of await screen(page).locator(".category-choice select, .view-switch button, .back-button, .gamecast").all()) expect((await control.boundingBox()).height).toBeGreaterThanOrEqual(44);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath("receiving-390.png"), animations: "disabled" });
   await page.setViewportSize({ width: 393, height: 852 });
@@ -686,5 +686,5 @@ test("sticky bars, condensed title, category jumps and keyboard path; nothing st
   await expect.poll(() => screen(page).locator(".game-bar").evaluate(el => getComputedStyle(el).position)).toBe("static");
   expect(await screen(page).locator(".view-nav").evaluate(el => getComputedStyle(el).position)).toBe("static");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: info.outputPath("players-393-zoom200.png"), fullPage: true, animations: "disabled" });
+  await page.screenshot({ path: info.outputPath("players-393-zoom200.png"), fullPage: true, scale: "css", animations: "disabled" });
 });

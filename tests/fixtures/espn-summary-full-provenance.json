@@ -1,0 +1,16 @@
+{
+  "label": "FULL FILE transformed/minimized genuine final summary; no scoring fields",
+  "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary?event=401856887",
+  "capturedAt": "2026-11-15T22:41:48.637Z",
+  "captureSha256": "e1824a50c5f1d6abd9e208efd28f0575d79b5ae2874f985c52b9798c7477952f",
+  "minimizedSha256": "9c1a57f783026908b5658bd1a63b60a95bdde7c4cde6c2770227bf80e95e874c",
+  "fixtureSha256": "b71a409713df2109bde71d6570677b2d0fe616785df29f6f0008728f26aaff36",
+  "transform": "Restore header.competitions:[captured competition] from discovery singular header.competition; other captured values unchanged. No scoring synthesized. All 10 groups and 74 participant rows. Excludes media/betting/unrelated person fields.",
+  "limits": "One final, empty interceptions; no changing live/all-game/native proof.",
+  "frozenOracle": {
+    "sourceCommit": "dba6230e3ee12afbfc26789342b6ab0b36af7af3",
+    "path": "lib/game-stats.ts",
+    "file": "game-stats-v124.ts.txt",
+    "sha256": "56ea286110a145fc471dd483de5dd585affaf513e649fb1e75f4ca5ebbf7ae84"
+  }
+}

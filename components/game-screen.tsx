@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefO
 import { ChevronLeft, ChevronRight, CloudOff, Signal, TriangleAlert, Tv, Zap } from "lucide-react";
 import { classify, type Game, type Scoreboard, type Team } from "@/lib/football";
 import { upsetExplanation, upsetWatch } from "@/lib/upset";
-import { PLAYER_CATEGORIES, type PlayerCategory } from "@/lib/game-stats";
+import { BOX_CATEGORIES, type BoxCategory } from "@/lib/game-boxscore";
 import type { Section } from "@/lib/game-route";
 import { HalftimeStatus } from "@/components/halftime-status";
 // Relative so page tests bundle the real stats view.
@@ -169,7 +169,10 @@ export function GameScreen({ game, loading, board, scopeError, backLabel, sectio
   const id = game?.id;
   const layout = useLayout(root, id);
   const [condensed, setCondensed] = useState(false);
-  const [jump, setJump] = useState<PlayerCategory>("passing");
+  const [jump, setJump] = useState<BoxCategory>("passing");
+  // A deliberate menu jump remains the reading target through passive reflow/polls.
+  // Real scrolling input releases it so scroll-spy follows normal reading again.
+  const jumpIntent = useRef<BoxCategory | null>(null);
   const change = useRef<{ focus: boolean } | null>(null);
   const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
   const stickyOffset = () => {
@@ -188,29 +191,67 @@ export function GameScreen({ game, loading, board, scopeError, backLabel, sectio
   // Scroll-spy: the jump link for the category under the sticky bars is current.
   useEffect(() => {
     if (section !== "players" || !id) return;
-    let frame = 0;
+    let frame = 0, restoreFrame = 0, settleFrame = 0;
     const spy = () => {
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
-        if (!root.current?.querySelector("[data-jump]")) return;
+        if (!root.current?.querySelector(".category-choice")) return;
+        if (jumpIntent.current && root.current.querySelector(`#cat-${jumpIntent.current}`)) { setJump(jumpIntent.current); return; }
         const line = stickyOffset() + 24;
-        let current: PlayerCategory = "passing";
-        for (const c of PLAYER_CATEGORIES) { const el = document.getElementById(`cat-${c}`); if (el && el.getBoundingClientRect().top <= line) current = c; }
+        const categories = BOX_CATEGORIES.filter(category => root.current?.querySelector(`#cat-${category}`));
+        let current: BoxCategory = categories[0] ?? "passing";
+        for (const c of categories) { const el = document.getElementById(`cat-${c}`); if (el && el.getBoundingClientRect().top <= line) current = c; }
         // At the end of the document the last category is current even if its heading cannot reach the line.
-        const last = document.getElementById("cat-receiving");
-        if (innerHeight + scrollY >= document.documentElement.scrollHeight - 2 && last && last.getBoundingClientRect().top < innerHeight) current = "receiving";
+        const lastCategory = categories.at(-1);
+        const last = lastCategory ? document.getElementById(`cat-${lastCategory}`) : null;
+        if (innerHeight + scrollY >= document.documentElement.scrollHeight - 2 && last && last.getBoundingClientRect().top < innerHeight) current = lastCategory!;
         setJump(current);
       });
     };
+    const release = (event: Event) => {
+      if (event.target instanceof Element && event.target.closest(".category-choice")) return;
+      if (event instanceof WheelEvent && event.deltaY === 0) return;
+      if (event instanceof KeyboardEvent && !["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) return;
+      jumpIntent.current = null;
+    };
+    const restore = () => {
+      if (!jumpIntent.current) return;
+      cancelAnimationFrame(restoreFrame); cancelAnimationFrame(settleFrame);
+      restoreFrame = requestAnimationFrame(() => {
+        restoreFrame = 0;
+        // Let responsive header and table measurements settle before resolving the target position.
+        settleFrame = requestAnimationFrame(() => {
+          settleFrame = 0;
+          const category = jumpIntent.current;
+          const target = category ? root.current?.querySelector<HTMLElement>(`#cat-${category}`) : null;
+          if (category && target) {
+            const top = Math.max(0, target.getBoundingClientRect().top + scrollY - stickyOffset() - 10);
+            if (Math.abs(scrollY - top) > 1) scrollTo({ top, behavior: "auto" });
+            setJump(category);
+          }
+        });
+      });
+    };
     addEventListener("scroll", spy, { passive: true });
-    return () => { removeEventListener("scroll", spy); cancelAnimationFrame(frame); };
+    addEventListener("resize", restore);
+    for (const event of ["wheel", "touchmove", "pointerdown", "keydown"]) addEventListener(event, release, { capture: true, passive: true });
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(restore) : null;
+    const body = root.current?.querySelector(".game-body");
+    if (body) observer?.observe(body);
+    return () => {
+      removeEventListener("scroll", spy); removeEventListener("resize", restore);
+      for (const event of ["wheel", "touchmove", "pointerdown", "keydown"]) removeEventListener(event, release, true);
+      observer?.disconnect(); cancelAnimationFrame(frame); cancelAnimationFrame(restoreFrame); cancelAnimationFrame(settleFrame);
+      jumpIntent.current = null;
+    };
   }, [section, id]);
   // Switching sections keeps the section navigation in place: if it is stuck, the new section starts just under it.
   useLayoutEffect(() => {
     const pending = change.current;
     if (!pending) return;
     change.current = null;
+    jumpIntent.current = null;
     setJump("passing");
     const nav = root.current?.querySelector<HTMLElement>(".view-nav"), context = root.current?.querySelector(".game-context"), bar = root.current?.querySelector<HTMLElement>(".game-bar");
     if (nav && context && getComputedStyle(nav).position === "sticky") {
@@ -224,7 +265,8 @@ export function GameScreen({ game, loading, board, scopeError, backLabel, sectio
     change.current = { focus: focusHeading };
     onSection(next);
   };
-  const toCategory = (category: PlayerCategory) => {
+  const toCategory = (category: BoxCategory) => {
+    jumpIntent.current = category;
     const target = document.getElementById(`cat-${category}`);
     if (target) {
       scrollTo({ top: Math.max(0, target.getBoundingClientRect().top + scrollY - stickyOffset() - 10), behavior: reduceMotion() ? "auto" : "smooth" });
