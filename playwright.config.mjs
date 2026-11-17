@@ -11,7 +11,7 @@ const baseURL = `http://127.0.0.1:${port}`;
 const browserRunId = randomUUID();
 const serverDiagnosticsDir = resolve("output/playwright/server");
 // Bind diagnostics to the actual browser harness, including uncommitted helpers.
-const browserTestSources = [...new Set(execFileSync("git", ["ls-files", "-co", "--exclude-standard", "-z", "tests/browser", "playwright.config.mjs", "scripts/browser-test-server.mjs", "scripts/browser-server-diagnostics.mjs"], { encoding: "utf8" }).split("\0").filter(Boolean))]
+const browserTestSources = [...new Set(execFileSync("git", ["ls-files", "-co", "--exclude-standard", "-z", "tests/browser", "playwright.config.mjs", "scripts/browser-test-server.mjs", "scripts/browser-server-diagnostics.mjs", "scripts/browser-runtime-errors.mjs"], { encoding: "utf8" }).split("\0").filter(Boolean))]
   .filter(path => existsSync(path)).sort().map(path => ({ path, sha256: createHash("sha256").update(readFileSync(path)).digest("hex") }));
 
 export default defineConfig({
