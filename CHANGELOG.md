@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.26.0 · 2026-11-16
+
+- Add an in-app leaders browser for regular-season passing, rushing and receiving total yards in 2025 and 2026. Team and selected-season conference filters combine, with clear units, competition ties and explicit empty, delayed or unavailable states.
+- Keep selected filters through refresh and player/team navigation. Historical player entries retain their selected team and year; historical team links explicitly open the current team page.
+- Apply Duke protection to both affected teams before ranking, counting or paging. Reuse the existing shared current-season source batch and add a separately admitted long-cache historical snapshot; browsing does not call the provider.
+
 ## 1.25.1 · 2026-11-16
 
 - Improve season-leader refresh failure reporting with private fixed stages, observed source HTTP status and source-phase timings in the existing authenticated maintenance result and scheduled logs.

@@ -32,6 +32,7 @@ import { AppUpdateNotice } from "@/components/app-update";
 // Relative so page tests bundle the real game screen and its stats view.
 import { GameScreen, linePlacement, points } from "../components/game-screen";
 import { TeamScreen } from "../components/team-screen";
+import { leadersReturn } from "@/lib/leaders-browser";
 
 const labels: Record<Category, string> = { acc: "ACC", top25: "Top 25", close: "One score", upset: "Upsets" };
 const names: Record<Category, string> = { acc: "ACC", top25: "Top 25", close: "One-score", upset: "Upset watch" };
@@ -259,7 +260,9 @@ export default function Home() {
     if (route || teamPage || playerPage) { focusedOnce.current = true; return; }
     const card = document.getElementById(`game-${focusedGame}`); if (card) { card.scrollIntoView({ block: "center" }); focusedOnce.current = true; }
   }, [data, focusedGame, route, teamPage, playerPage]);
-  const urlView = { date, followToday, selection, period, weekDate };
+  const leadersOrigin = leadersReturn(new URLSearchParams(search || "").get("leadersReturn"));
+  const urlView = { date, followToday, selection, period, weekDate, ...(leadersOrigin ? { leadersReturn: leadersOrigin } : {}) };
+  const leadersNotice = leadersOrigin ? <a className="leaders-return-link" href={leadersOrigin}>‹ Back to leaders · {new URLSearchParams(leadersOrigin.slice(9)).get("season")} regular season</a> : null;
   const update = useAppUpdate({ date, followToday, selection, period, hideFinals, allFbs, focusedGame, openGame: openIntent, weekDate });
 
   // Navigation between the scoreboard and the game screen. The scoreboard stays mounted
@@ -678,6 +681,7 @@ export default function Home() {
     <div className="scores-view" hidden={!!route || !!teamPage || !!playerPage}>
     <header className="app-header"><Link className="wordmark" href="/" onClick={() => { cancelAutomaticWeek(); setDate(null); setWeek(null); setSelection([]); setPeriod("day"); setAllFbs(savedAllFbs()); setFocusedGame(""); }} aria-label="Saturday Signal home"><span className="brand-icon"><Signal size={22} strokeWidth={3} /></span><span>saturday<wbr /><span className="brand-light">signal</span><span className="sport-label">COLLEGE FOOTBALL</span></span></Link><div className="header-actions"><Alerts iconOnly /><button className={`icon-button ${refreshing ? "refreshing" : ""}`} aria-label="Refresh scores" onClick={refresh} disabled={refreshing || !date}><RefreshCw size={20} /></button><Help update={update} /><DukeSettings games={data?.games || []} visibility={duke} /></div></header>
     <AppNavigation active="scores" date={date} followToday={followToday} weekDate={weekDate} />
+    {leadersNotice}
     <div className="date-bar">{weekly ? <><div className="date-navigation week-navigation"><button className="icon-button" aria-label="Previous week" disabled={!week} onClick={() => { if (week) chooseWeek(shiftDate(week.start, -7)); }}><ChevronLeft size={19} /></button><div className="week-label"><CalendarDays size={16} /><span>{week ? weekRange : "This football week"}</span><span className="week-note">THU–MON</span></div><button className="icon-button" aria-label="Next week" disabled={!week} onClick={() => { if (week) chooseWeek(shiftDate(week.start, 7)); }}><ChevronRight size={19} /></button></div><button className={`today-button ${followWeek ? "is-today" : ""}`} onClick={() => { chooseWeek(null); if (followWeek) refresh(); }} disabled={!week}>This week</button></> : <><div className="date-navigation"><button className="icon-button" aria-label="Previous day" disabled={!date} onClick={() => chooseDate(shiftDate(date, -1))}><ChevronLeft size={19} /></button><label className="date-picker"><CalendarDays size={15} /><span>{dateText}</span><input type="date" value={date} onChange={e => { if (e.target.value) chooseDate(e.target.value); }} aria-label="Scoreboard date, Eastern time" /></label><button className="icon-button" aria-label="Next day" disabled={!date} onClick={() => chooseDate(shiftDate(date, 1))}><ChevronRight size={19} /></button></div><button className={`today-button ${followToday ? "is-today" : ""}`} onClick={() => { chooseDate(null); if (followToday) refresh(); }} disabled={!today}>Today</button></>}<div className="period-modes" role="group" aria-label="Scoreboard period"><button aria-pressed={!weekly} onClick={() => choosePeriod("day")}>Day</button><button aria-pressed={weekly} onClick={() => choosePeriod("week")}>Week</button></div></div>
     <p className="timezone-cue">Dates ET · Kickoffs {timezone}</p>
     {overnight && !weekly && <p className="overnight-note">Late games are still on. Today is staying on {shortDate(today)}.</p>}
@@ -709,11 +713,11 @@ export default function Home() {
     {route && <GameScreen game={screenGame} board={screen?.board ?? null} loading={screenLoading} scopeError={!!scopeError} backLabel={weekly ? weekBack : dateText} section={route.section} onSection={changeSection} onBack={goBack} back={gameBack}
       warning={screen || !scheduleGame ? warning || undefined : teamSeason.failure || season?.stale ? "Couldn’t refresh this team’s schedule." : undefined}
       onRetryScores={screen || !scheduleGame ? refresh : teamSeason.retry} refreshing={screen || !scheduleGame ? refreshing : teamSeason.pending}
-      unavailableDetail={route.player ? "It isn’t in the selected season, or it’s hidden by your settings." : undefined} teamLinks={teamLinks} onOpenTeam={openTeam} playerLink={gamePlayerLink} notice={<>{scheduleNotice}<AppUpdateNotice update={update} /></>} />}
+      unavailableDetail={route.player ? "It isn’t in the selected season, or it’s hidden by your settings." : undefined} teamLinks={teamLinks} onOpenTeam={openTeam} playerLink={gamePlayerLink} notice={<>{leadersNotice}{scheduleNotice}<AppUpdateNotice update={update} /></>} />}
     {teamPage && <TeamScreen key={teamPage} teamId={teamPage} season={season} pending={teamSeason.pending} failed={!!teamSeason.failure} online={teamSeason.online} prefs={duke.prefs}
-      playerLink={(id, year) => { const request = { id, year, anchorYear: year, team: teamPage }; return { href: playerHref(request, urlView), open: () => openPlayer(request, `player-${id}-${teamPage}`) }; }} back={teamBack} onBack={goBackFromTeam} onRetry={teamSeason.retry} gameHref={id => gameHref({ id, section: "team", team: teamPage }, urlView)} onOpenGame={openScheduleGame} notice={<AppUpdateNotice update={update} />} />}
+      playerLink={(id, year) => { const request = { id, year, anchorYear: year, team: teamPage }; return { href: playerHref(request, urlView), open: () => openPlayer(request, `player-${id}-${teamPage}`) }; }} back={teamBack} onBack={goBackFromTeam} onRetry={teamSeason.retry} gameHref={id => gameHref({ id, section: "team", team: teamPage }, urlView)} onOpenGame={openScheduleGame} notice={<>{leadersNotice}<AppUpdateNotice update={update} /></>} />}
     {playerPage && <PlayerScreen key={`${playerPage.id}:${playerPage.team}:${playerPage.anchorYear}`} request={playerPage} season={playerData} identity={playerSeason.identity} pending={playerSeason.pending} failed={playerSeason.failed} online={playerSeason.online} prefs={duke.prefs}
       back={{ title: "Back", detail: "Previous screen", label: "Back to previous screen" }} onBack={goBackFromPlayer} onRetry={playerSeason.retry} onSeason={changePlayerSeason}
-      gameHref={id => gameHref({ id, section: "team", player: playerPage }, urlView)} onGame={openPlayerGame} teamHref={id => teamHref(id, urlView)} onTeam={openTeam} notice={<AppUpdateNotice update={update} />} />}
+      gameHref={id => gameHref({ id, section: "team", player: playerPage }, urlView)} onGame={openPlayerGame} teamHref={id => teamHref(id, urlView)} onTeam={openTeam} notice={<>{leadersNotice}<AppUpdateNotice update={update} /></>} />}
   </main></>;
 }

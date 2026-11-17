@@ -6,6 +6,14 @@ const { initialView } = await bundle("lib/app-update.ts");
 
 const view = (changes = {}) => ({ date: "2026-09-05", followToday: false, selection: ["acc", "upset"], period: "day", ...changes });
 const snapshot = (changes = {}) => ({ date: "2026-09-05", selection: ["acc"], period: "week", hideFinals: true, allFbs: false, scrollY: 812, origin: "401858481", ...changes });
+test("leaders return context survives team/game URLs and rejects external origins", () => {
+  const origin="/leaders?season=2025&category=passing&conference=Sun+Belt&team=326&page=2";
+  const team=new URL(teamUrl("https://example.test/","326",view({leadersReturn:origin})));
+  assert.equal(team.searchParams.get('leadersReturn'),origin);
+  const game=new URL(gameUrl(team.href,{id:'401858481',section:'team',team:'326'},view({leadersReturn:origin})));
+  assert.equal(game.searchParams.get('leadersReturn'),origin);
+  assert.equal(new URL(teamUrl('https://example.test/','326',view({leadersReturn:'https://evil.invalid/'}))).searchParams.has('leadersReturn'),false);
+});
 
 test("game URLs round-trip the event and section and keep the scoreboard view and unrelated data", () => {
   const href = gameUrl("https://example.test/?keep=yes&tab=acc&_ss_update=x&_ss_focus=y&_ss_open=0#game-401858481", { id: "401858481", section: "players" }, view());

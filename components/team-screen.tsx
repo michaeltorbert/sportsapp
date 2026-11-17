@@ -5,6 +5,7 @@ import { dukeHidden, type DukePreferences } from "@/lib/duke-visibility";
 import { seasonAggregates, RANKING_ROWS, type RankingKey, type RankingMetric, TEAM_LEADER_ROWS, TEAM_STAT_ROWS, type ScheduleEntry, type ScheduleSection, type TeamSeason, type TeamSeasonTeam } from "@/lib/team-season";
 // Relative, like the page's own import, so page tests bundle the real game screen helpers.
 import { gameDay } from "./game-screen";
+import { leadersHref } from "@/lib/leaders-browser";
 
 // A season crosses daylight and standard time, so every kickoff is converted on its own date to Eastern
 // time, the basis the cue names. Days already use the game's Eastern date (gameDay).
@@ -155,6 +156,7 @@ export function TeamScreen({ teamId, season, pending, failed, online, prefs, bac
     <div className="team-body"><div className="team-cols">
       <div className="team-side">
         <header className="team-head"><TeamLogo team={team} /><div className="team-id"><h1 className="team-title" tabIndex={-1}>{team.name}</h1><p className="team-meta"><span>{season.season.year} season</span><span className="sep" aria-hidden="true">·</span>{record}</p></div></header>
+        <a className="team-browse-leaders" href={leadersHref({year:2026,category:"passing",team:teamId,conference:"all",page:1})}>Browse FBS leaders <ChevronRight size={15} aria-hidden="true"/></a>
         {refreshFailed && <div className="feed-banner game-feed" role="alert"><CloudOff size={18} aria-hidden="true" /><span>{online ? "Couldn’t refresh this team." : "You’re offline."} Showing the season checked {checkedTime(season.checkedAt)}.</span>{online && <button type="button" onClick={onRetry} disabled={pending}>Retry</button>}</div>}
         {aggregates.shown && <section className="team-block team-leaders" aria-labelledby="team-leaders-h">
           <div className="team-leaders-heading"><h2 id="team-leaders-h">Season leaders</h2><p>Regular season</p></div>

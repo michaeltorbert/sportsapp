@@ -71,10 +71,17 @@ test('full compiled scheduled entry publishes shared leaders with isolated KV, n
  const moduleRoot=root+'/dist/server';const names=readdirSync(moduleRoot,{recursive:true}).filter(n=>n.endsWith('.js'));
  names.sort((a,b)=>a==='index.js'?-1:b==='index.js'?1:a.localeCompare(b));
  const modules=names.map(n=>({type:'ESModule',path:moduleRoot+'/'+n,contents:readFileSync(moduleRoot+'/'+n,'utf8')}));let calls=[];
+ const yearFixture=year=>JSON.parse(readFileSync(new URL(`./fixtures/leaders-browser-${year}.json`,import.meta.url),'utf8'));
+ const schedule=year=>({team:{id:'150'},requestedSeason:{year,type:2},events:yearFixture(year).snapshot.privacy.games.map(g=>({id:g.id,date:g.date,season:{year},seasonType:{type:2},competitions:[{date:g.date,timeValid:g.timeValid,neutralSite:g.neutralSite,status:{period:g.started?4:0,type:{name:g.state==='final'?'STATUS_FINAL':'STATUS_SCHEDULED',state:g.state==='final'?'post':'pre',completed:g.state==='final'}},competitors:g.teams.map(t=>({homeAway:t.homeAway,team:{id:t.id,shortDisplayName:t.name}}))}]}))});
  const mf=new Miniflare(convertV4MiniflareOptions({name:'compiled-scheduled-offline',modules,modulesRoot:moduleRoot,kvNamespaces:['SEASON_LEADERS_KV'],bindings:{CFBD_API_KEY:'synthetic-scheduled-only'},compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat'],cf:false,telemetry:{enabled:false},outboundService:request=>{
-  calls.push(request.url);assert.equal(request.headers.get('authorization'),'Bearer synthetic-scheduled-only');
-  const category=new URL(request.url).searchParams.get('category'),i=category?['passing','rushing','receiving'].indexOf(category)+1:0;
-  return new SyntheticResponse(JSON.stringify(sources[i]),{headers:{'content-type':'application/json'}});
+  calls.push(request.url);const url=new URL(request.url);
+  if(url.hostname==='api.collegefootballdata.com'){
+   assert.equal(request.headers.get('authorization'),'Bearer synthetic-scheduled-only');const year=Number(url.searchParams.get('year'));assert.ok([2025,2026].includes(year));const f=yearFixture(year),category=url.searchParams.get('category');
+   assert.ok(url.pathname==='/teams/fbs'||url.pathname==='/stats/player/season');if(category)assert.equal(url.searchParams.get('seasonType'),'regular');
+   return new SyntheticResponse(JSON.stringify(category?f.categories[['passing','rushing','receiving'].indexOf(category)]:f.identities),{headers:{'content-type':'application/json'}});
+  }
+  assert.equal(url.hostname,'site.api.espn.com');assert.equal(request.headers.get('authorization'),null,'never forward source bearer to ESPN');assert.equal(url.pathname,'/apis/site/v2/sports/football/college-football/teams/150/schedule');assert.equal(url.searchParams.get('seasontype'),'2');
+  return new SyntheticResponse(JSON.stringify(schedule(Number(url.searchParams.get('season')))),{headers:{'content-type':'application/json'}});
  }}));
  try{
   const kv=await mf.getKVNamespace('SEASON_LEADERS_KV');
@@ -82,8 +89,12 @@ test('full compiled scheduled entry publishes shared leaders with isolated KV, n
   const worker=await mf.getWorker();
   await worker.scheduled({scheduledTime:Date.now(),cron:'0 5,17 * * *'});
   const raw=await kv.get('season-leaders:v1:2026:regular');assert.ok(raw);const published=JSON.parse(raw);
-  assert.equal(published.teams['251'].leaders.passingYards.name,'Arch Manning');assert.equal(published.teams['251'].leaders.passingYards.yards,1298);assert.equal(Object.keys(published.teams).length,3);assert.equal(calls.length,4);assert.ok(!raw.includes('sourceTiming'));assert.ok(!raw.includes('diagnostic'));
-  assert.deepEqual(calls.map(u=>new URL(u).searchParams.get('category')),[null,'passing','rushing','receiving']);
-  await worker.scheduled({scheduledTime:Date.now(),cron:'0 5,17 * * *'});assert.equal(calls.length,4);
+  assert.equal(published.teams['251'].leaders.passingYards.name,'Arch Manning');assert.equal(published.teams['251'].leaders.passingYards.yards,2201);assert.equal(Object.keys(published.teams).length,9);assert.ok(!raw.includes('sourceTiming'));assert.ok(!raw.includes('diagnostic'));
+  const expected=[...[2026,2025].flatMap(year=>[`https://api.collegefootballdata.com/teams/fbs?year=${year}`,...['passing','rushing','receiving'].map(category=>`https://api.collegefootballdata.com/stats/player/season?year=${year}&category=${category}&seasonType=regular`)]),...[2025,2026].map(year=>`https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams/150/schedule?season=${year}&seasontype=2`)];assert.deepEqual(calls,expected,'one original current batch, one new historical batch, two distinct privacy schedules');
+  for(const year of [2025,2026]){
+   const response=await mf.dispatchFetch(`https://worker.invalid/api/leaders?season=${year}&category=passing&conference=all&team=251&page=1`);assert.equal(response.status,200);const result=await response.json();assert.equal(result.snapshot.year,year);assert.ok(result.snapshot.privacy.games.length>0);assert.equal(result.snapshot.tables.passing.find(r=>r.id==='4870906'&&r.team==='251').yards,year===2025?2942:2201);
+  }
+  assert.equal((await kv.list()).keys.some(k=>k.name.startsWith('player:v1:pack:')),false,'national publication does not fetch player packs');
+  await worker.scheduled({scheduledTime:Date.now(),cron:'0 5,17 * * *'});assert.deepEqual(calls,expected,'same current slot, historical admission and privacy slots make zero repeated source calls');
  }finally{await mf.dispose();}
 });
