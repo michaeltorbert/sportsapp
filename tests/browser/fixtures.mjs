@@ -6,7 +6,7 @@ import { classifyRuntimeErrors } from "../../scripts/browser-runtime-errors.mjs"
 // their arguments and exact underlying promise. Missing epochs fail closed.
 export async function observeRuntimeErrors(page, browserName, origin) {
   let sequence = 0, epoch = null, activeNavigation = null, unownedFrameObserved = false;
-  const data = { browserName, origin, errors: [], dom: [], documents: [], requests: [], navigations: [], frames: [] };
+  const data = { browserName, origin, hostPlatform: process.platform, hostArchitecture: process.arch, errors: [], dom: [], documents: [], requests: [], navigations: [], frames: [] };
   const requests = new Map();
   const ambiguousFrame = kind => {
     data.frames.push({ kind, seq: ++sequence, ownerEpoch: epoch });
@@ -32,6 +32,7 @@ export async function observeRuntimeErrors(page, browserName, origin) {
   });
   await page.addInitScript(() => {
     const epoch = `${performance.timeOrigin}:${Math.random()}`;
+    window.__ssRuntimeDocumentEpoch = epoch;
     let gap = false;
     const send = row => { void window.__ssRuntimeEvidence({ epoch, gap, ...row }).catch(() => { gap = true; }); };
     addEventListener("error", event => send({ kind: "error", message: event.message ?? "resource error" }));
