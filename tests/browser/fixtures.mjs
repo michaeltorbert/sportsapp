@@ -1,5 +1,75 @@
 import { test as base, expect } from "@playwright/test";
 import { appendEvidence, readServerState, readUnavailable, recordUnavailable, resourceSnapshot, serverFailureMessage, unavailableMessage } from "../../scripts/browser-server-diagnostics.mjs";
+import { classifyRuntimeErrors } from "../../scripts/browser-runtime-errors.mjs";
+
+// Passive test-only provenance. No awaited probe before goto/reload; preserve
+// their arguments and exact underlying promise. Missing epochs fail closed.
+export async function observeRuntimeErrors(page, browserName, origin) {
+  let sequence = 0, epoch = null, activeNavigation = null, unownedFrameObserved = false;
+  const data = { browserName, origin, hostPlatform: process.platform, hostArchitecture: process.arch, errors: [], dom: [], documents: [], requests: [], navigations: [], frames: [] };
+  const requests = new Map();
+  const ambiguousFrame = kind => {
+    data.frames.push({ kind, seq: ++sequence, ownerEpoch: epoch });
+    const document = data.documents.find(document => document.epoch === epoch);
+    if (document) document.frameAmbiguous = true;
+    else unownedFrameObserved = true;
+  };
+  for (const event of ["frameattached", "framedetached"]) page.on(event, frame => { if (frame !== page.mainFrame()) ambiguousFrame(event); });
+  await page.exposeBinding("__ssRuntimeEvidence", ({ frame }, row) => {
+    if (frame !== page.mainFrame()) {
+      ambiguousFrame("subframe_binding");
+      if (["error", "unhandledrejection"].includes(row.kind)) data.dom.push({ ...row, seq: ++sequence, mainFrame: false, ownerEpoch: epoch });
+      return;
+    }
+    const seq = ++sequence;
+    if (row.kind === "ready") {
+      epoch = row.epoch;
+      data.documents.push({ epoch, seq, ready: true, gap: false, frameAmbiguous: unownedFrameObserved || page.frames().length > 1 });
+      unownedFrameObserved = false;
+      if (activeNavigation?.commit) activeNavigation.toEpoch = epoch;
+    } else if (["error", "unhandledrejection"].includes(row.kind)) data.dom.push({ ...row, seq });
+    if (row.gap) { const document = data.documents.find(document => document.epoch === row.epoch); if (document) document.gap = true; }
+  });
+  await page.addInitScript(() => {
+    const epoch = `${performance.timeOrigin}:${Math.random()}`;
+    window.__ssRuntimeDocumentEpoch = epoch;
+    let gap = false;
+    const send = row => { void window.__ssRuntimeEvidence({ epoch, gap, ...row }).catch(() => { gap = true; }); };
+    addEventListener("error", event => send({ kind: "error", message: event.message ?? "resource error" }));
+    addEventListener("unhandledrejection", event => send({ kind: "unhandledrejection", message: String(event.reason?.message ?? event.reason) }));
+    send({ kind: "ready" });
+  });
+  for (const method of ["goto", "reload"]) {
+    const original = page[method];
+    page[method] = function(...args) {
+      const nav = { id: data.navigations.length + 1, start: ++sequence, fromEpoch: epoch, toEpoch: null, commit: null, success: false, documentRequest: null };
+      if (activeNavigation && !activeNavigation.settled) activeNavigation.ambiguous = nav.ambiguous = true;
+      data.navigations.push(nav); activeNavigation = nav;
+      const promise = original.apply(this, args);
+      promise.then(response => { nav.settled = ++sequence; nav.success = !nav.ambiguous && !!response && response.status() >= 200 && response.status() < 300 && !!nav.commit; }, () => { nav.settled = ++sequence; });
+      return promise;
+    };
+  }
+  page.on("request", request => {
+    const seq = ++sequence, mainFrame = request.frame() === page.mainFrame();
+    if (request.isNavigationRequest() && mainFrame && activeNavigation && !activeNavigation.commit) activeNavigation.documentRequest = seq;
+    if (!request.url().includes(".rsc")) return;
+    const row = { id: data.requests.length + 1, seq, epoch, mainFrame, url: request.url(), method: request.method(), type: request.resourceType(), status: null, failed: null, failure: null, finished: null };
+    data.requests.push(row); requests.set(request, row);
+  });
+  page.on("framenavigated", frame => {
+    if (frame !== page.mainFrame()) { ambiguousFrame("subframe_navigation"); return; }
+    if (frame !== page.mainFrame() || !activeNavigation?.documentRequest || activeNavigation.commit) return;
+    activeNavigation.commit = ++sequence;
+    if (epoch === activeNavigation.fromEpoch) epoch = null;
+    else activeNavigation.toEpoch = epoch;
+  });
+  page.on("response", response => { const row = requests.get(response.request()); if (row) { row.status = response.status(); row.response = ++sequence; } });
+  page.on("requestfinished", request => { const row = requests.get(request); if (row) row.finished = ++sequence; });
+  page.on("requestfailed", request => { const row = requests.get(request); if (row) { row.failed = ++sequence; row.failure = request.failure()?.errorText ?? null; } });
+  page.on("pageerror", error => data.errors.push({ id: data.errors.length + 1, seq: ++sequence, epoch, navigation: activeNavigation?.id ?? null, name: error.name, message: error.message, stack: error.stack }));
+  return { data, classify: () => classifyRuntimeErrors(data) };
+}
 
 export const NOW = "2026-09-06T03:59:00Z"; // Saturday, 11:59 p.m. Eastern.
 export const ALERT_ORIGIN = "https://alerts.example.test";
@@ -141,6 +211,7 @@ export const test = base.extend({
       active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 0, preferencesVersion: 1, sampleVersion: 1, failSave: false, conflict: false, alertRequests: [], scoreRequests: [], scoreRequestCount: 0, holdAfterInitialProbe: false, failAfterInitialProbe: false, heldScoreReleases: [], releaseScores() { this.holdAfterInitialProbe = false; for (const release of this.heldScoreReleases.splice(0)) release(); }, cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], hostedScoreResponse: null, statsRequests: [], teamRequests: [], playerRequests: [], logoRequests: [], unexpectedExternal: [], errors: [],
     };
     const lifecycle = [];
+    const runtimeEvidence = await observeRuntimeErrors(page, browserName, testInfo.project.use.baseURL);
     const recordLifecycle = event => {
       const entry = { event, utc: new Date().toISOString(), url: page.url() };
       if (event === "crash" || event === "disconnected") {
@@ -195,6 +266,7 @@ export const test = base.extend({
       }
       if (url.origin === testInfo.project.use.baseURL) {
         if (url.pathname === "/alerts-config.json") return json({ serviceUrl: ALERT_ORIGIN });
+        if (url.pathname === "/api/leaders" || url.pathname.startsWith("/api/leaders/")) return json({ error: "simulated leaders unavailable" }, 503);
         // The simulated direct feed only falls back in explicit failure cases.
         // Intercept here so the local Worker can never query a real score feed.
         if (url.pathname === "/api/scores") {
@@ -263,13 +335,14 @@ export const test = base.extend({
     page.off("close", onClose);
     browser.off("disconnected", onDisconnect);
     appendEvidence(serverDiagnosticsDir, "test-timeline.jsonl", { event: "end", utc: new Date().toISOString(), title: testInfo.title, file: testInfo.file, status: testInfo.status, errors: testInfo.errors.map(error => error.message) });
+    const runtimeClassification = runtimeEvidence.classify();
     await testInfo.attach("browser-evidence", { contentType: "application/json", body: JSON.stringify({
       utc: new Date().toISOString(), ...testInfo.config.metadata, deployedLocalBuild: health,
       browser: browserName, engineVersion: browser.version(), viewport: page.viewportSize(),
       userAgent, userAgentError, hasTouch: testInfo.project.use.hasTouch,
       lifecycle, pageClosed: page.isClosed(), browserConnected: browser.isConnected(),
       testErrors: testInfo.errors.map(error => ({ message: error.message, stack: error.stack })),
-      runtimeErrors: state.errors,
+      runtimeErrors: state.errors, runtimeProvenance: runtimeEvidence.data, runtimeClassification,
       simulated: ["ESPN responses", "alert-service responses", "notification permission", "PushManager", "service-worker registration", "installed standalone state"],
       // Even fake owner tokens stay out of attached evidence.
       alertRequests: state.alertRequests.map(r => ({ ...r, authorization: r.authorization ? "[redacted]" : null })), scoreRequests: state.scoreRequests, cdnRequests: state.cdnRequests, hostedScoreRequests: state.hostedScoreRequests, statsRequests: state.statsRequests, teamRequests: state.teamRequests, playerRequests: state.playerRequests, logoRequests: state.logoRequests, unexpectedExternal: state.unexpectedExternal,
@@ -279,7 +352,8 @@ export const test = base.extend({
     expect.soft(lifecycle.filter(entry => entry.event === "crash"), "No browser page crashes").toEqual([]);
     expect.soft(lifecycle.filter(entry => entry.event === "disconnected"), "Browser remains connected during the test").toEqual([]);
     expect.soft(state.unexpectedExternal, "No unmocked external request is permitted").toEqual([]);
-    expect.soft(state.errors, "No browser runtime errors").toEqual([]);
+    expect.soft(runtimeClassification.classified.length + runtimeClassification.unexpected.length, "Every raw browser runtime error remains accounted for").toBe(state.errors.length);
+    expect.soft(runtimeClassification.unexpected, "No unclassified browser runtime errors").toEqual([]);
   },
 });
 
