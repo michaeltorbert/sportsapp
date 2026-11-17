@@ -1,5 +1,7 @@
 import { SourceFailure, sourceJson, emptyRefreshBody, cfbdBlocked, blockCfbd, type SourceReason } from "./cfbd-source-state";
 import { TEAM_LEADER_ROWS, type SeasonLeaders, type SeasonLeader, type TeamLeaderKey } from "./team-season";
+import { createBrowserSnapshot, rejectBrowserKeyEcho } from "./leaders-browser-server";
+import { browserSnapshotKey } from "./leaders-browser";
 
 export const LEADERS_YEAR = 2026;
 export const LEADERS_INTERVAL_MS = 12 * 60 * 60 * 1000;
@@ -87,7 +89,7 @@ export type LeadersDiagnostic = {
   httpStatus?: number; sourceBlocked?: true;
 };
 export type LeadersSourceTiming = { sharedLimitMs: 90000; membershipMs?: number; passingMs?: number; rushingMs?: number; receivingMs?: number; totalMs: number };
-export type LeadersRefreshResult = RefreshResult & { diagnostic?: LeadersDiagnostic; sourceTiming?: LeadersSourceTiming };
+export type LeadersRefreshResult = RefreshResult & { diagnostic?: LeadersDiagnostic; sourceTiming?: LeadersSourceTiming; browser?: "published" | "unavailable" };
 /** KV pacing is deliberately NOT an atomic lock or an account-wide hard quota guarantee. */
 export async function refreshSeasonLeaders(env: LeadersEnv, fetcher: typeof fetch = fetch, now = () => Date.now(), monotonic = () => performance.now()): Promise<LeadersRefreshResult> {
   const kv = env.SEASON_LEADERS_KV;
@@ -110,7 +112,7 @@ export async function refreshSeasonLeaders(env: LeadersEnv, fetcher: typeof fetc
       stage = phase;
       sourceTiming ??= { sharedLimitMs: 90000, totalMs: 0 };
       const started = monotonic();
-      try { return await sourceJson(url, env.CFBD_API_KEY!, fetcher, controller.signal); }
+      try { const value = await sourceJson(url, env.CFBD_API_KEY!, fetcher, controller.signal); rejectBrowserKeyEcho(value,env.CFBD_API_KEY!); return value; }
       finally {
         const ms = elapsed(started);
         sourceTiming[`${phase}Ms`] = ms;
@@ -125,7 +127,11 @@ export async function refreshSeasonLeaders(env: LeadersEnv, fetcher: typeof fetc
       const checkedAt = new Date(now()).toISOString(), snapshot = createLeadersSnapshot(identity, categories, checkedAt);
       stage = "snapshot-write";
       await kv.put(SNAPSHOT_KEY, JSON.stringify(snapshot));
-      return { status: "refreshed", checkedAt, teams: Object.keys(snapshot.teams).length, sourceTiming };
+      // Same admitted four-response generation, no duplicate current source calls. Legacy maxima stay intact.
+      let browser: "published" | "unavailable" = "unavailable", full;
+      try { full = createBrowserSnapshot(identity,categories,2026,checkedAt); } catch { /* Old/partial source fields do not disable the existing team maxima. */ }
+      if (full) { await kv.put(browserSnapshotKey(2026),JSON.stringify(full)); browser = "published"; }
+      return { status: "refreshed", checkedAt, teams: Object.keys(snapshot.teams).length, sourceTiming, browser };
     } catch (error) {
       const source = error instanceof SourceFailure ? error : null;
       const observed = source?.httpStatus === undefined ? {} : { httpStatus: source.httpStatus };

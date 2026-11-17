@@ -2,6 +2,7 @@ import { parsePlayerRequest, type PlayerRequest } from "./player-season";
 import { gameId, viewSearch, weekParam, weekSearch } from "./app-update";
 import { validDate } from "./football";
 import { normalizeSelection, type Period, type Selection } from "./scoreboard-views";
+import { leadersReturn } from "./leaders-browser";
 
 // The dedicated game screen lives on the same root as the scoreboard:
 // `/?event=<id>[&section=scoring|players][&team=<id>]`, plus the scoreboard's own date/cats/period.
@@ -26,7 +27,7 @@ export type GameEntry = { v: 1; kind: "game"; key: string; id: string; section: 
 export type TeamEntry = { v: 1; kind: "team"; key: string; team: string; from: boolean; origin?: string; playerOrigin?: true };
 export type PlayerEntry = { v: 1; kind: "player"; key: string; player: PlayerRequest; from: boolean };
 export type RouteEntry = BoardEntry | GameEntry | TeamEntry | PlayerEntry;
-export type UrlView = { date: string; followToday: boolean; selection: Selection; period: Period; weekDate?: string | null };
+export type UrlView = { date: string; followToday: boolean; selection: Selection; period: Period; weekDate?: string | null; leadersReturn?: string };
 
 const TRANSIENT = ["_ss_update", "_ss_hide_finals", "_ss_all_fbs", "_ss_focus", "_ss_open"];
 const MAX_SCROLL = 10_000_000;
@@ -77,6 +78,7 @@ export function parseTeamRoute(search: string | null): TeamRoute | null {
   return team ? { team } : null;
 }
 function applyView(url: URL, view: UrlView) {
+  if (view.leadersReturn !== undefined) { const origin = leadersReturn(view.leadersReturn); if (origin) url.searchParams.set("leadersReturn",origin); else url.searchParams.delete("leadersReturn"); }
   if (view.followToday) url.searchParams.delete("date");
   else if (validDate(view.date)) url.searchParams.set("date", view.date);
   viewSearch(url, view);

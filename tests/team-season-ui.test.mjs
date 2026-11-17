@@ -37,6 +37,8 @@ function render(value, { team = value?.team.id ?? "150", p = prefs(), pending = 
   }));
 }
 const links = html => [...html.matchAll(/<a [^>]*href="([^"]*)"/g)].map(m => m[1].replaceAll("&amp;", "&"));
+const scheduleLinks = html => [...html.matchAll(/<a class="sched-row" [^>]*href="([^"]*)"/g)].map(m => m[1].replaceAll("&amp;", "&"));
+const browseLink = '/leaders?season=2026&category=passing&conference=all&team=150&page=1';
 
 test("a complete Duke page: season, source record, four labeled pairs and all 12 games as in-app links", () => {
   const html = render(season(), { back: { title: "Game", detail: "TULN at DUKE", label: "Back to game, Tulane at Duke" } });
@@ -53,10 +55,12 @@ test("a complete Duke page: season, source record, four labeled pairs and all 12
   assert.deepEqual(items, rows);
   assert.match(html, /<p class="team-averages-basis">Regular season · per game<\/p>/);
   assert.match(text(html), /Opponents shows what Duke allowed per game\./);
-  // Every schedule game, and nothing else, is a same-root link carrying the team as context.
-  const hrefs = links(html);
+  // Every schedule game is still a same-root game link; the independent browser entry has its own scope.
+  const hrefs = scheduleLinks(html);
   assert.equal(hrefs.length, 12);
   for (const href of hrefs) assert.match(href, /^\/\?event=\d+&team=150$/);
+  assert.deepEqual(links(html).filter(href => href.startsWith('/leaders')), [browseLink]);
+  assert.match(text(html), /Browse FBS leaders/);
   assert.doesNotMatch(html, /espn\.com|target="_blank"|Gamecast/);
   assert.match(text(html), /Regular season 12 games/);
   assert.match(text(html), /Postseason No postseason games are listed yet\./);
@@ -83,20 +87,22 @@ test("a hidden Duke game shows only its date: no opponent, score, result, link o
   const html = render(value, { p: prefs({ manual: { [finalGame.game.id]: true } }) });
   assert.doesNotMatch(html, new RegExp(`${finalGame.game.id}|Tulane|TULN|Won 17`));
   assert.match(html, /<div class="sched-row is-hidden"><span class="s-when"><span class="s-date">Sat, Sep 5<\/span><\/span><span class="s-opp">Duke game hidden by your settings<\/span>/);
-  assert.equal(links(html).length, 11);
+  assert.equal(scheduleLinks(html).length, 11);
+  assert.ok(links(html).includes(browseLink));
   assert.match(text(html), /Record hidden/);
   assert.doesNotMatch(html, /Record <b>4–2|4 wins|<table/);
   assert.match(text(html), /Record and season statistics hidden They include a Duke game your settings are hiding\./);
   // A hidden game that hasn't started hides its row only.
   const upcoming = value.regular.entries.find(e => e.game.state === "upcoming").game.id;
   const later = render(value, { p: prefs({ manual: { [upcoming]: true } }) });
-  assert.equal(links(later).length, 11);
+  assert.equal(scheduleLinks(later).length, 11);
   assert.match(later, /<table/); assert.match(text(later), /Record 4–2/);
 });
 
 test("before preferences load, every Duke game is concealed and aggregates wait", () => {
   const html = render(season(), { p: null });
-  assert.equal(links(html).length, 0);
+  assert.equal(scheduleLinks(html).length, 0);
+  assert.deepEqual(links(html), [browseLink], 'only the public team-scoped browser entry remains; no hidden-game links');
   assert.equal((html.match(/is-hidden/g) || []).length, 12);
   assert.match(text(html), /Checking your Duke settings…/);
   assert.doesNotMatch(html, /<table|Record <b>4–2|4 wins/);
@@ -124,7 +130,7 @@ test("incomplete coverage, missing statistics and missing values are explicit", 
   assert.match(text(partial), /Record not shown yet/);
   assert.match(text(partial), /Record and season statistics not shown yet/);
   assert.match(text(partial), /Postseason games couldn’t be loaded/);
-  assert.equal(links(partial).length, 12);
+  assert.equal(scheduleLinks(partial).length, 12);
   const noStats = render(season("150", { stats: null }));
   assert.match(text(noStats), /Season averages unavailable/);
   assert.match(text(noStats), /Record 4–2/);
@@ -176,7 +182,8 @@ test("season leaders precede unchanged averages, with full names, regular-season
   assert.ok(html.indexOf("Season leaders") < html.indexOf("Season averages"));
   for (const name of ["Arch Manning", "Hollywood Smothers", "Ryan Wingo"]) assert.match(html, new RegExp(name));
   assert.match(text(html), /Season leaders Regular season Duke’s yard leaders. Passing Arch Manning 1,295 total yards Rushing Hollywood Smothers 289 total yards Receiving Ryan Wingo 345 total yards/);
-  assert.equal(links(html).length, 12, "no fictitious player routes");
+  assert.equal(scheduleLinks(html).length, 12, "all real schedule routes remain");
+  assert.deepEqual(links(html).filter(href => !href.startsWith('/?event=')), [browseLink], 'no fictitious player routes; only the explicit browser entry is new');
   const partial = render(season("150", { leaders: { ...leaderRows, rushingYards: null } }));
   assert.match(text(partial), /Rushing Leader unavailable/); assert.doesNotMatch(partial, /Hollywood Smothers|>289</);
   assert.match(text(partial), /Some season leaders couldn’t be loaded/);

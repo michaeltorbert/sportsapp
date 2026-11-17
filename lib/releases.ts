@@ -1,5 +1,6 @@
-export const VERSION = "1.25.1";
+export const VERSION = "1.26.0";
 export const releases = [
+  { version: "1.26.0", date: "November 16, 2026", changes: "Browse regular-season passing, rushing and receiving yard leaders for 2025 and 2026. Filter by team and that season’s conference, keep selections through player/team navigation and refresh, and rank only the players shown after Duke protection." },
   { version: "1.25.1", date: "November 16, 2026", changes: "Improve season-leader refresh handling." },
   { version: "1.25.0", date: "November 15, 2026", changes: "Game box scores add the supplied defense, fumbles, interceptions, returns, kicking and punting rows alongside expanded passing, rushing and receiving fields and team totals. Use Category to jump between groups. Full names stay visible while wider tables scroll, and missing values and empty categories remain clear." },
   { version: "1.24.0", date: "November 14, 2026", changes: "Player pages connect season leaders and individual game rows to regular-season totals, full game logs and explicit previous seasons. Historical teams and missing statistics stay clear, with shared source caching and Duke spoiler protection across player and game navigation." },

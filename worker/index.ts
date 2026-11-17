@@ -2,6 +2,7 @@
 import app from "vinext/server/app-router-entry";
 import { refreshSeasonLeaders, type LeadersEnv } from "../lib/cfbd-season-leaders";
 import { refreshTeamRankings } from "../lib/cfbd-team-rankings";
+import { refreshBrowserSources } from "../lib/leaders-browser-server";
 export default {
   ...app,
   scheduled(_controller: ScheduledController, env: LeadersEnv, ctx: ExecutionContext) {
@@ -12,6 +13,9 @@ export default {
       if (leaders.status === "blocked" || leaders.reason === "storage-unavailable") return;
       const rankings = await refreshTeamRankings(env);
       console.log(JSON.stringify({ event: "team_rankings_refresh", ...rankings }));
+      if (rankings.status === "blocked" || rankings.reason === "storage-unavailable") return;
+      const browser = await refreshBrowserSources(env);
+      console.log(JSON.stringify({ event: "leaders_browser_refresh", ...browser }));
     })());
   },
 };

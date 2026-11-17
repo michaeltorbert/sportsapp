@@ -2,6 +2,7 @@ import { projectPackLeaders, type PackLeaderProjection } from "./player-pack-lea
 import type { Game, Team } from "./football";
 import { PLAYER_CATEGORIES, PLAYER_FIELDS, PLAYER_YEAR, PLAYER_UNKNOWN_GAME_STATUS, playerId, playerTeamId, playerYear, type PlayerCategory, type PlayerRequest, type PlayerSeason, type PlayerStats } from "./player-season";
 import { SNAPSHOT_KEY, type LeadersEnv, type LeadersKV } from "./cfbd-season-leaders";
+import { browserCatalog } from "./leaders-browser-server";
 import { blockCfbd, cfbdBlocked, sourceJson, SourceFailure } from "./cfbd-source-state";
 
 export type CanonicalTeam = { id: string; name: string };
@@ -191,8 +192,9 @@ export function createPlayerSeasonService(env: LeadersEnv, fetcher: typeof fetch
       throw error;
     } finally { clearTimeout(timer); }
   }
-  async function catalog(): Promise<CanonicalTeam[]> {
+  async function catalog(year = PLAYER_YEAR): Promise<CanonicalTeam[]> {
     if (!kv) return failure("configuration");
+    if (year === 2025) { const selected = await browserCatalog(kv,year,now()); if (selected) return selected; }
     const snapshot = await stored<Record<string, unknown>>(kv, SNAPSHOT_KEY, 600_000), teams = obj(snapshot?.teams);
     if (snapshot?.v !== 1 || snapshot.year !== PLAYER_YEAR) return failure("membership-unavailable");
     const values = Object.entries(teams).map(([tid, raw]) => { const r = obj(raw); requireValue(playerTeamId(tid) && r.id === tid && text(r.school)); return { id: tid, name: r.school }; });
@@ -231,10 +233,11 @@ export function createPlayerSeasonService(env: LeadersEnv, fetcher: typeof fetch
       if (!playerId(request.id) || !playerTeamId(request.team) || !playerYear(request.year) || !playerYear(request.anchorYear)) throw new PlayerFailure(400, "invalid");
       if (!kv || !env.CFBD_API_KEY) return failure("configuration");
       const teams = await catalog();
-      let anchor = teams.find(t => t.id === request.team);
+      const anchors = request.anchorYear === 2025 ? await catalog(request.anchorYear) : teams;
+      let anchor = anchors.find(t => t.id === request.team);
       if (!anchor) {
         if (!request.witnessTeam || !request.witnessEvent) throw new PlayerFailure(400, "identity-context");
-        const witnessTeam = teams.find(t => t.id === request.witnessTeam);
+        const witnessTeam = anchors.find(t => t.id === request.witnessTeam);
         if (!witnessTeam) throw new PlayerFailure(400, "identity-context");
         const owned = await pack(witnessTeam, request.anchorYear), proof = owned.value.witnesses[request.team];
         if (!proof || !proof.gameIds.includes(request.witnessEvent) || !proof.gamePeople[request.witnessEvent]?.[request.id]) throw new PlayerFailure(404, "identity-context");

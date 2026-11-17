@@ -135,9 +135,15 @@ test('SYNTHETIC leader storage/validation boundaries retain old snapshot and can
   const kv=storage(),get=kv.get.bind(kv),put=kv.put.bind(kv);kv.map.set(SNAPSHOT_KEY,'last-good');let calls=0;
   kv.get=async k=>{if(failing==='block-read'&&k==='cfbd:v1:blocked'||failing==='attempt-read'&&k.endsWith(':attempt'))throw Error(DIAGNOSTIC_CANARY);return get(k);};
   kv.put=async(k,v)=>{if(failing==='attempt-write'&&k.endsWith(':attempt')||failing==='snapshot-write'&&k===SNAPSHOT_KEY)throw Error(DIAGNOSTIC_CANARY);return put(k,v);};
-  const result=await refreshSeasonLeaders({SEASON_LEADERS_KV:kv,CFBD_API_KEY:DIAGNOSTIC_CANARY},async()=>{const i=calls++;return json(failing==='snapshot-validation'&&i===0?{private:DIAGNOSTIC_CANARY}:[identities,...categories][i]);},()=>T0);
+  const result=await refreshSeasonLeaders({SEASON_LEADERS_KV:kv,CFBD_API_KEY:DIAGNOSTIC_CANARY},async()=>{const i=calls++;return json(failing==='snapshot-validation'&&i===0?{malformed:'not-membership'}:[identities,...categories][i]);},()=>T0);
   assert.equal(result.diagnostic.stage,failing);assert.equal(result.diagnostic.reason,failing==='snapshot-validation'?'snapshot-invalid':'storage-unavailable');assert.equal(result.reason,failing==='snapshot-validation'?'source-unavailable':'storage-unavailable');assert.equal(calls,failing.startsWith('snapshot-')?4:0);assert.equal(kv.map.get(SNAPSHOT_KEY),'last-good');safeLeaderDiagnostic(result);
  }
+});
+test('SYNTHETIC whole-source key echo is rejected during membership before validation/publication and is never reported',async()=>{
+ const kv=storage();kv.map.set(SNAPSHOT_KEY,'last-good');let calls=0;
+ const result=await refreshSeasonLeaders({SEASON_LEADERS_KV:kv,CFBD_API_KEY:DIAGNOSTIC_CANARY},async()=>{calls++;return json({unused:DIAGNOSTIC_CANARY});},()=>T0);
+ assert.equal(calls,1);assert.equal(result.status,'failed');assert.equal(result.diagnostic.stage,'membership');assert.equal(kv.map.get(SNAPSHOT_KEY),'last-good');assert.equal(kv.map.has('leaders-browser:v1:2026:regular'),false);safeLeaderDiagnostic(result);
+ assert.equal(kv.ops.filter(op=>op[0]==='put'&&op[1]!==SNAPSHOT_KEY+':attempt').length,0,'only operational admission may be written before rejecting echoed credential');
 });
 test('SYNTHETIC known403 survives either block-write failure with storage stop and private denial marker',async()=>{
  for(const key of ['cfbd:v1:blocked',SNAPSHOT_KEY+':blocked']){
