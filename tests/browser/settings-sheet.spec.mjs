@@ -927,14 +927,19 @@ test('Settings Display details is the visible first row, stays collapsed until o
   // The app's spacing variable must not leak into the reported device inset.
   await page.addStyleTag({ content: ':root { --safe-top: 59px; }' });
   await openPanel(page, 'Settings');
-  const details = panel(page, 'Settings').locator('details.display-details');
-  await expect(page.locator('details.display-details')).toHaveCount(1);
+  const details = panel(page, 'Settings').locator('details.display-details:not(.schedule-diagnostics)');
+  await expect(page.locator('details.display-details:not(.schedule-diagnostics)')).toHaveCount(1);
   await expect(details).not.toHaveAttribute('open');
+  await expect(details.locator('summary')).toHaveText('Display details');
+  const diagnostics = panel(page, 'Settings').locator('details.schedule-diagnostics');
+  await expect(diagnostics).toHaveCount(1);
+  await expect(diagnostics.locator('summary')).toHaveText('Schedule diagnostics');
+  await expect(diagnostics).not.toHaveAttribute('open');
   // Opening Settings shows it without scrolling, ahead of the spoiler controls.
   expect(await panelBody(page, 'Settings').evaluate(body => {
-    const b = body.getBoundingClientRect(), s = body.querySelector('details.display-details > summary').getBoundingClientRect();
+    const b = body.getBoundingClientRect(), s = body.querySelector('details.display-details:not(.schedule-diagnostics) > summary').getBoundingClientRect();
     const spoiler = [...body.querySelectorAll('h3')].find(h => h.textContent === 'Spoiler protection');
-    return { scrollTop: body.scrollTop, visible: s.top >= b.top - .5 && s.bottom <= b.bottom + .5, first: !!(spoiler.compareDocumentPosition(body.querySelector('details.display-details')) & Node.DOCUMENT_POSITION_PRECEDING) };
+    return { scrollTop: body.scrollTop, visible: s.top >= b.top - .5 && s.bottom <= b.bottom + .5, first: !!(spoiler.compareDocumentPosition(body.querySelector('details.display-details:not(.schedule-diagnostics)')) & Node.DOCUMENT_POSITION_PRECEDING) };
   })).toEqual({ scrollTop: 0, visible: true, first: true });
   await details.locator('summary').tap();
   const value = label => details.locator('dt', { hasText: label }).locator('xpath=following-sibling::dd');
