@@ -107,16 +107,23 @@ test("more than three intersecting calendar entries fail before network requests
   raw.content.sbData.leagues[0].calendar[0].entries.push({ ...entries[0], value: "3" }, { ...entries[1], value: "4" });
   await assert.rejects(completeCdnRange(raw, "2026-09-08"), /does not cover/);
 });
-test("server boundary fallback logs primary failure and validates both CDN weeks", async t => {
+test("server boundary fallback captures safe primary failure and validates both CDN weeks", async t => {
   const { getScoreboard } = await bundle("lib/espn.ts");
+  const { createTrace } = await bundle("lib/schedule-diagnostics.ts");
+  const trace = createTrace("2026-09-08", "2026-09-08", "standalone", "server");
   const logs = [], requests = [];
-  t.mock.method(console, "error", message => logs.push(JSON.parse(message)));
+  t.mock.method(console, "error", message => logs.push(message));
   t.mock.method(globalThis, "fetch", async url => {
     const parsed = new URL(url); requests.push(parsed.hostname);
     return parsed.hostname === "site.api.espn.com" ? new Response("", { status: 403 }) : Response.json(feed(parsed.searchParams.get("week") === "1" ? 1 : 2));
   });
-  const board = await getScoreboard("2026-09-08");
+  const board = await getScoreboard("2026-09-08", "2026-09-08", false, trace);
   assert.deepEqual(board.games, []); assert.equal(board.stale, undefined);
   assert.deepEqual(requests, ["site.api.espn.com", "cdn.espn.com", "cdn.espn.com"]);
-  assert.deepEqual(logs, [{ event: "score_primary_failed", date: "2026-09-08", endDate: "2026-09-08", error: "ESPN status 403" }]);
+  assert.equal(trace.data.outcome, "degraded"); assert.equal(trace.data.source, "cdn");
+  assert.ok(trace.data.observations.some(o => o.stage === "primary" && o.code === "http" && o.status === 403));
+  assert.ok(trace.data.observations.some(o => o.stage === "primary" && o.code === "failed"));
+  assert.ok(trace.data.observations.some(o => o.stage === "cdn-week" && o.code === "ok" && o.status === 200));
+  assert.equal(trace.data.observations.at(-1).code, "ok");
+  assert.deepEqual(logs, [], "Raw primary/provider exception logging stays removed; bounded trace retains safe failure evidence");
 });

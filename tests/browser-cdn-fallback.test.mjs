@@ -135,3 +135,19 @@ test("all three browser paths can fail, then a later load recovers through the h
   assert.deepEqual(calls.map(url => url.startsWith("/api/") ? "hosted" : new URL(url).hostname),
     ["site.api.espn.com", "cdn.espn.com", "hosted"]);
 });
+
+for (const mode of ["coverage", "continuity", "week-identity"]) test(`diagnostic actual CDN ${mode} failure is explicit and requested-week HTTP evidence is retained`, async () => {
+  const { requestScores } = await bundle("lib/score-client.ts");
+  const request = await requestScores("2026-09-08", new AbortController().signal, async raw => {
+    if (String(raw).startsWith("/api/scores")) return hosted();
+    const url = new URL(raw);
+    if (url.hostname === "site.api.espn.com") return new Response(null, { status: 503 });
+    const current = feed(2);
+    if (mode === "coverage") current.content.sbData.leagues[0].calendar[0].entries = [];
+    if (mode === "continuity") current.content.sbData.leagues[0].calendar[0].entries = calendar.map((x, i) => i === 0 ? { ...x, endDate: "2026-09-08T06:58Z" } : x);
+    return Response.json(current);
+  });
+  assert.equal(request.diagnostic.outcome, "degraded");
+  assert.ok(request.diagnostic.observations.some(o => o.code === mode));
+  if (mode === "week-identity") assert.ok(request.diagnostic.observations.some(o => o.stage === "cdn-week" && o.status === 200));
+});

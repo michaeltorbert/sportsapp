@@ -52,3 +52,37 @@ test("server scores recover from the Cloudflare site-API 403 without returning a
   assert.ok(calls[1].includes("cdn.espn.com"));
   await assert.rejects(() => getScoreboard("2026-09-13"), /does not cover/);
 });
+
+test("diagnostic server stages retain HTTP/parse/validation failures, safe terminal 502 and unmodified response policy", async t => {
+  const { createTrace } = await bundle("lib/schedule-diagnostics.ts");
+  const { getScoreboard: scores } = await bundle("lib/espn.ts");
+  t.mock.method(globalThis, "fetch", async url => String(url).includes("site.api") ? new Response("private-provider-sentinel", { status: 403 }) : Response.json({ invalid: true }));
+  const trace = createTrace("2026-11-19", "2026-11-23", "standalone", "server");
+  await assert.rejects(scores("2026-11-19", "2026-11-23", false, trace));
+  assert.equal(trace.data.outcome, "failed");
+  assert.ok(trace.data.observations.some(o => o.stage === "primary" && o.status === 403));
+  assert.ok(trace.data.observations.some(o => o.stage === "cdn" && o.code === "validation"));
+  assert.doesNotMatch(JSON.stringify(trace.data), /private-provider/);
+  const { GET } = await bundle("app/api/scores/route.ts");
+  const response = await GET(new Request("https://app.test/api/scores?date=2026-11-19&end=2026-11-23"));
+  assert.equal(response.status, 502); assert.equal(response.headers.get("Retry-After"), "30"); assert.equal(response.headers.get("Cache-Control"), "no-store");
+  const body = await response.json(); assert.equal(body.scheduleDiagnostics.side, "server"); assert.equal(body.scheduleDiagnostics.outcome, "failed"); assert.doesNotMatch(JSON.stringify(body), /private-provider/);
+});
+test("server diagnostic stale fallback keeps failed source chain outside cached board", async t => {
+  const { createTrace } = await bundle("lib/schedule-diagnostics.ts");
+  const { getScoreboard: scores } = await bundle("lib/espn.ts");
+  let fail = false, now = Date.now();
+  t.mock.method(Date, "now", () => now);
+  t.mock.method(globalThis, "fetch", async () => fail ? new Response("private", { status: 503 }) : Response.json({ events: [] }));
+  const first = createTrace("2026-11-18", "2026-11-18", "standalone", "server");
+  const board = await scores("2026-11-18", "2026-11-18", false, first);
+  assert.equal(board.scheduleDiagnostics, undefined); assert.equal(first.data.source, "primary");
+  const cached = createTrace("2026-11-18", "2026-11-18", "standalone", "server"); await scores("2026-11-18", "2026-11-18", false, cached);
+  assert.equal(cached.data.source, "cache"); assert.ok(cached.data.observations.some(o => o.code === "fresh-cache"));
+  fail = true; now += 16000;
+  const stale = createTrace("2026-11-18", "2026-11-18", "standalone", "server");
+  const recovered = await scores("2026-11-18", "2026-11-18", false, stale);
+  assert.equal(recovered.stale, true); assert.equal(recovered.scheduleDiagnostics, undefined);
+  assert.equal(stale.data.outcome, "stale"); assert.equal(stale.data.source, "cache");
+  assert.ok(stale.data.observations.some(o => o.stage === "primary" && o.status === 503)); assert.ok(stale.data.observations.some(o => o.stage === "cdn" && o.status === 503));
+});

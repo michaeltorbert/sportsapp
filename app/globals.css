@@ -834,3 +834,9 @@ body:has(.game-screen)::before { background: #0d1626; }
 .game-screen .box-table tfoot th, .game-screen .box-table tfoot td { padding: 14px 12px; text-align: right; font-size: .9375rem; font-weight: 750; white-space: nowrap; }
 .game-screen .box-table tfoot th { text-align: left; white-space: normal; }
 .game-screen .box-table tbody th { word-break: normal; }
+
+/* Separate support retrieval; keep the existing Display details disclosure unchanged. */
+.schedule-diagnostic-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: .75rem; }
+.schedule-diagnostic-actions button { border: 1px solid currentColor; border-radius: .5rem; padding: .5rem .65rem; font: inherit; }
+.schedule-diagnostics label { display: block; }
+.schedule-diagnostics textarea { display: block; box-sizing: border-box; width: 100%; max-width: 100%; margin-top: .4rem; padding: .5rem; border: 1px solid currentColor; border-radius: .5rem; font: .75rem monospace; overflow-wrap: anywhere; }
