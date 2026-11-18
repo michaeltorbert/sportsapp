@@ -919,3 +919,38 @@ test("real client CDN: the unchanged 40-second refresh deadline cancels a late C
   assert.deepEqual(gameIds(next.boards.daily), ["sat-live"]); assert.deepEqual(feed.hosted, []);
   assert.equal(deadlines.length, 2);
 });
+
+test("real hook schedule diagnostics keep Day/Week failures independent and recover only the published matching week", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-09-05T21:00:00Z") });
+  let failWeek = true;
+  const fetcher = async raw => {
+    const url = new URL(raw, "https://app.test");
+    if (url.pathname === "/api/scores" || url.hostname === "cdn.espn.com") return new Response("controlled", { status: 503 });
+    const weekly = url.searchParams.get("dates")?.includes("-");
+    return failWeek && weekly ? new Response("controlled", { status: 503 }) : Response.json({ events: [] });
+  };
+  const h = harness(t, null, {}, { hook: real.useScoreboard, fetch: fetcher });
+  h.render(); const first = await h.until(v => !v.refreshing && !!v.boards.daily);
+  assert.equal(first.boards.week, null); assert.equal(h.switchTo("daily").error, ""); assert.match(h.switchTo("week").error, /Could not refresh/);
+  const key = "ss:schedule-diagnostics:v1", initial = JSON.parse(h.storage[key]), failed = initial.find(x => x.scope === "week" && x.outcome === "failed");
+  assert.ok(failed); assert.equal(failed.recoveredAt, undefined);
+  failWeek = false; await first.refresh(); await h.until(loaded);
+  const recovered = JSON.parse(h.storage[key]).find(x => x.id === failed.id);
+  assert.equal(typeof recovered.recoveredAt, "number");
+  for (const key of boardKeys(h.storage)) assert.equal(JSON.parse(h.storage[key]).scheduleDiagnostics, undefined);
+});
+
+test("real hook does not mark recovery when acquisition succeeds but canceled optional enrichment never publishes", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-09-05T21:00:00Z") });
+  const { createTrace } = await bundle("lib/schedule-diagnostics.ts");
+  const range = accWeek("2026-09-05"), prior = createTrace(range.start, range.end, "week").data;
+  prior.id = "prior-terminal-enrichment"; prior.outcome = "failed";
+  const event = espnGame("diagnostic-held", "2026-09-05T19:30:00Z");
+  const feed = espnFeed([event], new Map([[event.id, "hang"]]));
+  const key = "ss:schedule-diagnostics:v1";
+  const h = harness(t, null, { [key]: JSON.stringify([prior]) }, { hook: real.useScoreboard, fetch: feed.fetch });
+  h.render(); await h.until(v => v.refreshing && feed.summaries.length > 0);
+  h.unmount(); await h.settle();
+  assert.equal(JSON.parse(h.storage[key]).find(x => x.id === prior.id).recoveredAt, undefined);
+  assert.equal(boardKeys(h.storage).length, 0);
+});

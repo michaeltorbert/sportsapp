@@ -4,6 +4,7 @@ import { accWeek, easternDate, gameDay, retainFinalCategories, shiftDate, validD
 import { retainHalftimeEnvironment } from "./halftime-clock";
 import { stripHalftimeTiming } from "./halftime";
 import { enrichScores, requestScores, type ScoreRequest } from "./score-client";
+import { markDiagnosticCancellation, publishedDiagnostic } from "./schedule-diagnostics";
 import { createCdnDocuments } from "./cdn-documents";
 import { boardKey, expiredBoardKey, matchingBoard, type BoardScope } from "./scoreboard-views";
 import { readWeek } from "./app-update";
@@ -52,6 +53,7 @@ function cancelSpeculative(store: PreviewStore, keep = "") {
   if (!entry || entry.key === keep) return;
   store.speculative = null;
   if (store.entries.get(entry.key) === entry) store.entries.delete(entry.key);
+  markDiagnosticCancellation(entry.controller.signal, "preview-cancel");
   entry.controller.abort();
 }
 export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDate?: string | null) {
@@ -98,7 +100,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
   const refresh = useCallback(async () => {
     if (document.hidden || controller.current) return;
     const c = new AbortController(); controller.current = c; setRefreshing(true);
-    const timeout = window.setTimeout(() => c.abort(), 40000);
+    const timeout = window.setTimeout(() => { markDiagnosticCancellation(c.signal, "refresh-deadline"); c.abort(); }, 40000);
     // Completed backup CDN documents are reused only within this refresh; the next refresh downloads again.
     const cdn = createCdnDocuments();
     try {
@@ -107,7 +109,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
       const manualGuide = dailyOnly && selection !== null;
       // The probe is scores-only: enrichment cannot change the game-day decision,
       // and a discarded prior board needs no optional summary work.
-      try { if (!manualGuide) prior = await requestScores(yesterday, c.signal, fetch, yesterday, false, cdn); }
+      try { if (!manualGuide) prior = await requestScores(yesterday, c.signal, fetch, yesterday, false, cdn, "overnight"); }
       catch (e) {
         if (c.signal.aborted) throw e;
         overnightWarning = "Could not verify overnight games. Checking again shortly.";
@@ -127,7 +129,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
         const key = boardKey(boardScope, range.start, range.end);
         try {
           // A displayed prior board is enriched here, once, with its original request's generation and epoch.
-          const request = boardScope === "daily" && prior?.board.date === activeDate ? prior : await adoptPreview(previews.current, key, c.signal, () => requestScores(range.start, c.signal, fetch, range.end, false, cdn));
+          const request = boardScope === "daily" && prior?.board.date === activeDate ? prior : await adoptPreview(previews.current, key, c.signal, () => requestScores(range.start, c.signal, fetch, range.end, false, cdn, boardScope));
           if (controller.current !== c) return;
           // Read this scope's history once. The weekly board's pre-1.9 key keeps retained final categories across the upgrade.
           const old = cache.current.get(key) || readBoard(key) || (boardScope === "week" ? readBoard(boardKey(boardScope, range.start, range.end, true)) : null);
@@ -140,6 +142,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
           cache.current.set(key, next);
           if (cache.current.size > 8) cache.current.delete(cache.current.keys().next().value!);
           try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* Optional. */ }
+          publishedDiagnostic(request.diagnostic, boardScope, !!next.stale);
           setBoards(previous => ({ ...previous, [boardScope]: next }));
           setErrors(previous => ({ ...previous, [boardScope]: "" })); setNow(Date.now());
           if (dailyOnly && boardScope === "daily") setGuideDailyErrors(previous => {
@@ -156,7 +159,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
       const checkOvernight = async () => {
         try {
           // Informational only: the selected Guide board owns any enrichment.
-          const { board: overnight } = await requestScores(yesterday, c.signal, fetch, yesterday, false, cdn);
+          const { board: overnight } = await requestScores(yesterday, c.signal, fetch, yesterday, false, cdn, "overnight");
           if (controller.current !== c) return;
           const effective = gameDay(clock, overnight, held.current);
           held.current = effective; setToday(effective); setOvernightError("");
@@ -189,11 +192,11 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
     const resume = () => { if (!document.hidden && navigator.onLine) refresh(); };
     const offline = () => { setOvernightError(refreshError(false, dailyOnly)); };
     document.addEventListener("visibilitychange", resume); window.addEventListener("online", resume); window.addEventListener("offline", offline);
-    return () => { window.clearTimeout(initial); window.clearInterval(interval); controller.current?.abort(); controller.current = null; document.removeEventListener("visibilitychange", resume); window.removeEventListener("online", resume); window.removeEventListener("offline", offline); };
+    return () => { window.clearTimeout(initial); window.clearInterval(interval); if (controller.current) { markDiagnosticCancellation(controller.current.signal, "unmounted"); controller.current.abort(); } controller.current = null; document.removeEventListener("visibilitychange", resume); window.removeEventListener("online", resume); window.removeEventListener("offline", offline); };
   }, [refresh, queryReady, dailyOnly]);
   // A real change of day or week supersedes the running refresh at once, so none of its late
   // results or errors can land on the new range. Choosing the same value keeps polling as it is.
-  const supersede = () => { controller.current?.abort(); controller.current = null; setRefreshing(false); };
+  const supersede = () => { if (controller.current) { markDiagnosticCancellation(controller.current.signal, "superseded"); controller.current.abort(); } controller.current = null; setRefreshing(false); };
 
   // Neighbor previews (#172). The best known scores for an adjacent range: fresh history first, then its
   // preview. Neither is ever written to the displayed board, its errors or saved history before a commit.
@@ -213,7 +216,7 @@ export function useScoreboard(scope: BoardScope, dailyOnly = false, controlledDa
     store.asked.add(key);
     cancelSpeculative(store);
     const controller = new AbortController();
-    const entry: Preview = { key, gesture, controller, promise: requestScores(start, controller.signal, fetch, end, false), request: null, board: null, failed: false };
+    const entry: Preview = { key, gesture, controller, promise: requestScores(start, controller.signal, fetch, end, false, undefined, "preview"), request: null, board: null, failed: false };
     store.entries.delete(key); store.entries.set(key, entry); store.speculative = entry;
     for (const [other, kept] of store.entries) if (store.entries.size > PREVIEW_LIMIT && kept !== store.speculative) store.entries.delete(other);
     entry.promise.then(request => {

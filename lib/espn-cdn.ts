@@ -1,3 +1,4 @@
+import { diagnosticJson, type Trace } from "./schedule-diagnostics";
 import { z } from "zod";
 import { easternDate } from "./football";
 import { normalizeCdnRange, scoreboardCdnUrl } from "./espn-data";
@@ -12,7 +13,7 @@ export const isCdnDocument = (raw: unknown) => metadata.safeParse(raw).success;
 
 // A single selected week cannot prove an entire boundary day. Fetch all
 // intersecting weeks and accept only an identity-checked, continuous union.
-export async function completeCdnRange(raw: unknown, date: string, endDate = date, accOnly = false, signal?: AbortSignal, fetcher: typeof fetch = fetch) {
+export async function completeCdnRange(raw: unknown, date: string, endDate = date, accOnly = false, signal?: AbortSignal, fetcher: typeof fetch = fetch, trace?: Trace, shared = false) {
   try { return normalizeCdnRange(raw, date, endDate, accOnly); } catch { /* Require stronger coverage evidence below. */ }
   const initial = metadata.safeParse(raw);
   if (!initial.success) return normalizeCdnRange(raw, date, endDate, accOnly);
@@ -35,9 +36,10 @@ export async function completeCdnRange(raw: unknown, date: string, endDate = dat
       url.searchParams.set("year", String(first.season.year));
       url.searchParams.set("seasontype", String(first.season.type));
       url.searchParams.set("week", week.value);
-      const response = await fetcher(url, { headers: { Accept: "application/json" }, signal });
-      if (!response.ok) throw new Error(`ESPN CDN status ${response.status}`);
-      current = metadata.parse(await response.json()).content.sbData;
+      let response: Response;
+      try { response = await fetcher(url, { headers: { Accept: "application/json" }, signal }); }
+      catch (failure) { trace?.add("cdn-week", "fetch-unclassified"); throw failure; }
+      current = metadata.parse(await diagnosticJson(response, trace, "cdn-week", !shared)).content.sbData;
     }
     const actual = current.leagues[0]?.calendar.find(period => period.value === String(current.season.type))?.entries.find(item => item.value === week.value);
     if (current.season.year !== first.season.year || current.season.type !== first.season.type || String(current.week.number) !== week.value || actual?.startDate !== week.startDate || actual?.endDate !== week.endDate)

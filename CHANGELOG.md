@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.26.1 · 2026-11-18
+
+- Capture bounded allowlisted client and server schedule stages, observed HTTP status, validation, deadline, cancellation, fallback and stale evidence, without raw errors, provider bodies or owner settings. Preserve existing acquisition, budgets, caches and board admission.
+- Keep reports browser-local for seven days, at most 20 incidents / 64 KiB; expose Copy, Select and Clear in a separate Settings Support disclosure, including honest storage and clipboard fallback. No telemetry or new service.
+- Historical #205 failure remains unexplained; this diagnostic slice does not close the issue or prove provider-wide reliability.
+
 ## 1.26.0 · 2026-11-16
 
 - Add an in-app leaders browser for regular-season passing, rushing and receiving total yards in 2025 and 2026. Team and selected-season conference filters combine, with clear units, competition ties and explicit empty, delayed or unavailable states.
