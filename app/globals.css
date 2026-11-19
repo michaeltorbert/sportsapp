@@ -778,6 +778,12 @@ body:has(.game-screen)::before { background: #0d1626; }
 .team-screen .rank-basis{margin:6px 0 12px;color:var(--muted);font-size:.8125rem}.team-screen .rank-list{margin:0}.team-screen .rank-row{padding:14px 0;border-top:1px solid var(--line)}.team-screen .rank-row dt{font-size:.9375rem;font-weight:650;margin-bottom:8px}.team-screen .rank-row dd{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:0}.team-screen .rank-cell span,.team-screen .rank-cell b,.team-screen .rank-cell small{display:block}.team-screen .rank-cell span{font-size:.8125rem;color:var(--muted);margin-bottom:3px}.team-screen .rank-cell b{font-size:1.25rem;font-weight:750;line-height:1.2}.team-screen .rank-cell small{margin-top:3px;font-size:.8125rem;color:var(--muted)}.team-screen .rank-explainer{margin-top:10px;color:var(--muted);font-size:.8125rem}.team-screen .rank-explainer summary{min-height:44px;display:flex;align-items:center;cursor:pointer;color:var(--text);font-weight:650}.team-screen .rank-explainer summary::before{content:'＋';margin-right:8px}.team-screen .rank-explainer[open] summary::before{content:'−'}.team-screen .rank-explainer p+p{margin-top:8px}.team-screen .rank-note{margin:10px 0;color:var(--muted);font-size:.8125rem}.team-screen .rank-state{padding:14px 0;color:var(--muted);font-size:.875rem}.team-screen .rank-state strong{display:block;color:var(--text);margin-bottom:4px}
 @container team (max-width: 16rem) { .team-screen .rank-row dd { grid-template-columns: minmax(0, 1fr); } }
 
+/* Supported regular-season detail reuses the established row type sizes and comparison labels. */
+.team-screen .team-season-detail { container: season-detail / inline-size; }
+@container season-detail (max-width: 16rem) {
+  .team-screen .team-season-detail .rank-row dd { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* Player pages reuse the approved game/team palette and continuous document. */
 .player-screen { container: player / inline-size; padding-bottom: 36px; }
 .player-screen .player-head { padding: 24px 0 16px; }

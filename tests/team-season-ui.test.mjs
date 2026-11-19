@@ -214,3 +214,38 @@ test('all aggregate gate reasons omit every rankings value/control from rendered
  const s=season('150',{rankings:rankRows});
  for(const [value,p]of [[s,null],[s,prefs({rules:[{from:0,mode:'hide'}]})],[{...s,postseason:{status:'unavailable'}},prefs()]])assert.doesNotMatch(render(value,{p}),/FBS statistical rankings|361.3|93 of 138|rank-cell|How these rankings work/);
 });
+
+// Genuine November19 detail projection; base Duke schedule below is explicitly SYNTHETIC usage.
+const detailRaw = JSON.parse(readFileSync(new URL('./fixtures/espn-team-season-detail-unc-2026.json', import.meta.url), 'utf8'));
+const { seasonDetails } = await import('./helpers.mjs').then(({ bundle }) => bundle('lib/team-season-server.ts'));
+const detailRows = seasonDetails(detailRaw, '153', 2026, '2026-11-19T20:22:17.000Z');
+test('supported regular-season detail follows unchanged averages and precedes ranks with specific sides and units', () => {
+  const s = season('153', { details: detailRows, rankings: rankRows, regular: { status: 'complete', entries: [] } });
+  const html = render(s), words = text(html);
+  assert.ok(html.indexOf('team-averages-h') < html.indexOf('team-detail-h'));
+  assert.ok(html.indexOf('team-detail-h') < html.indexOf('team-rankings-h'));
+  assert.match(words, /Season detail 2026 regular season Interceptions and sacks are season totals\. Interceptions Made 7 Thrown 7 Sacks Made 19 Allowed 26 Third-down conversions Offense 46\.4% 58 of 125 converted Defense allowed 43\.6% 65 of 149 converted/);
+  assert.match(words, /Defense allowed shows opponents’ third-down conversions\./);
+  assert.match(words, /Statistics checked Nov 19, 3:22 PM ET\. Source update time unknown\./);
+  assert.doesNotMatch(words, /Total turnovers|Fumbles/);
+  assert.equal(scheduleLinks(html).length, 0);
+});
+test('SYNTHETIC partial and zero-attempt detail is explicit without turning unknowns into zero', () => {
+  const details = structuredClone(detailRows); details.interceptionsMade = null; details.thirdDown.offense = { converted: 0, attempted: 0 };
+  const html = render(season('150', { details }));
+  assert.match(html, /Made<\/span><b><span class="stat-missing" aria-label="Unavailable">—<\/span>/);
+  assert.match(text(html), /0 of 0 converted/); assert.doesNotMatch(html, />0\.0%</);
+  assert.match(text(html), /No conversion percentage is shown without an attempt\./);
+  assert.match(text(html), /— means a value is unavailable\./);
+  assert.match(text(render(season('150', { details: null }))), /Season detail unavailable.*rest of this page is still available/);
+});
+test('SYNTHETIC every aggregate gate reason removes detail title, values, metadata and accessible markup', () => {
+  const full = season('150', { details: detailRows });
+  const sentinel = /team-season-detail|team-detail-h|46\.4%|43\.6%|58 of 125|65 of 149|Statistics checked Nov 19/;
+  for (const [s, p] of [[full, null], [full, prefs({ rules: [{ from: 0, mode: 'hide' }] })], [{ ...full, regular: { status: 'unavailable' } }, prefs()], [{ ...full, postseason: { status: 'unavailable' } }, prefs()]]) assert.doesNotMatch(render(s, { p }), sentinel);
+  const opponent = season('153', { details: detailRows });
+  const shared = opponent.regular.entries.find(e => e.game.id === SHARED); Object.assign(shared.game, { state: 'final', started: true });
+  assert.doesNotMatch(render(opponent, { p: prefs({ manual: { [SHARED]: true } }) }), sentinel);
+  const safe = { ...full, regular: { status: 'complete', entries: [] } };
+  assert.match(render(safe, { p: null }), /team-season-detail/, 'complete Duke-free coverage remains useful before preferences load');
+});

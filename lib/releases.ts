@@ -1,5 +1,6 @@
-export const VERSION = "1.26.1";
+export const VERSION = "1.27.0";
 export const releases = [
+  { version: "1.27.0", date: "November 19, 2026", changes: "Team season pages add regular-season interceptions made and thrown, sacks made and allowed, and third-down conversion rates with successful attempts for offense and defense allowed. Existing leaders, averages, rankings and schedules stay in place. Missing values stay explicit, and Duke spoiler protection covers the new detail." },
   { version: "1.26.1", date: "November 18, 2026", changes: "Keep bounded schedule-failure reports in this browser for up to seven days. In Settings, open Schedule diagnostics to copy, select or clear them for support. Nothing is uploaded automatically. This adds evidence for future failures; the earlier background-loading failure remains unexplained." },
   { version: "1.26.0", date: "November 16, 2026", changes: "Browse regular-season passing, rushing and receiving yard leaders for 2025 and 2026. Filter by team and that season’s conference, keep selections through player/team navigation and refresh, and rank only the players shown after Duke protection." },
   { version: "1.25.1", date: "November 16, 2026", changes: "Improve season-leader refresh handling." },

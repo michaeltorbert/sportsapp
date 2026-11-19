@@ -5,7 +5,7 @@ import { bundle } from "../helpers.mjs";
 // Team seasons (issue #166). /api/team answers are the real Worker service's output for the
 // minimized genuine captures (fixtures/team-season-provenance.json), built here in Node and served
 // through the intercepted same-origin route; real upstream is checked separately (docs/team-season.md).
-const { createTeamSeasonService, teamScheduleUrl, teamStatsUrl } = await bundle("lib/team-season-server.ts");
+const { createTeamSeasonService, teamScheduleUrl, teamStatsUrl, seasonDetails } = await bundle("lib/team-season-server.ts");
 const fixture = name => JSON.parse(readFileSync(new URL(`../fixtures/espn-team-season-${name}.json`, import.meta.url), "utf8"));
 const DUKE = fixture("duke-2026"), UNC = fixture("unc-2026");
 const json = body => new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
@@ -503,4 +503,75 @@ test('incomplete Duke schedule omits ranking values and methodology from all ren
  serveCandidate(harness,()=>({...TEXAS_SEASON,rankings:TEXAS_RANKINGS,postseason:{status:'unavailable'}}));
  await harness.open({path:'/?team=251',now:'2026-10-23T20:00:00Z',waitForScores:false});await verifyFixtureMute(page);
  await expect(teamScreen(page).locator('.team-rankings')).toHaveCount(0);await expect(teamScreen(page)).not.toContainText('93 of 138');
+});
+
+// #189 supported detail: genuine November19 source objects, with controlled existing screen fixtures.
+// These intercepted browser states prove rendering/privacy, never current hosted source freshness.
+const DETAIL_CHECKED = '2026-11-19T20:22:17.000Z';
+const detailCapture = name => JSON.parse(readFileSync(new URL(`../fixtures/espn-team-season-detail-${name}-2026.json`, import.meta.url), 'utf8'));
+const TEXAS_DETAILS = seasonDetails(detailCapture('texas'), '251', 2026, DETAIL_CHECKED);
+const UNC_DETAILS = seasonDetails(detailCapture('unc'), '153', 2026, DETAIL_CHECKED);
+for (const [width, zoom] of [[320, false], [390, false], [390, true]]) {
+  test(`regular-season interceptions, sacks and third downs retain readable layout at ${width}px${zoom ? ' with 200% zoom' : ''}`, async ({ page, harness }, info) => {
+    serveCandidate(harness, () => ({ ...TEXAS_SEASON, details: TEXAS_DETAILS, rankings: TEXAS_RANKINGS }));
+    await page.setViewportSize({ width, height: 900 });
+    await harness.open({ path: '/?team=251', waitForScores: false });
+    await verifyFixtureMute(page);
+    if (zoom) await page.addStyleTag({ content: ZOOM });
+    const section = teamScreen(page).locator('.team-season-detail');
+    await expect(section).toContainText('2026 regular season');
+    await expect(section.locator('.rank-row dt')).toHaveText(['Interceptions', 'Sacks', 'Third-down conversions']);
+    await expect(section.locator('.rank-cell > span')).toHaveText(['Made', 'Thrown', 'Made', 'Allowed', 'Offense', 'Defense allowed']);
+    await expect(section.locator('.rank-cell b')).toHaveText(['9', '10', '30', '30', '40.4%', '33.1%']);
+    await expect(section.locator('.rank-cell small')).toHaveText(['57 of 141 converted', '51 of 154 converted']);
+    const avg = await teamScreen(page).locator('[aria-labelledby="team-averages-h"]').boundingBox(), added = await section.boundingBox(), rank = await teamScreen(page).locator('.team-rankings').boundingBox();
+    expect(avg.y + avg.height).toBeLessThanOrEqual(added.y + 1); expect(added.y + added.height).toBeLessThanOrEqual(rank.y + 1);
+    expect(await noOverflow(page)).toBe(true);
+    expect(overlaps(await textBoxes(section.locator('.rank-row dt, .rank-cell')))).toEqual([]);
+    await page.screenshot({ path: info.outputPath(`season-detail-${width}${zoom ? '-zoom200' : ''}.png`), fullPage: true, animations: 'disabled' });
+    await teamScreen(page).locator('a.sched-row').first().click(); await expect(gameScreen(page)).toBeVisible();
+    await gameScreen(page).getByRole('button', { name: 'Back to Texas schedule' }).click();
+    await expect(teamScreen(page).locator('.team-season-detail .rank-cell b')).toHaveText(['9', '10', '30', '30', '40.4%', '33.1%']);
+    await page.reload(); await expect(teamScreen(page).locator('.team-season-detail')).toContainText('51 of 154 converted');
+  });
+}
+test('SYNTHETIC partial/zero-attempt and unavailable detail preserves good cells and original averages', async ({ page, harness }) => {
+  const details = structuredClone(UNC_DETAILS); details.sacksMade = null; details.thirdDown.offense = { converted: 0, attempted: 0 };
+  let candidate = { ...TEXAS_SEASON, details }; // SYNTHETIC projection: only the detail behaviors are under test.
+  serveCandidate(harness, () => candidate);
+  await harness.open({ path: '/?team=251', waitForScores: false }); await verifyFixtureMute(page);
+  const section = teamScreen(page).locator('.team-season-detail');
+  await expect(section).toContainText('0 of 0 converted'); await expect(section).not.toContainText('0.0%');
+  await expect(section).toContainText('No conversion percentage is shown without an attempt.');
+  await expect(section.locator('.rank-cell b')).toHaveText(['7', '7', '—', '26', '—', '43.6%']);
+  await expect(teamScreen(page).locator('.team-averages')).toBeVisible();
+  candidate = { ...TEXAS_SEASON, details: { year: 2025, seasonType: 2 } }; await page.reload();
+  await expect(section).toContainText('Season detail unavailable'); await expect(teamScreen(page).locator('.team-averages')).toBeVisible();
+});
+test('SYNTHETIC detail values and check metadata never mount for hidden Duke, opponent or incomplete coverage', async ({ page, harness }) => {
+  let candidate = { ...SEASONS[150], details: UNC_DETAILS };
+  serveCandidate(harness, () => candidate);
+  await harness.open({ path: '/?team=150', waitForScores: false }); await verifyFixtureMute(page);
+  await expect(teamScreen(page).locator('.team-season-detail')).toBeVisible();
+  // Deliberate per-game Hide choices survive normal preference decoding. A first from:0 "hide"
+  // rule is the old damaged-data fallback and is intentionally repaired to automatic/away.
+  const hidden = { version: 2, rules: [{ from: 0, mode: 'away' }], manual: { [TULANE_GAME]: true, [SHARED]: true }, remembered: {}, waiting: {} };
+  await page.evaluate(value => { localStorage.setItem('ss:duke-visibility:v2', JSON.stringify(value)); dispatchEvent(new StorageEvent('storage', { key: 'ss:duke-visibility:v2', newValue: JSON.stringify(value) })); }, hidden);
+  await expect(teamScreen(page).getByText('Record and season statistics hidden', { exact: true })).toBeVisible();
+  await expect(teamScreen(page).locator('.team-season-detail')).toHaveCount(0);
+  expect(await teamScreen(page).ariaSnapshot()).not.toMatch(/Season detail|46\.4%|43\.6%|65 of 149|Statistics checked Nov 19/);
+  // SYNTHETIC opponent final and complete postseason isolate the actual shared Duke-game protection.
+  candidate = structuredClone({ ...SEASONS[153], details: UNC_DETAILS, postseason: { status: 'complete', entries: [] } });
+  Object.assign(candidate.regular.entries.find(e => e.game.id === SHARED).game, { state: 'final', started: true });
+  await page.goto('/?team=153');
+  await expect(teamScreen(page).locator('h1.team-title')).toHaveText('North Carolina Tar Heels');
+  await expect(teamScreen(page).getByText('Record and season statistics hidden', { exact: true })).toBeVisible();
+  await expect(teamScreen(page).locator('.team-season-detail')).toHaveCount(0);
+  expect(await teamScreen(page).ariaSnapshot()).not.toMatch(/Season detail|46\.4%|65 of 149|Statistics checked Nov 19/);
+  candidate = { ...TEXAS_SEASON, details: TEXAS_DETAILS, postseason: { status: 'unavailable' } };
+  await page.goto('/?team=251');
+  await expect(teamScreen(page).locator('h1.team-title')).toHaveText('Texas Longhorns');
+  await expect(teamScreen(page).getByText('Record and season statistics not shown yet', { exact: true })).toBeVisible();
+  await expect(teamScreen(page).locator('.team-season-detail')).toHaveCount(0);
+  expect(await teamScreen(page).ariaSnapshot()).not.toMatch(/Season detail|40\.4%|57 of 141|Statistics checked Nov 19/);
 });

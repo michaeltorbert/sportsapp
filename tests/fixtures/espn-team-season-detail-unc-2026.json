@@ -1,0 +1,340 @@
+{
+  "status": "success",
+  "team": {
+    "id": "153",
+    "abbreviation": "UNC",
+    "location": "North Carolina",
+    "name": "Tar Heels",
+    "displayName": "North Carolina Tar Heels",
+    "color": "7bafd4",
+    "logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+    "recordSummary": "5-5",
+    "seasonSummary": "2026",
+    "standingSummary": "12th in ACC"
+  },
+  "season": {
+    "year": 2026,
+    "type": 2,
+    "name": "Regular Season",
+    "displayName": "2026"
+  },
+  "requestedSeason": {
+    "year": 2026,
+    "type": 2,
+    "name": "Regular Season",
+    "displayName": "2026",
+    "qualifiedPostSeason": false
+  },
+  "results": {
+    "stats": {
+      "categories": [
+        {
+          "name": "passing",
+          "displayName": "Passing",
+          "abbreviation": "pass",
+          "stats": [
+            {
+              "name": "interceptions",
+              "displayName": "Interceptions",
+              "shortDisplayName": "INT",
+              "description": "The number of passes thrown that were intercepted by the opposing team.",
+              "abbreviation": "INT",
+              "value": 7.0,
+              "displayValue": "7"
+            },
+            {
+              "name": "sacks",
+              "displayName": "Total Sacks",
+              "shortDisplayName": "Sacks",
+              "description": "The total number of sacks.",
+              "abbreviation": "SACK",
+              "value": 26.0,
+              "displayValue": "26"
+            },
+            {
+              "name": "yardsPerGame",
+              "displayName": "Yards Per Game",
+              "shortDisplayName": "YDS/G",
+              "description": "The average number of yards per game.",
+              "abbreviation": "YDS/G",
+              "value": 347.0,
+              "displayValue": "347.0"
+            },
+            {
+              "name": "passingYardsPerGame",
+              "displayName": "Passing Yards Per Game",
+              "shortDisplayName": "PYDS/G",
+              "description": "The number of passing yards per game.",
+              "abbreviation": "YDS/G",
+              "value": 232.8,
+              "displayValue": "232.8"
+            }
+          ]
+        },
+        {
+          "name": "rushing",
+          "displayName": "Rushing",
+          "abbreviation": "rush",
+          "stats": [
+            {
+              "name": "rushingYardsPerGame",
+              "displayName": "Rushing Yards Per Game",
+              "shortDisplayName": "YDS/G",
+              "description": "The average number of rushing yards per game.",
+              "abbreviation": "YDS/G",
+              "value": 114.2,
+              "displayValue": "114.2"
+            }
+          ]
+        },
+        {
+          "name": "miscellaneous",
+          "displayName": "Miscellaneous",
+          "abbreviation": "misc",
+          "stats": [
+            {
+              "name": "thirdDownConvs",
+              "displayName": "Third Down Conversions",
+              "shortDisplayName": "3RDC",
+              "description": "The number of 3rd down conversions.",
+              "abbreviation": "3RDC",
+              "value": 58.0,
+              "displayValue": "58"
+            },
+            {
+              "name": "thirdDownAttempts",
+              "displayName": "Third Down Attempts",
+              "shortDisplayName": "3RDA",
+              "description": "The number of 3rd down attempts.",
+              "abbreviation": "3RDA",
+              "value": 125.0,
+              "displayValue": "125"
+            },
+            {
+              "name": "thirdDownConvPct",
+              "displayName": "3rd down %",
+              "shortDisplayName": "3RDC%",
+              "description": "The percentage of 3rd downs that are converted.",
+              "abbreviation": "3RDC%",
+              "value": 46.399998,
+              "displayValue": "46.40"
+            }
+          ]
+        },
+        {
+          "name": "defensive",
+          "displayName": "Defense",
+          "abbreviation": "def",
+          "stats": [
+            {
+              "name": "sacks",
+              "displayName": "Sacks",
+              "shortDisplayName": "Sacks",
+              "description": "The total number of sacks.",
+              "abbreviation": "SACK",
+              "value": 19.0,
+              "displayValue": "19"
+            }
+          ]
+        },
+        {
+          "name": "defensiveInterceptions",
+          "displayName": "Defensive Interceptions",
+          "abbreviation": "defint",
+          "stats": [
+            {
+              "name": "interceptions",
+              "displayName": "Interceptions",
+              "shortDisplayName": "Interceptions",
+              "description": "The total number of interceptions.",
+              "abbreviation": "INT",
+              "value": 7.0,
+              "displayValue": "7"
+            }
+          ]
+        },
+        {
+          "name": "scoring",
+          "displayName": "Scoring",
+          "abbreviation": "s",
+          "stats": [
+            {
+              "name": "totalPointsPerGame",
+              "displayName": "Total Points Per Game",
+              "shortDisplayName": "TP/G",
+              "description": "The number of points scored per game.",
+              "abbreviation": "TP/G",
+              "value": 25.8,
+              "displayValue": "25.8"
+            }
+          ]
+        }
+      ]
+    },
+    "opponent": [
+      {
+        "name": "passing",
+        "displayName": "Passing",
+        "abbreviation": "pass",
+        "stats": [
+          {
+            "name": "interceptions",
+            "displayName": "Interceptions",
+            "shortDisplayName": "INT",
+            "description": "The number of passes thrown that were intercepted by the opposing team.",
+            "abbreviation": "INT",
+            "value": 7.0,
+            "displayValue": "7",
+            "rank": 61,
+            "rankDisplayValue": "Tied-61st"
+          },
+          {
+            "name": "sacks",
+            "displayName": "Total Sacks",
+            "shortDisplayName": "Sacks",
+            "description": "The total number of sacks.",
+            "abbreviation": "SACK",
+            "value": 19.0,
+            "displayValue": "19",
+            "rank": 49,
+            "rankDisplayValue": "Tied-49th"
+          },
+          {
+            "name": "yardsPerGame",
+            "displayName": "Yards Per Game",
+            "shortDisplayName": "YDS/G",
+            "description": "The average number of yards per game.",
+            "abbreviation": "YDS/G",
+            "value": 369.5,
+            "displayValue": "369.5",
+            "rank": 81,
+            "rankDisplayValue": "81st"
+          },
+          {
+            "name": "passingYardsPerGame",
+            "displayName": "Passing Yards Per Game",
+            "shortDisplayName": "PYDS/G",
+            "description": "The number of passing yards per game.",
+            "abbreviation": "YDS/G",
+            "value": 219.9,
+            "displayValue": "219.9",
+            "rank": 82,
+            "rankDisplayValue": "82nd"
+          }
+        ]
+      },
+      {
+        "name": "rushing",
+        "displayName": "Rushing",
+        "abbreviation": "rush",
+        "stats": [
+          {
+            "name": "rushingYardsPerGame",
+            "displayName": "Rushing Yards Per Game",
+            "shortDisplayName": "YDS/G",
+            "description": "The average number of rushing yards per game.",
+            "abbreviation": "YDS/G",
+            "value": 149.6,
+            "displayValue": "149.6",
+            "rank": 80,
+            "rankDisplayValue": "Tied-80th"
+          }
+        ]
+      },
+      {
+        "name": "miscellaneous",
+        "displayName": "Miscellaneous",
+        "abbreviation": "misc",
+        "stats": [
+          {
+            "name": "thirdDownConvs",
+            "displayName": "Third Down Conversions",
+            "shortDisplayName": "3RDC",
+            "description": "The number of 3rd down conversions.",
+            "abbreviation": "3RDC",
+            "value": 65.0,
+            "displayValue": "65",
+            "rank": 130,
+            "rankDisplayValue": "Tied-130th"
+          },
+          {
+            "name": "thirdDownAttempts",
+            "displayName": "Third Down Attempts",
+            "shortDisplayName": "3RDA",
+            "description": "The number of 3rd down attempts.",
+            "abbreviation": "3RDA",
+            "value": 149.0,
+            "displayValue": "149",
+            "rank": 118,
+            "rankDisplayValue": "Tied-118th"
+          },
+          {
+            "name": "thirdDownConvPct",
+            "displayName": "3rd down %",
+            "shortDisplayName": "3RDC%",
+            "description": "The percentage of 3rd downs that are converted.",
+            "abbreviation": "3RDC%",
+            "value": 43.62416,
+            "displayValue": "43.62",
+            "rank": 1,
+            "rankDisplayValue": "Tied-1st"
+          }
+        ]
+      },
+      {
+        "name": "defensive",
+        "displayName": "Defense",
+        "abbreviation": "def",
+        "stats": [
+          {
+            "name": "sacks",
+            "displayName": "Sacks",
+            "shortDisplayName": "Sacks",
+            "description": "The total number of sacks.",
+            "abbreviation": "SACK",
+            "value": 26.0,
+            "displayValue": "26",
+            "rank": 108,
+            "rankDisplayValue": "Tied-108th"
+          }
+        ]
+      },
+      {
+        "name": "defensiveInterceptions",
+        "displayName": "Defensive Interceptions",
+        "abbreviation": "defint",
+        "stats": [
+          {
+            "name": "interceptions",
+            "displayName": "Interceptions",
+            "shortDisplayName": "Interceptions",
+            "description": "The total number of interceptions.",
+            "abbreviation": "INT",
+            "value": 7.0,
+            "displayValue": "7",
+            "rank": 58,
+            "rankDisplayValue": "Tied-58th"
+          }
+        ]
+      },
+      {
+        "name": "scoring",
+        "displayName": "Scoring",
+        "abbreviation": "s",
+        "stats": [
+          {
+            "name": "totalPointsPerGame",
+            "displayName": "Total Points Per Game",
+            "shortDisplayName": "TP/G",
+            "description": "The number of points scored per game.",
+            "abbreviation": "TP/G",
+            "value": 22.1,
+            "displayValue": "22.1",
+            "rank": 47,
+            "rankDisplayValue": "47th"
+          }
+        ]
+      }
+    ]
+  }
+}

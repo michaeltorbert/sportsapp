@@ -1,5 +1,11 @@
 # Saturday Signal releases
 
+## 1.27.0 · 2026-11-19
+
+- Add regular-season interception totals made/thrown, sack totals made/allowed, and offense/defense-allowed third-down conversions with one-decimal rates and converted/attempted counts. The compact section follows unchanged averages and precedes existing FBS rankings, retaining the approved phone type sizes and large-text reflow.
+- Read only the existing fetched ESPN team-statistics response, validate identity, counts, supplied reciprocal fields and conversion arithmetic, and independently preserve partial/unavailable detail without discarding existing team content. Cached and stale responses retain the actual statistics acquisition time; underlying source update time remains unknown.
+- Keep every new value and its accessible metadata behind the existing season-aggregate Duke gate. No added source calls, publisher changes, saved preferences or alert changes. Full turnover/fumble totals remain unsupported because current source fields conflict; broader #189/#181 remain open.
+
 ## 1.26.1 · 2026-11-18
 
 - Capture bounded allowlisted client and server schedule stages, observed HTTP status, validation, deadline, cancellation, fallback and stale evidence, without raw errors, provider bodies or owner settings. Preserve existing acquisition, budgets, caches and board admission.

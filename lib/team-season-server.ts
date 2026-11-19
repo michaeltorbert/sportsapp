@@ -1,4 +1,4 @@
-import type { SeasonLeaders, SeasonRankings } from "./team-season";
+import type { SeasonDetails, SeasonLeaders, SeasonRankings } from "./team-season";
 import { normalizeScoreboard } from "./espn-data";
 import { easternDate } from "./football";
 import { validEventId } from "./game-stats";
@@ -119,6 +119,55 @@ export function seasonStats(raw: unknown, teamId: string, year: number): Record<
   return Object.values(rows).some(([a, b]) => a !== null || b !== null) ? rows : null;
 }
 
+type DetailNumber = { present: boolean; value: number | null };
+/** Exact category/stat identity; invalid or conflicting supplied duplicates remain unknown. */
+function detailNumber(categories: unknown, category: string, name: string, percentage = false): DetailNumber {
+  const matches = array(categories).map(object).filter(c => c.name === category);
+  if (!matches.length) return { present: false, value: null };
+  if (matches.length !== 1 || !Array.isArray(matches[0].stats)) return { present: true, value: null };
+  const stats = array(matches[0].stats).map(object).filter(stat => stat.name === name);
+  if (!stats.length) return { present: false, value: null };
+  const values = stats.map(stat => {
+    const n = stat.value;
+    if (typeof n !== "number" || !Number.isFinite(n) || n < 0 || n > (percentage ? 100 : 10_000) || (!percentage && !Number.isInteger(n))) return null;
+    if (stat.displayValue !== undefined) {
+      const display = text(stat.displayValue, 16);
+      if (!display || !/^\d+(?:\.\d{1,6})?$/.test(display)) return null;
+      const precision = display.split(".")[1]?.length ?? 0;
+      if (Math.abs(Number(display) - n) > (percentage ? .5 * 10 ** -precision + .00001 : 0)) return null;
+    }
+    return n;
+  });
+  return { present: true, value: values.every(n => n !== null && n === values[0]) ? values[0] : null };
+}
+/** Supported regular-season counts and conversion pairs from the already fetched statistics body. */
+export function seasonDetails(raw: unknown, teamId: string, year: number, checkedAt: string): SeasonDetails | null {
+  const body = object(raw), requested = object(body.requestedSeason), sourceSeason = object(body.season), results = object(body.results);
+  if (body.status !== "success" || idOf(object(body.team).id) !== teamId || integer(requested.year) !== year || integer(requested.type) !== 2 || integer(sourceSeason.year) !== year || integer(sourceSeason.type) !== 2 || !Number.isFinite(Date.parse(checkedAt))) return null;
+  const own = object(results.stats).categories, opponent = results.opponent;
+  const corroborated = (category: string, name: string, reciprocalCategory: string) => {
+    const primary = detailNumber(own, category, name), reciprocal = detailNumber(opponent, reciprocalCategory, name);
+    return primary.value !== null && (!reciprocal.present || reciprocal.value === primary.value) ? primary.value : null;
+  };
+  const conversions = (categories: unknown) => {
+    const converted = detailNumber(categories, "miscellaneous", "thirdDownConvs").value;
+    const attempted = detailNumber(categories, "miscellaneous", "thirdDownAttempts").value;
+    const percent = detailNumber(categories, "miscellaneous", "thirdDownConvPct", true);
+    if (converted === null || attempted === null || converted > attempted) return null;
+    // Zero attempts retains the reported 0-of-0 counts, but the UI never invents a percentage.
+    if (percent.present && (percent.value === null || (attempted === 0 ? percent.value !== 0 : Math.abs(percent.value - converted / attempted * 100) > .02))) return null;
+    return { converted, attempted };
+  };
+  const details: SeasonDetails = {
+    year, seasonType: 2, checkedAt,
+    interceptionsMade: corroborated("defensiveInterceptions", "interceptions", "passing"),
+    interceptionsThrown: corroborated("passing", "interceptions", "defensiveInterceptions"),
+    sacksMade: corroborated("defensive", "sacks", "passing"), sacksAllowed: corroborated("passing", "sacks", "defensive"),
+    thirdDown: { offense: conversions(own), allowed: conversions(opponent) },
+  };
+  return [details.interceptionsMade, details.interceptionsThrown, details.sacksMade, details.sacksAllowed, details.thirdDown.offense, details.thirdDown.allowed].some(value => value !== null) ? details : null;
+}
+
 export type TeamSeasonResult = { status: 200; season: TeamSeason } | { status: 502 | 503; error: string; retryAfter: number };
 type Entry = { season: TeamSeason; expires: number };
 const MAX_BYTES = 2_000_000, CACHE_LIMIT = 16, MAX_ACTIVE = 2, STALE_LIMIT_MS = 1_800_000;
@@ -155,11 +204,12 @@ export function createTeamSeasonService(fetcher: typeof fetch = fetch, now = () 
       const checkedAt = new Date(now()).toISOString();
       const { year, type } = activeSeason(discovery, teamId);
       const settled = (promise: Promise<unknown>) => promise.then(value => ({ ok: true as const, value }), () => ({ ok: false as const }));
+      let statisticsCheckedAt: string | null = null;
       // The current answer doubles as the regular season only when that is what it reports.
       const [regular, postseason, stats] = await Promise.all([
         type === 2 ? Promise.resolve({ ok: true as const, value: discovery }) : settled(json(teamScheduleUrl(teamId, { year, type: 2 }), controller.signal)),
         settled(json(teamScheduleUrl(teamId, { year, type: 3 }), controller.signal)),
-        settled(json(teamStatsUrl(teamId, year), controller.signal)),
+        settled(json(teamStatsUrl(teamId, year), controller.signal).then(value => { statisticsCheckedAt = new Date(now()).toISOString(); return value; })),
       ]);
       if (controller.signal.aborted) throw new TeamSeasonSourceError("team season deadline expired");
       const body = object(discovery), team = object(body.team);
@@ -169,6 +219,7 @@ export function createTeamSeasonService(fetcher: typeof fetch = fetch, now = () 
         v: 1, team: { id: teamId, name, shortName, abbreviation: text(team.abbreviation, 16) ?? "", logo: typeof team.logo === "string" && /^https:\/\/[a-z0-9.-]+\.espncdn\.com\//.test(team.logo) && team.logo.length <= 300 ? team.logo : null },
         season: { year }, record: overallRecord(discovery),
         stats: stats.ok ? seasonStats(stats.value, teamId, year) : null,
+        details: stats.ok && statisticsCheckedAt ? seasonDetails(stats.value, teamId, year, statisticsCheckedAt) : null,
         regular: regular.ok ? scheduleSection(regular.value, teamId, year, 2, checkedAt) : { status: "unavailable" },
         postseason: postseason.ok ? scheduleSection(postseason.value, teamId, year, 3, checkedAt) : { status: "unavailable" },
         checkedAt,

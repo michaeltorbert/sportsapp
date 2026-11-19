@@ -10,6 +10,7 @@ const { TEAM_SEASON_TTL_MS } = await bundle("lib/team-season.ts");
 const fixture = name => JSON.parse(readFileSync(new URL(`./fixtures/espn-team-season-${name}.json`, import.meta.url), "utf8"));
 const DUKE = fixture("duke-2026"), UNC = fixture("unc-2026");
 const T0 = Date.parse("2026-10-19T05:05:00Z");
+const UNC_DETAIL = JSON.parse(readFileSync(new URL('./fixtures/espn-team-season-detail-unc-2026.json', import.meta.url), 'utf8'));
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 
 // Upstream answers by exact fixed URL; anything else is a test failure.
@@ -29,6 +30,28 @@ const dukeRoutes = (changes = {}) => ({
   [teamScheduleUrl("150", { year: 2026, type: 3 })]: DUKE.postseason,
   [teamStatsUrl("150", 2026)]: DUKE.stats,
   ...changes,
+});
+
+test('genuine new detail shares the original three fixed base reads and cached/stale acquisition time', async () => {
+  let now = T0, down = false;
+  const calls = [];
+  const fixed = { [teamScheduleUrl('153')]: UNC.schedule, [teamScheduleUrl('153', { year: 2026, type: 3 })]: { team: { id: '153' }, requestedSeason: { year: 2026, type: 3 }, events: [] }, [teamStatsUrl('153', 2026)]: UNC_DETAIL };
+  // SYNTHETIC empty postseason enables complete coverage; actual new stats are the genuine capture.
+  const service = createTeamSeasonService(async url => {
+    calls.push(url); if (down) throw Error('synthetic outage');
+    assert.ok(Object.hasOwn(fixed, url), `unexpected source ${url}`);
+    if (url === teamStatsUrl('153', 2026)) now += 25;
+    return json(fixed[url]);
+  }, () => now);
+  const first = (await service.get('153')).season;
+  assert.equal(calls.length, 3); assert.equal(first.details.sacksMade, 19); assert.equal(first.details.sacksAllowed, 26);
+  assert.equal(first.checkedAt, new Date(T0).toISOString());
+  assert.equal(first.details.checkedAt, new Date(T0 + 25).toISOString(), 'source acquisition completes after schedule discovery');
+  const loaded = await loadTeamSeason('153', new AbortController().signal, async () => json(first));
+  assert.equal(loaded.kind, 'ok'); assert.equal(loaded.season.details.sacksAllowed, 26);
+  now += 1_000; assert.deepEqual((await service.get('153')).season.details, first.details); assert.equal(calls.length, 3);
+  down = true; now += TEAM_SEASON_TTL_MS;
+  const stale = (await service.get('153')).season; assert.equal(stale.stale, true); assert.deepEqual(stale.details, first.details);
 });
 
 test("the fixed upstream URLs: current schedule, then the postseason and regular-season statistics for that season", () => {
