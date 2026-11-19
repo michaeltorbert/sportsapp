@@ -2,7 +2,7 @@
 import { useState, type MouseEvent, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, CloudOff, RefreshCw, Signal, Tv } from "lucide-react";
 import { dukeHidden, type DukePreferences } from "@/lib/duke-visibility";
-import { seasonAggregates, RANKING_ROWS, type RankingKey, type RankingMetric, TEAM_LEADER_ROWS, TEAM_STAT_ROWS, type ScheduleEntry, type ScheduleSection, type TeamSeason, type TeamSeasonTeam } from "@/lib/team-season";
+import { seasonAggregates, RANKING_ROWS, type RankingKey, type RankingMetric, TEAM_LEADER_ROWS, TEAM_STAT_ROWS, type ScheduleEntry, type ScheduleSection, type TeamSeason, type TeamSeasonTeam, type ThirdDownConversions } from "@/lib/team-season";
 // Relative, like the page's own import, so page tests bundle the real game screen helpers.
 import { gameDay } from "./game-screen";
 import { leadersHref } from "@/lib/leaders-browser";
@@ -84,6 +84,29 @@ function Section({ title, section, team, prefs, nextId, gameHref, onOpenGame, on
 function RankingValue({ metric, side }: { metric: RankingMetric | null; side: string }) {
   return <div className="rank-cell"><span>{side}</span>{metric ? <><b>{(metric.total / metric.games).toFixed(1)}</b><small>{metric.rank === null ? "National rank unavailable" : `${metric.tied ? "Tied " : ""}${metric.rank} of ${metric.population}`}</small></> : <small>Value unavailable</small>}</div>;
 }
+function DetailValue({ side, value, extra }: { side: string; value: string | null; extra?: string }) {
+  return <div className="rank-cell"><span>{side}</span><b><Value value={value} /></b>{extra && <small>{extra}</small>}</div>;
+}
+function ConversionValue({ side, row }: { side: string; row: ThirdDownConversions | null }) {
+  return <DetailValue side={side} value={row && row.attempted > 0 ? `${(row.converted / row.attempted * 100).toFixed(1)}%` : null} extra={row ? `${row.converted} of ${row.attempted} converted` : undefined} />;
+}
+function TeamDetails({ season }: { season: TeamSeason }) {
+  const details = season.details;
+  const count = (value: number | null) => value === null ? null : String(value);
+  const missing = details && [details.interceptionsMade, details.interceptionsThrown, details.sacksMade, details.sacksAllowed, details.thirdDown.offense, details.thirdDown.allowed].some(value => value === null);
+  return <section className="team-block team-season-detail" aria-labelledby="team-detail-h"><h2 id="team-detail-h">Season detail</h2>
+    {!details ? <div className="rank-state"><strong>Season detail unavailable</strong><p>It couldn’t be loaded. The rest of this page is still available.</p></div> : <>
+      <p className="rank-basis">{details.year} regular season<br />Interceptions and sacks are season totals.</p>
+      <dl className="rank-list">
+        <div className="rank-row"><dt>Interceptions</dt><dd><DetailValue side="Made" value={count(details.interceptionsMade)} /><DetailValue side="Thrown" value={count(details.interceptionsThrown)} /></dd></div>
+        <div className="rank-row"><dt>Sacks</dt><dd><DetailValue side="Made" value={count(details.sacksMade)} /><DetailValue side="Allowed" value={count(details.sacksAllowed)} /></dd></div>
+        <div className="rank-row"><dt>Third-down conversions</dt><dd><ConversionValue side="Offense" row={details.thirdDown.offense} /><ConversionValue side="Defense allowed" row={details.thirdDown.allowed} /></dd></div>
+      </dl>
+      <p className="rank-note">Defense allowed shows opponents’ third-down conversions.{missing && " — means a value is unavailable."}{[details.thirdDown.offense, details.thirdDown.allowed].some(row => row?.attempted === 0) && " No conversion percentage is shown without an attempt."}</p>
+      <p className="team-fresh">Statistics checked {checkedTime(details.checkedAt)}. Source update time unknown.</p>
+    </>}
+  </section>;
+}
 function TeamRankings({ season }: { season: TeamSeason }) {
   const rankings = season.rankings;
   return <section className="team-block team-rankings" aria-labelledby="team-rankings-h"><h2 id="team-rankings-h">FBS statistical rankings</h2>
@@ -104,7 +127,7 @@ export type TeamScreenProps = {
   back: { title: string; detail: string; label: string }; onBack: () => void; onRetry: () => void;
   gameHref: (id: string) => string; onOpenGame: (id: string) => void; notice?: ReactNode;
 };
-/** A team's current season: record, three yard leaders, averages and the published schedule. */
+/** A team's current season: record, yard leaders, averages, supported detail and the published schedule. */
 export function TeamScreen({ teamId, season, pending, failed, online, prefs, back, onBack, onRetry, gameHref, onOpenGame, notice, playerLink }: TeamScreenProps) {
   const backButton = <button type="button" className="back-button" data-focus-key="back" aria-label={back.label} onClick={onBack}><ChevronLeft size={22} aria-hidden="true" /><span className="back-text" aria-hidden="true"><span>{back.title}</span><small>{back.detail}</small></span></button>;
   const bar = <header className="game-bar">{backButton}<span className="team-bar-title" aria-hidden="true">{season?.team.abbreviation}</span><span className="bar-brand" aria-hidden="true"><span className="brand-icon"><Signal size={17} strokeWidth={3} /></span></span></header>;
@@ -170,6 +193,7 @@ export function TeamScreen({ teamId, season, pending, failed, online, prefs, bac
           {TEAM_LEADER_ROWS.some(([key]) => !season.leaders?.[key]) && <div className="team-leaders-status"><p>{season.leaders && TEAM_LEADER_ROWS.some(([key]) => season.leaders?.[key]) ? "Some season leaders couldn’t be loaded." : "Season leaders couldn’t be loaded."}</p><button type="button" className="notice-button" data-focus-key="leaders-retry" onClick={onRetry} disabled={pending || !online}>{pending ? "Retrying…" : "Retry"}</button></div>}
         </section>}
         <section className="team-block" aria-labelledby="team-averages-h"><h2 id="team-averages-h">Season averages</h2>{averages}</section>
+        {aggregates.shown && <TeamDetails season={season} />}
         {aggregates.shown && <TeamRankings season={season} />}
       </div>
       <div className="team-main">

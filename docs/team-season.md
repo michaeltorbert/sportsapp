@@ -4,8 +4,8 @@ A team page shows one team's **current** football season: its overall record, fo
 regular-season per-game averages for the team and its opponents, and the published
 regular-season and postseason schedules. Every schedule game opens the existing game
 screen in the app. Three full-name regular-season yard leaders (passing, rushing, receiving) appear above
-the existing averages. There is no archive, year selector, full season player table,
-standings or rankings view; the broader #181 remains open.
+the existing averages. There is no archive, year selector, full season player table or standings view.
+The separate statistical ranks described below are retained; broader #181 remains open.
 
 ## Routes and history
 
@@ -82,7 +82,7 @@ games are never passed to the Duke observation writer.
   source state decides. Nothing is predicted from the clock or the scheduled kickoff time.
 - A Duke game hidden by the settings shows only its date on any team's schedule: no
   opponent, status, score, result or link. Its game screen is the generic unavailable one.
-- The record, leaders and averages are withheld on any team's page whose schedule contains a hidden
+- The record, leaders, averages, statistical ranks and season detail are withheld on any team's page whose schedule contains a hidden
   Duke game that has started (`dukeStarted`, so a live 0–0 period-0 game counts). They are
   also withheld while preferences load if a possibly protected started Duke game is present,
   and while any schedule section is unavailable,
@@ -187,3 +187,63 @@ team/snapshot payloads. Independent phase timers prevent slow membership from
 shrinking the stats allowance, but do not establish the historical abort cause
 or actual hosted success. The current daily slot remains consumed; no replay,
 reset, source-key change or early publisher invocation is permitted.
+
+
+## Supported regular-season detail (#189, 1.27.0 candidate)
+
+After the retained four averages and before FBS statistical ranks, a compact Season
+detail section shows three supported families from the **same already-fetched** ESPN
+regular-season statistics response. Interceptions are **Made / Thrown** totals; sacks
+are **Made / Allowed** totals. Third-down conversions are **Offense / Defense allowed**,
+with a one-decimal conversion percentage and successful conversions of attempted
+third downs. Defense allowed means opponents' conversions against the selected team.
+They are not per-game averages, new national ranks or all turnovers.
+
+`seasonDetails` requires success and matching team, requested year/type 2 and source
+year/type 2. It reads own `defensiveInterceptions.interceptions` / `passing.interceptions`,
+own `defensive.sacks` / `passing.sacks`, and own/opponent
+`miscellaneous.thirdDownConvs`, `thirdDownAttempts`, `thirdDownConvPct`. Counts are
+finite nonnegative integers bounded at 10,000; supplied display values must agree.
+Conflicting repeated categories/statistics make affected fields unavailable. Identical
+stat repeats may agree. A supplied reciprocal opponent interception/sack must agree;
+a missing counterpart does not erase a clearly scoped valid own count. These rules
+operate per field so a bad optional row does not discard valid rows or the base season.
+
+Conversion counts must satisfy converted<=attempted. A supplied percentage must be
+finite 0..100 and agree with the count-derived rate within 0.02 percentage points, with
+its display value consistent with its reported precision. A missing percentage permits
+a clearly computed rate from validated counts. Zero attempts keeps 0 of 0 counts but
+shows an unavailable percentage; it never fabricates 0%. No game-box summation or
+schedule-derived divisor is used.
+
+The v1 wire format adds optional nullable `details`: year, seasonType 2, checkedAt,
+interceptionsMade/Thrown, sacksMade/Allowed, and thirdDown.offense/allowed converted/
+attempted pairs. The browser validates identity/time and each field/group separately;
+old responses and malformed optional detail preserve the existing record, averages,
+leaders, ranks and schedule. Missing cells use a spoken Unavailable dash; a wholly
+missing block has a compact unavailable state. No extra source request, cache/deadline/
+admission change, CFBD publisher call, key, or owner setting is introduced.
+
+Detail checkedAt is recorded only when the same statistics JSON read succeeds, not
+on schedule discovery or each cache read. Cached and stale seasons retain that time;
+the existing stale banner remains. Source update time is unknown. All new headings,
+values, source-check text and accessible markup live under the unchanged
+seasonAggregates gate. There is no hidden-value DOM fallback or preference writer.
+
+Genuine November19 Texas/UNC minimized source objects and full original capture
+hashes are in `tests/fixtures/espn-team-season-detail-provenance.json`. They verify
+Texas interceptions 9/10, sacks 30/30 and third downs 57 of 141 / 51 of 154, and UNC 7/7,
+19/26 and 58 of 125 / 65 of 149. These are captured examples, not current hosted proof.
+Parser/client/service tests exercise production functions and targeted labeled
+SYNTHETIC faults; the compiled Worker regression exercises the actual `/api/team`
+route and fixed three-source-read/cache behavior. Browser tests exercise the exact
+UI at 320/390 and 200% CSS zoom, partial/zero/unavailable values, navigation/reload,
+and hidden/incomplete/opponent DOM/accessibility omissions with test-scoped mute.
+Live source/preview/production comparisons, actual pixels and independent exact-
+artifact review remain release gates; controlled fixtures do not substitute.
+
+**TURNOVER-01 remains a coverage limitation:** current complete source takeaways/
+giveaways and reciprocal opponent totals conflict, and fumblesLost is not reliably
+reconciled. This bounded slice includes only separately corroborated interceptions;
+it does not label them all turnovers, infer fumbles, select convenient totals,
+introduce another collector or close broader #189/#181.

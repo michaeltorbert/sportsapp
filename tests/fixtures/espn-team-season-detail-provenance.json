@@ -1,0 +1,29 @@
+{
+  "label": "Minimized genuine complete public source captures; synthetic variations constructed only in tests",
+  "acquisitionExecutor": "root coordinator; no source fetch by author",
+  "sourceUpdateTime": "not exposed",
+  "items": [
+    {
+      "file": "espn-team-season-detail-texas-2026.json",
+      "originalSource": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams/251/statistics?season=2026&seasontype=2",
+      "httpStatus": 200,
+      "receivedAfterUtc": "2026-11-19T20:22:02Z",
+      "originalBytes": 75749,
+      "originalSha256": "230c3daf8e3fe2e0aa415f8d7e45567e0e980440e0c7413afdb030d5d4498a23",
+      "fixtureSha256": "e40e6fa0b4a6aeae2a62031b0df1a61dcd18b99dfee520181f65cc7e9c171971",
+      "minimization": "Preserved actual identity/season/status and used category/stat objects verbatim; omitted unrelated categories/stat objects only. Includes current retained average fields. No values invented or rescaled.",
+      "limits": "Current Nov19 capture supports sample parser semantics, not current hosted/browser/all-team proof."
+    },
+    {
+      "file": "espn-team-season-detail-unc-2026.json",
+      "originalSource": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams/153/statistics?season=2026&seasontype=2",
+      "httpStatus": 200,
+      "receivedAfterUtc": "2026-11-19T20:22:17Z",
+      "originalBytes": 75763,
+      "originalSha256": "52983a843fc32467a4331f18f5cf33387704c69f8c3a47ce996188ede52cd1fd",
+      "fixtureSha256": "b5ccb06d57fa61ea6a5d19630bd6d7951a0a2c1914717f3de885af7be1138f86",
+      "minimization": "Preserved actual identity/season/status and used category/stat objects verbatim; omitted unrelated categories/stat objects only. Includes current retained average fields. No values invented or rescaled.",
+      "limits": "Current Nov19 capture supports sample parser semantics, not current hosted/browser/all-team proof."
+    }
+  ]
+}

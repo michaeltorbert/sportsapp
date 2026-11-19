@@ -30,6 +30,27 @@ export const TEAM_LEADER_ROWS = [
 export type TeamLeaderKey = typeof TEAM_LEADER_ROWS[number][0];
 export type SeasonLeader = { athleteId: string; name: string; yards: number };
 export type SeasonLeaders = { year: number; seasonType: 2; checkedAt?: string; stale?: boolean } & Record<TeamLeaderKey, SeasonLeader | null>;
+export type ThirdDownConversions = { converted: number; attempted: number };
+export type SeasonDetails = {
+  year: number; seasonType: 2; checkedAt: string;
+  interceptionsMade: number | null; interceptionsThrown: number | null;
+  sacksMade: number | null; sacksAllowed: number | null;
+  thirdDown: { offense: ThirdDownConversions | null; allowed: ThirdDownConversions | null };
+};
+const detailCount = z.number().int().min(0).max(10_000);
+const conversionSchema = z.object({ converted: detailCount, attempted: detailCount }).refine(row => row.converted <= row.attempted);
+/** Optional detail is checked separately, so one bad field cannot discard a usable team season. */
+export function parseSeasonDetails(raw: unknown, year: number): SeasonDetails | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  const identity = z.object({ year: z.number().int().min(2000).max(2100), seasonType: z.literal(2), checkedAt: z.string().datetime() }).safeParse(value);
+  if (!identity.success || identity.data.year !== year) return null;
+  const count = (key: string) => { const parsed = detailCount.safeParse(value[key]); return parsed.success ? parsed.data : null; };
+  const thirdDown = value.thirdDown && typeof value.thirdDown === "object" && !Array.isArray(value.thirdDown) ? value.thirdDown as Record<string, unknown> : {};
+  const conversions = (side: string) => { const parsed = conversionSchema.safeParse(thirdDown[side]); return parsed.success ? parsed.data : null; };
+  const details: SeasonDetails = { ...identity.data, interceptionsMade: count("interceptionsMade"), interceptionsThrown: count("interceptionsThrown"), sacksMade: count("sacksMade"), sacksAllowed: count("sacksAllowed"), thirdDown: { offense: conversions("offense"), allowed: conversions("allowed") } };
+  return [details.interceptionsMade, details.interceptionsThrown, details.sacksMade, details.sacksAllowed, details.thirdDown.offense, details.thirdDown.allowed].some(value => value !== null) ? details : null;
+}
 export const RANKING_ROWS = [["totalYards", "Total yards"], ["netPassingYards", "Passing yards (net)"], ["rushingYards", "Rushing yards"]] as const;
 export const RANKING_KEYS = ["totalYards", "netPassingYards", "rushingYards", "totalYardsOpponent", "netPassingYardsOpponent", "rushingYardsOpponent"] as const;
 export type RankingKey = typeof RANKING_KEYS[number];
@@ -57,6 +78,7 @@ export type ScheduleSection = { status: "complete"; entries: ScheduleEntry[] } |
 export type TeamSeason = {
   v: 1; team: TeamSeasonTeam; season: { year: number };
   leaders?: SeasonLeaders | null;
+  details?: SeasonDetails | null;
   rankings?: SeasonRankings | null;
   record: string | null; stats: Record<TeamStatKey, StatPair> | null;
   regular: ScheduleSection; postseason: ScheduleSection;
@@ -144,6 +166,7 @@ export function parseTeamSeason(body: unknown, teamId: string): TeamSeason | nul
   const season = parsed.data as unknown as TeamSeason;
   season.rankings = parseSeasonRankings((body as Record<string, unknown>).rankings, season.season.year);
   season.leaders = parseLeaders((body as Record<string, unknown>).leaders, season.season.year);
+  season.details = parseSeasonDetails((body as Record<string, unknown>).details, season.season.year);
   // Every listed game must include the team, once, in the section its season type names.
   const ids = new Set<string>();
   for (const [section, type] of [[season.regular, 2], [season.postseason, 3]] as const) for (const entry of entries(section)) {

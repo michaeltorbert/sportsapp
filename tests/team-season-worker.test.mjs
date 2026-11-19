@@ -8,6 +8,31 @@ const root=fileURLToPath(new URL('..',import.meta.url));
 const fixture=n=>JSON.parse(readFileSync(new URL(`./fixtures/cfbd-${n}.json`,import.meta.url),'utf8'));
 const sources=[fixture('03-fbs-identities'),...['11-national-passing','12-national-rushing','13-national-receiving'].map(fixture)];
 
+// npm test builds first. Real compiled team route + service + serialization, with fixed offline source answers.
+test('compiled team route carries genuine regular-season detail with unchanged source request budget and cache', {timeout:20000}, async()=>{
+ const moduleRoot=root+'/dist/server';const names=readdirSync(moduleRoot,{recursive:true}).filter(n=>n.endsWith('.js'));
+ names.sort((a,b)=>a==='index.js'?-1:b==='index.js'?1:a.localeCompare(b));
+ const modules=names.map(n=>({type:'ESModule',path:moduleRoot+'/'+n,contents:readFileSync(moduleRoot+'/'+n,'utf8')}));
+ const captured=JSON.parse(readFileSync(new URL('./fixtures/espn-team-season-detail-unc-2026.json',import.meta.url),'utf8'));
+ const schedule=JSON.parse(readFileSync(new URL('./fixtures/espn-team-season-unc-2026.json',import.meta.url),'utf8')).schedule;
+ const base='https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams/153';
+ // SYNTHETIC empty postseason; original schedule/statistic field values stay genuine.
+ const replies=new Map([[base+'/schedule',schedule],[base+'/schedule?season=2026&seasontype=3',{team:{id:'153'},requestedSeason:{year:2026,type:3},events:[]}],[base+'/statistics?season=2026&seasontype=2',captured]]);
+ const calls=[];
+ const mf=new Miniflare(convertV4MiniflareOptions({name:'compiled-team-detail-offline',modules,modulesRoot:moduleRoot,compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat'],cf:false,telemetry:{enabled:false},outboundService:request=>{
+  calls.push(request.url);assert.ok(replies.has(request.url),`unexpected source ${request.url}`);assert.equal(request.headers.get('authorization'),null);
+  return new SyntheticResponse(JSON.stringify(replies.get(request.url)),{headers:{'content-type':'application/json'}});
+ }}));
+ try{
+  const response=await mf.dispatchFetch('https://worker.invalid/api/team?team=153');assert.equal(response.status,200);const result=await response.json();
+  assert.equal(result.v,1);assert.equal(result.team.id,'153');assert.equal(result.season.year,2026);assert.equal(result.regular.entries.length,12);
+  assert.deepEqual(result.stats.points,['25.8','22.1']);assert.equal(result.details.interceptionsMade,7);assert.equal(result.details.interceptionsThrown,7);assert.equal(result.details.sacksMade,19);assert.equal(result.details.sacksAllowed,26);
+  assert.deepEqual(result.details.thirdDown,{offense:{converted:58,attempted:125},allowed:{converted:65,attempted:149}});assert.ok(Number.isFinite(Date.parse(result.details.checkedAt)));
+  assert.deepEqual([...calls].sort(),[...replies.keys()].sort());
+  const second=await(await mf.dispatchFetch('https://worker.invalid/api/team?team=153')).json();assert.deepEqual(second.details,result.details);assert.equal(calls.length,3);
+ }finally{await mf.dispose();}
+});
+
 test('native workerd publisher+KV binding parses minimized real payloads; public reader has zero egress and denied source stays blocked', {timeout:30000},async()=>{
  const output=await build({stdin:{contents:`import {readSeasonLeaders} from './lib/cfbd-season-leaders.ts';
  import {POST} from './app/api/internal/season-leaders-refresh/route.ts';
