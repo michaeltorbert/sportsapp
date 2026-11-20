@@ -2,10 +2,10 @@
 import { useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Signal } from "lucide-react";
 import { gameDay } from "./game-screen";
-import { PLAYER_CATEGORIES, PLAYER_FIELDS, playerAggregates, playerGameHidden, type PlayerCategory, type PlayerRequest, type PlayerSeason, type PlayerStats } from "@/lib/player-season";
+import { DEFENSE_SOURCE_CUE, PLAYER_CATEGORIES, PLAYER_FIELDS, playerAggregates, playerGameHidden, type PlayerCategory, type PlayerRequest, type PlayerSeason, type PlayerStats } from "@/lib/player-season";
 import type { DukePreferences } from "@/lib/duke-visibility";
-const names = { passing: "Passing", rushing: "Rushing", receiving: "Receiving" };
-const core = { passing: ["COMPLETIONS", "ATT", "YDS", "TD", "INT"], rushing: ["CAR", "YDS", "TD"], receiving: ["REC", "YDS", "TD"] };
+const names = { passing: "Passing", rushing: "Rushing", receiving: "Receiving", defensive: "Defense", interceptions: "Interceptions" };
+const core = { passing: ["COMPLETIONS", "ATT", "YDS", "TD", "INT"], rushing: ["CAR", "YDS", "TD"], receiving: ["REC", "YDS", "TD"], defensive: ["TOT", "SOLO", "SACKS"], interceptions: ["INT", "YDS", "TD"] };
 const plain = (e: React.MouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 function value(n: number | null | undefined, key: string) { return n === null || n === undefined ? "Unavailable" : key === "PCT" ? `${(n * 100).toFixed(1)}%` : n.toLocaleString("en-US", { maximumFractionDigits: 3 }); }
 function Metrics({ stats, category, log = false }: { stats: PlayerStats; category: PlayerCategory; log?: boolean }) {
@@ -43,7 +43,11 @@ export function PlayerScreen({ request, season, identity, pending, failed, onlin
       {!season.historyAvailable && <Notice title="Previous seasons couldn’t be loaded">The selected season is still available.<button type="button" onClick={onRetry} disabled={pending || !online}>Retry</button></Notice>}
       {season.needsTeamChoice ? <Notice title={`Choose a team for ${year}`}>The source lists more than one team for this season. Statistics are shown separately.</Notice> : <>
       <section className="player-block" aria-labelledby="player-totals-h"><h2 id="player-totals-h">Season totals</h2>
-        {!totals?.shown ? <Notice title={totals?.reason === "checking" ? "Checking your Duke settings…" : totals?.reason === "hidden" ? "Season statistics hidden" : "Season statistics not shown yet"}>{totals?.reason === "hidden" ? "They include a Duke game your settings are hiding." : "We can’t yet confirm which season statistics can be shown."}</Notice> : !season.totalsAvailable ? <p className="player-empty">No season totals supplied for this player.</p> : PLAYER_CATEGORIES.map(c => <Metrics key={c} stats={season.totals} category={c} />)}
+        {!totals?.shown ? <Notice title={totals?.reason === "checking" ? "Checking your Duke settings…" : totals?.reason === "hidden" ? "Season statistics hidden" : "Season statistics not shown yet"}>{totals?.reason === "hidden" ? "They include a Duke game your settings are hiding." : "We can’t yet confirm which season statistics can be shown."}</Notice> : !season.totalsAvailable ? <p className="player-empty">{season.defense === "pending" ? "Season totals for this player aren’t loaded yet." : "No season totals supplied for this player."}</p> : PLAYER_CATEGORIES.map(c => <Metrics key={c} stats={season.totals} category={c} />)}
+        {/* #181 V2-C1: the source cue sits directly under the defensive season totals, before the game log. */}
+        {totals?.shown && season.totalsAvailable && (season.totals.defensive || season.totals.interceptions) && <p className="player-defense-source">{DEFENSE_SOURCE_CUE}</p>}
+        {totals?.shown && season.totalsAvailable && season.defense === "pending" && <p className="player-empty">Defensive statistics for this season aren’t loaded yet.</p>}
+        {totals?.shown && season.defense === "unavailable" && <p className="player-empty">Some defensive statistics couldn’t be loaded.</p>}
       </section>
       <section className="player-block" aria-labelledby="player-log-h"><h2 id="player-log-h">Game log</h2>{totals?.shown && <p className="player-coverage">Player statistics available for {supplied} of {completed} completed team games.</p>}
         {season.logs.some(l => l.game.state === "final" && !l.boxSupplied) && <Notice title="Part of the game log couldn’t be loaded">Games with unavailable statistics are marked below.</Notice>}

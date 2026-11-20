@@ -45,6 +45,13 @@ const identity = await keepFirstFailure(async () => {
     assert.equal(team.status, 400, `team${query}`);
     assert.equal(team.headers.get("cache-control"), "no-store");
   }
+  // #181 team defense: malformed, duplicate, unknown or unsupported-year input is rejected before any
+  // storage or CFBD work (the compiled route exists and validates first).
+  for (const query of ["", "?team=59", "?team=59&year=2025", "?team=abc&year=2026", "?team=59&team=59&year=2026", "?team=59&year=2026&extra=1"]) {
+    const defense = await fetchLocal(`/api/team-defense${query}`);
+    assert.equal(defense.status, 400, `team-defense${query}`);
+    assert.equal(defense.headers.get("cache-control"), "no-store");
+  }
   runtime.assertAlive();
   return metadata;
 }, {
@@ -55,4 +62,4 @@ const identity = await keepFirstFailure(async () => {
     if (!cleanup.gone) throw new Error(`Worker runtime process group was not cleaned up: ${cleanup.error?.message}`);
   },
 });
-console.log(JSON.stringify({ ...identity, runtime: "workerd", checks: ["health", "home", "manifest", "service-worker", "icon", "score-route", "stats-route", "team-route"], externalRequests: 0 }));
+console.log(JSON.stringify({ ...identity, runtime: "workerd", checks: ["health", "home", "manifest", "service-worker", "icon", "score-route", "stats-route", "team-route", "team-defense-route"], externalRequests: 0 }));

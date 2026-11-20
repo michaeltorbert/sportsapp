@@ -19,6 +19,48 @@ export function nativeRscUrl(error, origin) {
  } catch { return null; }
 }
 
+// #181 completed-read diagnostic (agreed bounded plan). Reachable ONLY for WebKit on a RECORDED darwin/arm64
+// host (observeRuntimeErrors records process.platform/process.arch); missing, synthetic, Linux, x64 or any
+// other host keeps the original completed-read rejection. It is a limited observable diagnostic that a run
+// may rely on only with a matching FINAL-PASS same-run native control (enforced by server-exit-reporter.mjs).
+export const COMPLETED_READ_LABEL = "native_completed_read_rsc_diagnostic";
+export const COMPLETED_READ_USAGE_ANNOTATION = "ss181-completed-read-diagnostic-usage";
+export const COMPLETED_READ_CONTROL_ANNOTATION = "ss181-completed-read-control-qualified";
+export const COMPLETED_READ_CONTROL_TITLE = "held replacement boundary: native after completed same-epoch read";
+export const COMPLETED_READ_IDENTITY_KEYS = Object.freeze(["browser", "hostPlatform", "hostArchitecture", "engineVersion", "sourceCommit", "browserRunId", "browserTestSourcesHash"]);
+const positiveSeq = value => Number.isFinite(value) && value > 0;
+const knownEpoch = epoch => typeof epoch === "string" && epoch.length > 0;
+// A main-frame GET fetch that completed 200 with no failure, strictly before the replacement started.
+const completedBeforeStart = (row, nav) => row.mainFrame === true && row.method === "GET" && row.type === "fetch" && row.status === 200 && row.failed === null && row.failure === null
+ && [row.seq, row.response, row.finished, nav.start].every(positiveSeq) && row.seq < row.response && row.response < row.finished && row.finished < nav.start;
+// Returns { row: the single prior completed exact-URL row, otherQuery: qualified same-path other-query rows },
+// or null (then the caller's existing logic is unchanged).
+function completedReadBaseline(evidence, error, url, nav) {
+ if (evidence.browserName !== "webkit" || evidence.hostPlatform !== "darwin" || evidence.hostArchitecture !== "arm64") return null;
+ if (!(nav.documentRequest < error.seq)) return null;
+ const exact = evidence.requests.filter(row => row.url === url);
+ // An exact-URL row whose owner is unknown cannot be excluded from "no new owning-epoch row".
+ if (exact.some(row => !knownEpoch(row.epoch))) return null;
+ const owned = exact.filter(row => row.epoch === nav.fromEpoch);
+ if (owned.length !== 1) return null;
+ const row = owned[0];
+ if (!completedBeforeStart(row, nav)) return null;
+ // Same-origin same-path DIFFERENT-URL rows: a known other epoch is ignored (never borrowed); an unknown owner
+ // or an unparseable URL (owning/unknown epoch) vetoes; an owning-epoch row must itself have completed 200
+ // strictly before the replacement started (temporal exclusion, not query matching). One bad row vetoes.
+ const target = new URL(url), otherQuery = [];
+ for (const other of evidence.requests) {
+  if (other.url === url) continue;
+  if (knownEpoch(other.epoch) && other.epoch !== nav.fromEpoch) continue;
+  let requestUrl;
+  try { requestUrl = new URL(other.url); } catch { return null; }
+  if (requestUrl.origin !== target.origin || requestUrl.pathname !== target.pathname) continue;
+  if (!knownEpoch(other.epoch) || !completedBeforeStart(other, nav)) return null;
+  otherQuery.push(other);
+ }
+ return { row, otherQuery };
+}
+
 export function classifyRuntimeErrors(evidence) {
  const classified = [], unexpected = [];
  const urls = evidence.errors.map(error => nativeRscUrl(error, evidence.origin));
@@ -26,7 +68,11 @@ export function classifyRuntimeErrors(evidence) {
   const reject = reason => unexpected.push({ ...error, reason });
   const url = urls[index];
   if (evidence.browserName !== "webkit" || !url) { reject("not_native_loopback_rsc"); continue; }
-  if (urls.filter(value => value === url).length !== 1) { reject("ambiguous_errors"); continue; }
+  // Uniqueness is per URL within the error's own non-empty owning epoch (not per whole test, not per
+  // navigation id alone). Another same-URL error in the same epoch, or any same-URL error whose epoch is
+  // unknown/empty (in either direction), keeps it ambiguous. All later guards are unchanged.
+  const own = typeof error.epoch === "string" && error.epoch ? error.epoch : null;
+  if (evidence.errors.some((other, j) => j !== index && urls[j] === url && (!own || typeof other.epoch !== "string" || !other.epoch || other.epoch === own))) { reject("ambiguous_errors"); continue; }
   const nav = evidence.navigations.find(row => row.id === error.navigation);
   if (!nav || nav.ambiguous || !nav.success || typeof nav.fromEpoch !== "string" || !nav.fromEpoch || typeof nav.toEpoch !== "string" || !nav.toEpoch || nav.fromEpoch === nav.toEpoch || error.epoch !== nav.fromEpoch || !(nav.start < nav.documentRequest && nav.documentRequest < nav.commit && nav.commit < nav.settled && nav.start < error.seq && error.seq < nav.commit)) { reject("replacement_not_proven"); continue; }
   const observer = evidence.documents.find(row => row.epoch === error.epoch);
@@ -54,6 +100,27 @@ export function classifyRuntimeErrors(evidence) {
   // Completed older requests are irrelevant. Pending/failed same-URL requests
   // belonging to this outgoing activation must be unique, not guessed by time.
   const candidates = evidence.requests.filter(row => row.url === url && row.epoch === nav.fromEpoch && row.mainFrame && row.seq < nav.commit && (!row.finished || row.finished > nav.start));
+  // Only when there is NO active candidate (so a unique in-window request-proven cancellation is never
+  // intercepted). Any completed-read veto leaves the existing ambiguous_requests result exactly as before.
+  const completed = candidates.length === 0 ? completedReadBaseline(evidence, error, url, nav) : null;
+  if (completed) {
+   const { row: baseline, otherQuery } = completed, n = otherQuery.length;
+   // Added only when qualified same-path other-query rows exist; otherwise the object is exactly as before.
+   const samePath = n ? {
+    priorCompletedSamePathOtherQueryRequests: otherQuery.map(row => ({ requestId: row.id, status: row.status, seq: row.seq, response: row.response, finished: row.finished })),
+    owningEpochSamePathRequestEvents: 1 + n, newOwningEpochSamePathRequestEventsAfterReplacementStart: 0,
+   } : {};
+   classified.push({ errorId: error.id, requestId: null, navigationId: nav.id, epoch: error.epoch, url,
+    classification: COMPLETED_READ_LABEL,
+    priorCompletedRequests: [{ requestId: baseline.id, status: baseline.status, finished: baseline.finished }],
+    ...samePath,
+    owningEpochExactUrlRequestEvents: 1, newOwningEpochExactUrlRequestEventsAfterReplacementStart: 0,
+    qualification: "requires_same_run_final_pass_darwin_arm64_webkit_completed_read_control",
+    causalLimit: n
+     ? `One prior successful exact-URL same-activation request and ${n} same-path different-query request${n === 1 ? "" : "s"} all completed 200 before replacement started; no same-path public Request event in the owning activation started at or after replacement start. Individual diagnostic cause, request cancellation and server ingress are not established.`
+     : "One prior successful same-activation public request completed before replacement; no new exact-URL public Request event was observed after replacement started. Individual diagnostic cause, request cancellation and server ingress are not established." });
+   continue;
+  }
   if (candidates.length !== 1) { reject("ambiguous_requests"); continue; }
   const request = candidates[0];
   if (request.method !== "GET" || request.type !== "fetch" || request.status !== null || !NATIVE_CANCEL_REASONS.includes(request.failure) || !(nav.start < request.failed && request.failed < nav.commit)) { reject("cancellation_not_proven"); continue; }

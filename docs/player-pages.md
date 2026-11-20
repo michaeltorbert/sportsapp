@@ -35,3 +35,31 @@ When the original season-leader reader is wholly unavailable, the team API may r
 Current pack normalization derives a versioned leader projection from original season-player rows **before** invalid IDs/fields are filtered from people. Malformed possible maxima invalidate their category; identical/conflicting duplicates, signed integer yards and deterministic ties follow the legacy selector. Box-only participants and game sums cannot become season leaders. Old packs lacking raw-row eligibility remain ineligible until normal refresh; no forced conversion or deletion occurs.
 
 Fallback requires exact2026/regular/team ID and pack/projection timestamp agreement, a complete usable pack schedule, bounded shape and the existing catalog's school/mascot/full-name correlation. Expired catalog statistics are not used as values; finite retained identity metadata can still corroborate the team. Actual pack data expires after36h and is labeled delayed after12h, independently of player cache retention. Existing Duke aggregate and client gates remain unchanged. Storage/shape/deadline failures return null. Preview and production must prove ordinary real player fill followed by named team leaders and working team→player navigation; test fixtures are not that proof.
+
+## Defensive statistics (#181)
+
+**Fields.** Profiles and game logs add CFBD `defensive` and `interceptions` categories, with only these supplied fields:
+- Defense: TOT (Total tackles), SOLO (Solo tackles), TFL (Tackles for loss), SACKS (Sacks).
+- Interceptions: INT (Interceptions made), YDS (Interception return yards), TD (Interception return touchdowns).
+
+**Validation.**
+- Counts must be nonnegative integers.
+- Sacks and TFL keep the source's half units (`"1.0"` becomes 1, `"7.5"` stays 7.5). Any other value is unavailable, never rounded.
+- Return yards follow the existing signed-integer yard rule.
+- Conflicting duplicates are unavailable.
+
+**Not shown:**
+- CFBD `PD`. It equals schools' breakups (BU), not passes defended. The existing ESPN game-box PD is unchanged.
+- QB HUR, defensive TD (meaning unclear), derived assisted tackles, games played and interception AVG.
+- Passing INT stays "thrown". A missing interceptions row is not zero.
+- No season total is summed from boxes.
+
+**Source cue.** The profile shows "Stats: CFBD. Totals may differ from school reports. Source update time unknown." directly under the season totals, before the game log, whenever defensive or interception totals appear.
+
+**Capability marker.** Packs built by this version carry `defense: 1` and include defense-only people. A fresh legacy v1 pack lacks the marker. It keeps its offense, and the profile shows its seasons as `defense: "pending"`. A miss in such a pack returns 503 `defense-pending`, never a false 404 `player-not-supplied`. Normal TTL and admission refresh it; there is no forced refresh, alias, deletion or re-dating.
+
+**Malformed optional data.** An invalid defensive or interceptions category (in totals or any log), or an unknown marker, is quarantined on its own. It is dropped and the season is marked `defense: "unavailable"` ("Some defensive statistics couldn’t be loaded."). It is never shown, and never treated as zero or absence. Valid offense, identity, year, history and logs survive, and prior categories keep their original strict contract. Identical repeated defensive or interception rows collapse, matching the team projection, while conflicting repeats are unavailable. Offense repeat semantics are unchanged.
+
+**Old clients.** The exact released 1.27 parser (`tests/fixtures/player-season-127.ts.txt`) strips the additive categories and marker. A defense-only player opened by an old client shows no category, which is a known, harmless limitation.
+
+**Known source variation (DQ-181-DEF-01).** Values are kept exactly as CFBD reports them. For example, Aycen Stevens has 7.5 sacks against 8.5 in Virginia Tech's own table. Equal game coverage cannot distinguish lag, revision or credit differences, so the cause is unknown. There are no manual overrides.

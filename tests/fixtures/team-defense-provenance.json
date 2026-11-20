@@ -1,0 +1,26 @@
+{
+  "fixture": "tests/fixtures/team-defense-source.json",
+  "source": "CollegeFootballData public API, 2026 regular season, captured 2026-11-20T17:57Z (stage1r-resume capture, projection SHA256 bb84fad4aabe4c177fea546d80a29ef972f755e196de4aa7d222a569012a6084); acquisition time, not underlying update time (unknown)",
+  "requests": [
+    "/stats/player/season?year=2026&team=Virginia+Tech&seasonType=regular (projection b3175a66e3ce2fb31246b339aa6ff96c08252c189f0689c5434cff485f386384)",
+    "/stats/player/season?year=2026&team=Georgia+Tech&seasonType=regular (projection 8d2e2ce7ddc2f6cea9530764eebe527489d529431240af23f0b5f2c42101f59d)",
+    "/games?year=2026&team=Georgia+Tech&seasonType=regular (projection c9a8f7a363d6f26a3ee7449faf542dcbf3effefba50990bca73993d3b650135c)",
+    "/games/players?year=2026&team=Georgia+Tech&seasonType=regular (projection 4ed489514251c407f9bfcf8a3b9af62f60f7a5a943fcc1585c4950b5f17eda21)"
+  ],
+  "excerpts": {
+    "stats.259": "Unchanged rows from source-259-season.tsv (sha256 8ca0bd17430c46b75389c8adeab215206540d89d01321b930d6ca3596482cd4c): lines 36,38,68,76,80,89,102,125,126,130,142,143,146,149,158,190,201,220,226,248,249,261,265,278,280,291,334,360,372,374 and 14,33,34,35. Selection: every family leader and tie, the runner-up(s), explicit zeros, fractional strings ('1.0','0.5','7.5','10.0'), interception YDS/TD/AVG and excluded PD/QB HUR/defensive TD rows. Not a full roster: other players' rows are omitted.",
+    "stats.59": "Unchanged rows from source-59-season.tsv (sha256 1209e9dfddeb1e94dc8ac857a48261cb3205fc6f72ca1a842b19a1b2f94e6f3b): lines 4,7,11,19,69,74,95,136,152,157,158,173,181,185,194,212,213,225,245,249,250,255,275,281,282,291,315. Same selection rule.",
+    "games.59": "All 12 regular-season games, unchanged (includes the completed Duke game 401858255 and two not-completed games).",
+    "boxes.59": "MINIMIZED game 401858228 (Georgia Tech 44, Mercer 11): Georgia Tech defensive and interceptions rows for 5147934, 5105677 and 5222695 unchanged from source-59-sample-boxes.tsv lines 3-26; every other category, every other athlete and all Mercer athletes are omitted (Mercer's side is kept with an empty category list so both box sides exist)."
+  },
+  "fullSourceOracle": "Leaders in the full capture (verified by the independent reviewer and the author analysis): VT total tackles Keon Wylie 59; VT sacks Aycen Stevens 7.5; VT interceptions three-way tie at 1 (Brennan Johnson, Quentin Reddish, Thomas Williams); GT total tackles Tae Harris 63; GT sacks tie at 3 (Taje Mccoy, Noah Carter); GT interceptions three-way tie at 1 (Kealan Jones, Trae Stevenson Jr., C.J. Gamble). The excerpt reproduces these because it contains every value at or above each runner-up.",
+  "knownSourceVariation": "DQ-181-DEF-01: CFBD-reported values are kept as reported (e.g. Aycen Stevens 7.5 sacks vs 8.5 in Virginia Tech's own cumulative table); cause unknown; no override.",
+  "playerSeason127": {
+    "fixture": "tests/fixtures/player-season-127.ts.txt",
+    "source": "released lib/player-season.ts at 90aa9d8c72a087f25a4a5dda540a321056c3fc0e (production 1.27), byte-identical",
+    "bytes": 8107,
+    "sha256": "8fcca3bfbd229f887b0e5afa0ce24f7bd0ef58152d147ed915b719fa142428c4",
+    "use": "tests/player-compat.test.mjs compiles it unmodified (resolveDir lib/, unchanged ./football and ./duke-visibility) as the actual old client parser"
+  },
+  "syntheticMutations": "Tests label every synthetic change (malformed/conflicting values, invalid IDs, >3 ties, legacy packs, passing INT rows) inline; none of them is presented as source data."
+}

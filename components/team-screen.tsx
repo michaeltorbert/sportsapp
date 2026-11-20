@@ -6,6 +6,9 @@ import { seasonAggregates, RANKING_ROWS, type RankingKey, type RankingMetric, TE
 // Relative, like the page's own import, so page tests bundle the real game screen helpers.
 import { gameDay } from "./game-screen";
 import { leadersHref } from "@/lib/leaders-browser";
+import { DEFENSE_FAMILIES, teamDefenseGate, type DefenseFamily, type TeamDefense } from "@/lib/team-defense";
+import type { Game } from "@/lib/football";
+import { DEFENSE_SOURCE_CUE } from "@/lib/player-season";
 
 // A season crosses daylight and standard time, so every kickoff is converted on its own date to Eastern
 // time, the basis the cue names. Days already use the game's Eastern date (gameDay).
@@ -122,13 +125,58 @@ function TeamRankings({ season }: { season: TeamSeason }) {
   </section>;
 }
 
+/** `board`: current scoreboard games; matching copies can only add protection to the raw pack gate (PV1-01). */
+export type TeamDefenseProp = { value: TeamDefense | null; board?: readonly Game[]; pending: boolean; failed: boolean; onRetry: () => void };
+type PlayerLinkFactory = (id: string, year: number) => { href: string; open: () => void };
+const defenseValue = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 1 });
+const DEFENSE_UNITS = { tackles: ["total tackle", "total tackles"], sacks: ["sack", "sacks"], interceptions: ["interception made", "interceptions made"] } as const;
+/** #181 Defensive leaders: rendered only when BOTH the base aggregates gate (caller) and this pack
+ *  generation's own contribution gate pass. Protected states render no names, values, ties, counts,
+ *  links or times, in the DOM or for assistive technology. Every tied leader is an ordinary link. */
+function DefenseLeaders({ teamId, shortName, year, defense, prefs, online, playerLink }: { teamId: string; shortName: string; year: number; defense: TeamDefenseProp; prefs: DukePreferences | null; online: boolean; playerLink?: PlayerLinkFactory }) {
+  const d = defense.value && defense.value.team.id === teamId && defense.value.year === year ? defense.value : null;
+  // Own class names (same visual rules as the yard rows) so the existing yard-leader markup is untouched.
+  const heading = <div className="team-defense-heading"><h2 id="team-defense-h">Defensive leaders</h2><p>Regular season</p></div>;
+  // CI-F3: both defense Retry buttons share this markup. The label cell always reserves the width of the longer
+  // "Retrying…" (an aria-hidden, visibility-hidden sizer in the same grid cell), so Retry ↔ Retrying… never
+  // changes the button's width and so never re-wraps the status row. The accessible name stays exactly the visible word.
+  const retryButton = <button type="button" className="notice-button" data-focus-key="defense-retry" onClick={defense.onRetry} disabled={defense.pending || !online}><span className="team-defense-retry-label"><span>{defense.pending ? "Retrying…" : "Retry"}</span><span aria-hidden="true">Retrying…</span></span></button>;
+  const status = (text: string, retry = false) => <section className="team-block team-defense" aria-labelledby="team-defense-h">{heading}
+    <div className="team-defense-status" role="status"><p>{text}</p>{retry && retryButton}</div></section>;
+  // A known failure outranks loading: its status (with Retry disabled as "Retrying…" while a reload is pending)
+  // keeps the same layout across Back/re-enable, so restored scroll positions below this section don't move.
+  if (!d) return defense.failed ? status("Defensive leaders couldn’t be loaded.", true) : defense.pending ? status("Loading defensive leaders…") : null;
+  const gate = teamDefenseGate(d, prefs, defense.board);
+  if (!gate.shown) return status(gate.reason === "checking" ? "Checking your Duke settings…" : gate.reason === "hidden" ? "Defensive leaders are hidden: they include a Duke game your settings are hiding." : "Defensive leaders aren’t shown yet: part of this schedule couldn’t be loaded.");
+  if (d.capability === "pending") return status("Defensive leaders aren’t loaded yet. They’ll appear after this season’s statistics next refresh.");
+  if (d.capability !== "available" || !d.families) return status("Defensive leaders couldn’t be loaded.", true);
+  const link = (id: string, name: string) => { const l = playerLink?.(id, year); return l ? <a href={l.href} data-focus-key={`player-${id}-${teamId}`} onClick={event => { if (plainClick(event)) { event.preventDefault(); l.open(); } }}>{name}</a> : name; };
+  const row = (key: keyof typeof DEFENSE_UNITS, label: string, f: DefenseFamily) => {
+    if (f.state !== "leaders") return <div className="team-defense-row" key={key}><dt><span className="team-defense-category">{label}</span><span className="team-defense-name team-defense-missing">{f.state === "none-positive" ? "No positive total supplied" : f.state === "not-supplied" ? "Not supplied" : "Leader unavailable"}</span></dt><dd /></div>;
+    const tied = f.leaders.length > 1, unit = DEFENSE_UNITS[key][f.value === 1 ? 0 : 1], solo = !tied ? f.leaders[0].solo : undefined;
+    return <div className="team-defense-row" key={key}><dt><span className="team-defense-category">{label}</span>
+      {tied ? <><span className="team-defense-tie">Tied · {f.leaders.length} players</span><ul className="team-defense-names" aria-label={`${label} leaders, tied`}>{f.leaders.map(l => <li key={l.id}>{link(l.id, l.name)}</li>)}</ul></>
+        : <span className="team-defense-name">{link(f.leaders[0].id, f.leaders[0].name)}</span>}</dt>
+      <dd><strong>{defenseValue(f.value)}</strong><span>{unit}{tied ? " each" : ""}</span>{solo !== undefined && <span className="team-defense-solo">{defenseValue(solo)} solo</span>}</dd></div>;
+  };
+  return <section className="team-block team-defense" aria-labelledby="team-defense-h">{heading}
+    <p className="team-defense-intro">{shortName}’s season leaders on defense.</p>
+    <dl className="team-defense-list">{DEFENSE_FAMILIES.map(([key, , , label]) => row(key, label, d.families![key]))}</dl>
+    <p className="team-defense-fresh">Defense checked {checkedTime(d.checkedAt)}{d.stale || defense.failed ? " · Refresh delayed" : ""}.</p>
+    <p className="team-defense-source">{DEFENSE_SOURCE_CUE}</p>
+    {/* PV1-04: a failed revisit keeps the retained, still-gated values and says so, with an ordinary Retry. */}
+    {defense.failed && <div className="team-defense-status" role="status"><p>Couldn’t refresh defensive leaders. Showing the last check.</p>{retryButton}</div>}
+  </section>;
+}
+
 export type TeamScreenProps = {
-  playerLink?: (id: string, year: number) => { href: string; open: () => void }; teamId: string; season: TeamSeason | null; pending: boolean; failed: boolean; online: boolean; prefs: DukePreferences | null;
+  playerLink?: PlayerLinkFactory; teamId: string; season: TeamSeason | null; pending: boolean; failed: boolean; online: boolean; prefs: DukePreferences | null;
+  defense?: TeamDefenseProp;
   back: { title: string; detail: string; label: string }; onBack: () => void; onRetry: () => void;
   gameHref: (id: string) => string; onOpenGame: (id: string) => void; notice?: ReactNode;
 };
 /** A team's current season: record, yard leaders, averages, supported detail and the published schedule. */
-export function TeamScreen({ teamId, season, pending, failed, online, prefs, back, onBack, onRetry, gameHref, onOpenGame, notice, playerLink }: TeamScreenProps) {
+export function TeamScreen({ teamId, season, pending, failed, online, prefs, back, onBack, onRetry, gameHref, onOpenGame, notice, playerLink, defense }: TeamScreenProps) {
   const backButton = <button type="button" className="back-button" data-focus-key="back" aria-label={back.label} onClick={onBack}><ChevronLeft size={22} aria-hidden="true" /><span className="back-text" aria-hidden="true"><span>{back.title}</span><small>{back.detail}</small></span></button>;
   const bar = <header className="game-bar">{backButton}<span className="team-bar-title" aria-hidden="true">{season?.team.abbreviation}</span><span className="bar-brand" aria-hidden="true"><span className="brand-icon"><Signal size={17} strokeWidth={3} /></span></span></header>;
   if (!season) {
@@ -192,6 +240,7 @@ export function TeamScreen({ teamId, season, pending, failed, online, prefs, bac
           {season.leaders?.checkedAt && <p className="team-fresh">Leaders checked {checkedTime(season.leaders.checkedAt)}{season.leaders.stale ? " · Refresh delayed" : ""}. Source update time unknown.</p>}
           {TEAM_LEADER_ROWS.some(([key]) => !season.leaders?.[key]) && <div className="team-leaders-status"><p>{season.leaders && TEAM_LEADER_ROWS.some(([key]) => season.leaders?.[key]) ? "Some season leaders couldn’t be loaded." : "Season leaders couldn’t be loaded."}</p><button type="button" className="notice-button" data-focus-key="leaders-retry" onClick={onRetry} disabled={pending || !online}>{pending ? "Retrying…" : "Retry"}</button></div>}
         </section>}
+        {aggregates.shown && defense && <DefenseLeaders teamId={teamId} shortName={team.shortName} year={season.season.year} defense={defense} prefs={prefs} online={online} playerLink={playerLink} />}
         <section className="team-block" aria-labelledby="team-averages-h"><h2 id="team-averages-h">Season averages</h2>{averages}</section>
         {aggregates.shown && <TeamDetails season={season} />}
         {aggregates.shown && <TeamRankings season={season} />}

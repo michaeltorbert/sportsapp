@@ -7,23 +7,33 @@ const memory = new Map<string, PlayerSeason>();
 export function usePlayerSeason(request: PlayerRequest | null) {
   const key = request ? playerRequestKey(request) : "", online = useOnline();
   const [attempt, setAttempt] = useState(0);
-  const [state, setState] = useState<{ key: string; season: PlayerSeason | null; pending: boolean; failed: boolean }>({ key, season: memory.get(key) ?? null, pending: false, failed: false });
+  // Each time the request becomes live again (offline→online, or no request→request) a new load starts, so
+  // it gets a new owner: `cycle` is adjusted during render (React's supported pattern), never in an effect.
+  const live = !!request && online;
+  const [lastLive, setLastLive] = useState(live), [cycle, setCycle] = useState(0);
+  if (live !== lastLive) { setLastLive(live); if (live) setCycle(n => n + 1); }
+  // Request ownership (`${key}#${attempt}#${cycle}`): state is set only by the settled load owning the current
+  // request, never synchronously in the effect, so pending is derived. Same fetch, abort, retained-season,
+  // failure and identity behavior as before.
+  const owner = `${key}#${attempt}#${cycle}`;
+  const [settled, setSettled] = useState<{ owner: string; key: string; season: PlayerSeason | null; failed: boolean } | null>(null);
   useEffect(() => {
     if (!request || !online) return;
     let disposed = false; const controller = new AbortController();
-    setState({ key, season: memory.get(key) ?? null, pending: true, failed: false });
+    const fail = () => { if (!disposed) setSettled({ owner, key, season: memory.get(key) ?? null, failed: true }); };
     void loadPlayerSeason(request, controller.signal).then(result => {
       if (disposed) return;
       if (result.kind === "ok") {
         memory.delete(key); memory.set(key, result.season); while (memory.size > 16) memory.delete(memory.keys().next().value!);
-        setState({ key, season: result.season, pending: false, failed: false });
-      } else setState(current => current.key === key ? { ...current, pending: false, failed: true } : current);
-    }).catch(() => { if (!disposed) setState(current => current.key === key ? { ...current, pending: false, failed: true } : current); });
+        setSettled({ owner, key, season: result.season, failed: false });
+      } else fail();
+    }).catch(fail);
     return () => { disposed = true; controller.abort(); };
-    // request's primitive fingerprint owns cancellation; object identity is irrelevant.
+    // request's primitive fingerprint (in `owner`) owns cancellation; object identity is irrelevant.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, online, attempt]);
-  const current = state.key === key ? state : { key, season: memory.get(key) ?? null, pending: !!request && online, failed: false };
+  }, [owner, online]);
+  const mine = settled?.owner === owner ? settled : null;
+  const current = { key, season: (settled?.key === key ? settled.season : null) ?? memory.get(key) ?? null, pending: !!request && online && !mine, failed: !!mine?.failed };
   const identity = current.season ?? [...memory.values()].reverse().find(s => request && s.id === request.id && s.anchor.team === request.team && s.anchor.year === request.anchorYear) ?? null;
   return { ...current, identity, online, retry: () => { if (!current.pending) setAttempt(n => n + 1); } };
 }

@@ -1,6 +1,20 @@
 import { test as base, expect } from "@playwright/test";
 import { appendEvidence, readServerState, readUnavailable, recordUnavailable, resourceSnapshot, serverFailureMessage, unavailableMessage } from "../../scripts/browser-server-diagnostics.mjs";
-import { classifyRuntimeErrors } from "../../scripts/browser-runtime-errors.mjs";
+import { classifyRuntimeErrors, COMPLETED_READ_LABEL, COMPLETED_READ_USAGE_ANNOTATION } from "../../scripts/browser-runtime-errors.mjs";
+
+// #181 completed-read qualification identity: actual browser.version(), the RECORDED observer host and this
+// run's config metadata. No user agent, auth or personal data. Missing values stay null and never match.
+export function completedReadIdentity({ browserName, browser, evidence, testInfo }) {
+  const { sourceCommit = null, browserRunId = null, browserTestSourcesHash = null } = testInfo.config.metadata;
+  return { browser: browserName, hostPlatform: evidence.hostPlatform ?? null, hostArchitecture: evidence.hostArchitecture ?? null, engineVersion: browser.version(), sourceCommit, browserRunId, browserTestSourcesHash };
+}
+// Every use of the completed-read label (ordinary harness AND the control's own) is annotated, so the
+// server-exit reporter can require a matching FINAL-PASS same-run control. Returns the usage count.
+export function annotateCompletedReadUsage(testInfo, classification, identity) {
+  const uses = classification.classified.filter(row => row.classification === COMPLETED_READ_LABEL);
+  for (const row of uses) testInfo.annotations.push({ type: COMPLETED_READ_USAGE_ANNOTATION, description: JSON.stringify({ ...identity, errorId: row.errorId, priorCompletedRequestIds: row.priorCompletedRequests.map(prior => prior.requestId) }) });
+  return uses.length;
+}
 
 // Passive test-only provenance. No awaited probe before goto/reload; preserve
 // their arguments and exact underlying promise. Missing epochs fail closed.
@@ -208,7 +222,7 @@ export const test = base.extend({
     appendEvidence(serverDiagnosticsDir, "test-timeline.jsonl", { event: "start", utc: startedAt, title: testInfo.title, file: testInfo.file, workerIndex: testInfo.workerIndex });
     const state = {
       events: standardEvents(), failScores: false, ready: true, failConfig: false,
-      active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 0, preferencesVersion: 1, sampleVersion: 1, failSave: false, conflict: false, alertRequests: [], scoreRequests: [], scoreRequestCount: 0, holdAfterInitialProbe: false, failAfterInitialProbe: false, heldScoreReleases: [], releaseScores() { this.holdAfterInitialProbe = false; for (const release of this.heldScoreReleases.splice(0)) release(); }, cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], hostedScoreResponse: null, statsRequests: [], teamRequests: [], playerRequests: [], logoRequests: [], unexpectedExternal: [], errors: [],
+      active: true, kickoff: true, closeGame: true, upsetWatch: true, upsetFinal: true, revision: 0, preferencesVersion: 1, sampleVersion: 1, failSave: false, conflict: false, alertRequests: [], scoreRequests: [], scoreRequestCount: 0, holdAfterInitialProbe: false, failAfterInitialProbe: false, heldScoreReleases: [], releaseScores() { this.holdAfterInitialProbe = false; for (const release of this.heldScoreReleases.splice(0)) release(); }, cdnFeed: null, cdnRequests: [], hostedScoreRequests: [], hostedScoreResponse: null, statsRequests: [], teamRequests: [], playerRequests: [], defenseRequests: [], logoRequests: [], unexpectedExternal: [], errors: [],
     };
     const lifecycle = [];
     const runtimeEvidence = await observeRuntimeErrors(page, browserName, testInfo.project.use.baseURL);
@@ -291,6 +305,12 @@ export const test = base.extend({
           state.playerRequests.push(url.search);
           return state.player ? state.player(url, route) : route.fulfill({ status: 503, contentType: "application/json", headers: { "Cache-Control": "no-store", "Retry-After": "300" }, body: JSON.stringify({ error: "simulated player season unavailable" }) });
         }
+        // Team defense (#181) reads the same server-side CFBD pack: always intercepted before the Worker,
+        // including the default unavailable case and any future subpath. Tests opt in with state.defense.
+        if (url.pathname === "/api/team-defense" || url.pathname.startsWith("/api/team-defense/")) {
+          state.defenseRequests.push(url.search);
+          return state.defense ? state.defense(url, route) : route.fulfill({ status: 503, contentType: "application/json", headers: { "Cache-Control": "no-store", "Retry-After": "300" }, body: JSON.stringify({ error: "simulated team defense unavailable" }) });
+        }
         return route.continue();
       }
       // Team logos named by the genuine team-season fixtures (#166). Expected and recorded, then answered
@@ -336,6 +356,7 @@ export const test = base.extend({
     browser.off("disconnected", onDisconnect);
     appendEvidence(serverDiagnosticsDir, "test-timeline.jsonl", { event: "end", utc: new Date().toISOString(), title: testInfo.title, file: testInfo.file, status: testInfo.status, errors: testInfo.errors.map(error => error.message) });
     const runtimeClassification = runtimeEvidence.classify();
+    annotateCompletedReadUsage(testInfo, runtimeClassification, completedReadIdentity({ browserName, browser, evidence: runtimeEvidence.data, testInfo }));
     await testInfo.attach("browser-evidence", { contentType: "application/json", body: JSON.stringify({
       utc: new Date().toISOString(), ...testInfo.config.metadata, deployedLocalBuild: health,
       browser: browserName, engineVersion: browser.version(), viewport: page.viewportSize(),
@@ -345,7 +366,7 @@ export const test = base.extend({
       runtimeErrors: state.errors, runtimeProvenance: runtimeEvidence.data, runtimeClassification,
       simulated: ["ESPN responses", "alert-service responses", "notification permission", "PushManager", "service-worker registration", "installed standalone state"],
       // Even fake owner tokens stay out of attached evidence.
-      alertRequests: state.alertRequests.map(r => ({ ...r, authorization: r.authorization ? "[redacted]" : null })), scoreRequests: state.scoreRequests, cdnRequests: state.cdnRequests, hostedScoreRequests: state.hostedScoreRequests, statsRequests: state.statsRequests, teamRequests: state.teamRequests, playerRequests: state.playerRequests, logoRequests: state.logoRequests, unexpectedExternal: state.unexpectedExternal,
+      alertRequests: state.alertRequests.map(r => ({ ...r, authorization: r.authorization ? "[redacted]" : null })), scoreRequests: state.scoreRequests, cdnRequests: state.cdnRequests, hostedScoreRequests: state.hostedScoreRequests, statsRequests: state.statsRequests, teamRequests: state.teamRequests, playerRequests: state.playerRequests, defenseRequests: state.defenseRequests, logoRequests: state.logoRequests, unexpectedExternal: state.unexpectedExternal,
     }, null, 2) });
     // Soft assertions still fail the test while allowing every crash/runtime
     // check to report its evidence instead of stopping at the first failure.

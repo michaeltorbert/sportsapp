@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import ServerExitReporter from "./browser/server-exit-reporter.mjs";
 import { anomalyText, readServerState, recordUnavailable, serverFailureMessage } from "../scripts/browser-server-diagnostics.mjs";
+import { COMPLETED_READ_CONTROL_ANNOTATION, COMPLETED_READ_CONTROL_TITLE, COMPLETED_READ_USAGE_ANNOTATION } from "../scripts/browser-runtime-errors.mjs";
 
 const supervisor = resolve("scripts/browser-test-server.mjs");
 // Playwright runs webServer.command through a POSIX shell; quote each argv token.
@@ -151,6 +152,88 @@ test("reporter signals once on confirmed exit and reports failure, not on normal
   await pause(30);
   assert.equal(normal.onEnd(), undefined);
   assert.equal(signals, 1);
+});
+
+// #181 completed-read gate: reporter API objects only (TestCase id/title/expectedStatus, TestResult
+// status/annotations), no browser. Identity values are synthetic test strings.
+const gateMeta = { sourceCommit: "c".repeat(40), browserRunId: "gate-run", browserTestSourcesHash: "h".repeat(64) };
+const gateIdentity = (change = {}) => ({ browser: "webkit", hostPlatform: "darwin", hostArchitecture: "arm64", engineVersion: "27.2", ...gateMeta, ...change });
+const usage = identity => ({ type: COMPLETED_READ_USAGE_ANNOTATION, description: JSON.stringify({ ...identity, errorId: 1, priorCompletedRequestIds: [4] }) });
+const qualified = identity => ({ type: COMPLETED_READ_CONTROL_ANNOTATION, description: JSON.stringify({ ...identity, testId: "control", errorId: 1, priorCompletedRequestIds: [1] }) });
+const controlEnd = (annotations, status = "passed", expectedStatus = "passed") => [{ id: "control", title: COMPLETED_READ_CONTROL_TITLE, expectedStatus }, { status, annotations }];
+const userEnd = annotations => [{ id: "all-fbs", title: "All FBS restoration", expectedStatus: "passed" }, { status: "passed", annotations }];
+function gateRun(t, ends, { state } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "browser-completed-read-gate-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  if (state) writeFileSync(join(dir, "state.json"), JSON.stringify({ runId: gateMeta.browserRunId, directory: dir, ...state }));
+  const reporter = new ServerExitReporter({ signal: () => {}, pollMs: 10 });
+  reporter.onBegin({ metadata: { serverDiagnosticsDir: dir, ...gateMeta } });
+  for (const [testCase, result] of ends) reporter.onTestEnd(testCase, result);
+  const chunks = [], write = process.stderr.write;
+  process.stderr.write = chunk => { chunks.push(String(chunk)); return true; };
+  try { return { status: reporter.onEnd(), stderr: chunks.join("") }; } finally { process.stderr.write = write; }
+}
+const summaryOf = stderr => JSON.parse(/completed-read gate (\{.*\})\n/.exec(stderr)[1]);
+
+test("completed-read gate: no label use keeps the old normal result", t => {
+  const run = gateRun(t, [userEnd([])]);
+  assert.equal(run.status, undefined);
+  assert.equal(summaryOf(run.stderr).usages, 0);
+});
+
+test("completed-read gate: label use without any control (e.g. a grep run) fails", t => {
+  const run = gateRun(t, [userEnd([usage(gateIdentity())])]);
+  assert.deepEqual(run.status, { status: "failed" });
+  assert.deepEqual(summaryOf(run.stderr), { usages: 1, unmatched: 1, matchingControls: [], identity: null, result: "failed" });
+  assert.match(run.stderr, /lack a matching FINAL-PASS same-run completed-read native control/);
+});
+
+test("completed-read gate: a matching FINAL-PASS control satisfies every same-identity use, including its own", t => {
+  const run = gateRun(t, [userEnd([usage(gateIdentity())]), controlEnd([usage(gateIdentity()), qualified(gateIdentity())])]);
+  assert.equal(run.status, undefined);
+  assert.deepEqual(summaryOf(run.stderr), { usages: 2, unmatched: 0, matchingControls: ["control"], identity: gateIdentity(), result: "passed" });
+});
+
+test("completed-read gate: engine, architecture, platform, source, run or test-source mismatch fails", t => {
+  for (const change of [{ engineVersion: "27.3" }, { hostArchitecture: "x64" }, { hostPlatform: "linux" }, { sourceCommit: "d".repeat(40) }, { browserRunId: "stale-run" }, { browserTestSourcesHash: "e".repeat(64) }]) {
+    const run = gateRun(t, [userEnd([usage(gateIdentity())]), controlEnd([qualified(gateIdentity(change))])]);
+    assert.deepEqual(run.status, { status: "failed" }, JSON.stringify(change));
+    // Use and control share the changed value. A different engine alone is not invalid (see the next test);
+    // an unsupported host or a source/run/test-source hash other than this run's metadata still fails.
+    if ("engineVersion" in change) continue;
+    const stale = gateRun(t, [userEnd([usage(gateIdentity(change))]), controlEnd([qualified(gateIdentity(change))])]);
+    assert.deepEqual(stale.status, { status: "failed" }, `both ${JSON.stringify(change)}`);
+  }
+});
+
+test("completed-read gate: a fresh same-run control on an updated engine qualifies that engine's uses (no fixed engine pin)", t => {
+  const updated = gateIdentity({ engineVersion: "27.3" });
+  const run = gateRun(t, [userEnd([usage(updated)]), controlEnd([usage(updated), qualified(updated)])]);
+  assert.equal(run.status, undefined);
+  assert.deepEqual(summaryOf(run.stderr), { usages: 2, unmatched: 0, matchingControls: ["control"], identity: updated, result: "passed" });
+  // The updated-engine control does not qualify an older-engine use in the same run.
+  assert.deepEqual(gateRun(t, [userEnd([usage(gateIdentity())]), controlEnd([qualified(updated)])]).status, { status: "failed" });
+});
+
+test("completed-read gate: failed, skipped, unqualified, malformed or earlier-attempt-only controls fail", t => {
+  const use = userEnd([usage(gateIdentity())]);
+  for (const [name, ends] of [
+   ["failed", [use, controlEnd([qualified(gateIdentity())], "failed")]],
+   ["timed out", [use, controlEnd([qualified(gateIdentity())], "timedOut")]],
+   ["skipped", [use, controlEnd([], "skipped", "skipped")]],
+   ["passed without in-body qualification", [use, controlEnd([])]],
+   ["malformed qualification", [use, controlEnd([{ type: COMPLETED_READ_CONTROL_ANNOTATION, description: "{not json" }])]],
+   ["qualification on another test title", [use, [{ id: "other", title: "other test", expectedStatus: "passed" }, { status: "passed", annotations: [qualified(gateIdentity())] }]]],
+   ["final retry failed after an earlier passing attempt", [use, controlEnd([qualified(gateIdentity())]), controlEnd([], "failed")]],
+   ["malformed use", [userEnd([{ type: COMPLETED_READ_USAGE_ANNOTATION, description: "" }]), controlEnd([qualified(gateIdentity())])]],
+  ]) assert.deepEqual(gateRun(t, ends).status, { status: "failed" }, name);
+});
+
+test("completed-read gate keeps server-exit failure and its message first", t => {
+  const run = gateRun(t, [userEnd([usage(gateIdentity())]), controlEnd([qualified(gateIdentity())])], { state: { phase: "exited", exit: { utc: "now", code: 3 } } });
+  assert.deepEqual(run.status, { status: "failed" });
+  assert.match(run.stderr, /code 3/);
+  assert.doesNotMatch(run.stderr, /lack a matching/);
 });
 
 test("Playwright stops after the first supervised server exit", async t => {

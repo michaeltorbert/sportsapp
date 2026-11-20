@@ -247,3 +247,67 @@ giveaways and reciprocal opponent totals conflict, and fumblesLost is not reliab
 reconciled. This bounded slice includes only separately corroborated interceptions;
 it does not label them all turnovers, infer fumbles, select convenient totals,
 introduce another collector or close broader #189/#181.
+
+## Defensive leaders (#181, team-first)
+
+**What the section shows.** Directly after the three yard leaders, the current supported
+season shows **Total tackles** (CFBD defensive/TOT, with a "N solo" line only for a sole
+leader), **Sacks** (defensive/SACKS, half sacks preserved) and **Interceptions** made
+(interceptions/INT).
+- Every tied leader is listed by full name as an ordinary in-app profile link, with no cap,
+  collapse or "+N more".
+- Family states are distinct: leaders, every supplied value a known 0 ("No positive total
+  supplied"), no rows ("Not supplied") and invalid ("Leader unavailable").
+- The section ends with the generation's check time (its acquisition time, not when the
+  source was updated) and the cue "Stats: CFBD. Totals may differ from school reports.
+  Source update time unknown."
+
+**Source and route.**
+- `/api/team-defense?team=<id>&year=<current>` rejects unknown, duplicate, malformed and
+  unsupported-year input before any storage or source work.
+- It resolves the team from the existing trusted catalog and returns
+  `createPlayerSeasonService().teamDefense()`. That reads the **same private
+  `pack:<team>:<year>`**, with the same coalescing, 24-hour/30-day TTLs, retained stale
+  pack, `admitPlayerReads` budget and attempt keys, and common CFBD denial block.
+- There is no other collector, publisher, ledger or alias, and it fetches no identities.
+- Profiles stay lazy on actual opens. A cold environment's worst case for VT plus GT is
+  2 packs × 3 reads + 11 profiles = 17 calls, against that environment's own 24/day and
+  400/31-day ledger. These are not account-balance guarantees.
+- `/api/team` and `/api/leaders` stay KV-only and unchanged, and the yard projection and
+  national publisher are untouched.
+
+**Projection.** `projectTeamDefense` runs over the original season rows before people are
+filtered.
+- Negative or zero team rows are skipped.
+- A malformed value, invalid ID, conflicting duplicate or name conflict invalidates its
+  family instead of promoting a lower row. Identical duplicates collapse.
+- New packs carry `defense: 1` plus the projection. A fresh legacy pack returns
+  `capability: "pending"`, never a known absence. A stored projection that fails
+  validation returns `"unavailable"`.
+
+**Privacy.** The browser validates exact team, year, basis, ties and games. The section
+renders only when **both** gates pass:
+- the base `seasonAggregates` gate, which also gates the request itself;
+- the pack generation's own contribution gate, `teamDefenseGate`. This uses
+  `playerGameHidden` semantics over the pack's **raw** schedule. When scoreboard copies
+  exist, the same gate must **also** pass with them substituted: a board copy can only add
+  protection, never erase a raw hidden decision (for example a source-unknown, possibly
+  underway game that the board lists as upcoming). It fails closed on unknown preferences,
+  an incomplete or empty schedule and any hidden Duke game, for example Georgia Tech's
+  real 401858255.
+
+Protected, loading, pending and failure states render a status line only: no names,
+values, tie counts, links or times. A failed revisit keeps the retained, still-gated
+values, marks them "Refresh delayed" and offers an ordinary Retry, with no polling and no
+forced upstream work. No preference observation or subtraction occurs.
+
+The response validator accepts only the current supported year, matching the query
+contract. Historical player routes are unchanged.
+
+**Evidence.** Genuine November 20 rows (`tests/fixtures/team-defense-source.json` plus its
+provenance file) verify:
+- VT: 59 / 7.5 / three-way 1
+- GT: 63 / two-way 3 / three-way 1
+
+The CFBD-reported 7.5 against Virginia Tech's own 8.5 is DQ-181-DEF-01: kept as reported,
+with the cause unknown. Fixtures and intercepted browser routes are not hosted proof.

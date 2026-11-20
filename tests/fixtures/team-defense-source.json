@@ -1,0 +1,110 @@
+{
+  "label": "GENUINE CFBD 2026 regular-season EXCERPT (Nov 20 capture). Rows are unchanged source values; selection and minimization are described in team-defense-provenance.json.",
+  "catalog": {"59": {"id": "59", "school": "Georgia Tech"}, "259": {"id": "259", "school": "Virginia Tech"}},
+  "stats": {
+    "259": [
+      {"season": 2026, "playerId": "4832831", "player": "Keon Wylie", "team": "Virginia Tech", "position": "LB", "conference": "ACC", "category": "defensive", "statType": "TOT", "stat": "59"},
+      {"season": 2026, "playerId": "4832831", "player": "Keon Wylie", "team": "Virginia Tech", "position": "LB", "conference": "ACC", "category": "defensive", "statType": "SOLO", "stat": "31"},
+      {"season": 2026, "playerId": "4832831", "player": "Keon Wylie", "team": "Virginia Tech", "position": "LB", "conference": "ACC", "category": "defensive", "statType": "SACKS", "stat": "1.0"},
+      {"season": 2026, "playerId": "4832831", "player": "Keon Wylie", "team": "Virginia Tech", "position": "LB", "conference": "ACC", "category": "defensive", "statType": "TFL", "stat": "5.0"},
+      {"season": 2026, "playerId": "4832831", "player": "Keon Wylie", "team": "Virginia Tech", "position": "LB", "conference": "ACC", "category": "defensive", "statType": "PD", "stat": "3"},
+      {"season": 2026, "playerId": "4832831", "player": "Keon Wylie", "team": "Virginia Tech", "position": "LB", "conference": "ACC", "category": "defensive", "statType": "TD", "stat": "0"},
+      {"season": 2026, "playerId": "5178083", "player": "Noah Chambers", "team": "Virginia Tech", "position": "LB", "conference": "ACC", "category": "defensive", "statType": "TOT", "stat": "54"},
+      {"season": 2026, "playerId": "5178083", "player": "Noah Chambers", "team": "Virginia Tech", "position": "LB", "conference": "ACC", "category": "defensive", "statType": "SOLO", "stat": "32"},
+      {"season": 2026, "playerId": "5178083", "player": "Noah Chambers", "team": "Virginia Tech", "position": "LB", "conference": "ACC", "category": "defensive", "statType": "SACKS", "stat": "0.5"},
+      {"season": 2026, "playerId": "4921269", "player": "Kaleb Spencer", "team": "Virginia Tech", "position": "LB", "conference": "ACC", "category": "defensive", "statType": "TOT", "stat": "54"},
+      {"season": 2026, "playerId": "4921269", "player": "Kaleb Spencer", "team": "Virginia Tech", "position": "LB", "conference": "ACC", "category": "defensive", "statType": "SACKS", "stat": "3"},
+      {"season": 2026, "playerId": "4920136", "player": "Aycen Stevens", "team": "Virginia Tech", "position": "DL", "conference": "ACC", "category": "defensive", "statType": "TOT", "stat": "25"},
+      {"season": 2026, "playerId": "4920136", "player": "Aycen Stevens", "team": "Virginia Tech", "position": "DL", "conference": "ACC", "category": "defensive", "statType": "SOLO", "stat": "16"},
+      {"season": 2026, "playerId": "4920136", "player": "Aycen Stevens", "team": "Virginia Tech", "position": "DL", "conference": "ACC", "category": "defensive", "statType": "SACKS", "stat": "7.5"},
+      {"season": 2026, "playerId": "4920136", "player": "Aycen Stevens", "team": "Virginia Tech", "position": "DL", "conference": "ACC", "category": "defensive", "statType": "TFL", "stat": "10.0"},
+      {"season": 2026, "playerId": "4920136", "player": "Aycen Stevens", "team": "Virginia Tech", "position": "DL", "conference": "ACC", "category": "defensive", "statType": "QB HUR", "stat": "3"},
+      {"season": 2026, "playerId": "5141504", "player": "Cortez Harris", "team": "Virginia Tech", "position": "DL", "conference": "ACC", "category": "defensive", "statType": "SACKS", "stat": "5.5"},
+      {"season": 2026, "playerId": "5127806", "player": "Mylachi Williams", "team": "Virginia Tech", "position": "DL", "conference": "ACC", "category": "defensive", "statType": "SACKS", "stat": "4.5"},
+      {"season": 2026, "playerId": "5081211", "player": "DQ Smith", "team": "Virginia Tech", "position": "S", "conference": "ACC", "category": "defensive", "statType": "SACKS", "stat": "0"},
+      {"season": 2026, "playerId": "4921118", "player": "Thomas Williams", "team": "Virginia Tech", "position": "CB", "conference": "ACC", "category": "defensive", "statType": "TOT", "stat": "8"},
+      {"season": 2026, "playerId": "4921118", "player": "Thomas Williams", "team": "Virginia Tech", "position": "CB", "conference": "ACC", "category": "defensive", "statType": "SOLO", "stat": "5"},
+      {"season": 2026, "playerId": "4921118", "player": "Thomas Williams", "team": "Virginia Tech", "position": "CB", "conference": "ACC", "category": "defensive", "statType": "SACKS", "stat": "0"},
+      {"season": 2026, "playerId": "4921118", "player": "Thomas Williams", "team": "Virginia Tech", "position": "CB", "conference": "ACC", "category": "interceptions", "statType": "INT", "stat": "1"},
+      {"season": 2026, "playerId": "4921118", "player": "Thomas Williams", "team": "Virginia Tech", "position": "CB", "conference": "ACC", "category": "interceptions", "statType": "YDS", "stat": "0"},
+      {"season": 2026, "playerId": "4921118", "player": "Thomas Williams", "team": "Virginia Tech", "position": "CB", "conference": "ACC", "category": "interceptions", "statType": "TD", "stat": "0"},
+      {"season": 2026, "playerId": "5239158", "player": "Brennan Johnson", "team": "Virginia Tech", "position": "S", "conference": "ACC", "category": "defensive", "statType": "TOT", "stat": "1"},
+      {"season": 2026, "playerId": "5239158", "player": "Brennan Johnson", "team": "Virginia Tech", "position": "S", "conference": "ACC", "category": "interceptions", "statType": "INT", "stat": "1"},
+      {"season": 2026, "playerId": "5239158", "player": "Brennan Johnson", "team": "Virginia Tech", "position": "S", "conference": "ACC", "category": "interceptions", "statType": "YDS", "stat": "22"},
+      {"season": 2026, "playerId": "5239158", "player": "Brennan Johnson", "team": "Virginia Tech", "position": "S", "conference": "ACC", "category": "interceptions", "statType": "TD", "stat": "0"},
+      {"season": 2026, "playerId": "5239158", "player": "Brennan Johnson", "team": "Virginia Tech", "position": "S", "conference": "ACC", "category": "interceptions", "statType": "AVG", "stat": "22.0"},
+      {"season": 2026, "playerId": "5146425", "player": "Quentin Reddish", "team": "Virginia Tech", "position": "S", "conference": "ACC", "category": "defensive", "statType": "TOT", "stat": "33"},
+      {"season": 2026, "playerId": "5146425", "player": "Quentin Reddish", "team": "Virginia Tech", "position": "S", "conference": "ACC", "category": "interceptions", "statType": "INT", "stat": "1"},
+      {"season": 2026, "playerId": "5146425", "player": "Quentin Reddish", "team": "Virginia Tech", "position": "S", "conference": "ACC", "category": "interceptions", "statType": "YDS", "stat": "0"},
+      {"season": 2026, "playerId": "5146425", "player": "Quentin Reddish", "team": "Virginia Tech", "position": "S", "conference": "ACC", "category": "interceptions", "statType": "TD", "stat": "0"}
+    ],
+    "59": [
+      {"season": 2026, "playerId": "5147934", "player": "Tae Harris", "team": "Georgia Tech", "position": "S", "conference": "ACC", "category": "defensive", "statType": "TOT", "stat": "63"},
+      {"season": 2026, "playerId": "5147934", "player": "Tae Harris", "team": "Georgia Tech", "position": "S", "conference": "ACC", "category": "defensive", "statType": "SOLO", "stat": "35"},
+      {"season": 2026, "playerId": "5147934", "player": "Tae Harris", "team": "Georgia Tech", "position": "S", "conference": "ACC", "category": "defensive", "statType": "SACKS", "stat": "0"},
+      {"season": 2026, "playerId": "5105677", "player": "Taje Mccoy", "team": "Georgia Tech", "position": "DE", "conference": "ACC", "category": "defensive", "statType": "TOT", "stat": "59"},
+      {"season": 2026, "playerId": "5105677", "player": "Taje Mccoy", "team": "Georgia Tech", "position": "DE", "conference": "ACC", "category": "defensive", "statType": "SOLO", "stat": "26"},
+      {"season": 2026, "playerId": "5105677", "player": "Taje Mccoy", "team": "Georgia Tech", "position": "DE", "conference": "ACC", "category": "defensive", "statType": "SACKS", "stat": "3"},
+      {"season": 2026, "playerId": "5105677", "player": "Taje Mccoy", "team": "Georgia Tech", "position": "DE", "conference": "ACC", "category": "defensive", "statType": "TFL", "stat": "6"},
+      {"season": 2026, "playerId": "4812383", "player": "Tawfiq Thomas", "team": "Georgia Tech", "position": "DT", "conference": "ACC", "category": "defensive", "statType": "TOT", "stat": "53"},
+      {"season": 2026, "playerId": "4812383", "player": "Tawfiq Thomas", "team": "Georgia Tech", "position": "DT", "conference": "ACC", "category": "defensive", "statType": "SACKS", "stat": "2.5"},
+      {"season": 2026, "playerId": "5139096", "player": "Noah Carter", "team": "Georgia Tech", "position": "DE", "conference": "ACC", "category": "defensive", "statType": "TOT", "stat": "12"},
+      {"season": 2026, "playerId": "5139096", "player": "Noah Carter", "team": "Georgia Tech", "position": "DE", "conference": "ACC", "category": "defensive", "statType": "SACKS", "stat": "3"},
+      {"season": 2026, "playerId": "5153762", "player": "Cayman Spaulding", "team": "Georgia Tech", "position": "LB", "conference": "ACC", "category": "defensive", "statType": "SACKS", "stat": "2"},
+      {"season": 2026, "playerId": "5292052", "player": "Christian Speakman", "team": "Georgia Tech", "position": "DT", "conference": "ACC", "category": "defensive", "statType": "SACKS", "stat": "0.5"},
+      {"season": 2026, "playerId": "5276991", "player": "Kealan Jones", "team": "Georgia Tech", "position": "S", "conference": "ACC", "category": "defensive", "statType": "TOT", "stat": "9"},
+      {"season": 2026, "playerId": "5276991", "player": "Kealan Jones", "team": "Georgia Tech", "position": "S", "conference": "ACC", "category": "interceptions", "statType": "INT", "stat": "1"},
+      {"season": 2026, "playerId": "5276991", "player": "Kealan Jones", "team": "Georgia Tech", "position": "S", "conference": "ACC", "category": "interceptions", "statType": "YDS", "stat": "0"},
+      {"season": 2026, "playerId": "5276991", "player": "Kealan Jones", "team": "Georgia Tech", "position": "S", "conference": "ACC", "category": "interceptions", "statType": "TD", "stat": "0"},
+      {"season": 2026, "playerId": "5276054", "player": "Trae Stevenson Jr.", "team": "Georgia Tech", "position": "CB", "conference": "ACC", "category": "defensive", "statType": "TOT", "stat": "8"},
+      {"season": 2026, "playerId": "5276054", "player": "Trae Stevenson Jr.", "team": "Georgia Tech", "position": "CB", "conference": "ACC", "category": "interceptions", "statType": "INT", "stat": "1"},
+      {"season": 2026, "playerId": "5276054", "player": "Trae Stevenson Jr.", "team": "Georgia Tech", "position": "CB", "conference": "ACC", "category": "interceptions", "statType": "YDS", "stat": "22"},
+      {"season": 2026, "playerId": "5276054", "player": "Trae Stevenson Jr.", "team": "Georgia Tech", "position": "CB", "conference": "ACC", "category": "interceptions", "statType": "TD", "stat": "0"},
+      {"season": 2026, "playerId": "5222695", "player": "C.J. Gamble", "team": "Georgia Tech", "position": "LB", "conference": "ACC", "category": "defensive", "statType": "TOT", "stat": "5"},
+      {"season": 2026, "playerId": "5222695", "player": "C.J. Gamble", "team": "Georgia Tech", "position": "LB", "conference": "ACC", "category": "defensive", "statType": "SOLO", "stat": "2"},
+      {"season": 2026, "playerId": "5222695", "player": "C.J. Gamble", "team": "Georgia Tech", "position": "LB", "conference": "ACC", "category": "interceptions", "statType": "INT", "stat": "1"},
+      {"season": 2026, "playerId": "5222695", "player": "C.J. Gamble", "team": "Georgia Tech", "position": "LB", "conference": "ACC", "category": "interceptions", "statType": "YDS", "stat": "1"},
+      {"season": 2026, "playerId": "5222695", "player": "C.J. Gamble", "team": "Georgia Tech", "position": "LB", "conference": "ACC", "category": "interceptions", "statType": "TD", "stat": "0"},
+      {"season": 2026, "playerId": "5222695", "player": "C.J. Gamble", "team": "Georgia Tech", "position": "LB", "conference": "ACC", "category": "interceptions", "statType": "AVG", "stat": "1.0"}
+    ]
+  },
+  "games": {
+    "59": [
+      {"awayClassification": "fbs", "awayConference": "Big 12", "awayId": 38, "awayPoints": 14, "awayTeam": "Colorado", "completed": true, "conferenceGame": false, "homeClassification": "fbs", "homeConference": "ACC", "homeId": 59, "homePoints": 13, "homeTeam": "Georgia Tech", "id": 401856776, "neutralSite": false, "season": 2026, "seasonType": "regular", "startDate": "2026-09-04T00:00:00.000Z", "startTimeTBD": false, "week": 1},
+      {"awayClassification": "fbs", "awayConference": "SEC", "awayId": 2633, "awayPoints": 45, "awayTeam": "Tennessee", "completed": true, "conferenceGame": false, "homeClassification": "fbs", "homeConference": "ACC", "homeId": 59, "homePoints": 24, "homeTeam": "Georgia Tech", "id": 401856681, "neutralSite": false, "season": 2026, "seasonType": "regular", "startDate": "2026-09-12T23:00:00.000Z", "startTimeTBD": false, "week": 2},
+      {"awayClassification": "fcs", "awayConference": "Southern", "awayId": 2382, "awayPoints": 11, "awayTeam": "Mercer", "completed": true, "conferenceGame": false, "homeClassification": "fbs", "homeConference": "ACC", "homeId": 59, "homePoints": 44, "homeTeam": "Georgia Tech", "id": 401858228, "neutralSite": false, "season": 2026, "seasonType": "regular", "startDate": "2026-09-19T16:00:00.000Z", "startTimeTBD": false, "week": 3},
+      {"awayClassification": "fbs", "awayConference": "ACC", "awayId": 59, "awayPoints": 27, "awayTeam": "Georgia Tech", "completed": true, "conferenceGame": true, "homeClassification": "fbs", "homeConference": "ACC", "homeId": 24, "homePoints": 34, "homeTeam": "Stanford", "id": 401858240, "neutralSite": false, "season": 2026, "seasonType": "regular", "startDate": "2026-09-27T02:30:00.000Z", "startTimeTBD": false, "week": 4},
+      {"awayClassification": "fbs", "awayConference": "ACC", "awayId": 150, "awayPoints": 25, "awayTeam": "Duke", "completed": true, "conferenceGame": true, "homeClassification": "fbs", "homeConference": "ACC", "homeId": 59, "homePoints": 28, "homeTeam": "Georgia Tech", "id": 401858255, "neutralSite": false, "season": 2026, "seasonType": "regular", "startDate": "2026-10-10T19:30:00.000Z", "startTimeTBD": false, "week": 6},
+      {"awayClassification": "fbs", "awayConference": "ACC", "awayId": 59, "awayPoints": 24, "awayTeam": "Georgia Tech", "completed": true, "conferenceGame": true, "homeClassification": "fbs", "homeConference": "ACC", "homeId": 259, "homePoints": 34, "homeTeam": "Virginia Tech", "id": 401858264, "neutralSite": false, "season": 2026, "seasonType": "regular", "startDate": "2026-10-17T19:30:00.000Z", "startTimeTBD": false, "week": 7},
+      {"awayClassification": "fbs", "awayConference": "ACC", "awayId": 103, "awayPoints": 49, "awayTeam": "Boston College", "completed": true, "conferenceGame": true, "homeClassification": "fbs", "homeConference": "ACC", "homeId": 59, "homePoints": 27, "homeTeam": "Georgia Tech", "id": 401858273, "neutralSite": false, "season": 2026, "seasonType": "regular", "startDate": "2026-10-24T19:30:00.000Z", "startTimeTBD": false, "week": 8},
+      {"awayClassification": "fbs", "awayConference": "ACC", "awayId": 59, "awayPoints": 11, "awayTeam": "Georgia Tech", "completed": true, "conferenceGame": true, "homeClassification": "fbs", "homeConference": "ACC", "homeId": 221, "homePoints": 34, "homeTeam": "Pittsburgh", "id": 401858281, "neutralSite": false, "season": 2026, "seasonType": "regular", "startDate": "2026-10-31T23:30:00.000Z", "startTimeTBD": false, "week": 9},
+      {"awayClassification": "fbs", "awayConference": "ACC", "awayId": 97, "awayPoints": 44, "awayTeam": "Louisville", "completed": true, "conferenceGame": true, "homeClassification": "fbs", "homeConference": "ACC", "homeId": 59, "homePoints": 17, "homeTeam": "Georgia Tech", "id": 401858287, "neutralSite": false, "season": 2026, "seasonType": "regular", "startDate": "2026-11-08T00:30:00.000Z", "startTimeTBD": false, "week": 10},
+      {"awayClassification": "fbs", "awayConference": "ACC", "awayId": 59, "awayPoints": 20, "awayTeam": "Georgia Tech", "completed": true, "conferenceGame": true, "homeClassification": "fbs", "homeConference": "ACC", "homeId": 228, "homePoints": 6, "homeTeam": "Clemson", "id": 401858297, "neutralSite": false, "season": 2026, "seasonType": "regular", "startDate": "2026-11-14T17:30:00.000Z", "startTimeTBD": false, "week": 11},
+      {"awayClassification": "fbs", "awayConference": "ACC", "awayId": 154, "awayPoints": null, "awayTeam": "Wake Forest", "completed": false, "conferenceGame": true, "homeClassification": "fbs", "homeConference": "ACC", "homeId": 59, "homePoints": null, "homeTeam": "Georgia Tech", "id": 401858310, "neutralSite": false, "season": 2026, "seasonType": "regular", "startDate": "2026-11-21T17:00:00.000Z", "startTimeTBD": false, "week": 12},
+      {"awayClassification": "fbs", "awayConference": "ACC", "awayId": 59, "awayPoints": null, "awayTeam": "Georgia Tech", "completed": false, "conferenceGame": false, "homeClassification": "fbs", "homeConference": "SEC", "homeId": 61, "homePoints": null, "homeTeam": "Georgia", "id": 401856760, "neutralSite": false, "season": 2026, "seasonType": "regular", "startDate": "2026-11-28T05:00:00.000Z", "startTimeTBD": true, "week": 13}
+    ]
+  },
+  "boxes": {
+    "59": [
+      {"id": 401858228, "teams": [
+        {"team": "Georgia Tech", "conference": "ACC", "homeAway": "home", "points": 44, "categories": [
+          {"name": "defensive", "types": [
+            {"name": "TOT", "athletes": [{"id": "5147934", "name": "Tae Harris", "stat": "6"}, {"id": "5105677", "name": "Taje Mccoy", "stat": "4"}, {"id": "5222695", "name": "C.J. Gamble", "stat": "1"}]},
+            {"name": "SOLO", "athletes": [{"id": "5147934", "name": "Tae Harris", "stat": "3"}, {"id": "5105677", "name": "Taje Mccoy", "stat": "2"}, {"id": "5222695", "name": "C.J. Gamble", "stat": "0"}]},
+            {"name": "SACKS", "athletes": [{"id": "5147934", "name": "Tae Harris", "stat": "0"}, {"id": "5105677", "name": "Taje Mccoy", "stat": "1"}, {"id": "5222695", "name": "C.J. Gamble", "stat": "0"}]},
+            {"name": "TFL", "athletes": [{"id": "5147934", "name": "Tae Harris", "stat": "0"}, {"id": "5105677", "name": "Taje Mccoy", "stat": "2"}, {"id": "5222695", "name": "C.J. Gamble", "stat": "0"}]},
+            {"name": "PD", "athletes": [{"id": "5147934", "name": "Tae Harris", "stat": "0"}, {"id": "5105677", "name": "Taje Mccoy", "stat": "0"}, {"id": "5222695", "name": "C.J. Gamble", "stat": "0"}]},
+            {"name": "QB HUR", "athletes": [{"id": "5147934", "name": "Tae Harris", "stat": "0"}, {"id": "5105677", "name": "Taje Mccoy", "stat": "0"}, {"id": "5222695", "name": "C.J. Gamble", "stat": "0"}]},
+            {"name": "TD", "athletes": [{"id": "5147934", "name": "Tae Harris", "stat": "0"}, {"id": "5105677", "name": "Taje Mccoy", "stat": "0"}, {"id": "5222695", "name": "C.J. Gamble", "stat": "0"}]}
+          ]},
+          {"name": "interceptions", "types": [
+            {"name": "INT", "athletes": [{"id": "5222695", "name": "C.J. Gamble", "stat": "1"}]},
+            {"name": "YDS", "athletes": [{"id": "5222695", "name": "C.J. Gamble", "stat": "1"}]},
+            {"name": "TD", "athletes": [{"id": "5222695", "name": "C.J. Gamble", "stat": "0"}]}
+          ]}
+        ]},
+        {"team": "Mercer", "conference": "Southern", "homeAway": "away", "points": 11, "categories": []}
+      ]}
+    ]
+  }
+}
