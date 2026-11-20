@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.28.0 · 2026-11-20
+
+- Add team-season Defensive leaders after the unchanged yard leaders: total tackles (with solo for a sole leader), sacks with half sacks preserved, and interceptions made. Every tied leader is listed by full name and opens the matching in-app player page.
+- Player pages and game logs add total and solo tackles, tackles for loss and sacks, plus interceptions made, return yards and return touchdowns when supplied. CFBD passes defended, QB hurries, defensive touchdowns and derived assisted tackles are not shown; missing rows stay missing, never zero, and nothing is summed from box scores.
+- Read from the same admitted CFBD team/year player cache (no new collector, budget or publisher), with older cached seasons marked pending until their normal refresh. Values are shown as CFBD reports them with a visible note that totals may differ from school reports; source update time remains unknown.
+- Keep new names, values and ties behind both the team aggregate and the cached season's own Duke contribution gates. Existing team, player, leaders-browser, game, alert and preference behavior is unchanged; broader #181/#189 remain open.
+
 ## 1.27.0 · 2026-11-19
 
 - Add regular-season interception totals made/thrown, sack totals made/allowed, and offense/defense-allowed third-down conversions with one-decimal rates and converted/attempted counts. The compact section follows unchanged averages and precedes existing FBS rankings, retaining the approved phone type sizes and large-text reflow.

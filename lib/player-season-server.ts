@@ -4,10 +4,13 @@ import { PLAYER_CATEGORIES, PLAYER_FIELDS, PLAYER_YEAR, PLAYER_UNKNOWN_GAME_STAT
 import { SNAPSHOT_KEY, type LeadersEnv, type LeadersKV } from "./cfbd-season-leaders";
 import { browserCatalog } from "./leaders-browser-server";
 import { blockCfbd, cfbdBlocked, sourceJson, SourceFailure } from "./cfbd-source-state";
+import { projectTeamDefense, validDefenseProjection, type DefenseProjection, type TeamDefense } from "./team-defense";
 
 export type CanonicalTeam = { id: string; name: string };
 type Person = { name: string; position: string | null; stats: PlayerStats };
-export type PlayerPack = { v: 1; basis: "regular"; leaderProjection?: PackLeaderProjection | null; team: CanonicalTeam; year: number; checkedAt: string; scheduleComplete: boolean; people: Record<string, Person>;
+/** `defense: 1` (#181, additive on v1) marks a pack normalized with defensive/interception people and a raw
+ *  defense projection. Without it a fresh legacy pack keeps its offense but cannot certify any defensive absence. */
+export type PlayerPack = { v: 1; basis: "regular"; leaderProjection?: PackLeaderProjection | null; defense?: 1; defenseProjection?: DefenseProjection; team: CanonicalTeam; year: number; checkedAt: string; scheduleComplete: boolean; people: Record<string, Person>;
   games: { game: Game; players: Record<string, PlayerStats>; boxSupplied: boolean }[];
   witnesses: Record<string, { team: CanonicalTeam; classification: string | null; people: Record<string, string>; gameIds: string[]; gamePeople: Record<string, Record<string, string>> }> };
 export type PlayerIdentity = { id: string; name: string; position: string | null; checkedAt: string; currentTeam: string;
@@ -22,8 +25,12 @@ function category(v: unknown): v is PlayerCategory { return PLAYER_CATEGORIES.in
 function field(c: PlayerCategory, k: string) { return PLAYER_FIELDS[c].some(([f]) => f === k); }
 function add(stats: PlayerStats, c: PlayerCategory, k: string, value: unknown) {
   const values = stats[c] ??= {}; let n = numeric(value);
-  if (n !== null && ((k === "PCT" && (n < 0 || n > 1)) || (["COMPLETIONS", "ATT", "TD", "INT", "CAR", "REC"].includes(k) && (!Number.isInteger(n) || n < 0)) || (["YDS", "LONG"].includes(k) && !Number.isInteger(n)))) n = null;
-  values[k] = Object.hasOwn(values, k) ? null : n;
+  if (n !== null && ((k === "PCT" && (n < 0 || n > 1)) || (["COMPLETIONS", "ATT", "TD", "INT", "CAR", "REC", "TOT", "SOLO"].includes(k) && (!Number.isInteger(n) || n < 0)) || (["YDS", "LONG"].includes(k) && !Number.isInteger(n)) ||
+    // Sacks and tackles for loss are credited in half units; anything else is unavailable, never rounded.
+    (["SACKS", "TFL"].includes(k) && (n < 0 || !Number.isInteger(n * 2))))) n = null;
+  // A repeated field is unavailable, except that an identical valid #181 defensive/interception repeat collapses,
+  // matching projectTeamDefense so team and profile agree. Prior offense semantics are unchanged.
+  values[k] = !Object.hasOwn(values, k) ? n : (c === "defensive" || c === "interceptions") && n !== null && values[k] === n ? n : null;
 }
 function person(people: Record<string, Person>, pid: string, name: string, position: string | null) {
   const existing = people[pid]; requireValue(!existing || existing.name === name);
@@ -47,7 +54,7 @@ function teamGame(r: Record<string, unknown>): Game {
 export function createPlayerPack(team: CanonicalTeam, year: number, stats: unknown, schedule: unknown, boxes: unknown, checkedAt: string): PlayerPack {
   requireValue(playerTeamId(team.id) && text(team.name) && playerYear(year) && Number.isFinite(Date.parse(checkedAt)));
   const statRows = array(stats, 50_000);
-  const out: PlayerPack = { v: 1, basis: "regular", leaderProjection: projectPackLeaders(team, year, statRows, checkedAt), team, year, checkedAt, scheduleComplete: false, people: {}, games: [], witnesses: {} };
+  const out: PlayerPack = { v: 1, basis: "regular", leaderProjection: projectPackLeaders(team, year, statRows, checkedAt), defense: 1, defenseProjection: projectTeamDefense(team.name, year, statRows), team, year, checkedAt, scheduleComplete: false, people: {}, games: [], witnesses: {} };
   for (const raw of statRows) {
     const r = obj(raw); requireValue(r.team === team.name && r.season === year);
     if (!category(r.category) || !field(r.category, String(r.statType))) continue;
@@ -87,8 +94,9 @@ export function createPlayerPack(team: CanonicalTeam, year: number, stats: unkno
               const pair = typeof a.stat === "string" ? /^(\d{1,4})\/(\d{1,4})$/.exec(a.stat) : null;
               add(values, "passing", "COMPLETIONS", pair?.[1]); add(values, "passing", "ATT", pair?.[2]);
             } else {
-              const key = typ.name === "AVG" ? { passing: "YPA", rushing: "YPC", receiving: "YPR" }[c.name] : typ.name;
-              if (field(c.name, key)) add(values, c.name, key, a.stat);
+              // Interception AVG has no field and is dropped; so are CFBD PD, QB HUR and defensive TD.
+              const key = typ.name === "AVG" ? ({ passing: "YPA", rushing: "YPC", receiving: "YPR" } as Partial<Record<PlayerCategory, string>>)[c.name] : typ.name;
+              if (key && field(c.name, key)) add(values, c.name, key, a.stat);
             }
           }
         }
@@ -114,7 +122,15 @@ export function playerFromPack(pack: PlayerPack, pid: string, identity: PlayerId
   const choices = identity ? Array.from({ length: identity.end - identity.start + 1 }, (_, i) => identity.end - i).map(year => ({ year, teams: [...new Set(identity.stints.filter(s => s.start <= year && s.end >= year).map(s => s.team))] })).filter(c => c.teams.length) : [{ year: pack.year, teams: [pack.team.name] }];
   const current = identity ? catalog.find(t => t.name === identity.currentTeam) ?? (identity.currentTeam === pack.team.name ? pack.team : null) : null;
   return { v: 1, id: pid, anchor: { team: anchorTeam, year: anchorYear }, needsTeamChoice: false, name: p.name, position: p.position ?? identity?.position ?? null, year: pack.year, team: pack.team, currentTeam: current, basis: "regular", checkedAt: pack.checkedAt, stale, choices,
-    totals: p.stats, totalsAvailable: Object.keys(p.stats).length > 0, logs: pack.games.map(g => ({ game: g.game, stats: g.players[pid] ?? {}, boxSupplied: g.boxSupplied })), scheduleComplete: pack.scheduleComplete === true, historyAvailable: !!identity };
+    totals: p.stats, totalsAvailable: Object.keys(p.stats).length > 0, logs: pack.games.map(g => ({ game: g.game, stats: g.players[pid] ?? {}, boxSupplied: g.boxSupplied })), scheduleComplete: pack.scheduleComplete === true, historyAvailable: !!identity, defense: packDefense(pack) };
+}
+const packDefense = (pack: PlayerPack): "available" | "pending" => pack.defense === 1 ? "available" : "pending";
+/** The team-defense response from the selected team's own pack generation: leaders plus only the
+ *  schedule needed for the contribution gate (no raw boxes or people). */
+export function teamDefenseFromPack(pack: PlayerPack, stale: boolean): TeamDefense {
+  const capability = pack.defense !== 1 ? "pending" : validDefenseProjection(pack.defenseProjection) ? "available" : "unavailable";
+  return { v: 1, team: pack.team, year: pack.year, basis: "regular", checkedAt: pack.checkedAt, stale, capability,
+    families: capability === "available" ? pack.defenseProjection!.families : null, games: pack.games.map(g => g.game), scheduleComplete: pack.scheduleComplete === true };
 }
 
 const PREFIX = "player:v1:", DAY = 86_400_000, HISTORY_TTL = 30 * DAY;
@@ -244,7 +260,9 @@ export function createPlayerSeasonService(env: LeadersEnv, fetcher: typeof fetch
         anchor = proof.team;
       }
       const anchorPack = await pack(anchor, request.anchorYear), person = anchorPack.value.people[request.id];
-      if (!person) throw new PlayerFailure(404, "player-not-supplied");
+      // A fresh legacy pack (no defense marker) dropped defense-only people, so a miss is not a known
+      // absence: honest pending (retryable 503), never a false 404 and never a forced refresh.
+      if (!person) throw anchorPack.value.defense === 1 ? new PlayerFailure(404, "player-not-supplied") : new PlayerFailure(503, "defense-pending");
       let info: PlayerIdentity | null = null;
       try { info = await identity(request.id, person, anchor, request.anchorYear); }
       catch (error) { if (request.year !== request.anchorYear || request.stintTeam) throw error; }
@@ -279,9 +297,22 @@ export function createPlayerSeasonService(env: LeadersEnv, fetcher: typeof fetch
       if (!chosen.value.people[request.id]) {
         // Preserve verified identity/year even when that year supplies no player rows.
         const base = playerFromPack(anchorPack.value, request.id, info, anchorPack.stale, teams, request.anchorYear, request.team);
-        return { status: 200, season: { ...base, year: request.year, team: selected, totals: {}, totalsAvailable: false, checkedAt: chosen.value.checkedAt, stale: chosen.stale, scheduleComplete: chosen.value.scheduleComplete === true, logs: chosen.value.games.map(g => ({ game: g.game, stats: {}, boxSupplied: g.boxSupplied })) } };
+        return { status: 200, season: { ...base, year: request.year, team: selected, totals: {}, totalsAvailable: false, checkedAt: chosen.value.checkedAt, stale: chosen.stale, scheduleComplete: chosen.value.scheduleComplete === true, logs: chosen.value.games.map(g => ({ game: g.game, stats: {}, boxSupplied: g.boxSupplied })), defense: packDefense(chosen.value) } };
       }
       return { status: 200, season: playerFromPack(chosen.value, request.id, info, chosen.stale, teams, request.anchorYear, request.team) };
     } catch (error) { return error instanceof PlayerFailure ? { status: error.status, error: error.reason } : { status: 503, error: "player-unavailable" }; }
+  },
+  /** #181 team-first discovery: the SAME private pack (resource, coalescing, TTL, stale retention,
+   *  admission, budgets and denial block). Canonical catalog identity; current supported year only.
+   *  Never fetches identities: profiles stay lazy on actual opens. */
+  async teamDefense(teamId: string, year: number): Promise<{ status: number; defense?: TeamDefense; error?: string }> {
+    try {
+      if (!playerTeamId(teamId) || year !== PLAYER_YEAR) throw new PlayerFailure(400, "invalid");
+      if (!kv || !env.CFBD_API_KEY) return failure("configuration");
+      const team = (await catalog()).find(t => t.id === teamId);
+      if (!team) throw new PlayerFailure(404, "team-not-listed");
+      const owned = await pack(team, year);
+      return { status: 200, defense: teamDefenseFromPack(owned.value, owned.stale) };
+    } catch (error) { return error instanceof PlayerFailure ? { status: error.status, error: error.reason } : { status: 503, error: "defense-unavailable" }; }
   } };
 }
