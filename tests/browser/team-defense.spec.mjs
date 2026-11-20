@@ -89,6 +89,61 @@ test("the pack's own hidden Duke contribution withholds every new name, number a
   expect(await teamScreen(page).ariaSnapshot()).not.toMatch(leak);
   await expect(teamScreen(page).locator(".team-defense a")).toHaveCount(0);
 });
+// PV2-01: a load restarted by reconnecting owns its own pending state (local fixtures only; requests held).
+test("reconnect: the restarted team-defense load is pending until it settles, then shows leaders", async ({ page, harness }) => {
+  serve(harness);
+  const body = JSON.stringify(S.teamDefenseFromPack(pack(true), false));
+  let calls = 0, release;
+  const held = new Promise(resolve => { release = resolve; });
+  harness.state.defense = async (_url, route) => {
+    calls++;
+    if (calls === 1) return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "simulated" }) });
+    await held;
+    return route.fulfill({ status: 200, contentType: "application/json", headers: { "Cache-Control": "no-store" }, body });
+  };
+  await page.setViewportSize({ width: 390, height: 900 });
+  await harness.open({ path: "/?team=251", waitForScores: false });
+  await verifyFixtureMute(page);
+  const status = teamScreen(page).locator(".team-defense-status");
+  await expect(status).toContainText("Defensive leaders couldn’t be loaded.");
+  await page.context().setOffline(true);
+  await expect(status.getByRole("button", { name: "Retry" })).toBeDisabled();
+  await page.context().setOffline(false);
+  await expect.poll(() => calls).toBe(2);
+  await expect(status).toContainText("Loading defensive leaders…");
+  await expect(teamScreen(page).locator(".team-defense a")).toHaveCount(0);
+  release();
+  await expect(teamScreen(page).locator(".team-defense a")).toHaveText(LINKS);
+  await expect(teamScreen(page).locator(".team-defense-status")).toHaveCount(0);
+});
+test("reconnect: the restarted profile load is pending (Retry disabled) until it settles, data retained", async ({ page, harness }) => {
+  serve(harness);
+  const p = pack(true);
+  let calls = 0, release;
+  const held = new Promise(resolve => { release = resolve; });
+  harness.state.player = async (_url, route) => {
+    calls++;
+    if (calls >= 2) await held;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(S.playerFromPack(p, "5222695", null, false, [], 2026, "251")) });
+  };
+  await page.setViewportSize({ width: 390, height: 900 });
+  await harness.open({ path: "/?team=251", waitForScores: false });
+  await verifyFixtureMute(page);
+  await teamScreen(page).locator(".team-defense a", { hasText: "C.J. Gamble" }).click();
+  await expect(playerScreen(page).locator(".player-title")).toHaveText("C.J. Gamble");
+  // Identity is null in this fixture, so the existing "Previous seasons" notice offers Retry (disabled while pending).
+  const retry = playerScreen(page).getByRole("button", { name: "Retry" });
+  await expect(retry).toBeEnabled();
+  await page.context().setOffline(true);
+  await expect(retry).toBeDisabled();
+  await page.context().setOffline(false);
+  await expect.poll(() => calls).toBe(2);
+  await expect(retry).toBeDisabled();
+  await expect(playerScreen(page).locator('[aria-labelledby="player-totals-h"] .player-metrics dd')).toHaveText(["5", "2", "1", "1", "0"]);
+  release();
+  await expect(retry).toBeEnabled();
+  await expect(playerScreen(page).locator(".player-title")).toHaveText("C.J. Gamble");
+});
 test("default intercepted outage is honest and never reaches the Worker or a provider", async ({ page, harness }) => {
   harness.state.team = (_url, route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(TEXAS_BASE) });
   await page.setViewportSize({ width: 390, height: 900 });

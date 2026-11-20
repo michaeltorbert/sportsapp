@@ -7,10 +7,15 @@ const memory = new Map<string, PlayerSeason>();
 export function usePlayerSeason(request: PlayerRequest | null) {
   const key = request ? playerRequestKey(request) : "", online = useOnline();
   const [attempt, setAttempt] = useState(0);
-  // Request ownership (`${key}#${attempt}`): state is set only by the settled load owning the current
+  // Each time the request becomes live again (offline→online, or no request→request) a new load starts, so
+  // it gets a new owner: `cycle` is adjusted during render (React's supported pattern), never in an effect.
+  const live = !!request && online;
+  const [lastLive, setLastLive] = useState(live), [cycle, setCycle] = useState(0);
+  if (live !== lastLive) { setLastLive(live); if (live) setCycle(n => n + 1); }
+  // Request ownership (`${key}#${attempt}#${cycle}`): state is set only by the settled load owning the current
   // request, never synchronously in the effect, so pending is derived. Same fetch, abort, retained-season,
   // failure and identity behavior as before.
-  const owner = `${key}#${attempt}`;
+  const owner = `${key}#${attempt}#${cycle}`;
   const [settled, setSettled] = useState<{ owner: string; key: string; season: PlayerSeason | null; failed: boolean } | null>(null);
   useEffect(() => {
     if (!request || !online) return;

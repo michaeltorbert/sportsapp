@@ -35,7 +35,12 @@ export type TeamDefenseState = { defense: TeamDefense | null; pending: boolean; 
 export function useTeamDefense(teamId: string | null, year: number | null, enabled: boolean): TeamDefenseState {
   const key = teamId && year !== null ? `${teamId}:${year}` : "", online = useOnline(), active = !!key && enabled;
   const [attempt, setAttempt] = useState(0);
-  const request = `${key}#${attempt}`;
+  // A load restarted by reconnecting or re-enabling (live false→true) gets a new owner, so it is pending
+  // until it settles. `cycle` is adjusted during render (React's supported pattern), never in an effect.
+  const live = active && online;
+  const [lastLive, setLastLive] = useState(live), [cycle, setCycle] = useState(0);
+  if (live !== lastLive) { setLastLive(live); if (live) setCycle(n => n + 1); }
+  const request = `${key}#${attempt}#${cycle}`;
   const [settled, setSettled] = useState<{ request: string; key: string; defense: TeamDefense | null; failed: boolean } | null>(null);
   useEffect(() => {
     if (!active || !online || !teamId || year === null) return;
