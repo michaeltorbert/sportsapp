@@ -1,6 +1,7 @@
 import { test, expect, observeRuntimeErrors } from "./fixtures.mjs";
 import { NATIVE_CANCEL_REASONS, incompleteNativeControl } from "../../scripts/browser-runtime-errors.mjs";
-import { nativeRscUrl } from "../../scripts/browser-runtime-errors.mjs";
+import { nativeRscUrl, COMPLETED_READ_LABEL, COMPLETED_READ_CONTROL_ANNOTATION, COMPLETED_READ_CONTROL_TITLE } from "../../scripts/browser-runtime-errors.mjs";
+import { annotateCompletedReadUsage, completedReadIdentity } from "./fixtures.mjs";
 
 // Deliberate-error controls use a separate disposable page and explicitly assert
 // its errors remain unexpected. The ordinary harness guard is never disabled.
@@ -219,13 +220,14 @@ for (const kind of ["native", "throw", "rejection", "policy", "frame"]) test(`he
  }
 });
 
-// COLLECTION ONLY (#181 RSC stage C, agreed plan): does native WebKit produce the historical ID1 shape — a
-// completed same-URL 200 earlier in the SAME outgoing activation, then one identical native GET during the held
-// replacement that yields a native pageerror with no new public request event? No reload between baseline and
-// target, one native target, no retry/sleep/timing search. Setup problems FAIL (SETUPFAIL), never "inconclusive".
-// An observed shape is evidence only: the current classifier must still reject it (ambiguous_requests); no
-// acceptance branch, label or policy widening exists. The existing cells above are unchanged.
-test("held replacement boundary: native after completed same-epoch read (collection only)", async ({ browser, browserName, harness }, testInfo) => {
+// #181 mandatory completed-read native control (agreed bounded plan). A completed same-URL 200 earlier in the
+// SAME outgoing activation, then ONE identical native GET during the held replacement. No reload between
+// baseline and target, no retry/sleep/timing search. Setup problems FAIL (SETUPFAIL), never "inconclusive".
+// On the eligible recorded host (WebKit darwin/arm64) the raw shape is a HARD requirement, then the distinct
+// completed-read diagnostic must be produced; only then, in the body, is the qualification annotation pushed
+// that server-exit-reporter.mjs requires for ANY same-run use of the label. Other hosts keep the old veto.
+// The existing cells above are unchanged.
+test(COMPLETED_READ_CONTROL_TITLE, async ({ browser, browserName, harness }, testInfo) => {
  test.skip(browserName !== "webkit", "Collection control for the WebKit-only native diagnostic shape.");
  const origin = testInfo.project.use.baseURL;
  const { context, page, observer } = await control(browser, browserName, origin);
@@ -286,24 +288,44 @@ test("held replacement boundary: native after completed same-epoch read (collect
    targetInWindow: !!target && target.epoch === oldEpoch && replacement.documentRequest < target.seq && target.seq < replacement.commit,
    handledNativeFailure: observation.returned === true && observation.ok === false, baselineFinished200BeforeStartAsserted: true,
    targetErrorRaw: target, newRequestEvents,
+   baselineStrictOrder: [baselineRow.seq, baselineRow.response, baselineRow.finished, replacement.start].every(value => Number.isFinite(value) && value > 0) && baselineRow.seq < baselineRow.response && baselineRow.response < baselineRow.finished && baselineRow.finished < replacement.start,
   };
-  const shapeObserved = raw.nativeTargetErrors === 1 && raw.targetInWindow && raw.handledNativeFailure && raw.newRequestEventCount === 0;
+  const shapeObserved = raw.nativeTargetErrors === 1 && raw.targetInWindow && raw.handledNativeFailure && raw.newRequestEventCount === 0 && raw.baselineStrictOrder;
+  const eligible = observer.data.browserName === "webkit" && observer.data.hostPlatform === "darwin" && observer.data.hostArchitecture === "arm64";
   result = observer.classify();
-  if (shapeObserved) {
+  const identity = completedReadIdentity({ browserName, browser, evidence: observer.data, testInfo });
+  // The control's own label use is annotated like any other, before any assertion can stop the body.
+  annotateCompletedReadUsage(testInfo, result, identity);
+  if (eligible) {
+   collection = "eligible_control_FAILED";
+   expect(raw, "eligible darwin/arm64 WebKit: the independent raw completed-read shape MUST be observed").toMatchObject({ nativeTargetErrors: 1, newRequestEventCount: 0, targetInWindow: true, handledNativeFailure: true, baselineStrictOrder: true });
+   expect(shapeObserved).toBe(true);
+   expect(result.unexpected, "eligible control: no unexpected errors").toEqual([]);
+   expect(result.classified.map(row => [row.errorId, row.classification]), "eligible control: distinct completed-read diagnostic").toEqual([[target.id, COMPLETED_READ_LABEL]]);
+   expect(result.classified[0]).toMatchObject({ requestId: null, navigationId: replacement.id, epoch: oldEpoch, url: probeUrl, priorCompletedRequests: [{ requestId: baselineRow.id, status: 200, finished: baselineRow.finished }], owningEpochExactUrlRequestEvents: 1, newOwningEpochExactUrlRequestEventsAfterReplacementStart: 0 });
+   expect(result.classified.length + result.unexpected.length).toBe(observer.data.errors.length);
+   expect(harness.state.errors).toEqual([]);
+   // Every HARD assertion above passed: only now may the body claim qualification (never in teardown).
+   collection = "eligible_control_qualified";
+   testInfo.annotations.push({ type: COMPLETED_READ_CONTROL_ANNOTATION, description: JSON.stringify({ ...identity, testId: testInfo.testId, errorId: target.id, priorCompletedRequestIds: [baselineRow.id] }) });
+  } else if (shapeObserved) {
    collection = "candidate_shape_observed_policy_NOT_APPLIED";
-   testInfo.annotations.push({ type: collection, description: "Native completed-read shape observed. Collection evidence only; no acceptance branch exists and the current classifier still rejects it." });
+   testInfo.annotations.push({ type: collection, description: "Native completed-read shape observed on an ineligible host. Collection evidence only; the completed-read diagnostic is unreachable here and the classifier still rejects it." });
    expect(result.classified, "current classifier must not classify the completed-read target").toEqual([]);
    expect(result.unexpected.map(row => [row.id, row.reason]), "current classifier rejects the target as ambiguous_requests").toEqual([[target.id, "ambiguous_requests"]]);
   } else {
    collection = "shape_not_observed_UNQUALIFIED";
-   testInfo.annotations.push({ type: "inconclusive", description: `Completed-read native shape not observed on this platform (errors=${raw.nativeTargetErrors}, newRequestEvents=${raw.newRequestEventCount}, inWindow=${raw.targetInWindow}, handled=${raw.handledNativeFailure}). NOT qualified; no retry/timing search.` });
+   testInfo.annotations.push({ type: "inconclusive", description: `Completed-read native shape not observed on this ineligible host (errors=${raw.nativeTargetErrors}, newRequestEvents=${raw.newRequestEventCount}, inWindow=${raw.targetInWindow}, handled=${raw.handledNativeFailure}). NOT qualified; no retry/timing search.` });
   }
-  expect(result.classified.length + result.unexpected.length).toBe(observer.data.errors.length);
-  expect(harness.state.errors).toEqual([]);
+  if (!eligible) {
+   expect(result.classified.some(row => row.classification === COMPLETED_READ_LABEL), "completed-read diagnostic unreachable on an ineligible host").toBe(false);
+   expect(result.classified.length + result.unexpected.length).toBe(observer.data.errors.length);
+   expect(harness.state.errors).toEqual([]);
+  }
  } finally {
   release(); await navigation?.catch(() => {});
   try {
-   await testInfo.attach("held-replacement-native-after-completed-read", { contentType: "application/json", body: JSON.stringify({ ...observer.data, baseline, baselineRow, observation, raw, result, finalClassification: observer.classify(), collection, causalLimit: "Collection only. Public Request events are not owned-server ingress accounting; no individual network cause or acceptance policy is established." }) });
+   await testInfo.attach("held-replacement-native-after-completed-read", { contentType: "application/json", body: JSON.stringify({ ...observer.data, baseline, baselineRow, observation, raw, result, finalClassification: observer.classify(), collection, causalLimit: "Native control for the bounded completed-read diagnostic only. Public Request events are not owned-server ingress accounting; no individual historical network cause, cancellation or ingress is established." }) });
   } finally { await outgoing?.dispose().catch(() => {}); await context.close(); }
  }
 });

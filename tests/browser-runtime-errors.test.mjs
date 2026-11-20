@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { classifyRuntimeErrors, nativeRscUrl, NATIVE_CANCEL_REASONS, incompleteNativeControl } from "../scripts/browser-runtime-errors.mjs";
+import { classifyRuntimeErrors, nativeRscUrl, NATIVE_CANCEL_REASONS, incompleteNativeControl, COMPLETED_READ_LABEL } from "../scripts/browser-runtime-errors.mjs";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 
@@ -196,22 +196,128 @@ test("stage A: different URLs are independent; the downstream completed-200 veto
 });
 
 // Stage B: immutable actual controlled provenance from the failed v3 WebKit All-FBS run (local loopback RSC only).
-test("stage B: actual v3 provenance — ID1 stays ambiguous_requests; IDs 2-4 are limited diagnostics; raw unchanged", () => {
+const historical = () => {
  const bytes = readFileSync(new URL("./fixtures/ss181-runtime-provenance-v3.json", import.meta.url));
  assert.equal(bytes.length, 8064);
  assert.equal(createHash("sha256").update(bytes).digest("hex"), "35f2ce6a1eeaf9e60114d31092dbdb7be0bfacb3d5450eea513cef3442a98362");
  const wrapper = JSON.parse(bytes.toString());
  assert.equal(wrapper.sourceCommit, "f1e3a8aeb7e3b9bbc0d5cbf4834ef806985ac3db"); assert.equal(wrapper.runtimeProvenance.browserName, "webkit");
- const raw = wrapper.runtimeProvenance, before = JSON.stringify(raw), result = classifyRuntimeErrors(raw);
- assert.equal(JSON.stringify(raw), before, "classifier never mutates raw evidence (deep)");
- // Every error is accounted for exactly once.
- const seen = [...result.classified.map(c => c.errorId), ...result.unexpected.map(u => u.id)].sort();
- assert.deepEqual(seen, [1, 2, 3, 4]);
- assert.deepEqual(result.unexpected.map(u => [u.id, u.reason]), [[1, "ambiguous_requests"]], "ID1 remains unexpected: its only same-epoch read completed 200 before the replacement");
+ return wrapper.runtimeProvenance;
+};
+const assertOldZeroEvent = result => {
  for (const id of [2, 3, 4]) {
   const c = result.classified.find(row => row.errorId === id);
   assert.equal(c.classification, "native_replacement_rsc_diagnostic");
   assert.equal(c.publicRequestEvents, 0); assert.equal(c.qualification, "requires_actual_current_platform_control");
   assert.match(c.causalLimit, /individual cancellation and server ingress are not established/);
  }
+};
+test("stage B: actual v3 provenance on its RECORDED darwin/arm64 host — ID1 is the distinct completed-read diagnostic (not an exoneration); IDs 2-4 unchanged; raw unchanged", () => {
+ const raw = historical(), before = JSON.stringify(raw), result = classifyRuntimeErrors(raw);
+ assert.equal(JSON.stringify(raw), before, "classifier never mutates raw evidence (deep)");
+ // Every error is accounted for exactly once.
+ const seen = [...result.classified.map(c => c.errorId), ...result.unexpected.map(u => u.id)].sort();
+ assert.deepEqual(seen, [1, 2, 3, 4]);
+ assert.deepEqual(result.unexpected, []);
+ const id1 = result.classified.find(row => row.errorId === 1);
+ assert.equal(id1.classification, COMPLETED_READ_LABEL, "qualified-platform diagnostic only; no historical cause, cancellation or ingress");
+ assert.equal(id1.requestId, null); assert.equal(id1.navigationId, 3);
+ assert.deepEqual(id1.priorCompletedRequests, [{ requestId: 4, status: 200, finished: 70 }]);
+ assert.equal(id1.owningEpochExactUrlRequestEvents, 1); assert.equal(id1.newOwningEpochExactUrlRequestEventsAfterReplacementStart, 0);
+ assertOldZeroEvent(result);
+});
+test("stage B: EXPLICITLY SYNTHETIC host mutations of the historical evidence keep ID1 unexpected ambiguous_requests", () => {
+ for (const change of [{ hostPlatform: undefined }, { hostPlatform: "linux" }, { hostPlatform: "synthetic" }, { hostArchitecture: "x64" }, { hostArchitecture: undefined }]) {
+  const raw = structuredClone(historical()); // a mutated copy, NOT original raw history
+  for (const [key, value] of Object.entries(change)) { if (value === undefined) delete raw[key]; else raw[key] = value; }
+  const result = classifyRuntimeErrors(raw);
+  assert.deepEqual(result.unexpected.map(u => [u.id, u.reason]), [[1, "ambiguous_requests"]], JSON.stringify(change));
+  assert.ok(!result.classified.some(row => row.classification === COMPLETED_READ_LABEL));
+  assertOldZeroEvent(result);
+ }
+});
+
+// Immutable actual completed-read native control (source 3dbe7c33, run eef2fea2, WebKit 27.2 per same-run
+// browser-evidence; Darwin/arm64). Recorded raw collection result (old policy) stays as recorded.
+test("actual v4 completed-read native control: exact bytes, raw unchanged, distinct diagnostic under the current policy", () => {
+ const bytes = readFileSync(new URL("./fixtures/ss181-completedread-native-v4.json", import.meta.url));
+ assert.equal(bytes.length, 5075);
+ assert.equal(createHash("sha256").update(bytes).digest("hex"), "31ae5fb8356082dd37bca5afc8c6f3cef97fa50def1b108a47f13a1874b193b1");
+ const raw = JSON.parse(bytes.toString()), before = JSON.stringify(raw);
+ assert.deepEqual([raw.browserName, raw.hostPlatform, raw.hostArchitecture], ["webkit", "darwin", "arm64"]);
+ assert.deepEqual(raw.result.unexpected.map(u => [u.id, u.reason]), [[1, "ambiguous_requests"]], "recorded old-policy collection result");
+ const result = classifyRuntimeErrors(raw);
+ assert.equal(JSON.stringify(raw), before);
+ assert.deepEqual(result.unexpected, []);
+ assert.deepEqual(result.classified, [{ errorId: 1, requestId: null, navigationId: 3, epoch: raw.errors[0].epoch, url: raw.requests[0].url, classification: COMPLETED_READ_LABEL,
+  priorCompletedRequests: [{ requestId: 1, status: 200, finished: 11 }], owningEpochExactUrlRequestEvents: 1, newOwningEpochExactUrlRequestEventsAfterReplacementStart: 0,
+  qualification: "requires_same_run_final_pass_darwin_arm64_webkit_completed_read_control",
+  causalLimit: "One prior successful same-activation public request completed before replacement; no new exact-URL public Request event was observed after replacement started. Individual diagnostic cause, request cancellation and server ingress are not established." }]);
+});
+
+// Synthetic completed-read predicate cases (eligible recorded host; strict seq 2 < response 3 < finished 4 < start 5).
+function completedRead() {
+ const raw = evidence(); raw.hostPlatform = "darwin"; raw.hostArchitecture = "arm64";
+ Object.assign(raw.requests[0], { seq: 2, response: 3, finished: 4, status: 200, failed: null, failure: null });
+ return raw;
+}
+test("completed-read: one strict prior 200 on the eligible host is the distinct diagnostic with exact metadata", () => {
+ const raw = completedRead(), before = JSON.stringify(raw), result = classifyRuntimeErrors(raw);
+ assert.equal(JSON.stringify(raw), before);
+ assert.deepEqual(result.unexpected, []);
+ assert.deepEqual(result.classified, [{ errorId: 1, requestId: null, navigationId: 1, epoch: "old", url, classification: COMPLETED_READ_LABEL,
+  priorCompletedRequests: [{ requestId: 1, status: 200, finished: 4 }], owningEpochExactUrlRequestEvents: 1, newOwningEpochExactUrlRequestEventsAfterReplacementStart: 0,
+  qualification: "requires_same_run_final_pass_darwin_arm64_webkit_completed_read_control",
+  causalLimit: "One prior successful same-activation public request completed before replacement; no new exact-URL public Request event was observed after replacement started. Individual diagnostic cause, request cancellation and server ingress are not established." }]);
+ assert.doesNotMatch(result.classified[0].causalLimit, /No same-activation public Request event/);
+ assert.equal("publicRequestEvents" in result.classified[0], false, "never a zero-ALL-public-events claim");
+});
+test("completed-read: unsupported or unrecorded hosts keep the original completed-read veto", () => {
+ for (const change of [{ hostPlatform: "synthetic" }, { hostPlatform: "linux" }, { hostPlatform: undefined }, { hostArchitecture: "x64" }, { hostArchitecture: undefined }, { hostPlatform: ["darwin"] }]) {
+  const raw = completedRead();
+  for (const [key, value] of Object.entries(change)) { if (value === undefined) delete raw[key]; else raw[key] = value; }
+  assert.deepEqual(classifyRuntimeErrors(raw).unexpected.map(u => u.reason), ["ambiguous_requests"], JSON.stringify(change));
+ }
+});
+const completedReadNegatives = {
+ "two completed rows": e => { e.requests.unshift({ ...e.requests[0], id: 2, seq: 1.1, response: 1.2, finished: 1.3 }); },
+ "extra pending exact row": e => { e.requests.push({ ...e.requests[0], id: 2, seq: 7, response: null, status: null, finished: null }); },
+ "extra failed exact row after start": e => { e.requests.push({ ...e.requests[0], id: 2, seq: 7, response: null, status: null, finished: null, failed: 8, failure: "unknown failure" }); },
+ "extra completed exact row after start": e => { e.requests.push({ ...e.requests[0], id: 2, seq: 6.5, response: 7, finished: 8 }); },
+ "exact row with unknown owner epoch": e => { e.requests.push({ ...e.requests[0], id: 2, epoch: null }); },
+ "status 204": e => { e.requests[0].status = 204; }, "status 403": e => { e.requests[0].status = 403; },
+ "status 500": e => { e.requests[0].status = 500; }, "status null": e => { e.requests[0].status = null; },
+ "failed non-null": e => { e.requests[0].failed = 3.5; }, "failure non-null": e => { e.requests[0].failure = "cancelled"; },
+ "failed missing": e => { delete e.requests[0].failed; },
+ "response missing": e => { delete e.requests[0].response; }, "response NaN": e => { e.requests[0].response = Number.NaN; },
+ "seq zero": e => { e.requests[0].seq = 0; }, "seq negative": e => { e.requests[0].seq = -1; },
+ "response equals finished": e => { e.requests[0].response = 4; }, "seq equals response": e => { e.requests[0].seq = 3; },
+ "finished equals start": e => { e.requests[0].finished = 5; }, "finished after start": e => { e.requests[0].finished = 5.5; },
+ "wrong method": e => { e.requests[0].method = "POST"; }, "wrong resource": e => { e.requests[0].type = "xhr"; },
+ "subframe row": e => { e.requests[0].mainFrame = false; },
+ "error before documentRequest": e => { e.navigations[0].documentRequest = 9.5; },
+ "error equal to documentRequest": e => { e.navigations[0].documentRequest = 9; },
+ "same-epoch duplicate error on a different navigation": e => { e.errors.push({ ...e.errors[0], id: 2, navigation: 2 }); },
+ "other same-URL error with unknown epoch": e => { e.errors.push({ ...e.errors[0], id: 2, epoch: null }); },
+};
+for (const state of [{ status: 200, seq: 2.1, response: 2.2, finished: 2.3, failed: null, failure: null }, { status: null, finished: null, failed: null, failure: null }, { status: null, failed: 8, failure: "cancelled" }, { status: 200, seq: 7, response: 7.5, finished: 8, failed: null, failure: null }]) {
+ completedReadNegatives[`same-path query conflict ${JSON.stringify(state)}`] = e => { e.requests.push({ ...e.requests[0], id: 2, url: `${url}x`, ...state }); };
+}
+for (const name of ["wrong engine", "generic name", "malformed native message", "HTTPS unverified", "foreign origin", "API path", "credentials", "no replacement", "same document", "failed destination", "no document request", "overlapping navigation", "new document diagnostic", "missing outgoing epoch", "postcommit error", "observer gap", "observer not ready", "subframe ownership ambiguity despite otherwise qualifying main request", "genuine native-looking throw", "unhandled rejection counterpart"]) completedReadNegatives[name] = negatives[name];
+for (const [name, mutate] of Object.entries(completedReadNegatives)) test(`completed-read fails closed: ${name}`, () => {
+ const raw = completedRead(); mutate(raw); const result = classifyRuntimeErrors(raw);
+ assert.ok(!result.classified.some(row => row.classification === COMPLETED_READ_LABEL), name);
+ assert.equal(result.classified.length + result.unexpected.length, raw.errors.length);
+ assert.ok(result.unexpected.some(u => u.id === 1), name);
+});
+test("completed-read: a prior completed 200 plus a unique in-window cancellation stays request-proven, unchanged", () => {
+ const raw = completedRead();
+ raw.requests.push({ id: 2, seq: 7, epoch: "old", mainFrame: true, url, method: "GET", type: "fetch", status: null, failure: NATIVE_CANCEL_REASONS[0], failed: 8, finished: null });
+ assert.deepEqual(classifyRuntimeErrors(raw).classified.map(row => [row.classification, row.requestId]), [["native_obsolete_document_rsc_cancellation", 2]]);
+});
+test("completed-read: prior/future epoch or other-path completed rows are not borrowed as baseline evidence", () => {
+ const prior = completedRead(); prior.requests[0].epoch = "prior";
+ assert.equal(classifyRuntimeErrors(prior).classified[0].classification, "native_replacement_rsc_diagnostic");
+ const otherPath = completedRead(); otherPath.requests[0].url = `${origin}/guide.rsc?_rsc=KsQaSH2L7Z4e6Q5N`;
+ assert.equal(classifyRuntimeErrors(otherPath).classified[0].classification, "native_replacement_rsc_diagnostic");
 });

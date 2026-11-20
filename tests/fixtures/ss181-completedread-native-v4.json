@@ -1,0 +1,168 @@
+{
+  "browserName": "webkit",
+  "origin": "http://127.0.0.1:4183",
+  "hostPlatform": "darwin",
+  "hostArchitecture": "arm64",
+  "errors": [
+    {
+      "id": 1,
+      "seq": 14,
+      "epoch": "1795210090617:0.6094892944477083",
+      "navigation": 3,
+      "name": "Fetch API cannot load http",
+      "message": "/127.0.0.1:4183/.rsc?runtime-control=completed-read due to access control checks.",
+      "stack": "Fetch API cannot load http://127.0.0.1:4183/.rsc?runtime-control=completed-read due to access control checks.\n    at send (:18:27)\n    at unknown (:1:27)\n    at evaluate (:372:22)\n    at unknown (:1:52)"
+    }
+  ],
+  "dom": [],
+  "documents": [
+    {
+      "epoch": "1795210090608:0.19876678733167863",
+      "seq": 2,
+      "ready": true,
+      "gap": false,
+      "frameAmbiguous": false
+    },
+    {
+      "epoch": "1795210090617:0.6094892944477083",
+      "seq": 7,
+      "ready": true,
+      "gap": false,
+      "frameAmbiguous": false
+    },
+    {
+      "epoch": "1795210090631:0.6793169807982408",
+      "seq": 16,
+      "ready": true,
+      "gap": false,
+      "frameAmbiguous": false
+    }
+  ],
+  "requests": [
+    {
+      "id": 1,
+      "seq": 9,
+      "epoch": "1795210090617:0.6094892944477083",
+      "mainFrame": true,
+      "url": "http://127.0.0.1:4183/.rsc?runtime-control=completed-read",
+      "method": "GET",
+      "type": "fetch",
+      "status": 200,
+      "failed": null,
+      "failure": null,
+      "finished": 11,
+      "response": 10
+    }
+  ],
+  "navigations": [
+    {
+      "id": 1,
+      "start": 1,
+      "fromEpoch": null,
+      "toEpoch": null,
+      "commit": null,
+      "success": false,
+      "documentRequest": null,
+      "settled": 3
+    },
+    {
+      "id": 2,
+      "start": 4,
+      "fromEpoch": "1795210090608:0.19876678733167863",
+      "toEpoch": "1795210090617:0.6094892944477083",
+      "commit": 6,
+      "success": true,
+      "documentRequest": 5,
+      "settled": 8
+    },
+    {
+      "id": 3,
+      "start": 12,
+      "fromEpoch": "1795210090617:0.6094892944477083",
+      "toEpoch": "1795210090631:0.6793169807982408",
+      "commit": 15,
+      "success": true,
+      "documentRequest": 13,
+      "settled": 17
+    }
+  ],
+  "frames": [],
+  "baseline": {
+    "returned": true,
+    "ok": true,
+    "status": 200,
+    "epoch": "1795210090617:0.6094892944477083",
+    "sameOwner": true
+  },
+  "baselineRow": {
+    "id": 1,
+    "seq": 9,
+    "epoch": "1795210090617:0.6094892944477083",
+    "mainFrame": true,
+    "url": "http://127.0.0.1:4183/.rsc?runtime-control=completed-read",
+    "method": "GET",
+    "type": "fetch",
+    "status": 200,
+    "failed": null,
+    "failure": null,
+    "finished": 11,
+    "response": 10
+  },
+  "observation": {
+    "returned": true,
+    "ok": false,
+    "name": "TypeError",
+    "message": "Load failed",
+    "epoch": "1795210090617:0.6094892944477083",
+    "sameOwner": true
+  },
+  "raw": {
+    "nativeTargetErrors": 1,
+    "newRequestEventCount": 0,
+    "targetInWindow": true,
+    "handledNativeFailure": true,
+    "baselineFinished200BeforeStartAsserted": true,
+    "targetErrorRaw": {
+      "id": 1,
+      "seq": 14,
+      "epoch": "1795210090617:0.6094892944477083",
+      "navigation": 3,
+      "name": "Fetch API cannot load http",
+      "message": "/127.0.0.1:4183/.rsc?runtime-control=completed-read due to access control checks.",
+      "stack": "Fetch API cannot load http://127.0.0.1:4183/.rsc?runtime-control=completed-read due to access control checks.\n    at send (:18:27)\n    at unknown (:1:27)\n    at evaluate (:372:22)\n    at unknown (:1:52)"
+    },
+    "newRequestEvents": []
+  },
+  "result": {
+    "classified": [],
+    "unexpected": [
+      {
+        "id": 1,
+        "seq": 14,
+        "epoch": "1795210090617:0.6094892944477083",
+        "navigation": 3,
+        "name": "Fetch API cannot load http",
+        "message": "/127.0.0.1:4183/.rsc?runtime-control=completed-read due to access control checks.",
+        "stack": "Fetch API cannot load http://127.0.0.1:4183/.rsc?runtime-control=completed-read due to access control checks.\n    at send (:18:27)\n    at unknown (:1:27)\n    at evaluate (:372:22)\n    at unknown (:1:52)",
+        "reason": "ambiguous_requests"
+      }
+    ]
+  },
+  "finalClassification": {
+    "classified": [],
+    "unexpected": [
+      {
+        "id": 1,
+        "seq": 14,
+        "epoch": "1795210090617:0.6094892944477083",
+        "navigation": 3,
+        "name": "Fetch API cannot load http",
+        "message": "/127.0.0.1:4183/.rsc?runtime-control=completed-read due to access control checks.",
+        "stack": "Fetch API cannot load http://127.0.0.1:4183/.rsc?runtime-control=completed-read due to access control checks.\n    at send (:18:27)\n    at unknown (:1:27)\n    at evaluate (:372:22)\n    at unknown (:1:52)",
+        "reason": "ambiguous_requests"
+      }
+    ]
+  },
+  "collection": "candidate_shape_observed_policy_NOT_APPLIED",
+  "causalLimit": "Collection only. Public Request events are not owned-server ingress accounting; no individual network cause or acceptance policy is established."
+}

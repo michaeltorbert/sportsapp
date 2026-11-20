@@ -1,6 +1,20 @@
 import { test as base, expect } from "@playwright/test";
 import { appendEvidence, readServerState, readUnavailable, recordUnavailable, resourceSnapshot, serverFailureMessage, unavailableMessage } from "../../scripts/browser-server-diagnostics.mjs";
-import { classifyRuntimeErrors } from "../../scripts/browser-runtime-errors.mjs";
+import { classifyRuntimeErrors, COMPLETED_READ_LABEL, COMPLETED_READ_USAGE_ANNOTATION } from "../../scripts/browser-runtime-errors.mjs";
+
+// #181 completed-read qualification identity: actual browser.version(), the RECORDED observer host and this
+// run's config metadata. No user agent, auth or personal data. Missing values stay null and never match.
+export function completedReadIdentity({ browserName, browser, evidence, testInfo }) {
+  const { sourceCommit = null, browserRunId = null, browserTestSourcesHash = null } = testInfo.config.metadata;
+  return { browser: browserName, hostPlatform: evidence.hostPlatform ?? null, hostArchitecture: evidence.hostArchitecture ?? null, engineVersion: browser.version(), sourceCommit, browserRunId, browserTestSourcesHash };
+}
+// Every use of the completed-read label (ordinary harness AND the control's own) is annotated, so the
+// server-exit reporter can require a matching FINAL-PASS same-run control. Returns the usage count.
+export function annotateCompletedReadUsage(testInfo, classification, identity) {
+  const uses = classification.classified.filter(row => row.classification === COMPLETED_READ_LABEL);
+  for (const row of uses) testInfo.annotations.push({ type: COMPLETED_READ_USAGE_ANNOTATION, description: JSON.stringify({ ...identity, errorId: row.errorId, priorCompletedRequestIds: row.priorCompletedRequests.map(prior => prior.requestId) }) });
+  return uses.length;
+}
 
 // Passive test-only provenance. No awaited probe before goto/reload; preserve
 // their arguments and exact underlying promise. Missing epochs fail closed.
@@ -342,6 +356,7 @@ export const test = base.extend({
     browser.off("disconnected", onDisconnect);
     appendEvidence(serverDiagnosticsDir, "test-timeline.jsonl", { event: "end", utc: new Date().toISOString(), title: testInfo.title, file: testInfo.file, status: testInfo.status, errors: testInfo.errors.map(error => error.message) });
     const runtimeClassification = runtimeEvidence.classify();
+    annotateCompletedReadUsage(testInfo, runtimeClassification, completedReadIdentity({ browserName, browser, evidence: runtimeEvidence.data, testInfo }));
     await testInfo.attach("browser-evidence", { contentType: "application/json", body: JSON.stringify({
       utc: new Date().toISOString(), ...testInfo.config.metadata, deployedLocalBuild: health,
       browser: browserName, engineVersion: browser.version(), viewport: page.viewportSize(),
