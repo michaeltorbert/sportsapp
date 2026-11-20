@@ -198,10 +198,21 @@ test("completed-read gate: engine, architecture, platform, source, run or test-s
   for (const change of [{ engineVersion: "27.3" }, { hostArchitecture: "x64" }, { hostPlatform: "linux" }, { sourceCommit: "d".repeat(40) }, { browserRunId: "stale-run" }, { browserTestSourcesHash: "e".repeat(64) }]) {
     const run = gateRun(t, [userEnd([usage(gateIdentity())]), controlEnd([qualified(gateIdentity(change))])]);
     assert.deepEqual(run.status, { status: "failed" }, JSON.stringify(change));
-    // A use whose own identity mismatches this run's metadata also fails even beside its "matching" control.
+    // Use and control share the changed value. A different engine alone is not invalid (see the next test);
+    // an unsupported host or a source/run/test-source hash other than this run's metadata still fails.
+    if ("engineVersion" in change) continue;
     const stale = gateRun(t, [userEnd([usage(gateIdentity(change))]), controlEnd([qualified(gateIdentity(change))])]);
     assert.deepEqual(stale.status, { status: "failed" }, `both ${JSON.stringify(change)}`);
   }
+});
+
+test("completed-read gate: a fresh same-run control on an updated engine qualifies that engine's uses (no fixed engine pin)", t => {
+  const updated = gateIdentity({ engineVersion: "27.3" });
+  const run = gateRun(t, [userEnd([usage(updated)]), controlEnd([usage(updated), qualified(updated)])]);
+  assert.equal(run.status, undefined);
+  assert.deepEqual(summaryOf(run.stderr), { usages: 2, unmatched: 0, matchingControls: ["control"], identity: updated, result: "passed" });
+  // The updated-engine control does not qualify an older-engine use in the same run.
+  assert.deepEqual(gateRun(t, [userEnd([usage(gateIdentity())]), controlEnd([qualified(updated)])]).status, { status: "failed" });
 });
 
 test("completed-read gate: failed, skipped, unqualified, malformed or earlier-attempt-only controls fail", t => {
