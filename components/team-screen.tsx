@@ -137,8 +137,12 @@ function DefenseLeaders({ teamId, shortName, year, defense, prefs, online, playe
   const d = defense.value && defense.value.team.id === teamId && defense.value.year === year ? defense.value : null;
   // Own class names (same visual rules as the yard rows) so the existing yard-leader markup is untouched.
   const heading = <div className="team-defense-heading"><h2 id="team-defense-h">Defensive leaders</h2><p>Regular season</p></div>;
+  // CI-F3: both defense Retry buttons share this markup. The label cell always reserves the width of the longer
+  // "Retrying…" (an aria-hidden, visibility-hidden sizer in the same grid cell), so Retry ↔ Retrying… never
+  // changes the button's width and so never re-wraps the status row. The accessible name stays exactly the visible word.
+  const retryButton = <button type="button" className="notice-button" data-focus-key="defense-retry" onClick={defense.onRetry} disabled={defense.pending || !online}><span className="team-defense-retry-label"><span>{defense.pending ? "Retrying…" : "Retry"}</span><span aria-hidden="true">Retrying…</span></span></button>;
   const status = (text: string, retry = false) => <section className="team-block team-defense" aria-labelledby="team-defense-h">{heading}
-    <div className="team-defense-status" role="status"><p>{text}</p>{retry && <button type="button" className="notice-button" data-focus-key="defense-retry" onClick={defense.onRetry} disabled={defense.pending || !online}>{defense.pending ? "Retrying…" : "Retry"}</button>}</div></section>;
+    <div className="team-defense-status" role="status"><p>{text}</p>{retry && retryButton}</div></section>;
   // A known failure outranks loading: its status (with Retry disabled as "Retrying…" while a reload is pending)
   // keeps the same layout across Back/re-enable, so restored scroll positions below this section don't move.
   if (!d) return defense.failed ? status("Defensive leaders couldn’t be loaded.", true) : defense.pending ? status("Loading defensive leaders…") : null;
@@ -161,7 +165,7 @@ function DefenseLeaders({ teamId, shortName, year, defense, prefs, online, playe
     <p className="team-defense-fresh">Defense checked {checkedTime(d.checkedAt)}{d.stale || defense.failed ? " · Refresh delayed" : ""}.</p>
     <p className="team-defense-source">{DEFENSE_SOURCE_CUE}</p>
     {/* PV1-04: a failed revisit keeps the retained, still-gated values and says so, with an ordinary Retry. */}
-    {defense.failed && <div className="team-defense-status" role="status"><p>Couldn’t refresh defensive leaders. Showing the last check.</p><button type="button" className="notice-button" data-focus-key="defense-retry" onClick={defense.onRetry} disabled={defense.pending || !online}>{defense.pending ? "Retrying…" : "Retry"}</button></div>}
+    {defense.failed && <div className="team-defense-status" role="status"><p>Couldn’t refresh defensive leaders. Showing the last check.</p>{retryButton}</div>}
   </section>;
 }
 

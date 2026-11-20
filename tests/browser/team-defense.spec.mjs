@@ -187,3 +187,70 @@ test("default intercepted outage is honest and never reaches the Worker or a pro
   expect(harness.state.defenseRequests.length).toBeGreaterThan(0);
   expect(harness.state.unexpectedExternal).toEqual([]);
 });
+// CI-F3 (Linux WebKit 390: +26.1875px when Retry became Retrying…): the defense Retry button keeps one width, so
+// the status row and section keep their height across settled failure → held reload after Back → failed again.
+// Each phase saves actual status-element pixels and lean geometry/font evidence BEFORE any geometry assertion.
+for (const [width, zoom] of [[320, false], [390, false], [390, true]]) test(`defense Retry ↔ Retrying… keeps the button width and the status and section height at ${width}px${zoom ? " and 200% zoom" : ""}`, async ({ page, harness }, info) => {
+  serve(harness);
+  let calls = 0, release;
+  const held = new Promise(resolve => { release = resolve; });
+  harness.state.defense = async (_url, route) => {
+    calls++;
+    if (calls >= 2) await held;
+    return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "simulated" }) });
+  };
+  const label = `${width}${zoom ? "-zoom200" : ""}`, phases = {};
+  try {
+    await page.setViewportSize({ width, height: 900 });
+    await harness.open({ path: "/?team=251", waitForScores: false });
+    await verifyFixtureMute(page);
+    if (zoom) await page.addStyleTag({ content: "html { zoom: 2; }" });
+    const block = teamScreen(page).locator(".team-defense"), status = block.locator(".team-defense-status");
+    const idle = block.getByRole("button", { name: "Retry", exact: true }), retrying = block.getByRole("button", { name: "Retrying…", exact: true });
+    const capture = async phase => {
+      await status.screenshot({ path: info.outputPath(`defense-status-${label}-${phase}.png`), animations: "disabled" });
+      phases[phase] = await status.evaluate(element => {
+        const rect = node => { const r = node.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
+        const font = node => { const s = getComputedStyle(node); return { family: s.fontFamily, size: s.fontSize, lineHeight: s.lineHeight, weight: s.fontWeight }; };
+        const button = element.querySelector("button"), text = element.querySelector("p");
+        return { section: rect(element.closest(".team-defense")), status: rect(element), paragraph: rect(text), button: rect(button),
+          paragraphFont: font(text), buttonFont: font(button), buttonInnerText: button.innerText, fontsStatus: document.fonts.status,
+          noOverflow: document.documentElement.scrollWidth <= innerWidth + 1 };
+      });
+    };
+    await expect(status).toContainText("Defensive leaders couldn’t be loaded.");
+    await expect(idle).toBeEnabled();
+    await capture("before");
+    await expect(idle).toHaveCount(1); await expect(retrying).toHaveCount(0);
+    await expect(status.locator("button")).toHaveText("Retry", { useInnerText: true });
+    await teamScreen(page).locator("a.sched-row").first().click();
+    await page.getByRole("button", { name: "Back to Texas schedule" }).click();
+    await expect.poll(() => calls).toBe(2);
+    await expect(retrying).toBeDisabled();
+    await capture("pending");
+    await expect(retrying).toHaveCount(1); await expect(idle).toHaveCount(0);
+    await expect(status.locator("button")).toHaveText("Retrying…", { useInnerText: true });
+    await expect(status).toContainText("Defensive leaders couldn’t be loaded.");
+    await expect(block).not.toContainText("Loading defensive leaders");
+    release();
+    await expect(idle).toBeEnabled();
+    await capture("after");
+    await expect(idle).toHaveCount(1); await expect(retrying).toHaveCount(0);
+    await expect(status.locator("button")).toHaveText("Retry", { useInnerText: true });
+    for (const phase of ["before", "pending", "after"]) {
+      expect(phases[phase].button.height, `${phase}: 44px target`).toBeGreaterThanOrEqual(44);
+      expect(phases[phase].noOverflow, `${phase}: no horizontal overflow`).toBe(true);
+    }
+    for (const [a, b] of [["before", "pending"], ["pending", "after"]]) {
+      expect(Math.abs(phases[b].button.width - phases[a].button.width), `button width ${a}→${b}`).toBeLessThanOrEqual(1);
+      expect(Math.abs(phases[b].status.height - phases[a].status.height), `status height ${a}→${b}`).toBeLessThanOrEqual(1);
+      expect(Math.abs(phases[b].section.height - phases[a].section.height), `section height ${a}→${b}`).toBeLessThanOrEqual(1);
+    }
+    expect(calls).toBe(2);
+    expect(harness.state.playerRequests).toEqual([]);
+    expect(harness.state.unexpectedExternal).toEqual([]);
+  } finally {
+    release();
+    await info.attach(`defense-status-geometry-${label}`, { contentType: "application/json", body: JSON.stringify({ width, zoom: zoom ? 2 : 1, calls, phases }, null, 2) });
+  }
+});

@@ -714,6 +714,10 @@ body:has(.game-screen)::before { background: #0d1626; }
 .team-screen .team-defense-names li { font-size: 1rem; font-weight: 750; overflow-wrap: anywhere; }
 .team-screen .team-defense-name a, .team-screen .team-defense-names a { color: var(--lime); display: inline-flex; align-items: center; min-height: 44px; }
 .team-screen .team-defense-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-top: 8px; }
+/* CI-F3: the defense Retry label always reserves the width of "Retrying…" (hidden sizer in the same cell). */
+.team-screen .team-defense-retry-label { display: inline-grid; justify-items: center; }
+.team-screen .team-defense-retry-label > span { grid-area: 1 / 1; }
+.team-screen .team-defense-retry-label > [aria-hidden="true"] { visibility: hidden; }
 .team-screen .team-defense-fresh { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 4px 0 2px; color: var(--muted); font-size: .8125rem; }
 .team-screen .team-defense-source { margin: 4px 0 2px; color: var(--muted); font-size: .8125rem; line-height: 1.5; }
 @container defense (max-width: 16rem) {
