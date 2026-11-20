@@ -139,7 +139,9 @@ function DefenseLeaders({ teamId, shortName, year, defense, prefs, online, playe
   const heading = <div className="team-defense-heading"><h2 id="team-defense-h">Defensive leaders</h2><p>Regular season</p></div>;
   const status = (text: string, retry = false) => <section className="team-block team-defense" aria-labelledby="team-defense-h">{heading}
     <div className="team-defense-status" role="status"><p>{text}</p>{retry && <button type="button" className="notice-button" data-focus-key="defense-retry" onClick={defense.onRetry} disabled={defense.pending || !online}>{defense.pending ? "Retrying…" : "Retry"}</button>}</div></section>;
-  if (!d) return defense.pending ? status("Loading defensive leaders…") : defense.failed ? status("Defensive leaders couldn’t be loaded.", true) : null;
+  // A known failure outranks loading: its status (with Retry disabled as "Retrying…" while a reload is pending)
+  // keeps the same layout across Back/re-enable, so restored scroll positions below this section don't move.
+  if (!d) return defense.failed ? status("Defensive leaders couldn’t be loaded.", true) : defense.pending ? status("Loading defensive leaders…") : null;
   const gate = teamDefenseGate(d, prefs, defense.board);
   if (!gate.shown) return status(gate.reason === "checking" ? "Checking your Duke settings…" : gate.reason === "hidden" ? "Defensive leaders are hidden: they include a Duke game your settings are hiding." : "Defensive leaders aren’t shown yet: part of this schedule couldn’t be loaded.");
   if (d.capability === "pending") return status("Defensive leaders aren’t loaded yet. They’ll appear after this season’s statistics next refresh.");

@@ -60,5 +60,9 @@ export function useTeamDefense(teamId: string | null, year: number | null, enabl
   const owned = settled?.request === request ? settled : null;
   const pending = active && online && !owned;
   const defense = !active ? null : (settled?.key === key ? settled.defense : null) ?? memory.get(key) ?? null;
-  return { defense, pending, failed: active && !!owned?.failed, retry: () => { if (!pending) setAttempt(n => n + 1); } };
+  // PV3-01: while a restarted load is pending, the last known outcome for this team/year stays in force. A known
+  // failure keeps reporting failed (the screen shows it with a disabled "Retrying…"), so returning to the page
+  // never swaps the failure status for a shorter loading line and back after scroll restoration.
+  const knownFailure = settled?.key === key && settled.failed;
+  return { defense, pending, failed: active && (owned ? owned.failed : knownFailure), retry: () => { if (!pending) setAttempt(n => n + 1); } };
 }

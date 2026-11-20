@@ -1,5 +1,6 @@
 import { test, expect, observeRuntimeErrors } from "./fixtures.mjs";
 import { NATIVE_CANCEL_REASONS, incompleteNativeControl } from "../../scripts/browser-runtime-errors.mjs";
+import { nativeRscUrl } from "../../scripts/browser-runtime-errors.mjs";
 
 // Deliberate-error controls use a separate disposable page and explicitly assert
 // its errors remain unexpected. The ordinary harness guard is never disabled.
@@ -214,6 +215,95 @@ for (const kind of ["native", "throw", "rejection", "policy", "frame"]) test(`he
   release(); await navigation?.catch(() => {});
   try {
    await testInfo.attach(`held-replacement-${kind}`, { contentType: "application/json", body: JSON.stringify({ ...observer.data, baseline, observation, result, finalClassification: observer.classify(), qualification, causalLimit: "Public Request events are not owned-server ingress accounting; no individual network cause is certified." }) });
+  } finally { await outgoing?.dispose().catch(() => {}); await context.close(); }
+ }
+});
+
+// COLLECTION ONLY (#181 RSC stage C, agreed plan): does native WebKit produce the historical ID1 shape — a
+// completed same-URL 200 earlier in the SAME outgoing activation, then one identical native GET during the held
+// replacement that yields a native pageerror with no new public request event? No reload between baseline and
+// target, one native target, no retry/sleep/timing search. Setup problems FAIL (SETUPFAIL), never "inconclusive".
+// An observed shape is evidence only: the current classifier must still reject it (ambiguous_requests); no
+// acceptance branch, label or policy widening exists. The existing cells above are unchanged.
+test("held replacement boundary: native after completed same-epoch read (collection only)", async ({ browser, browserName, harness }, testInfo) => {
+ test.skip(browserName !== "webkit", "Collection control for the WebKit-only native diagnostic shape.");
+ const origin = testInfo.project.use.baseURL;
+ const { context, page, observer } = await control(browser, browserName, origin);
+ const probeUrl = `${origin}/.rsc?runtime-control=completed-read`;
+ let hold = false, release, replacementSeen, outgoing, navigation, baseline, baselineRow, observation, result, raw = null;
+ let collection = "SETUPFAIL";
+ const gate = new Promise(resolve => { release = resolve; });
+ const seen = new Promise(resolve => { replacementSeen = resolve; });
+ try {
+  await page.route("**/*", async route => {
+   const url = new URL(route.request().url());
+   if (url.origin !== origin) return route.abort();
+   if (url.pathname === "/runtime-held-new" && hold) { replacementSeen(); await gate; }
+   if (url.pathname === "/.rsc") return route.fulfill({ status: 200, contentType: "text/x-component", body: "synthetic native Fetch fixture" });
+   return route.fulfill({ contentType: "text/html", body: url.pathname === "/runtime-held-new" ? "<h1>Held replacement destination</h1>" : "<h1>Outgoing native Fetch control</h1>" });
+  });
+  await page.goto(`${origin}/runtime-held-old`);
+  outgoing = await captureOutgoing(page);
+  const oldEpoch = await outgoing.evaluate(owner => owner.epoch);
+  expect(typeof oldEpoch === "string" && oldEpoch.length > 0, "SETUPFAIL: outgoing epoch").toBe(true);
+  expect(await outgoing.evaluate(owner => owner.native), "SETUPFAIL: native Fetch captured").toBe(true);
+  expect(observer.data.documents.some(row => row.epoch === oldEpoch && row.ready), "SETUPFAIL: observer ready").toBe(true);
+  // Baseline: the exact probe URL completes 200 in THIS realm, recorded as a finished main-frame GET fetch.
+  baseline = await outgoing.evaluate((owner, url) => owner.send(url), probeUrl);
+  expect(baseline.ok, "SETUPFAIL: baseline ok").toBe(true); expect(baseline.status, "SETUPFAIL: baseline 200").toBe(200);
+  expect(baseline.sameOwner, "SETUPFAIL: baseline same owner").toBe(true); expect(baseline.epoch, "SETUPFAIL: baseline epoch").toBe(oldEpoch);
+  await expect.poll(() => observer.data.requests.filter(row => row.url === probeUrl && row.epoch === oldEpoch && row.finished).length, { message: "SETUPFAIL: baseline request recorded finished" }).toBe(1);
+  const rows = observer.data.requests.filter(row => row.url === probeUrl && row.epoch === oldEpoch);
+  expect(rows, "SETUPFAIL: exactly one baseline row before the replacement").toHaveLength(1);
+  baselineRow = { ...rows[0] };
+  expect([baselineRow.mainFrame, baselineRow.method, baselineRow.type, baselineRow.status, baselineRow.failure ?? null, baselineRow.failed ?? null], "SETUPFAIL: baseline main-frame GET fetch 200, no failure").toEqual([true, "GET", "fetch", 200, null, null]);
+  expect(observer.data.errors, "SETUPFAIL: no error before the target").toEqual([]);
+  // Held replacement starts only now (baseline already FINISHED); no reload in between.
+  hold = true; navigation = page.goto(`${origin}/runtime-held-new`); await seen;
+  observation = await outgoing.evaluate((owner, url) => owner.send(url), probeUrl);
+  expect(observation.epoch, "SETUPFAIL: target from the outgoing realm").toBe(oldEpoch); expect(observation.sameOwner, "SETUPFAIL: target same owner").toBe(true);
+  release(); const destination = await navigation;
+  expect(destination.status(), "SETUPFAIL: replacement 200").toBe(200);
+  await expect(page.getByRole("heading", { name: "Held replacement destination" })).toBeVisible();
+  const replacement = observer.data.navigations.at(-1);
+  expect(replacement.success, "SETUPFAIL: replacement succeeded").toBe(true);
+  expect(replacement.fromEpoch, "SETUPFAIL: replacement leaves the outgoing epoch").toBe(oldEpoch);
+  expect(baselineRow.finished < replacement.start, "SETUPFAIL: baseline finished before the replacement started").toBe(true);
+  // Genuine/anomalous evidence fails; it never becomes a safe "inconclusive".
+  expect(observer.data.dom, "DOM error/rejection counterpart").toEqual([]);
+  expect(observer.data.frames, "frame evidence").toEqual([]);
+  const doc = observer.data.documents.find(row => row.epoch === oldEpoch);
+  expect([doc.ready, !!doc.gap, !!doc.frameAmbiguous], "observer gap/frame ambiguity").toEqual([true, false, false]);
+  expect(observer.data.errors.length, "extra errors").toBeLessThanOrEqual(1);
+  for (const error of observer.data.errors) expect(nativeRscUrl(error, origin), "unrecognized/non-target error").toBe(probeUrl);
+  expect(observer.data.requests.filter(row => row.url === probeUrl && row.epoch === oldEpoch && row.status !== null && row.status !== 200), "non-200 probe response").toEqual([]);
+  expect(observer.data.requests.find(row => row.id === baselineRow.id), "SETUPFAIL: baseline row stable (finished 200) through the target").toEqual(baselineRow);
+  // Raw qualification computed independently of the classifier (no fabricated request events).
+  const target = observer.data.errors[0] ?? null;
+  const newRequestEvents = observer.data.requests.filter(row => row.url === probeUrl && row.epoch === oldEpoch && row.id !== baselineRow.id);
+  raw = {
+   nativeTargetErrors: observer.data.errors.length, newRequestEventCount: newRequestEvents.length,
+   targetInWindow: !!target && target.epoch === oldEpoch && replacement.documentRequest < target.seq && target.seq < replacement.commit,
+   handledNativeFailure: observation.returned === true && observation.ok === false, baselineFinished200BeforeStartAsserted: true,
+   targetErrorRaw: target, newRequestEvents,
+  };
+  const shapeObserved = raw.nativeTargetErrors === 1 && raw.targetInWindow && raw.handledNativeFailure && raw.newRequestEventCount === 0;
+  result = observer.classify();
+  if (shapeObserved) {
+   collection = "candidate_shape_observed_policy_NOT_APPLIED";
+   testInfo.annotations.push({ type: collection, description: "Native completed-read shape observed. Collection evidence only; no acceptance branch exists and the current classifier still rejects it." });
+   expect(result.classified, "current classifier must not classify the completed-read target").toEqual([]);
+   expect(result.unexpected.map(row => [row.id, row.reason]), "current classifier rejects the target as ambiguous_requests").toEqual([[target.id, "ambiguous_requests"]]);
+  } else {
+   collection = "shape_not_observed_UNQUALIFIED";
+   testInfo.annotations.push({ type: "inconclusive", description: `Completed-read native shape not observed on this platform (errors=${raw.nativeTargetErrors}, newRequestEvents=${raw.newRequestEventCount}, inWindow=${raw.targetInWindow}, handled=${raw.handledNativeFailure}). NOT qualified; no retry/timing search.` });
+  }
+  expect(result.classified.length + result.unexpected.length).toBe(observer.data.errors.length);
+  expect(harness.state.errors).toEqual([]);
+ } finally {
+  release(); await navigation?.catch(() => {});
+  try {
+   await testInfo.attach("held-replacement-native-after-completed-read", { contentType: "application/json", body: JSON.stringify({ ...observer.data, baseline, baselineRow, observation, raw, result, finalClassification: observer.classify(), collection, causalLimit: "Collection only. Public Request events are not owned-server ingress accounting; no individual network cause or acceptance policy is established." }) });
   } finally { await outgoing?.dispose().catch(() => {}); await context.close(); }
  }
 });

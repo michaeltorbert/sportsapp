@@ -52,11 +52,12 @@ for (const [width, zoom] of [[320, false], [390, false], [390, true]]) {
     expect(harness.state.playerRequests, "no identity prefetch at render").toEqual([]);
   });
 }
-test("a tied leader opens the matching profile; cue sits under totals before the game log; Back returns", async ({ page, harness }) => {
+for (const [width, zoom] of [[320, false], [390, false], [390, true]]) test(`a tied leader opens the matching profile; cue sits under totals before the game log; Back returns at ${width}px${zoom ? " and 200% zoom" : ""}`, async ({ page, harness }, info) => {
   serve(harness);
-  await page.setViewportSize({ width: 390, height: 900 });
+  await page.setViewportSize({ width, height: 900 });
   await harness.open({ path: "/?team=251", waitForScores: false });
   await verifyFixtureMute(page);
+  if (zoom) await page.addStyleTag({ content: "html { zoom: 2; }" });
   await teamScreen(page).locator(".team-defense a", { hasText: "C.J. Gamble" }).click();
   await expect(playerScreen(page).locator(".player-title")).toHaveText("C.J. Gamble");
   const totals = playerScreen(page).locator('[aria-labelledby="player-totals-h"]');
@@ -68,10 +69,41 @@ test("a tied leader opens the matching profile; cue sits under totals before the
   expect(cue.y).toBeLessThan(log.y);
   expect(await playerScreen(page).textContent()).not.toMatch(/Passes defended|QB hurries|Assisted/);
   expect(await noOverflow(page)).toBe(true);
+  // Profile pixels (SYNTHETIC relabel of genuine GT rows onto Texas; not hosted proof).
+  await page.screenshot({ path: info.outputPath(`defense-profile-${width}${zoom ? "-zoom200" : ""}.png`), fullPage: true, animations: "disabled" });
   await playerScreen(page).locator(".back-button").click();
   await expect(teamScreen(page).locator(".team-defense a")).toHaveText(LINKS);
   await page.reload();
   await expect(teamScreen(page).locator(".team-defense a")).toHaveText(LINKS);
+});
+// PV3-01: a delayed failed revisit (team → schedule game → Back) keeps the defense section's layout steady.
+test("Back to a team whose defense failed keeps the failure layout while the reload is pending", async ({ page, harness }) => {
+  serve(harness);
+  let calls = 0, release;
+  const held = new Promise(resolve => { release = resolve; });
+  harness.state.defense = async (_url, route) => {
+    calls++;
+    if (calls >= 2) await held;
+    return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "simulated" }) });
+  };
+  await page.setViewportSize({ width: 390, height: 900 });
+  await harness.open({ path: "/?team=251", waitForScores: false });
+  await verifyFixtureMute(page);
+  const block = teamScreen(page).locator(".team-defense");
+  await expect(block.getByRole("button", { name: "Retry" })).toBeEnabled();
+  const before = await block.boundingBox();
+  await teamScreen(page).locator("a.sched-row").first().click();
+  await page.getByRole("button", { name: "Back to Texas schedule" }).click();
+  await expect.poll(() => calls).toBe(2);
+  await expect(block).toContainText("Defensive leaders couldn’t be loaded.");
+  await expect(block.getByRole("button", { name: "Retrying…" })).toBeDisabled();
+  await expect(block).not.toContainText("Loading defensive leaders");
+  const pending = await block.boundingBox();
+  release();
+  await expect(block.getByRole("button", { name: "Retry" })).toBeEnabled();
+  const after = await block.boundingBox();
+  expect(Math.abs(pending.height - before.height)).toBeLessThanOrEqual(1);
+  expect(Math.abs(after.height - pending.height)).toBeLessThanOrEqual(1);
 });
 test("the pack's own hidden Duke contribution withholds every new name, number and tie from DOM and accessibility", async ({ page, harness }) => {
   serve(harness, { dropDuke: false });
@@ -110,7 +142,9 @@ test("reconnect: the restarted team-defense load is pending until it settles, th
   await expect(status.getByRole("button", { name: "Retry" })).toBeDisabled();
   await page.context().setOffline(false);
   await expect.poll(() => calls).toBe(2);
-  await expect(status).toContainText("Loading defensive leaders…");
+  // Known failure stays in force while the restarted load is pending (PV3-01): Retry disabled as "Retrying…", no identities.
+  await expect(status).toContainText("Defensive leaders couldn’t be loaded.");
+  await expect(status.getByRole("button", { name: "Retrying…" })).toBeDisabled();
   await expect(teamScreen(page).locator(".team-defense a")).toHaveCount(0);
   release();
   await expect(teamScreen(page).locator(".team-defense a")).toHaveText(LINKS);

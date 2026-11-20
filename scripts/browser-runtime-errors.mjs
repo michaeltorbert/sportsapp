@@ -26,7 +26,11 @@ export function classifyRuntimeErrors(evidence) {
   const reject = reason => unexpected.push({ ...error, reason });
   const url = urls[index];
   if (evidence.browserName !== "webkit" || !url) { reject("not_native_loopback_rsc"); continue; }
-  if (urls.filter(value => value === url).length !== 1) { reject("ambiguous_errors"); continue; }
+  // Uniqueness is per URL within the error's own non-empty owning epoch (not per whole test, not per
+  // navigation id alone). Another same-URL error in the same epoch, or any same-URL error whose epoch is
+  // unknown/empty (in either direction), keeps it ambiguous. All later guards are unchanged.
+  const own = typeof error.epoch === "string" && error.epoch ? error.epoch : null;
+  if (evidence.errors.some((other, j) => j !== index && urls[j] === url && (!own || typeof other.epoch !== "string" || !other.epoch || other.epoch === own))) { reject("ambiguous_errors"); continue; }
   const nav = evidence.navigations.find(row => row.id === error.navigation);
   if (!nav || nav.ambiguous || !nav.success || typeof nav.fromEpoch !== "string" || !nav.fromEpoch || typeof nav.toEpoch !== "string" || !nav.toEpoch || nav.fromEpoch === nav.toEpoch || error.epoch !== nav.fromEpoch || !(nav.start < nav.documentRequest && nav.documentRequest < nav.commit && nav.commit < nav.settled && nav.start < error.seq && error.seq < nav.commit)) { reject("replacement_not_proven"); continue; }
   const observer = evidence.documents.find(row => row.epoch === error.epoch);

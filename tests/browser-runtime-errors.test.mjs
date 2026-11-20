@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { classifyRuntimeErrors, nativeRscUrl, NATIVE_CANCEL_REASONS, incompleteNativeControl } from "../scripts/browser-runtime-errors.mjs";
+import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 const origin = "http://127.0.0.1:4837", url = `${origin}/.rsc?_rsc=KsQaSH2L7Z4e6Q5N`;
 function evidence() {
@@ -160,3 +162,56 @@ for (const name of ["wrong engine", "generic name", "malformed native message", 
   assert.equal(result.classified.length, 0); assert.equal(result.unexpected.length, raw.errors.length);
  });
 }
+
+// Stage A: error uniqueness is per URL within the error's own non-empty owning epoch (reason enums unchanged).
+test("stage A: same URL in a different known epoch no longer makes an otherwise unique error ambiguous", () => {
+ const raw = evidence();
+ raw.errors.push({ ...raw.errors[0], id: 2, seq: 30, epoch: "later", navigation: 2 }); // SYNTHETIC later activation
+ raw.navigations.push({ id: 2, start: 20, fromEpoch: "later", toEpoch: "after", documentRequest: 25, commit: 40, settled: 41, success: true });
+ const result = classifyRuntimeErrors(raw), first = result.classified.find(c => c.errorId === 1);
+ assert.equal(first?.classification, "native_obsolete_document_rsc_cancellation");
+ assert.ok(!result.unexpected.some(u => u.errorId === 1 || (u.id === 1 && u.reason === "ambiguous_errors")));
+});
+test("stage A: same URL in the same epoch, or a same-URL error with an unknown/empty epoch, stays ambiguous in both directions", () => {
+ for (const [label, other, selfEpoch] of [
+  ["same epoch", { epoch: "old" }, "old"],
+  ["other unknown epoch", { epoch: null }, "old"],
+  ["other empty epoch", { epoch: "" }, "old"],
+  ["other missing epoch", { epoch: undefined }, "old"],
+  ["own unknown epoch", { epoch: "later" }, null],
+  ["own empty epoch", { epoch: "later" }, ""],
+ ]) {
+  const raw = evidence(); raw.errors[0].epoch = selfEpoch;
+  raw.errors.push({ ...raw.errors[0], id: 2, seq: 9, ...other }); // SYNTHETIC
+  const result = classifyRuntimeErrors(raw);
+  assert.equal(result.classified.length, 0, label);
+  assert.deepEqual(result.unexpected.map(u => u.reason), ["ambiguous_errors", "ambiguous_errors"], label);
+ }
+});
+test("stage A: different URLs are independent; the downstream completed-200 veto still rejects (not as ambiguous_errors)", () => {
+ const raw = evidence(); raw.requests[0].status = 200;
+ raw.errors.push({ ...raw.errors[0], id: 2, epoch: "old", stack: raw.errors[0].stack.replace("/.rsc?", "/guide.rsc?"), message: raw.errors[0].message.replace("/.rsc?", "/guide.rsc?") }); // SYNTHETIC other URL, same epoch
+ const result = classifyRuntimeErrors(raw), first = result.unexpected.find(u => u.id === 1);
+ assert.ok(first); assert.notEqual(first.reason, "ambiguous_errors");
+});
+
+// Stage B: immutable actual controlled provenance from the failed v3 WebKit All-FBS run (local loopback RSC only).
+test("stage B: actual v3 provenance — ID1 stays ambiguous_requests; IDs 2-4 are limited diagnostics; raw unchanged", () => {
+ const bytes = readFileSync(new URL("./fixtures/ss181-runtime-provenance-v3.json", import.meta.url));
+ assert.equal(bytes.length, 8064);
+ assert.equal(createHash("sha256").update(bytes).digest("hex"), "35f2ce6a1eeaf9e60114d31092dbdb7be0bfacb3d5450eea513cef3442a98362");
+ const wrapper = JSON.parse(bytes.toString());
+ assert.equal(wrapper.sourceCommit, "f1e3a8aeb7e3b9bbc0d5cbf4834ef806985ac3db"); assert.equal(wrapper.runtimeProvenance.browserName, "webkit");
+ const raw = wrapper.runtimeProvenance, before = JSON.stringify(raw), result = classifyRuntimeErrors(raw);
+ assert.equal(JSON.stringify(raw), before, "classifier never mutates raw evidence (deep)");
+ // Every error is accounted for exactly once.
+ const seen = [...result.classified.map(c => c.errorId), ...result.unexpected.map(u => u.id)].sort();
+ assert.deepEqual(seen, [1, 2, 3, 4]);
+ assert.deepEqual(result.unexpected.map(u => [u.id, u.reason]), [[1, "ambiguous_requests"]], "ID1 remains unexpected: its only same-epoch read completed 200 before the replacement");
+ for (const id of [2, 3, 4]) {
+  const c = result.classified.find(row => row.errorId === id);
+  assert.equal(c.classification, "native_replacement_rsc_diagnostic");
+  assert.equal(c.publicRequestEvents, 0); assert.equal(c.qualification, "requires_actual_current_platform_control");
+  assert.match(c.causalLimit, /individual cancellation and server ingress are not established/);
+ }
+});

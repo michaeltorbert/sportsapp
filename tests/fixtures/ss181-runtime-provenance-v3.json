@@ -1,0 +1,267 @@
+{
+  "source": "FULL actual controlled browser provenance from failed v3 WebKit All-FBS run; API sports data intercepted, native loopback RSC behavior observed; not provider evidence",
+  "sourceCommit": "f1e3a8aeb7e3b9bbc0d5cbf4834ef806985ac3db",
+  "browserRunId": "60ad911a-83f5-458a-8fee-440d6f68814d",
+  "collectedUtc": "2026-11-20T19:44:36.065Z",
+  "reportSha256": "ce60dd2a40a568a4aaeeeffc5a0b50c464e3b2c502d6a54310a215c64150933e",
+  "runtimeProvenance": {
+    "browserName": "webkit",
+    "origin": "http://127.0.0.1:4183",
+    "hostPlatform": "darwin",
+    "hostArchitecture": "arm64",
+    "errors": [
+      {
+        "id": 1,
+        "seq": 77,
+        "epoch": "-1:0.5621521083243565",
+        "navigation": 3,
+        "name": "Fetch API cannot load http",
+        "message": "/127.0.0.1:4183/.rsc?_rsc=KsQaSH2L7Z4e6Q5N due to access control checks.",
+        "stack": "Fetch API cannot load http://127.0.0.1:4183/.rsc?_rsc=KsQaSH2L7Z4e6Q5N due to access control checks.\n    at unknown (http://127.0.0.1:4183/assets/types-CcPJ80Uo.js:2:5996)"
+      },
+      {
+        "id": 2,
+        "seq": 140,
+        "epoch": "-1:0.671316166182455",
+        "navigation": 5,
+        "name": "Fetch API cannot load http",
+        "message": "/127.0.0.1:4183/.rsc?_rsc=KsQaSH2L7Z4e6Q5N due to access control checks.",
+        "stack": "Fetch API cannot load http://127.0.0.1:4183/.rsc?_rsc=KsQaSH2L7Z4e6Q5N due to access control checks.\n    at unknown (http://127.0.0.1:4183/assets/types-CcPJ80Uo.js:2:5996)"
+      },
+      {
+        "id": 3,
+        "seq": 141,
+        "epoch": "-1:0.671316166182455",
+        "navigation": 5,
+        "name": "Fetch API cannot load http",
+        "message": "/127.0.0.1:4183/guide.rsc?_rsc=KsQaSH2L7Z4e6Q5N due to access control checks.",
+        "stack": "Fetch API cannot load http://127.0.0.1:4183/guide.rsc?_rsc=KsQaSH2L7Z4e6Q5N due to access control checks.\n    at unknown (http://127.0.0.1:4183/assets/types-CcPJ80Uo.js:2:5996)"
+      },
+      {
+        "id": 4,
+        "seq": 142,
+        "epoch": "-1:0.671316166182455",
+        "navigation": 5,
+        "name": "Fetch API cannot load http",
+        "message": "/127.0.0.1:4183/leaders.rsc?season=2026&category=passing&conference=all&team=all&page=1&_rsc=KsQaSH2L7Z4e6Q5N due to access control checks.",
+        "stack": "Fetch API cannot load http://127.0.0.1:4183/leaders.rsc?season=2026&category=passing&conference=all&team=all&page=1&_rsc=KsQaSH2L7Z4e6Q5N due to access control checks.\n    at unknown (http://127.0.0.1:4183/assets/types-CcPJ80Uo.js:2:5996)"
+      }
+    ],
+    "dom": [],
+    "documents": [
+      {
+        "epoch": "-1:0.32462131719128706",
+        "seq": 4,
+        "ready": true,
+        "gap": false,
+        "frameAmbiguous": false
+      },
+      {
+        "epoch": "-1:0.5621521083243565",
+        "seq": 41,
+        "ready": true,
+        "gap": false,
+        "frameAmbiguous": false
+      },
+      {
+        "epoch": "-1:0.784287953507848",
+        "seq": 79,
+        "ready": true,
+        "gap": false,
+        "frameAmbiguous": false
+      },
+      {
+        "epoch": "-1:0.671316166182455",
+        "seq": 113,
+        "ready": true,
+        "gap": false,
+        "frameAmbiguous": false
+      },
+      {
+        "epoch": "-1:0.6070854328816312",
+        "seq": 144,
+        "ready": true,
+        "gap": false,
+        "frameAmbiguous": false
+      }
+    ],
+    "requests": [
+      {
+        "id": 1,
+        "seq": 29,
+        "epoch": "-1:0.32462131719128706",
+        "mainFrame": true,
+        "url": "http://127.0.0.1:4183/.rsc?_rsc=KsQaSH2L7Z4e6Q5N",
+        "method": "GET",
+        "type": "fetch",
+        "status": 200,
+        "failed": null,
+        "failure": null,
+        "finished": 33,
+        "response": 32
+      },
+      {
+        "id": 2,
+        "seq": 30,
+        "epoch": "-1:0.32462131719128706",
+        "mainFrame": true,
+        "url": "http://127.0.0.1:4183/guide.rsc?_rsc=KsQaSH2L7Z4e6Q5N",
+        "method": "GET",
+        "type": "fetch",
+        "status": 200,
+        "failed": null,
+        "failure": null,
+        "finished": 37,
+        "response": 35
+      },
+      {
+        "id": 3,
+        "seq": 31,
+        "epoch": "-1:0.32462131719128706",
+        "mainFrame": true,
+        "url": "http://127.0.0.1:4183/leaders.rsc?season=2026&category=passing&conference=all&team=all&page=1&_rsc=KsQaSH2L7Z4e6Q5N",
+        "method": "GET",
+        "type": "fetch",
+        "status": 200,
+        "failed": null,
+        "failure": null,
+        "finished": 36,
+        "response": 34
+      },
+      {
+        "id": 4,
+        "seq": 66,
+        "epoch": "-1:0.5621521083243565",
+        "mainFrame": true,
+        "url": "http://127.0.0.1:4183/.rsc?_rsc=KsQaSH2L7Z4e6Q5N",
+        "method": "GET",
+        "type": "fetch",
+        "status": 200,
+        "failed": null,
+        "failure": null,
+        "finished": 70,
+        "response": 69
+      },
+      {
+        "id": 5,
+        "seq": 67,
+        "epoch": "-1:0.5621521083243565",
+        "mainFrame": true,
+        "url": "http://127.0.0.1:4183/guide.rsc?_rsc=KsQaSH2L7Z4e6Q5N",
+        "method": "GET",
+        "type": "fetch",
+        "status": 200,
+        "failed": null,
+        "failure": null,
+        "finished": 74,
+        "response": 72
+      },
+      {
+        "id": 6,
+        "seq": 68,
+        "epoch": "-1:0.5621521083243565",
+        "mainFrame": true,
+        "url": "http://127.0.0.1:4183/leaders.rsc?season=2026&category=passing&conference=all&team=all&page=1&_rsc=KsQaSH2L7Z4e6Q5N",
+        "method": "GET",
+        "type": "fetch",
+        "status": 200,
+        "failed": null,
+        "failure": null,
+        "finished": 73,
+        "response": 71
+      },
+      {
+        "id": 7,
+        "seq": 104,
+        "epoch": "-1:0.784287953507848",
+        "mainFrame": true,
+        "url": "http://127.0.0.1:4183/.rsc?_rsc=KsQaSH2L7Z4e6Q5N",
+        "method": "GET",
+        "type": "fetch",
+        "status": null,
+        "failed": 108,
+        "failure": "cancelled",
+        "finished": null
+      },
+      {
+        "id": 8,
+        "seq": 105,
+        "epoch": "-1:0.784287953507848",
+        "mainFrame": true,
+        "url": "http://127.0.0.1:4183/guide.rsc?_rsc=KsQaSH2L7Z4e6Q5N",
+        "method": "GET",
+        "type": "fetch",
+        "status": null,
+        "failed": 109,
+        "failure": "cancelled",
+        "finished": null
+      },
+      {
+        "id": 9,
+        "seq": 106,
+        "epoch": "-1:0.784287953507848",
+        "mainFrame": true,
+        "url": "http://127.0.0.1:4183/leaders.rsc?season=2026&category=passing&conference=all&team=all&page=1&_rsc=KsQaSH2L7Z4e6Q5N",
+        "method": "GET",
+        "type": "fetch",
+        "status": null,
+        "failed": 110,
+        "failure": "cancelled",
+        "finished": null
+      }
+    ],
+    "navigations": [
+      {
+        "id": 1,
+        "start": 1,
+        "fromEpoch": null,
+        "toEpoch": "-1:0.32462131719128706",
+        "commit": 3,
+        "success": true,
+        "documentRequest": 2,
+        "settled": 16
+      },
+      {
+        "id": 2,
+        "start": 38,
+        "fromEpoch": "-1:0.32462131719128706",
+        "toEpoch": "-1:0.5621521083243565",
+        "commit": 40,
+        "success": true,
+        "documentRequest": 39,
+        "settled": 53
+      },
+      {
+        "id": 3,
+        "start": 75,
+        "fromEpoch": "-1:0.5621521083243565",
+        "toEpoch": "-1:0.784287953507848",
+        "commit": 78,
+        "success": true,
+        "documentRequest": 76,
+        "settled": 91
+      },
+      {
+        "id": 4,
+        "start": 107,
+        "fromEpoch": "-1:0.784287953507848",
+        "toEpoch": "-1:0.671316166182455",
+        "commit": 112,
+        "success": true,
+        "documentRequest": 111,
+        "settled": 125
+      },
+      {
+        "id": 5,
+        "start": 138,
+        "fromEpoch": "-1:0.671316166182455",
+        "toEpoch": "-1:0.6070854328816312",
+        "commit": 143,
+        "success": true,
+        "documentRequest": 139,
+        "settled": 156
+      }
+    ],
+    "frames": []
+  }
+}
