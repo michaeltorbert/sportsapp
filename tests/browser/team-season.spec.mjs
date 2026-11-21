@@ -531,7 +531,9 @@ for (const id of ['251', '153']) for (const [width, zoom] of [[320, false], [390
     await expect(section.locator('.rank-basis')).toContainText('Scoring: 10 completed regular-season games');
     await expect(section).toContainText('Higher offense values and lower allowed values rank first.');
     await expect(section).not.toContainText('Some statistics are incomplete');
-    await expect(section).toContainText('Rankings checked Nov 21, 12:01 AM ET. Source update time unknown.');
+    // Engines' Intl joins the same date and time differently (Chromium "Nov 21, 12:01 AM", WebKit "Nov 21 at 12:01 AM");
+    // only that separator varies. The exact date, time, ET basis and unknown-update statement stay asserted.
+    await expect(section).toContainText(/Rankings checked Nov 21(?:,| at) 12:01 AM ET\. Source update time unknown\./);
     expect(await noOverflow(page)).toBe(true);
     expect(overlaps(await textBoxes(section.locator('.rank-row dt, .rank-cell > span, .rank-cell b, .rank-cell small')))).toEqual([]);
     await page.screenshot({ path: info.outputPath(`scoring-${id}-${width}${zoom ? '-zoom200' : ''}.png`), fullPage: true, animations: 'disabled' });
