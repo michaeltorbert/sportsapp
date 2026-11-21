@@ -55,7 +55,12 @@ export const RANKING_ROWS = [["totalYards", "Total yards"], ["netPassingYards", 
 export const RANKING_KEYS = ["totalYards", "netPassingYards", "rushingYards", "totalYardsOpponent", "netPassingYardsOpponent", "rushingYardsOpponent"] as const;
 export type RankingKey = typeof RANKING_KEYS[number];
 export type RankingMetric = { total: number; games: number; rank: number | null; population: number; coverage: number; tied: boolean };
-export type SeasonRankings = { year: number; games: number | null; population: number; checkedAt: string; stale: boolean; metrics: Record<RankingKey, RankingMetric | null> };
+/**
+ * #189 scoring: points scored/allowed per game over the team's own CFBD-reported completed 2026
+ * regular-season games. Its own denominator, basis and generation time; never one of the six yardage metrics.
+ */
+export type ScoringRankings = { basis: "regular-completed"; year: number; games: number; population: number; checkedAt: string; offense: RankingMetric; defense: RankingMetric };
+export type SeasonRankings = { year: number; games: number | null; population: number; checkedAt: string; stale: boolean; metrics: Record<RankingKey, RankingMetric | null>; scoring?: ScoringRankings | null };
 /** Optional data fails closed independently of the retained ESPN season. */
 export function parseSeasonRankings(raw: unknown, year: number, now = Date.now()): SeasonRankings | null {
   const metric = z.object({ total: z.number().int().min(-10_000_000).max(10_000_000), games: z.number().int().min(1).max(20), rank: z.number().int().min(1).max(138).nullable(), population: z.literal(138), coverage: z.number().int().min(1).max(138), tied: z.boolean() });
@@ -64,7 +69,17 @@ export function parseSeasonRankings(raw: unknown, year: number, now = Date.now()
   const data = parsed.data, age = now - Date.parse(data.checkedAt);
   if (!Number.isFinite(age) || age < 0 || age > 259_200_000) return null;
   for (const row of Object.values(data.metrics)) if (row && (row.games !== data.games || (row.rank !== null && row.coverage !== row.population) || (row.rank === null && (row.coverage === row.population || row.tied)) || (row.tied && row.rank === row.population))) return null;
-  return { ...data, stale: age > 86_400_000 };
+  // The legacy yardage result above is unchanged; a missing (older snapshot) or invalid scoring child is only null.
+  return { ...data, stale: age > 86_400_000, scoring: parseScoringRankings((raw as Record<string, unknown>).scoring, data.checkedAt) };
+}
+/** Same metric rules as yardage, with its own completed-games denominator, from the same rankings generation only. */
+export function parseScoringRankings(raw: unknown, checkedAt: string): ScoringRankings | null {
+  const metric = z.object({ total: z.number().int().min(0).max(6_000), games: z.number().int().min(1).max(20), rank: z.number().int().min(1).max(138).nullable(), population: z.literal(138), coverage: z.number().int().min(1).max(138), tied: z.boolean() });
+  const parsed = z.object({ basis: z.literal("regular-completed"), year: z.literal(2026), games: z.number().int().min(1).max(20), population: z.literal(138), checkedAt: z.string().datetime(), offense: metric, defense: metric }).safeParse(raw);
+  if (!parsed.success || parsed.data.checkedAt !== checkedAt) return null;
+  const data = parsed.data;
+  for (const row of [data.offense, data.defense]) if (row.games !== data.games || row.coverage !== data.offense.coverage || (row.rank !== null && row.coverage !== row.population) || (row.rank === null && (row.coverage === row.population || row.tied)) || (row.tied && row.rank === row.population)) return null;
+  return data;
 }
 export type StatPair = [string | null, string | null];
 // The existing season-metric shape: signed, up to two decimals. Anything else is unavailable, never zero.
@@ -119,6 +134,15 @@ export function seasonAggregates(season: TeamSeason, prefs: DukePreferences | nu
   if (seasonEntries(season).some(({ game }) => dukeStarted(game) && dukeHidden(game, prefs))) return { shown: false, reason: prefs ? "hidden" : "checking" };
   if (season.regular.status !== "complete" || season.postseason.status !== "complete") return { shown: false, reason: "incomplete" };
   return { shown: true };
+}
+/**
+ * #189 S4: the board-merged season AND the team's own validated schedule must both permit aggregates. A board
+ * copy can add protection (a fresher started game) but can never remove the raw schedule's protection (an
+ * older or mismatched upcoming copy over a started hidden game). Without a raw season, the merged result stands.
+ */
+export function protectedAggregates(season: TeamSeason, raw: TeamSeason | null | undefined, prefs: DukePreferences | null): Aggregates {
+  const merged = seasonAggregates(season, prefs);
+  return !merged.shown || !raw ? merged : seasonAggregates(raw, prefs);
 }
 
 // The browser trusts nothing it did not validate: the same shapes the Worker produces, bounded.

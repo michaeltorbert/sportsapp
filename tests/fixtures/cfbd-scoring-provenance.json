@@ -1,0 +1,27 @@
+{
+  "kind": "EXCERPT",
+  "source": "CFBD 2026 FBS membership and national regular-season games (fixed /teams/fbs?year=2026 and /games?year=2026&seasonType=regular&classification=fbs)",
+  "retrievedAt": "2026-11-21 (fixed capture; see sourceCaptureSha256)",
+  "sourceCaptureSha256": "39109a4e3e8ed337f51814337a6027da7154560c96f93976f247f7d7ceb0c36f",
+  "complete": false,
+  "scope": "Two actual FBS identities (Texas 251, North Carolina 153) and all 24 of their captured regular-season game rows (20 completed, 4 uncompleted with null scores; one actual FCS opponent, game 401858218), copied unchanged from the full projected capture. Other FBS members' rows for these games are opponents only. Not national population proof: tests add explicitly SYNTHETIC members/games to reach 138. Full national ranks are verified separately by root from the complete raw capture.",
+  "independentlyVerified": {
+    "251": {
+      "games": 10,
+      "pointsFor": 302,
+      "pointsAllowed": 178
+    },
+    "153": {
+      "games": 10,
+      "pointsFor": 258,
+      "pointsAllowed": 221
+    }
+  },
+  "sampleSha256": "e29c5dae4490bf5c201177d8891e0a41b34703eb0a039a698743159e3960b55b",
+  "legacyParserFixture": {
+    "file": "legacy-ranking-parser-1.28.0.ts.txt",
+    "source": "lib/team-season.ts at base 080fe0115227e4ce1f793c0cacafb0b71a8cff21: line 1 (zod import) and lines 55-68 (RANKING_KEYS through parseSeasonRankings) verbatim",
+    "purpose": "exercise the exact previous parser against new snapshots; not product code"
+  },
+  "underlyingUpdateTime": "unknown"
+}

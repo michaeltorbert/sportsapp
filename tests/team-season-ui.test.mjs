@@ -29,9 +29,9 @@ function season(team = "150", changes = {}) {
   };
 }
 const prefs = (changes = {}) => ({ ...ui.defaultDukePreferences(), ...changes });
-function render(value, { team = value?.team.id ?? "150", p = prefs(), pending = false, failed = false, online = true, back } = {}) {
+function render(value, { team = value?.team.id ?? "150", p = prefs(), pending = false, failed = false, online = true, back, raw } = {}) {
   return renderToStaticMarkup(createElement(ui.TeamScreen, {
-    teamId: team, season: value, pending, failed, online, prefs: p,
+    teamId: team, season: value, rawSeason: raw, pending, failed, online, prefs: p,
     back: back ?? { title: "Scores", detail: "Today", label: "Back to scores, Today" }, onBack() {}, onRetry() {},
     gameHref: id => `/?event=${id}&team=${team}`, onOpenGame() {},
   }));
@@ -206,13 +206,41 @@ const rankRows={year:2026,games:6,population:138,checkedAt:CHECKED,stale:false,m
 test('separate yardage ranking section follows ESPN averages, with units/source/basis, delayed and partial states',()=>{
  const s=season('150',{rankings:rankRows}),html=render(s);
  assert.ok(html.indexOf('Season averages')<html.indexOf('FBS statistical rankings'));assert.ok(html.indexOf('FBS statistical rankings')<html.indexOf('id="team-schedule-h"'));
- const words=text(html);assert.match(words,/2026 season · yards per game 6 games reported by CFBD/);assert.match(words,/Total yards Offense 361.3 93 of 138 Defense · allowed 272.5 11 of 138/);assert.match(words,/Passing yards \(net\)/);assert.match(words,/statistical ranks, not poll rankings/);assert.match(words,/Source update time unknown/);assert.match(html,/<details class="rank-explainer"><summary>How these rankings work<\/summary>/);
+ const words=text(html);assert.match(words,/2026 season · per-game averages Yardage: 6 games reported by CFBD for Duke Scoring: completed games unavailable/);assert.match(words,/Total yards Offense 361.3 93 of 138 Defense · allowed 272.5 11 of 138/);assert.match(words,/Passing yards \(net\)/);assert.match(words,/statistical ranks, not poll rankings/);assert.match(words,/Source update time unknown/);assert.match(html,/<details class="rank-explainer"><summary>How these rankings work<\/summary>/);
+ // #189: an older snapshot without scoring keeps every yardage value and says scoring is unavailable, never zero.
+ assert.match(words,/Scoring \(points per game\) Offense Value unavailable Defense · allowed Value unavailable/);assert.doesNotMatch(words,/Some statistics are incomplete/);assert.doesNotMatch(html,/>0\.0</);
  const partial=structuredClone(rankRows);partial.metrics.rushingYards.rank=null;partial.metrics.rushingYards.coverage=137;partial.stale=true;assert.match(text(render(season('150',{rankings:partial}))),/Refresh delayed.*National rank unavailable.*Some statistics are incomplete/);
  assert.match(text(render(season('150',{rankings:null}))),/Rankings unavailable/);
 });
+// #189 genuine independently verified current Texas scoring (10 completed games, 302 scored, 178 allowed, tied 48 / 16 of 138).
+const texasScoring={basis:'regular-completed',year:2026,games:10,population:138,checkedAt:CHECKED,offense:{total:302,games:10,rank:48,population:138,coverage:138,tied:true},defense:{total:178,games:10,rank:16,population:138,coverage:138,tied:false}};
+test('#189 fourth Scoring row: points per game, own completed-games cue, direction, ties and methodology after unchanged yardage rows',()=>{
+ const html=render(season('150',{rankings:{...rankRows,scoring:texasScoring}})),words=text(html);
+ assert.match(words,/Yardage: 6 games reported by CFBD for Duke Scoring: 10 completed regular-season games/);
+ const rows=[...html.matchAll(/<div class="rank-row"><dt>([^<]+)<\/dt>/g)].map(m=>m[1]);
+ assert.deepEqual(rows.slice(-4),['Total yards','Passing yards (net)','Rushing yards','Scoring (points per game)']);
+ assert.match(words,/Rushing yards Offense 134.5 102 of 138 Defense · allowed 106.3 27 of 138 Scoring \(points per game\) Offense 30.2 Tied 48 of 138 Defense · allowed 17.8 16 of 138/);
+ assert.match(words,/Higher offense values and lower allowed values rank first\./);
+ assert.match(words,/Scoring uses the points each team scored and allowed in its completed 2026 regular-season games reported by CFBD, including games against FCS opponents, divided by those games\./);
+ assert.match(words,/No regular-season or postseason-only scope is claimed for the yardage rows\./);assert.doesNotMatch(words,/Some statistics are incomplete/);
+ const partial=structuredClone(texasScoring);partial.offense.rank=null;partial.offense.tied=false;partial.defense.rank=null;partial.offense.coverage=partial.defense.coverage=137;
+ assert.match(text(render(season('150',{rankings:{...rankRows,scoring:partial}}))),/Offense 30.2 National rank unavailable.*Some statistics are incomplete/);
+ const zero=structuredClone(texasScoring);zero.games=zero.offense.games=zero.defense.games=1;zero.offense.total=0;assert.match(text(render(season('150',{rankings:{...rankRows,scoring:zero}}))),/Scoring: 1 completed regular-season game Total yards .*Scoring \(points per game\) Offense 0\.0 /);
+});
 test('all aggregate gate reasons omit every rankings value/control from rendered and assistive markup',()=>{
- const s=season('150',{rankings:rankRows});
- for(const [value,p]of [[s,null],[s,prefs({rules:[{from:0,mode:'hide'}]})],[{...s,postseason:{status:'unavailable'}},prefs()]])assert.doesNotMatch(render(value,{p}),/FBS statistical rankings|361.3|93 of 138|rank-cell|How these rankings work/);
+ const s=season('150',{rankings:{...rankRows,scoring:texasScoring}});
+ for(const [value,p]of [[s,null],[s,prefs({rules:[{from:0,mode:'hide'}]})],[{...s,postseason:{status:'unavailable'}},prefs()]])assert.doesNotMatch(render(value,{p}),/FBS statistical rankings|361.3|93 of 138|rank-cell|How these rankings work|Scoring \(points per game\)|30\.2|Tied 48|completed regular-season/);
+});
+test('#189 S4 SYNTHETIC raw started hidden Duke game withholds every aggregate even when the merged board copy is upcoming',()=>{
+ const raw=season('153',{rankings:{...rankRows,scoring:texasScoring}}),entry=raw.regular.entries.find(e=>e.game.id===SHARED);
+ Object.assign(entry.game,{state:'final',started:true});
+ const merged=structuredClone(raw);Object.assign(merged.regular.entries.find(e=>e.game.id===SHARED).game,{state:'upcoming',started:false,period:0});
+ const hide=prefs({manual:{[SHARED]:true}}),sentinel=/FBS statistical rankings|Scoring \(points per game\)|30\.2|Tied 48|rank-cell|Record unavailable/;
+ assert.match(render(merged,{p:hide}),/FBS statistical rankings/,'merged alone would show');
+ const html=render(merged,{p:hide,raw});assert.doesNotMatch(html,sentinel);assert.match(text(html),/Record and season statistics hidden/);
+ assert.doesNotMatch(render(merged,{p:null,raw}),sentinel);
+ assert.doesNotMatch(render(merged,{p:prefs(),raw:{...raw,postseason:{status:'unavailable'}}}),sentinel);
+ assert.match(render(merged,{p:prefs(),raw}),/Scoring \(points per game\)/,'shown when both permit');
 });
 
 // Genuine November19 detail projection; base Duke schedule below is explicitly SYNTHETIC usage.

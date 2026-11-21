@@ -6,7 +6,7 @@ import { bundle } from "./helpers.mjs";
 // Minimized genuine public captures; see fixtures/team-season-provenance.json. Every variation
 // below is constructed here and labeled SYNTHETIC.
 const { scheduleSection, seasonStats, activeSeason, overallRecord } = await bundle("lib/team-season-server.ts");
-const { seasonAggregates, parseTeamSeason, findScheduleGame, withBoardGames, TEAM_STAT_ROWS } = await bundle("lib/team-season.ts");
+const { seasonAggregates, protectedAggregates, parseTeamSeason, findScheduleGame, withBoardGames, TEAM_STAT_ROWS } = await bundle("lib/team-season.ts");
 const { defaultDukePreferences, dukeHidden } = await bundle("lib/duke-visibility.ts");
 const fixture = name => JSON.parse(readFileSync(new URL(`./fixtures/espn-team-season-${name}.json`, import.meta.url), "utf8"));
 const DUKE = fixture("duke-2026"), UNC = fixture("unc-2026"), BOWL = fixture("postseason-2025");
@@ -198,6 +198,31 @@ test("the scoreboard's fresher copy replaces a schedule game only for the same m
   const swapped = { ...live, teams: [live.teams[1], live.teams[0]] };
   assert.equal(findScheduleGame(withBoardGames(duke, [swapped]), upcoming.id).game.state, "upcoming");
   assert.deepEqual(withBoardGames({ ...duke, postseason: { status: "unavailable" } }, [live]).postseason, { status: "unavailable" });
+});
+
+test("#189 S4: raw schedule AND board-merged season must both permit aggregates (SYNTHETIC board copies)", () => {
+  const unc = season({ team: "153", regular: scheduleSection(UNC.schedule, "153", 2026, 2, CHECKED) });
+  const raw = clone(unc), shared = raw.regular.entries.find(e => e.game.id === SHARED);
+  // The genuine shared UNC-Duke game is final in the current source; here the raw copy is set started/final explicitly.
+  Object.assign(shared.game, { state: "final", started: true });
+  const hide = prefs({ manual: { [SHARED]: true } });
+  // An older/mismatched board copy reporting the same matchup as upcoming would otherwise remove protection.
+  const upcoming = { ...clone(shared.game), state: "upcoming", started: false, period: 0, teams: shared.game.teams.map(t => ({ ...t, score: null })) };
+  const merged = withBoardGames(raw, [upcoming]);
+  assert.equal(findScheduleGame(merged, SHARED).game.state, "upcoming");
+  assert.deepEqual(seasonAggregates(merged, hide), { shown: true }, "the merged copy alone would show");
+  assert.deepEqual(protectedAggregates(merged, raw, hide), { shown: false, reason: "hidden" });
+  // Reverse: raw upcoming, fresher board started. The board copy adds protection.
+  const rawUpcoming = clone(unc); Object.assign(rawUpcoming.regular.entries.find(e => e.game.id === SHARED).game, { state: "upcoming", started: false, period: 0 });
+  const live = { ...clone(rawUpcoming.regular.entries.find(e => e.game.id === SHARED).game), state: "live", started: true, period: 2 };
+  assert.deepEqual(protectedAggregates(withBoardGames(rawUpcoming, [live]), rawUpcoming, hide), { shown: false, reason: "hidden" });
+  // Unknown preferences and incomplete schedules stay protected through either input.
+  assert.deepEqual(protectedAggregates(merged, raw, null), { shown: false, reason: "checking" });
+  assert.deepEqual(protectedAggregates(merged, { ...raw, postseason: { status: "unavailable" } }, prefs()), { shown: false, reason: "incomplete" });
+  // A future Duke game alone never withholds current completed aggregates; shown games and no raw input are unchanged.
+  assert.deepEqual(protectedAggregates(withBoardGames(rawUpcoming, []), rawUpcoming, hide), { shown: true });
+  assert.deepEqual(protectedAggregates(merged, raw, prefs()), { shown: true });
+  assert.deepEqual(protectedAggregates(merged, undefined, hide), seasonAggregates(merged, hide));
 });
 
 test("schedule rows use the existing rule on the source's own state only: no prediction from the clock", () => {

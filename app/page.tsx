@@ -22,7 +22,7 @@ import { useAppUpdate, LOADED_COMMIT, type AppUpdate } from "@/lib/use-app-updat
 import { DukeSettings, DukeGameControls } from "@/components/duke-settings";
 import { useDukeVisibility } from "@/lib/use-duke-visibility";
 import { dukeHidden, protectDukeBoard } from "@/lib/duke-visibility";
-import { findScheduleGame, seasonAggregates, withBoardGames } from "@/lib/team-season";
+import { findScheduleGame, protectedAggregates, withBoardGames } from "@/lib/team-season";
 import { useTeamDefense } from "@/lib/use-team-defense";
 import { usePlayerSeason } from "@/lib/use-player-season";
 import { PLAYER_YEAR, playerGame as resolvePlayerGame, playerRequestKey, playerYear, type PlayerRequest } from "@/lib/player-season";
@@ -662,11 +662,13 @@ export default function Home() {
   // team's validated schedule, and only while the Duke settings show it. The board's copy wins when both exist.
   // Only a season for the team actually in context; with none (the scoreboard, or the prerendered home) there is none.
   const contextTeam = teamPage ?? route?.team ?? null, loadedSeason = teamSeason.season;
-  const season = contextTeam && loadedSeason && loadedSeason.team.id === contextTeam ? withBoardGames(loadedSeason, dukeGames) : null;
+  const rawSeason = contextTeam && loadedSeason && loadedSeason.team.id === contextTeam ? loadedSeason : null;
+  const season = rawSeason ? withBoardGames(rawSeason, dukeGames) : null;
   // #181: defensive leaders load only for the open team page's current supported season, and only while its
   // base aggregates are shown. The team screen applies the pack's own same-generation contribution gate too.
   // The raw pack response is kept as is; board copies are passed separately so they can only add protection (PV1-01).
-  const defenseEnabled = !!teamPage && !!season && season.season.year === PLAYER_YEAR && seasonAggregates(season, duke.prefs).shown;
+  // #189 S4: base aggregates require both the merged season and the raw schedule (a board copy never removes protection).
+  const defenseEnabled = !!teamPage && !!season && season.season.year === PLAYER_YEAR && protectedAggregates(season, rawSeason, duke.prefs).shown;
   const teamDefense = useTeamDefense(teamPage, season ? season.season.year : null, defenseEnabled);
   const scheduled = route?.team && !screen ? findScheduleGame(season, route.id) : null;
   const scheduleGame = scheduled && !dukeHidden(scheduled.game, duke.prefs) ? scheduled.game : null;
@@ -720,7 +722,7 @@ export default function Home() {
       warning={screen || !scheduleGame ? warning || undefined : teamSeason.failure || season?.stale ? "Couldn’t refresh this team’s schedule." : undefined}
       onRetryScores={screen || !scheduleGame ? refresh : teamSeason.retry} refreshing={screen || !scheduleGame ? refreshing : teamSeason.pending}
       unavailableDetail={route.player ? "It isn’t in the selected season, or it’s hidden by your settings." : undefined} teamLinks={teamLinks} onOpenTeam={openTeam} playerLink={gamePlayerLink} notice={<>{leadersNotice}{scheduleNotice}<AppUpdateNotice update={update} /></>} />}
-    {teamPage && <TeamScreen key={teamPage} teamId={teamPage} season={season} pending={teamSeason.pending} failed={!!teamSeason.failure} online={teamSeason.online} prefs={duke.prefs}
+    {teamPage && <TeamScreen key={teamPage} teamId={teamPage} season={season} rawSeason={rawSeason} pending={teamSeason.pending} failed={!!teamSeason.failure} online={teamSeason.online} prefs={duke.prefs}
       defense={{ value: teamDefense.defense, board: dukeGames, pending: teamDefense.pending, failed: teamDefense.failed, onRetry: teamDefense.retry }}
       playerLink={(id, year) => { const request = { id, year, anchorYear: year, team: teamPage }; return { href: playerHref(request, urlView), open: () => openPlayer(request, `player-${id}-${teamPage}`) }; }} back={teamBack} onBack={goBackFromTeam} onRetry={teamSeason.retry} gameHref={id => gameHref({ id, section: "team", team: teamPage }, urlView)} onOpenGame={openScheduleGame} notice={<>{leadersNotice}<AppUpdateNotice update={update} /></>} />}
     {playerPage && <PlayerScreen key={`${playerPage.id}:${playerPage.team}:${playerPage.anchorYear}`} request={playerPage} season={playerData} identity={playerSeason.identity} pending={playerSeason.pending} failed={playerSeason.failed} online={playerSeason.online} prefs={duke.prefs}

@@ -29,8 +29,8 @@ function serveTeams(harness) {
   };
 }
 // The genuine Tulane at Duke final on the board for Saturday, September 5.
-function board(harness) {
-  const e = event(TULANE_GAME, { state: "final", scores: [3, 17], date: "2026-09-05T19:30:00Z" });
+function board(harness, state = "final") {
+  const e = event(TULANE_GAME, { state, scores: [3, 17], date: "2026-09-05T19:30:00Z" });
   const [away, home] = e.competitions[0].competitors;
   Object.assign(away, { id: tulaneId }); Object.assign(away.team, { id: tulaneId, shortDisplayName: "Tulane", abbreviation: "TULN" });
   // Duke is an ACC team (the capture's team.groups.id "1"), which is why the default All view lists this final.
@@ -485,10 +485,12 @@ for (const [width, zoom] of [[320, false], [390, false], [390, true]]) {
     await verifyFixtureMute(page);
     if(zoom)await page.addStyleTag({content:ZOOM});
     const section=teamScreen(page).locator('.team-rankings');
-    await expect(section).toContainText('2026 season · yards per game');
-    await expect(section).toContainText('6 games reported by CFBD for Texas');
+    await expect(section).toContainText('2026 season · per-game averages');
+    await expect(section).toContainText('Yardage: 6 games reported by CFBD for Texas');
+    // #189: this older snapshot has no scoring child: yardage values/ranks are unchanged and Scoring says unavailable.
+    await expect(section).toContainText('Scoring: completed games unavailable');
     await expect(section.locator('.rank-cell b')).toHaveText(['361.3','272.5','226.8','166.2','134.5','106.3']);
-    await expect(section.locator('.rank-cell small')).toHaveText(['93 of 138','11 of 138','74 of 138','12 of 138','102 of 138','27 of 138']);
+    await expect(section.locator('.rank-cell small')).toHaveText(['93 of 138','11 of 138','74 of 138','12 of 138','102 of 138','27 of 138','Value unavailable','Value unavailable']);
     const before=await teamScreen(page).locator('[aria-labelledby="team-averages-h"]').boundingBox(),after=await section.boundingBox();
     expect(before.y+before.height).toBeLessThanOrEqual(after.y+1);
     await section.getByText('How these rankings work',{exact:true}).click();
@@ -499,6 +501,80 @@ for (const [width, zoom] of [[320, false], [390, false], [390, true]]) {
     await page.screenshot({path:info.outputPath(`rankings-${width}${zoom?'-zoom200':''}.png`),fullPage:true,animations:'disabled'});
   });
 }
+// #189 scoring: genuine November 21 public team-reference yardage generations plus independently verified
+// scoring from the complete current capture. Combining them into one transported object is SYNTHETIC; it is
+// rendering/pixel evidence only, never hosted publication proof.
+const NOV21 = '2026-11-21T05:01:35.829Z';
+const metrics = (totals, ranks, tied = []) => Object.fromEntries(['totalYards','netPassingYards','rushingYards','totalYardsOpponent','netPassingYardsOpponent','rushingYardsOpponent'].map((k,i)=>[k,{total:totals[i],games:10,rank:ranks[i],population:138,coverage:138,tied:tied.includes(k)}]));
+const scoringOf = (pointsFor, pointsAllowed, offenseRank, offenseTied, defenseRank) => ({ basis:'regular-completed', year:2026, games:10, population:138, checkedAt:NOV21, offense:{total:pointsFor,games:10,rank:offenseRank,population:138,coverage:138,tied:offenseTied}, defense:{total:pointsAllowed,games:10,rank:defenseRank,population:138,coverage:138,tied:false} });
+const CURRENT = {
+  251: { rankings: { year:2026, games:10, population:138, checkedAt:NOV21, stale:false, metrics: metrics([3541,2264,1277,2887,1862,1025],[94,66,106,16,30,19]), scoring: scoringOf(302,178,48,true,16) },
+    values: ['354.1','288.7','226.4','186.2','127.7','102.5','30.2','17.8'], ranks: ['94 of 138','16 of 138','66 of 138','30 of 138','106 of 138','19 of 138','Tied 48 of 138','16 of 138'] },
+  153: { rankings: { year:2026, games:10, population:138, checkedAt:NOV21, stale:false, metrics: metrics([3469,2327,1142,3695,2199,1496],[102,57,122,81,82,80],['rushingYardsOpponent']), scoring: scoringOf(258,221,84,true,47) },
+    values: ['346.9','369.5','232.7','219.9','114.2','149.6','25.8','22.1'], ranks: ['102 of 138','81 of 138','57 of 138','82 of 138','122 of 138','Tied 80 of 138','Tied 84 of 138','47 of 138'] },
+};
+// UNC's captured base season has an uncaptured postseason; complete empty postseason is SYNTHETIC here.
+const candidateFor = id => id === '251' ? { ...TEXAS_SEASON, rankings: CURRENT[251].rankings } : { ...SEASONS[153], postseason: { status: 'complete', entries: [] }, rankings: CURRENT[153].rankings };
+for (const id of ['251', '153']) for (const [width, zoom] of [[320, false], [390, false], [390, true]]) {
+  test(`#189 Scoring row with points per game, own completed-games cue and ranks for ${id} at ${width}px${zoom ? ' large text' : ''}`, async ({ page, harness }, info) => {
+    serveCandidate(harness, () => candidateFor(id));
+    await page.setViewportSize({ width, height: 900 });
+    await harness.open({ path: `/?team=${id}`, now: '2026-11-21T12:00:00Z', waitForScores: false });
+    await verifyFixtureMute(page);
+    if (zoom) await page.addStyleTag({ content: ZOOM });
+    const section = teamScreen(page).locator('.team-rankings');
+    await expect(section.locator('.rank-row dt')).toHaveText(['Total yards', 'Passing yards (net)', 'Rushing yards', 'Scoring (points per game)']);
+    await expect(section.locator('.rank-cell > span')).toHaveText(Array(4).fill(['Offense', 'Defense · allowed']).flat());
+    await expect(section.locator('.rank-cell b')).toHaveText(CURRENT[id].values);
+    await expect(section.locator('.rank-cell small')).toHaveText(CURRENT[id].ranks);
+    await expect(section.locator('.rank-basis')).toContainText(`Yardage: 10 games reported by CFBD for ${id === '251' ? 'Texas' : 'North Carolina'}`);
+    await expect(section.locator('.rank-basis')).toContainText('Scoring: 10 completed regular-season games');
+    await expect(section).toContainText('Higher offense values and lower allowed values rank first.');
+    await expect(section).not.toContainText('Some statistics are incomplete');
+    // Engines' Intl joins the same date and time differently (Chromium "Nov 21, 12:01 AM", WebKit "Nov 21 at 12:01 AM");
+    // only that separator varies. The exact date, time, ET basis and unknown-update statement stay asserted.
+    await expect(section).toContainText(/Rankings checked Nov 21(?:,| at) 12:01 AM ET\. Source update time unknown\./);
+    expect(await noOverflow(page)).toBe(true);
+    expect(overlaps(await textBoxes(section.locator('.rank-row dt, .rank-cell > span, .rank-cell b, .rank-cell small')))).toEqual([]);
+    // Full-page capture at one image pixel per CSS pixel (Playwright `scale: 'css'`): at 3x device density the
+    // long 200%-zoom page exceeds the renderer's 32767-pixel screenshot limit on Linux WebKit. Layout, viewport,
+    // zoom and fonts are unchanged; only the PNG's pixel density is lower.
+    await page.screenshot({ path: info.outputPath(`scoring-${id}-${width}${zoom ? '-zoom200' : ''}.png`), fullPage: true, animations: 'disabled', scale: 'css' });
+    await section.getByText('How these rankings work', { exact: true }).click();
+    await expect(section).toContainText('including games against FCS opponents');
+    await expect(section).toContainText('statistical ranks, not poll rankings');
+    await expect(section).toContainText('No regular-season or postseason-only scope is claimed for the yardage rows.');
+    if (id === '251') await expect(teamScreen(page).locator('a.sched-row')).toHaveCount(12);
+    else await expect(teamScreen(page).locator('a.sched-row')).toHaveCount(SEASONS[153].regular.entries.length);
+    // Existing schedule → game → Back still returns to this team with the same scoring values; reload keeps them.
+    await teamScreen(page).locator('a.sched-row').first().click(); await expect(gameScreen(page)).toBeVisible();
+    await gameScreen(page).getByRole('button', { name: `Back to ${id === '251' ? 'Texas' : 'North Carolina'} schedule` }).click();
+    await expect(teamScreen(page).locator('.team-rankings .rank-cell b')).toHaveText(CURRENT[id].values);
+    await page.reload(); await expect(teamScreen(page).locator('.team-rankings .rank-cell small')).toHaveText(CURRENT[id].ranks);
+  });
+}
+test('#189 S4 SYNTHETIC hidden Duke game: scoring values, ranks, population and check time never mount, raw schedule final with an upcoming board copy', async ({ page, harness }) => {
+  // The board copy of the genuine Tulane at Duke game is deliberately upcoming while the raw schedule copy is final.
+  const SEPT = '2026-09-06T03:00:00.000Z';
+  const sentinel = { ...CURRENT[251].rankings, checkedAt: SEPT, scoring: { ...CURRENT[251].rankings.scoring, checkedAt: SEPT } };
+  serveCandidate(harness, () => ({ ...SEASONS[150], rankings: sentinel })); board(harness, 'upcoming');
+  await page.setViewportSize({ width: 390, height: 900 });
+  await harness.open();
+  await verifyFixtureMute(page);
+  await page.locator(`#game-${TULANE_GAME} a.game-summary`).tap();
+  await gameScreen(page).getByRole('link', { name: 'Duke season and schedule' }).tap();
+  await expect(teamScreen(page).locator('.team-rankings .rank-row dt').last()).toHaveText('Scoring (points per game)');
+  await page.evaluate(id => {
+    const key = 'ss:duke-visibility:v2', stored = JSON.parse(localStorage.getItem(key)) ?? { version: 2, rules: [{ from: 0, mode: 'away' }], manual: {}, remembered: {}, waiting: {} };
+    const value = JSON.stringify({ ...stored, manual: { ...stored.manual, [id]: true } });
+    localStorage.setItem(key, value); dispatchEvent(new StorageEvent('storage', { key, newValue: value }));
+  }, TULANE_GAME);
+  await expect(teamScreen(page).getByText('Record and season statistics hidden', { exact: true })).toBeVisible();
+  await expect(teamScreen(page).locator('.team-rankings')).toHaveCount(0);
+  const forbidden = /Scoring \(points per game\)|30\.2|17\.8|Tied 48 of 138|completed regular-season games|Rankings checked|of 138/;
+  expect(await teamScreen(page).textContent()).not.toMatch(forbidden);
+  expect(await teamScreen(page).ariaSnapshot()).not.toMatch(forbidden);
+});
 test('incomplete Duke schedule omits ranking values and methodology from all rendered markup',async({page,harness})=>{
  serveCandidate(harness,()=>({...TEXAS_SEASON,rankings:TEXAS_RANKINGS,postseason:{status:'unavailable'}}));
  await harness.open({path:'/?team=251',now:'2026-10-23T20:00:00Z',waitForScores:false});await verifyFixtureMute(page);
