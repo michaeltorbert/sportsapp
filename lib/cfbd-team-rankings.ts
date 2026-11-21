@@ -1,12 +1,17 @@
 import { RANKING_KEYS, parseSeasonRankings, type SeasonRankings, type RankingKey, type RankingMetric } from "./team-season";
 import type { LeadersEnv, LeadersKV, RefreshResult } from "./cfbd-season-leaders";
 import { cfbdBlocked, blockCfbd, sourceJson, SourceFailure, emptyRefreshBody, type SourceReason } from "./cfbd-source-state";
+import { createScoringRankings, SCORING_GAMES_URL } from "./cfbd-scoring-rankings";
 export const RANKINGS_YEAR = 2026, RANKINGS_INTERVAL_MS = 86_400_000, RANKINGS_MAX_AGE_MS = 259_200_000;
 export const RANKINGS_SNAPSHOT_KEY = `team-rankings:v1:${RANKINGS_YEAR}`;
 const ATTEMPT_KEY = `${RANKINGS_SNAPSHOT_KEY}:attempt`, EXPECTED_FBS = 138;
+/** The public reader's bound; a generation that would exceed it publishes without its optional scoring child. */
+export const RANKINGS_MAX_CHARS = 600_000;
+// Fixed reads in order: membership, season stats, then (#189) the national regular-season games for scoring.
 export const RANKINGS_URLS = [
   `https://api.collegefootballdata.com/teams/fbs?year=${RANKINGS_YEAR}`,
   `https://api.collegefootballdata.com/stats/season?year=${RANKINGS_YEAR}&classification=fbs`,
+  SCORING_GAMES_URL,
 ];
 type Team = { id: string; school: string; mascot: string; rankings: SeasonRankings };
 export type RankingsSnapshot = { v: 1; year: number; checkedAt: string; teams: Record<string, Team> };
@@ -54,19 +59,21 @@ export async function readTeamRankings(kv: LeadersKV | undefined, teamId: string
   if (!kv || year !== RANKINGS_YEAR) return null;
   try {
     const raw = await kv.get(RANKINGS_SNAPSHOT_KEY);
-    if (!raw || raw.length > 600_000) return null;
+    if (!raw || raw.length > RANKINGS_MAX_CHARS) return null;
     const snapshot = obj(JSON.parse(raw)), team = obj(obj(snapshot.teams)[teamId]);
     if (snapshot.v !== 1 || snapshot.year !== year || team.id !== teamId || !text(team.school) || !text(team.mascot) || team.school !== shortName || `${team.school} ${team.mascot}` !== name || obj(team.rankings).checkedAt !== snapshot.checkedAt) return null;
     return parseSeasonRankings(team.rankings, year, now);
   } catch { return null; }
 }
 export type RankingDiagnostic = {
-  stage: "block-read" | "attempt-read" | "attempt-write" | "membership" | "stats" | "snapshot-validation" | "snapshot-write" | "block-write";
+  stage: "block-read" | "attempt-read" | "attempt-write" | "membership" | "stats" | "games" | "snapshot-validation" | "snapshot-write" | "block-write";
   reason: SourceReason | "source-unavailable" | "snapshot-invalid" | "storage-unavailable";
   httpStatus?: number; sourceBlocked?: true;
 };
-export type SourceTiming = { requestLimitMs: 45000; membershipMs?: number; statsMs?: number; totalMs: number };
-export type RankingsRefreshResult = RefreshResult & { diagnostic?: RankingDiagnostic; sourceTiming?: SourceTiming };
+/** #189 private partial result: yardage refreshed, scoring not. Fixed fields only; no remote text, body or key. */
+export type ScoringDiagnostic = { stage: "games" | "scoring-validation"; reason: SourceReason | "source-unavailable" | "scoring-invalid" | "snapshot-size"; httpStatus?: number };
+export type SourceTiming = { requestLimitMs: 45000; membershipMs?: number; statsMs?: number; gamesMs?: number; totalMs: number };
+export type RankingsRefreshResult = RefreshResult & { diagnostic?: RankingDiagnostic; sourceTiming?: SourceTiming; scoring?: "published" | "unavailable"; scoringDiagnostic?: ScoringDiagnostic };
 function diagnosed(result: RefreshResult, diagnostic: RankingDiagnostic, sourceTiming?: SourceTiming): RankingsRefreshResult {
   console.warn(JSON.stringify({ event: "team_rankings_refresh_failed", diagnostic, ...(sourceTiming ? { sourceTiming } : {}) }));
   return { ...result, diagnostic, ...(sourceTiming ? { sourceTiming } : {}) };
@@ -78,15 +85,15 @@ export async function refreshTeamRankings(env: LeadersEnv, fetcher: typeof fetch
   let sourceTiming: SourceTiming | undefined;
   // Private operation timings only. Each full sourceJson (headers AND body) owns its timer.
   const elapsed = (start: number) => { const ms = monotonic() - start; return Number.isFinite(ms) ? Math.min(3_600_000, Math.max(0, Math.round(ms))) : 0; };
-  const readSource = async (url: string, phase: "membership" | "stats") => {
+  const readSource = async (url: string, phase: "membership" | "stats" | "games") => {
     sourceTiming ??= { requestLimitMs: 45000, totalMs: 0 };
     const controller = new AbortController(), started = monotonic();
     const timer = setTimeout(() => controller.abort(), 45_000);
     try { return await sourceJson(url, env.CFBD_API_KEY!, fetcher, controller.signal); }
     finally {
       clearTimeout(timer);
-      sourceTiming[phase === "membership" ? "membershipMs" : "statsMs"] = elapsed(started);
-      sourceTiming.totalMs = (sourceTiming.membershipMs ?? 0) + (sourceTiming.statsMs ?? 0);
+      sourceTiming[`${phase}Ms`] = elapsed(started);
+      sourceTiming.totalMs = (sourceTiming.membershipMs ?? 0) + (sourceTiming.statsMs ?? 0) + (sourceTiming.gamesMs ?? 0);
     }
   };
   try {
@@ -103,9 +110,30 @@ export async function refreshTeamRankings(env: LeadersEnv, fetcher: typeof fetch
       const stats = await readSource(RANKINGS_URLS[1], "stats");
       stage = "snapshot-validation";
       const checkedAt = new Date(now()).toISOString(), snapshot = createRankingsSnapshot(identity, stats, checkedAt);
+      // #189: one fixed national games read, only after valid legacy yardage. An actual denial propagates to the
+      // existing block path below (blocked, last-good kept, nothing from this generation written). Any other
+      // games, validation or size failure still publishes the yardage with scoring unavailable, never "refreshed".
+      let serialized = JSON.stringify(snapshot), scoring: "published" | "unavailable" = "unavailable", scoringDiagnostic: ScoringDiagnostic | undefined;
+      stage = "games";
+      let games: unknown;
+      try { games = await readSource(RANKINGS_URLS[2], "games"); }
+      catch (error) {
+        if (error instanceof SourceFailure && error.blocked) throw error;
+        const source = error instanceof SourceFailure ? error : null;
+        scoringDiagnostic = { stage: "games", reason: source?.reason ?? "source-unavailable", ...(source?.httpStatus === undefined ? {} : { httpStatus: source.httpStatus }) };
+      }
+      if (!scoringDiagnostic) {
+        try {
+          const byTeam = createScoringRankings(Object.values(snapshot.teams).map(t => ({ id: t.id, school: t.school })), games, checkedAt, EXPECTED_FBS);
+          const candidate = JSON.stringify({ ...snapshot, teams: Object.fromEntries(Object.entries(snapshot.teams).map(([id, t]) => [id, { ...t, rankings: { ...t.rankings, scoring: byTeam[id] ?? null } }])) });
+          if (candidate.length > RANKINGS_MAX_CHARS) scoringDiagnostic = { stage: "scoring-validation", reason: "snapshot-size" };
+          else { serialized = candidate; scoring = "published"; }
+        } catch { scoringDiagnostic = { stage: "scoring-validation", reason: "scoring-invalid" }; }
+      }
       stage = "snapshot-write";
-      await kv.put(RANKINGS_SNAPSHOT_KEY, JSON.stringify(snapshot));
-      return { status: "refreshed", checkedAt, teams: Object.keys(snapshot.teams).length, sourceTiming };
+      await kv.put(RANKINGS_SNAPSHOT_KEY, serialized);
+      if (scoringDiagnostic) console.warn(JSON.stringify({ event: "team_rankings_scoring_unavailable", scoringDiagnostic, ...(sourceTiming ? { sourceTiming } : {}) }));
+      return { status: "refreshed", checkedAt, teams: Object.keys(snapshot.teams).length, sourceTiming, scoring, ...(scoringDiagnostic ? { scoringDiagnostic } : {}) };
     } catch (error) {
       const source = error instanceof SourceFailure ? error : null;
       const observed = source?.httpStatus === undefined ? {} : { httpStatus: source.httpStatus };

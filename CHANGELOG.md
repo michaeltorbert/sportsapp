@@ -1,5 +1,12 @@
 # Saturday Signal releases
 
+## 1.29.0 · 2026-11-21
+
+- Add a fourth FBS statistical-rankings row, Scoring (points per game), with offense (points scored, higher ranks first) and defense allowed (points allowed, lower ranks first). Ranks use exact unrounded comparisons with competition ties among all 138 FBS members; any member without valid completed-game coverage withholds national scoring ranks rather than promoting others.
+- Derive scoring from one added fixed CFBD read of 2026 regular-season FBS games in the existing daily rankings publisher (three source calls instead of two). Only `completed` games count, joined to the same validated membership generation by numeric team ID with exact name cross-checks; FCS opponents count for their FBS side, genuine zero scores count, and upcoming null scores never become zero. Its own completed-games count and basis are shown separately from the unchanged yardage basis.
+- Store scoring as an optional, independently validated sibling inside the existing v1 rankings snapshot. Earlier app versions read the same snapshot with unchanged yardage ranks; earlier snapshots show Scoring unavailable. A non-denial games or validation failure still publishes the yardage generation with scoring unavailable and a private warning; an actual denial keeps the shared permanent block and last good snapshot. No new KV key, cron, attempt or credential.
+- Team-page aggregates now require both the team's own schedule and the scoreboard-merged copy to pass the Duke gate, so an older or mismatched board copy can never remove protection. Existing yardage ranks, leaders, averages, detail, schedules, navigation, alerts and preferences are unchanged; broader #181/#189 remain open.
+
 ## 1.28.0 · 2026-11-20
 
 - Add team-season Defensive leaders after the unchanged yard leaders: total tackles (with solo for a sole leader), sacks with half sacks preserved, and interceptions made. Every tied leader is listed by full name and opens the matching in-app player page.

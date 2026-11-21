@@ -2,7 +2,7 @@
 import { useState, type MouseEvent, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, CloudOff, RefreshCw, Signal, Tv } from "lucide-react";
 import { dukeHidden, type DukePreferences } from "@/lib/duke-visibility";
-import { seasonAggregates, RANKING_ROWS, type RankingKey, type RankingMetric, TEAM_LEADER_ROWS, TEAM_STAT_ROWS, type ScheduleEntry, type ScheduleSection, type TeamSeason, type TeamSeasonTeam, type ThirdDownConversions } from "@/lib/team-season";
+import { protectedAggregates, RANKING_ROWS, type RankingKey, type RankingMetric, TEAM_LEADER_ROWS, TEAM_STAT_ROWS, type ScheduleEntry, type ScheduleSection, type TeamSeason, type TeamSeasonTeam, type ThirdDownConversions } from "@/lib/team-season";
 // Relative, like the page's own import, so page tests bundle the real game screen helpers.
 import { gameDay } from "./game-screen";
 import { leadersHref } from "@/lib/leaders-browser";
@@ -112,14 +112,17 @@ function TeamDetails({ season }: { season: TeamSeason }) {
 }
 function TeamRankings({ season }: { season: TeamSeason }) {
   const rankings = season.rankings;
+  // #189: scoring has its own completed-games denominator; when it is unavailable the yardage rows stay as they are.
+  const scoring = rankings?.scoring ?? null;
   return <section className="team-block team-rankings" aria-labelledby="team-rankings-h"><h2 id="team-rankings-h">FBS statistical rankings</h2>
     {!rankings ? <div className="rank-state"><strong>Rankings unavailable</strong><p>They couldn’t be loaded. The rest of this page is still available.</p></div> : <>
-      <p className="rank-basis">{rankings.year} season · yards per game<br />{rankings.games === null ? "Games reported unavailable" : `${rankings.games} games reported by CFBD for ${season.team.shortName}`}</p>
+      <p className="rank-basis">{rankings.year} season · per-game averages<br />{rankings.games === null ? "Yardage: games reported unavailable" : `Yardage: ${rankings.games} games reported by CFBD for ${season.team.shortName}`}<br />{scoring ? `Scoring: ${scoring.games} completed regular-season ${scoring.games === 1 ? "game" : "games"}` : "Scoring: completed games unavailable"}</p>
       {rankings.stale && <p className="rank-note">Refresh delayed — showing the last checked data.</p>}
-      <dl className="rank-list">{RANKING_ROWS.map(([key, label]) => <div className="rank-row" key={key}><dt>{label}</dt><dd><RankingValue metric={rankings.metrics[key]} side="Offense" /><RankingValue metric={rankings.metrics[`${key}Opponent` as RankingKey]} side="Defense · allowed" /></dd></div>)}</dl>
-      {Object.values(rankings.metrics).some(metric => !metric || metric.rank === null) && <p className="rank-note">Some statistics are incomplete. National ranks are shown only when all {rankings.population} FBS teams have data for that statistic.</p>}
-      <p className="rank-note">Higher offense and lower allowed yardage rank first.</p>
-      <details className="rank-explainer"><summary>How these rankings work</summary><p>Saturday Signal calculates statistical ranks among {rankings.population} FBS teams from CFBD’s {rankings.year} season totals divided by each team’s reported games. Equal unrounded averages share a rank; the next rank skips tied places. These are statistical ranks, not poll rankings.</p><p>CFBD’s game coverage and net passing definition may differ from the ESPN regular-season averages above. No regular-season or postseason-only scope is claimed for this section.</p></details>
+      <dl className="rank-list">{RANKING_ROWS.map(([key, label]) => <div className="rank-row" key={key}><dt>{label}</dt><dd><RankingValue metric={rankings.metrics[key]} side="Offense" /><RankingValue metric={rankings.metrics[`${key}Opponent` as RankingKey]} side="Defense · allowed" /></dd></div>)}
+        <div className="rank-row"><dt>Scoring (points per game)</dt><dd><RankingValue metric={scoring?.offense ?? null} side="Offense" /><RankingValue metric={scoring?.defense ?? null} side="Defense · allowed" /></dd></div></dl>
+      {[...Object.values(rankings.metrics), ...(scoring ? [scoring.offense, scoring.defense] : [])].some(metric => !metric || metric.rank === null) && <p className="rank-note">Some statistics are incomplete. National ranks are shown only when all {rankings.population} FBS teams have data for that statistic.</p>}
+      <p className="rank-note">Higher offense values and lower allowed values rank first.</p>
+      <details className="rank-explainer"><summary>How these rankings work</summary><p>Saturday Signal calculates statistical ranks among {rankings.population} FBS teams. Yardage uses CFBD’s {rankings.year} season totals divided by each team’s reported games. Scoring uses the points each team scored and allowed in its completed {rankings.year} regular-season games reported by CFBD, including games against FCS opponents, divided by those games. Equal unrounded averages share a rank; the next rank skips tied places. These are statistical ranks, not poll rankings.</p><p>CFBD’s game coverage and net passing definition may differ from the ESPN regular-season averages above. No regular-season or postseason-only scope is claimed for the yardage rows.</p></details>
       <p className="team-fresh">Rankings checked {checkedTime(rankings.checkedAt)}. Source update time unknown.</p>
     </>}
   </section>;
@@ -171,12 +174,14 @@ function DefenseLeaders({ teamId, shortName, year, defense, prefs, online, playe
 
 export type TeamScreenProps = {
   playerLink?: PlayerLinkFactory; teamId: string; season: TeamSeason | null; pending: boolean; failed: boolean; online: boolean; prefs: DukePreferences | null;
+  /** #189 S4: the team's own validated schedule before board copies are merged; it must also permit every aggregate. */
+  rawSeason?: TeamSeason | null;
   defense?: TeamDefenseProp;
   back: { title: string; detail: string; label: string }; onBack: () => void; onRetry: () => void;
   gameHref: (id: string) => string; onOpenGame: (id: string) => void; notice?: ReactNode;
 };
 /** A team's current season: record, yard leaders, averages, supported detail and the published schedule. */
-export function TeamScreen({ teamId, season, pending, failed, online, prefs, back, onBack, onRetry, gameHref, onOpenGame, notice, playerLink, defense }: TeamScreenProps) {
+export function TeamScreen({ teamId, season, rawSeason, pending, failed, online, prefs, back, onBack, onRetry, gameHref, onOpenGame, notice, playerLink, defense }: TeamScreenProps) {
   const backButton = <button type="button" className="back-button" data-focus-key="back" aria-label={back.label} onClick={onBack}><ChevronLeft size={22} aria-hidden="true" /><span className="back-text" aria-hidden="true"><span>{back.title}</span><small>{back.detail}</small></span></button>;
   const bar = <header className="game-bar">{backButton}<span className="team-bar-title" aria-hidden="true">{season?.team.abbreviation}</span><span className="bar-brand" aria-hidden="true"><span className="brand-icon"><Signal size={17} strokeWidth={3} /></span></span></header>;
   if (!season) {
@@ -189,7 +194,7 @@ export function TeamScreen({ teamId, season, pending, failed, online, prefs, bac
       </div>
     </div>;
   }
-  const aggregates = seasonAggregates(season, prefs), team = season.team;
+  const aggregates = protectedAggregates(season, rawSeason, prefs), team = season.team;
   const nextId = [...(season.regular.status === "complete" ? season.regular.entries : []), ...(season.postseason.status === "complete" ? season.postseason.entries : [])].find(entry => entry.game.state === "upcoming" && !dukeHidden(entry.game, prefs))?.game.id;
   const record = !aggregates.shown
     ? <span className="team-record">Record <b className="withheld">{aggregates.reason === "checking" ? "checking…" : aggregates.reason === "hidden" ? "hidden" : "not shown yet"}</b></span>

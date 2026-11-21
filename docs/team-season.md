@@ -78,8 +78,14 @@ The existing preferences and `dukeHidden`/`dukeStarted` are reused unchanged, an
 games are never passed to the Duke observation writer.
 
 - A schedule game that is also on the scoreboard uses the scoreboard's copy (same event, same
-  teams), so the fresher actual state decides (`withBoardGames`). Otherwise the schedule's own
+  teams) for its row, so the fresher actual state decides (`withBoardGames`). Otherwise the schedule's own
   source state decides. Nothing is predicted from the clock or the scheduled kickoff time.
+- Since 1.29.0 (#189) the page's aggregates require **both** the board-merged season and the
+  team's own validated schedule to pass (`protectedAggregates`), and the defensive-pack request
+  uses the same gate. A board copy can add protection but never remove it: an older or
+  mismatched upcoming board copy cannot unhide a started hidden Duke game in the raw schedule.
+  A raw schedule that still says live may briefly withhold aggregates after the board reports
+  final, until the schedule refreshes.
 - A Duke game hidden by the settings shows only its date on any team's schedule: no
   opponent, status, score, result or link. Its game screen is the generic unavailable one.
 - The record, leaders, averages, statistical ranks and season detail are withheld on any team's page whose schedule contains a hidden
@@ -162,6 +168,50 @@ Public `/api/team` reads leaders and ranks concurrently from existing KV within 
 `POST /api/internal/team-rankings-refresh` requires the existing refresh-token secret before storage/source access, an actually empty byte stream within 1s and no query parameters. It changes no leaders slot, source key, alert binding, subscription or preference. The external reviewed operator may configure only CFBD_REFRESH_TOKEN and call this fixed endpoint once per candidate; no force/replay path exists.
 
 Minimal real fixture provenance is recorded in `tests/fixtures/cfbd-team-rankings-provenance.json`; synthetic population/fault tests are labeled. Current full national independent derivation and direct Texas/UNC comparisons are external acceptance evidence. Local fixtures/browser checks do not prove hosted access, production display or native-device behavior. Issues 189/181 stay open for broader player coverage/navigation and other original outcomes; player issue 190 and leaders-browser issue 192 remain distinct.
+
+### Scoring offense and defense (#189, 1.29.0 candidate)
+
+A fourth row, **Scoring (points per game)**, follows the unchanged three yardage rows: offense is points
+scored per game (higher ranks first) and defense allowed is points allowed per game (lower ranks first).
+The section basis now reads "per-game averages", keeps the yardage line ("Yardage: N games reported by
+CFBD") and adds the scoring row's own cue ("Scoring: N completed regular-season games").
+
+- **Source.** The same daily rankings publisher adds one fixed read,
+  `/games?year=2026&seasonType=regular&classification=fbs`, after membership and season stats have produced
+  a valid yardage generation (`lib/cfbd-scoring-rankings.ts`). No points field exists in the season-stats
+  response, so scoring is calculated from completed game scores. There is no per-team or public CFBD query.
+- **Rules.** Every row needs a unique positive game ID, season 2026, `seasonType` regular and a boolean
+  `completed`. Only `completed === true` counts; upcoming/in-progress null scores never become zero. Completed
+  rows need integer scores 0..300 and distinct positive team IDs. A member side joins by numeric ID with an
+  exact school-name cross-check and `fbs` classification; an FCS or other non-member opponent counts for its
+  FBS side. A duplicate game ID, conflicting identity, unknown FBS ID, malformed relevant row or more than 20
+  games stops the whole scoring derivation. A member with no completed game withholds every national scoring
+  rank (coverage below 138); values remain. Exact integer cross-products order teams before display
+  rounding, with competition ties across different game counts.
+- **Snapshot compatibility.** Scoring is an optional sibling `rankings.scoring`
+  (`basis: "regular-completed"`, year, own `games`, population, the generation's `checkedAt`, offense and
+  defense metrics) inside the unchanged `team-rankings:v1:2026` key. The six yardage metrics, their
+  common `games`, factory and parser are unchanged. The 1.28.0 parser (verbatim in
+  `tests/fixtures/legacy-ranking-parser-1.28.0.ts.txt`) strips the child and reads identical yardage; the
+  new parser reads older snapshots with `scoring: null`, and an invalid child is only null. A serialized
+  generation over the reader's 600,000-character bound publishes without scoring.
+- **Failure behavior.** A non-denial games failure (HTTP error, transport, abort, size, JSON) or scoring
+  validation/size failure still publishes the yardage generation with `scoring: "unavailable"` and a private
+  fixed `scoringDiagnostic`/`team_rankings_scoring_unavailable` warning; it never reports scoring refreshed.
+  An actual 401/403/429/redirect/challenge on the games read persists `cfbd:v1:blocked`, returns blocked
+  (or failed storage if the block cannot be written), keeps the last good snapshot and stops later provider
+  work. The games read has its own 45s operation allowance and the 8,000,000-byte limit; `gamesMs` is added
+  to private `sourceTiming.totalMs` with the existing field names retained.
+- **Budget.** Normal production use is now 248 leader reads plus 93 rank reads per 31-day month (three per
+  daily slot instead of two), 341 before probes, preview/bootstrap publication and other consumers (the
+  previous figure was 310). This is pacing, not an account quota guarantee. No KV key, cron, attempt slot,
+  credential, billing or reset change.
+- **Evidence and limits.** Genuine Texas/UNC rows (`tests/fixtures/cfbd-scoring-2026-sample.json` and its
+  provenance) reproduce the independently verified November 21 capture: Texas 302/178 over 10 games, UNC
+  258/221 over 10 including the FCS game 401858218. National ranks were verified externally from the
+  complete capture (all 138 members). CFBD's game coverage and completion flags can change later; a capture
+  is not universal coverage, and the underlying sports-update time is unknown. Local tests and intercepted
+  browser routes are not hosted proof.
 
 ### Controlled failure diagnostics
 
