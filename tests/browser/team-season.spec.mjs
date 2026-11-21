@@ -536,7 +536,10 @@ for (const id of ['251', '153']) for (const [width, zoom] of [[320, false], [390
     await expect(section).toContainText(/Rankings checked Nov 21(?:,| at) 12:01 AM ET\. Source update time unknown\./);
     expect(await noOverflow(page)).toBe(true);
     expect(overlaps(await textBoxes(section.locator('.rank-row dt, .rank-cell > span, .rank-cell b, .rank-cell small')))).toEqual([]);
-    await page.screenshot({ path: info.outputPath(`scoring-${id}-${width}${zoom ? '-zoom200' : ''}.png`), fullPage: true, animations: 'disabled' });
+    // Full-page capture at one image pixel per CSS pixel (Playwright `scale: 'css'`): at 3x device density the
+    // long 200%-zoom page exceeds the renderer's 32767-pixel screenshot limit on Linux WebKit. Layout, viewport,
+    // zoom and fonts are unchanged; only the PNG's pixel density is lower.
+    await page.screenshot({ path: info.outputPath(`scoring-${id}-${width}${zoom ? '-zoom200' : ''}.png`), fullPage: true, animations: 'disabled', scale: 'css' });
     await section.getByText('How these rankings work', { exact: true }).click();
     await expect(section).toContainText('including games against FCS opponents');
     await expect(section).toContainText('statistical ranks, not poll rankings');
