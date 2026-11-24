@@ -1,5 +1,10 @@
 # Saturday Signal releases
 
+## 1.29.1 · 2026-11-24
+
+- Team rankings can recover at the next scheduled refresh after a temporary data-source failure. Only the 05:00 UTC scheduled publisher, when its first (FBS membership) read gets a non-denial HTTP 502, records a strict same-day receipt; the 17:00 UTC scheduled run that same UTC day may then make one recovery generation with the unchanged three fixed reads. Worst case is four source calls that day instead of three.
+- The existing daily attempt marker, snapshot schema, sources, limits, ranking/scoring math, UI and denial handling are unchanged. Two additive KV keys hold the receipt and its one-time consumption, reserved before any source call. Operator refreshes, public views, other failures, denials and the recovery itself never create an opportunity; the already consumed November 24 slot does not qualify. KV pacing remains non-atomic. Broader #181/#189 remain open.
+
 ## 1.29.0 · 2026-11-21
 
 - Add a fourth FBS statistical-rankings row, Scoring (points per game), with offense (points scored, higher ranks first) and defense allowed (points allowed, lower ranks first). Ranks use exact unrounded comparisons with competition ties among all 138 FBS members; any member without valid completed-game coverage withholds national scoring ranks rather than promoting others.

@@ -123,3 +123,74 @@ test('full compiled scheduled entry publishes shared leaders with isolated KV, n
   await worker.scheduled({scheduledTime:Date.now(),cron:'0 5,17 * * *'});assert.deepEqual(calls,expected,'same current slot, historical admission and privacy slots make zero repeated source calls');
  }finally{await mf.dispose();}
 });
+
+// ---- 1.29.1 E-S5-502. SYNTHETIC source answers and controller times; never live-source or hosted-cron proof. ----
+const DAY=86400000,HOUR=3600000,CRON='0 5,17 * * *';
+const RANKING_URLS=['https://api.collegefootballdata.com/teams/fbs?year=2026','https://api.collegefootballdata.com/stats/season?year=2026&classification=fbs','https://api.collegefootballdata.com/games?year=2026&seasonType=regular&classification=fbs'];
+const rankingSample=JSON.parse(readFileSync(new URL('./fixtures/cfbd-team-rankings-2026-sample.json',import.meta.url),'utf8'));
+// Genuine Texas/UNC sample rows plus an explicitly SYNTHETIC 136-team population, as in the unit suite.
+function rankingSource(){
+ const ids=structuredClone(rankingSample.identities),rows=structuredClone(rankingSample.rows);
+ for(let i=0;i<136;i++){const school=`Synthetic ${i}`;ids.push({id:10000+i,school,mascot:'Testers',classification:'fbs'});for(const k of ['games','totalYards','netPassingYards','rushingYards','totalYardsOpponent','netPassingYardsOpponent','rushingYardsOpponent'])rows.push({season:2026,team:school,statName:k,statValue:k==='games'?6:3000+i});}
+ const games=ids.map((t,i)=>({id:800000000+i,season:2026,seasonType:'regular',completed:true,homeId:t.id,homeTeam:t.school,homeClassification:'fbs',homePoints:20+(i%30),awayId:900000+i,awayTeam:`Synthetic FCS ${i}`,awayClassification:'fcs',awayPoints:i%17}));
+ return {ids,rows,games};
+}
+// The worker's own clock is real time; controller times are built on the same real UTC day.
+const nearMidnight=()=>{const into=Date.now()%DAY;return into<120000||into>DAY-120000;};
+
+test('1.29.1 actual scheduled source: SYNTHETIC failed recovery-receipt write keeps the 502 cause, signals storage-unavailable and stops the browser refresh',async t=>{
+ if(nearMidnight()){t.skip('within two minutes of UTC midnight');return;}
+ const output=await build({entryPoints:[root+'/worker/index.ts'],bundle:true,platform:'browser',format:'esm',write:false,plugins:[{name:'offline-fetch-renderer-only',setup(b){b.onResolve({filter:/^vinext\/server\/app-router-entry$/},()=>({path:'offline-app',namespace:'offline'}));b.onLoad({filter:/.*/,namespace:'offline'},()=>({contents:'export default {fetch(){return new Response("offline")}}',loader:'js'}));}}]});
+ const worker=(await import('data:text/javascript;base64,'+Buffer.from(output.outputFiles[0].text).toString('base64'))).default;
+ const now=Date.now(),dayStart=Math.floor(now/DAY)*DAY;
+ // Leaders' own existing pacing marker makes it skip; this isolates the rankings stop.
+ const map=new Map([['season-leaders:v1:2026:regular:attempt',String(Math.floor(now/43200000)+1)]]),logs=[];let calls=0;
+ const kv={async get(k){return map.get(k)??null;},async put(k,v){if(k==='team-rankings:v1:2026:recovery-eligible')throw Error('private-worker-canary');map.set(k,v);}};
+ const savedFetch=globalThis.fetch,savedLog=console.log,savedWarn=console.warn;
+ globalThis.fetch=async()=>{calls++;return new Response(JSON.stringify({private:'private-worker-canary'}),{status:502,headers:{'content-type':'application/json'}});};
+ console.log=line=>logs.push(JSON.parse(line));console.warn=()=>{};
+ try{
+  let task;worker.scheduled({cron:CRON,scheduledTime:dayStart+5*HOUR+4878},{SEASON_LEADERS_KV:kv,CFBD_API_KEY:'private-worker-canary'},{waitUntil(p){task=p;}});await task;
+  assert.equal(calls,1);assert.deepEqual(logs.map(l=>l.event),['season_leaders_refresh','team_rankings_refresh'],'browser refresh stopped');
+  assert.equal(logs[0].reason,'refresh-slot');assert.deepEqual([logs[1].status,logs[1].reason],['failed','storage-unavailable']);
+  assert.deepEqual(logs[1].diagnostic,{stage:'membership',reason:'source-response',httpStatus:502});assert.deepEqual(logs[1].recoveryDiagnostic,{stage:'eligibility-write',reason:'storage-unavailable'});
+  assert.equal(map.get('team-rankings:v1:2026:attempt'),String(Math.floor(now/DAY)));assert.equal(map.has('team-rankings:v1:2026:recovery-eligible'),false);assert.ok(!JSON.stringify(logs).includes('private-worker-canary'));
+ }finally{globalThis.fetch=savedFetch;console.log=savedLog;console.warn=savedWarn;}
+});
+
+// npm test builds first. The exact emitted scheduled hook carries the real controller context into rankings.
+test('1.29.1 full compiled scheduled entry: SYNTHETIC 05 membership502 then jittered same-day 17 recovers once with three calls; repeat 17 has zero egress',{timeout:30000},async t=>{
+ if(nearMidnight()){t.skip('within two minutes of UTC midnight');return;}
+ const moduleRoot=root+'/dist/server';const names=readdirSync(moduleRoot,{recursive:true}).filter(n=>n.endsWith('.js'));
+ names.sort((a,b)=>a==='index.js'?-1:b==='index.js'?1:a.localeCompare(b));
+ const modules=names.map(n=>({type:'ESModule',path:moduleRoot+'/'+n,contents:readFileSync(moduleRoot+'/'+n,'utf8')}));
+ const source=rankingSource(),calls=[];let membership502=true;
+ const mf=new Miniflare(convertV4MiniflareOptions({name:'compiled-rankings-recovery-offline',modules,modulesRoot:moduleRoot,kvNamespaces:['SEASON_LEADERS_KV'],bindings:{CFBD_API_KEY:'synthetic-scheduled-only'},compatibilityDate:'2026-09-01',compatibilityFlags:['nodejs_compat'],cf:false,telemetry:{enabled:false},outboundService:request=>{
+  calls.push(request.url);assert.ok(RANKING_URLS.includes(request.url),`unexpected source ${request.url}`);assert.equal(request.headers.get('authorization'),'Bearer synthetic-scheduled-only');
+  if(request.url===RANKING_URLS[0]&&membership502)return new SyntheticResponse(JSON.stringify({error:'synthetic'}),{status:502,headers:{'content-type':'application/json'}});
+  const body=request.url===RANKING_URLS[0]?source.ids:request.url===RANKING_URLS[1]?source.rows:source.games;
+  return new SyntheticResponse(JSON.stringify(body),{headers:{'content-type':'application/json'}});
+ }}));
+ try{
+  const kv=await mf.getKVNamespace('SEASON_LEADERS_KV'),now=Date.now(),slot=Math.floor(now/DAY),dayStart=slot*DAY;
+  // Other products' own existing pacing markers make them skip with zero egress; rankings is isolated.
+  await kv.put('season-leaders:v1:2026:regular:attempt',String(Math.floor(now/43200000)+1));
+  await kv.put('leaders-browser:v1:2025:attempt',String(now));await kv.put('leaders-browser:v1:2026:privacy:attempt',String(now));
+  const worker=await mf.getWorker();
+  await worker.scheduled({cron:CRON,scheduledTime:dayStart+5*HOUR+4878});
+  assert.deepEqual(calls,[RANKING_URLS[0]],'failed primary costs exactly one call');
+  const receipt=JSON.parse(await kv.get('team-rankings:v1:2026:recovery-eligible'));
+  assert.deepEqual([receipt.v,receipt.slot,receipt.phase,receipt.stage,receipt.reason,receipt.httpStatus],[1,slot,'primary05','membership','source-response',502]);
+  assert.equal(await kv.get('team-rankings:v1:2026:attempt'),String(slot));assert.equal(await kv.get('team-rankings:v1:2026:recovery'),null);assert.equal(await kv.get('team-rankings:v1:2026'),null);
+  membership502=false;
+  await worker.scheduled({cron:CRON,scheduledTime:dayStart+17*HOUR+4878});
+  assert.deepEqual(calls,[RANKING_URLS[0],...RANKING_URLS],'one recovery generation, unchanged three fixed reads');
+  const raw=await kv.get('team-rankings:v1:2026');assert.ok(raw);const snapshot=JSON.parse(raw);
+  assert.equal(snapshot.v,1);assert.equal(Object.keys(snapshot.teams).length,138);assert.equal(snapshot.teams['251'].rankings.metrics.totalYards.total,2168);assert.ok(snapshot.teams['251'].rankings.scoring,'scoring child published');
+  assert.ok(!raw.includes('recovery')&&!raw.includes('diagnostic'));
+  assert.equal(await kv.get('team-rankings:v1:2026:attempt'),String(slot),'primary marker unchanged');assert.equal(await kv.get('team-rankings:v1:2026:recovery'),String(slot));
+  await worker.scheduled({cron:CRON,scheduledTime:dayStart+17*HOUR+9000});
+  await worker.scheduled({cron:CRON,scheduledTime:dayStart+5*HOUR+9000});
+  assert.equal(calls.length,4,'repeated 17 and duplicate 05 deliveries make zero source calls');
+ }finally{await mf.dispose();}
+});

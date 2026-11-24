@@ -5,6 +5,34 @@ import { createScoringRankings, SCORING_GAMES_URL } from "./cfbd-scoring-ranking
 export const RANKINGS_YEAR = 2026, RANKINGS_INTERVAL_MS = 86_400_000, RANKINGS_MAX_AGE_MS = 259_200_000;
 export const RANKINGS_SNAPSHOT_KEY = `team-rankings:v1:${RANKINGS_YEAR}`;
 const ATTEMPT_KEY = `${RANKINGS_SNAPSHOT_KEY}:attempt`, EXPECTED_FBS = 138;
+// 1.29.1 (E-S5-502): additive keys only. The primary attempt key/value above is unchanged.
+// A receipt is minted only by a trusted scheduled 05 UTC primary whose own membership read got a
+// non-denial HTTP 502; the separate consumption key admits at most ONE same-UTC-day 17 UTC recovery.
+export const RANKINGS_ELIGIBLE_KEY = `${RANKINGS_SNAPSHOT_KEY}:recovery-eligible`, RANKINGS_RECOVERY_KEY = `${RANKINGS_SNAPSHOT_KEY}:recovery`;
+export const RANKINGS_CRON = "0 5,17 * * *";
+/** Trusted controller context from the Worker's scheduled event only. Operator/public paths never pass one. */
+export type RankingsSchedule = { cron: unknown; scheduledTime: unknown };
+type SchedulePhase = "primary05" | "recovery17";
+/** Exact configured cron, finite controller time on the current UTC day, and its UTC hour. Jitter stays in-hour. */
+function schedulePhase(schedule: RankingsSchedule | undefined, nowMs: number): SchedulePhase | null {
+  if (!schedule || schedule.cron !== RANKINGS_CRON || !Number.isFinite(nowMs)) return null;
+  const t = schedule.scheduledTime;
+  if (typeof t !== "number" || !Number.isFinite(t) || t <= 0 || Math.floor(t / RANKINGS_INTERVAL_MS) !== Math.floor(nowMs / RANKINGS_INTERVAL_MS)) return null;
+  const hour = new Date(t).getUTCHours();
+  return hour === 5 ? "primary05" : hour === 17 ? "recovery17" : null;
+}
+const ELIGIBLE_FIELDS = ["v", "slot", "at", "phase", "stage", "reason", "httpStatus"].sort().join();
+/** Strict bounded v1 receipt for exactly this slot; anything else (legacy, malformed, future, other day) fails closed. */
+function eligibleFor(raw: string | null, slot: number, nowMs: number): boolean {
+  if (raw === null || raw.length > 256) return false;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+    const r = parsed as Record<string, unknown>;
+    return Object.keys(r).sort().join() === ELIGIBLE_FIELDS && r.v === 1 && r.slot === slot && typeof r.at === "number" && Number.isSafeInteger(r.at)
+      && Math.floor(r.at / RANKINGS_INTERVAL_MS) === slot && r.at <= nowMs && r.phase === "primary05" && r.stage === "membership" && r.reason === "source-response" && r.httpStatus === 502;
+  } catch { return false; }
+}
 /** The public reader's bound; a generation that would exceed it publishes without its optional scoring child. */
 export const RANKINGS_MAX_CHARS = 600_000;
 // Fixed reads in order: membership, season stats, then (#189) the national regular-season games for scoring.
@@ -66,19 +94,27 @@ export async function readTeamRankings(kv: LeadersKV | undefined, teamId: string
   } catch { return null; }
 }
 export type RankingDiagnostic = {
-  stage: "block-read" | "attempt-read" | "attempt-write" | "membership" | "stats" | "games" | "snapshot-validation" | "snapshot-write" | "block-write";
+  stage: "block-read" | "attempt-read" | "attempt-write" | "recovery-read" | "recovery-write" | "membership" | "stats" | "games" | "snapshot-validation" | "snapshot-write" | "block-write";
   reason: SourceReason | "source-unavailable" | "snapshot-invalid" | "storage-unavailable";
   httpStatus?: number; sourceBlocked?: true;
 };
+/** A known 502 whose eligibility receipt could not be stored: the original diagnostic is kept alongside this. */
+export type RecoveryDiagnostic = { stage: "eligibility-write"; reason: "storage-unavailable" };
 /** #189 private partial result: yardage refreshed, scoring not. Fixed fields only; no remote text, body or key. */
 export type ScoringDiagnostic = { stage: "games" | "scoring-validation"; reason: SourceReason | "source-unavailable" | "scoring-invalid" | "snapshot-size"; httpStatus?: number };
 export type SourceTiming = { requestLimitMs: 45000; membershipMs?: number; statsMs?: number; gamesMs?: number; totalMs: number };
-export type RankingsRefreshResult = RefreshResult & { diagnostic?: RankingDiagnostic; sourceTiming?: SourceTiming; scoring?: "published" | "unavailable"; scoringDiagnostic?: ScoringDiagnostic };
-function diagnosed(result: RefreshResult, diagnostic: RankingDiagnostic, sourceTiming?: SourceTiming): RankingsRefreshResult {
-  console.warn(JSON.stringify({ event: "team_rankings_refresh_failed", diagnostic, ...(sourceTiming ? { sourceTiming } : {}) }));
-  return { ...result, diagnostic, ...(sourceTiming ? { sourceTiming } : {}) };
+export type RankingsRefreshResult = RefreshResult & { diagnostic?: RankingDiagnostic; recoveryDiagnostic?: RecoveryDiagnostic; sourceTiming?: SourceTiming; scoring?: "published" | "unavailable"; scoringDiagnostic?: ScoringDiagnostic; attempt?: "recovery" };
+function diagnosed(result: RefreshResult, diagnostic: RankingDiagnostic, sourceTiming?: SourceTiming, recoveryDiagnostic?: RecoveryDiagnostic): RankingsRefreshResult {
+  const recovery = recoveryDiagnostic ? { recoveryDiagnostic } : {};
+  console.warn(JSON.stringify({ event: "team_rankings_refresh_failed", diagnostic, ...recovery, ...(sourceTiming ? { sourceTiming } : {}) }));
+  return { ...result, diagnostic, ...recovery, ...(sourceTiming ? { sourceTiming } : {}) };
 }
-export async function refreshTeamRankings(env: LeadersEnv, fetcher: typeof fetch = fetch, now = () => Date.now(), monotonic = () => performance.now()): Promise<RankingsRefreshResult> {
+/**
+ * `schedule` is supplied only by the Worker's scheduled handler. Without it (operator POST, tests, legacy callers)
+ * the ordinary daily primary behaves exactly as before but can never mint or consume a recovery opportunity.
+ * KV pacing remains non-atomic: no exactly-once or account-wide quota guarantee.
+ */
+export async function refreshTeamRankings(env: LeadersEnv, fetcher: typeof fetch = fetch, now = () => Date.now(), monotonic = () => performance.now(), schedule?: RankingsSchedule): Promise<RankingsRefreshResult> {
   const kv = env.SEASON_LEADERS_KV;
   if (!kv || !env.CFBD_API_KEY) return { status: "failed", reason: "configuration" };
   let stage: RankingDiagnostic["stage"] = "block-read";
@@ -96,13 +132,8 @@ export async function refreshTeamRankings(env: LeadersEnv, fetcher: typeof fetch
       sourceTiming.totalMs = (sourceTiming.membershipMs ?? 0) + (sourceTiming.statsMs ?? 0) + (sourceTiming.gamesMs ?? 0);
     }
   };
-  try {
-    if (await cfbdBlocked(kv)) return { status: "blocked", reason: "source-blocked" };
-    stage = "attempt-read";
-    const slot = Math.floor(now() / RANKINGS_INTERVAL_MS), prior = await kv.get(ATTEMPT_KEY);
-    if (prior && Number(prior) >= slot) return { status: "skipped", reason: "refresh-slot" };
-    stage = "attempt-write";
-    await kv.put(ATTEMPT_KEY, String(slot));
+  // One unchanged generation body shared by the primary and the single recovery. Only the primary may mint.
+  const generate = async (slot: number, mint: boolean): Promise<RankingsRefreshResult> => {
     try {
       stage = "membership";
       const identity = await readSource(RANKINGS_URLS[0], "membership");
@@ -146,8 +177,42 @@ export async function refreshTeamRankings(env: LeadersEnv, fetcher: typeof fetch
         return diagnosed({ status: "blocked", reason: "source-blocked" }, { stage: failureStage, reason: source.reason, ...observed }, sourceTiming);
       }
       const storage = stage === "snapshot-write";
-      return diagnosed({ status: "failed", reason: storage ? "storage-unavailable" : "source-unavailable" }, { stage, reason: storage ? "storage-unavailable" : stage === "snapshot-validation" ? "snapshot-invalid" : source?.reason ?? "source-unavailable", ...observed }, sourceTiming);
+      const diagnostic: RankingDiagnostic = { stage, reason: storage ? "storage-unavailable" : stage === "snapshot-validation" ? "snapshot-invalid" : source?.reason ?? "source-unavailable", ...observed };
+      // E-S5-502: only this exact non-denial membership failure of a trusted 05 primary is recoverable.
+      const at = Math.floor(now());
+      // A receipt binds this slot; a clock outside it (e.g. day rollover mid-read) simply mints nothing.
+      if (mint && stage === "membership" && source && !source.blocked && source.reason === "source-response" && source.httpStatus === 502
+        && Number.isSafeInteger(at) && Math.floor(at / RANKINGS_INTERVAL_MS) === slot) {
+        try {
+          await kv.put(RANKINGS_ELIGIBLE_KEY, JSON.stringify({ v: 1, slot, at, phase: "primary05", stage: "membership", reason: "source-response", httpStatus: 502 }));
+        } catch {
+          // Keep the source cause visible AND stop the Worker's later products, as for any storage failure.
+          return diagnosed({ status: "failed", reason: "storage-unavailable" }, diagnostic, sourceTiming, { stage: "eligibility-write", reason: "storage-unavailable" });
+        }
+      }
+      return diagnosed({ status: "failed", reason: storage ? "storage-unavailable" : "source-unavailable" }, diagnostic, sourceTiming);
     }
+  };
+  try {
+    const nowMs = now(), phase = schedulePhase(schedule, nowMs);
+    // Legacy and common denial markers override every admission, including recovery.
+    if (await cfbdBlocked(kv)) return { status: "blocked", reason: "source-blocked" };
+    stage = "attempt-read";
+    const slot = Math.floor(nowMs / RANKINGS_INTERVAL_MS), prior = await kv.get(ATTEMPT_KEY);
+    if (prior && Number(prior) >= slot) {
+      // Not a reset or replay: the consumed primary stays consumed. No extra KV reads outside a trusted 17 run.
+      if (phase !== "recovery17" || prior !== String(slot)) return { status: "skipped", reason: "refresh-slot" };
+      stage = "recovery-read";
+      const eligible = await kv.get(RANKINGS_ELIGIBLE_KEY), consumed = await kv.get(RANKINGS_RECOVERY_KEY);
+      const unused = consumed === null || (/^\d{1,10}$/.test(consumed) && Number(consumed) < slot);
+      if (!unused || !eligibleFor(eligible, slot, nowMs)) return { status: "skipped", reason: "refresh-slot" };
+      stage = "recovery-write";
+      await kv.put(RANKINGS_RECOVERY_KEY, String(slot)); // Reserved before any source egress; never renewed.
+      return { ...(await generate(slot, false)), attempt: "recovery" };
+    }
+    stage = "attempt-write";
+    await kv.put(ATTEMPT_KEY, String(slot));
+    return await generate(slot, phase === "primary05");
   } catch { return diagnosed({ status: "failed", reason: "storage-unavailable" }, { stage, reason: "storage-unavailable" }, sourceTiming); }
 }
 export async function handleRankingsRefresh(request: Request, env: LeadersEnv, fetcher: typeof fetch = fetch): Promise<Response> {
