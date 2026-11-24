@@ -35,6 +35,44 @@ function eligibleFor(raw: string | null, slot: number, nowMs: number): boolean {
 }
 /** The public reader's bound; a generation that would exceed it publishes without its optional scoring child. */
 export const RANKINGS_MAX_CHARS = 600_000;
+// 1.29.2 operator recovery. TEMPORARY legacy admission for the single reviewed production observation: the
+// 2026-11-24 05 UTC primary (old e0a68b0 code) spent its attempt on a non-denial membership HTTP 502 and, being
+// old code, wrote no receipt. Self-expires at the UTC midnight that begins 2026-11-25. Remove in the next routine release.
+export const RANKINGS_LEGACY_DAY_START = Date.UTC(2026, 10, 24), RANKINGS_LEGACY_DAY_END = Date.UTC(2026, 10, 25);
+/** Production workers.dev origin. Cloudflare routes by hostname, so preview/local never see this as their own URL. */
+export const RANKINGS_PRODUCTION_ORIGIN = "https://saturday-signal.scythe-wildflower.workers.dev";
+export type RecoveryAdmission = "receipt" | "legacy-2026-11-24";
+function legacyAdmitted(production: boolean, slot: number, nowMs: number): boolean {
+  return production && nowMs >= RANKINGS_LEGACY_DAY_START && nowMs < RANKINGS_LEGACY_DAY_END && slot === RANKINGS_LEGACY_DAY_START / RANKINGS_INTERVAL_MS;
+}
+/**
+ * Operator recovery only: no stored snapshot, or a genuine v1 generation checked strictly before today's UTC start.
+ * A stored generation must have the v1 envelope, exactly the 138-member roster with consistent top-level identity
+ * (key = numeric id, school/mascot text, unique schools), and for every member the same checkedAt plus a ranking
+ * block the existing parser accepts. The parser's reference time is the snapshot's own checkedAt, so an otherwise
+ * valid old snapshot is never refused for wall-clock age; the optional scoring child is not required.
+ */
+function priorSnapshotOnly(raw: string | null, dayStart: number): boolean {
+  if (raw === null) return true;
+  if (raw.length > RANKINGS_MAX_CHARS) return false;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+    const s = parsed as Record<string, unknown>, teams = s.teams;
+    const checked = typeof s.checkedAt === "string" ? Date.parse(s.checkedAt) : NaN;
+    if (s.v !== 1 || s.year !== RANKINGS_YEAR || !teams || typeof teams !== "object" || Array.isArray(teams)
+      || !Number.isFinite(checked) || new Date(checked).toISOString() !== s.checkedAt || checked >= dayStart) return false;
+    const members = Object.entries(teams as Record<string, unknown>), schools = new Set<string>();
+    if (members.length !== EXPECTED_FBS) return false;
+    for (const [id, member] of members) {
+      const t = obj(member);
+      if (!/^[1-9]\d{0,5}$/.test(id) || t.id !== id || !text(t.school) || !text(t.mascot) || schools.has(t.school)
+        || obj(t.rankings).checkedAt !== s.checkedAt || !parseSeasonRankings(t.rankings, RANKINGS_YEAR, checked)) return false;
+      schools.add(t.school);
+    }
+    return true;
+  } catch { return false; }
+}
 // Fixed reads in order: membership, season stats, then (#189) the national regular-season games for scoring.
 export const RANKINGS_URLS = [
   `https://api.collegefootballdata.com/teams/fbs?year=${RANKINGS_YEAR}`,
@@ -103,7 +141,7 @@ export type RecoveryDiagnostic = { stage: "eligibility-write"; reason: "storage-
 /** #189 private partial result: yardage refreshed, scoring not. Fixed fields only; no remote text, body or key. */
 export type ScoringDiagnostic = { stage: "games" | "scoring-validation"; reason: SourceReason | "source-unavailable" | "scoring-invalid" | "snapshot-size"; httpStatus?: number };
 export type SourceTiming = { requestLimitMs: 45000; membershipMs?: number; statsMs?: number; gamesMs?: number; totalMs: number };
-export type RankingsRefreshResult = RefreshResult & { diagnostic?: RankingDiagnostic; recoveryDiagnostic?: RecoveryDiagnostic; sourceTiming?: SourceTiming; scoring?: "published" | "unavailable"; scoringDiagnostic?: ScoringDiagnostic; attempt?: "recovery" };
+export type RankingsRefreshResult = RefreshResult & { diagnostic?: RankingDiagnostic; recoveryDiagnostic?: RecoveryDiagnostic; sourceTiming?: SourceTiming; scoring?: "published" | "unavailable"; scoringDiagnostic?: ScoringDiagnostic; attempt?: "recovery"; admission?: RecoveryAdmission };
 function diagnosed(result: RefreshResult, diagnostic: RankingDiagnostic, sourceTiming?: SourceTiming, recoveryDiagnostic?: RecoveryDiagnostic): RankingsRefreshResult {
   const recovery = recoveryDiagnostic ? { recoveryDiagnostic } : {};
   console.warn(JSON.stringify({ event: "team_rankings_refresh_failed", diagnostic, ...recovery, ...(sourceTiming ? { sourceTiming } : {}) }));
@@ -115,6 +153,19 @@ function diagnosed(result: RefreshResult, diagnostic: RankingDiagnostic, sourceT
  * KV pacing remains non-atomic: no exactly-once or account-wide quota guarantee.
  */
 export async function refreshTeamRankings(env: LeadersEnv, fetcher: typeof fetch = fetch, now = () => Date.now(), monotonic = () => performance.now(), schedule?: RankingsSchedule): Promise<RankingsRefreshResult> {
+  return runRankings(env, fetcher, now, monotonic, schedule, null);
+}
+/**
+ * 1.29.2 operator recovery (separate authenticated route only). Never a primary: it requires today's consumed daily
+ * marker, an unused shared recovery marker (the same one the scheduled 17 UTC branch uses), no same-day or malformed
+ * snapshot, and either a strict valid same-day receipt or the temporary fixed legacy admission. It reserves the
+ * shared marker before any egress, never mints/renews a receipt and never writes the daily marker. KV is non-atomic:
+ * operators must send one POST outside the 05/17 UTC scheduled windows; there is no global exactly-once guarantee.
+ */
+export async function recoverTeamRankings(env: LeadersEnv, fetcher: typeof fetch = fetch, now = () => Date.now(), monotonic = () => performance.now(), production = false): Promise<RankingsRefreshResult> {
+  return runRankings(env, fetcher, now, monotonic, undefined, { production: production === true });
+}
+async function runRankings(env: LeadersEnv, fetcher: typeof fetch, now: () => number, monotonic: () => number, schedule: RankingsSchedule | undefined, operator: { production: boolean } | null): Promise<RankingsRefreshResult> {
   const kv = env.SEASON_LEADERS_KV;
   if (!kv || !env.CFBD_API_KEY) return { status: "failed", reason: "configuration" };
   let stage: RankingDiagnostic["stage"] = "block-read";
@@ -194,11 +245,27 @@ export async function refreshTeamRankings(env: LeadersEnv, fetcher: typeof fetch
     }
   };
   try {
-    const nowMs = now(), phase = schedulePhase(schedule, nowMs);
+    const nowMs = now(), phase = operator ? null : schedulePhase(schedule, nowMs);
     // Legacy and common denial markers override every admission, including recovery.
     if (await cfbdBlocked(kv)) return { status: "blocked", reason: "source-blocked" };
     stage = "attempt-read";
     const slot = Math.floor(nowMs / RANKINGS_INTERVAL_MS), prior = await kv.get(ATTEMPT_KEY);
+    if (operator) {
+      const refuse: RankingsRefreshResult = { status: "skipped", reason: "refresh-slot" };
+      // Strict same-day consumed primary only; operator recovery never reserves or becomes the daily primary.
+      if (!Number.isSafeInteger(slot) || slot <= 0 || prior !== String(slot)) return refuse;
+      stage = "recovery-read";
+      const eligible = await kv.get(RANKINGS_ELIGIBLE_KEY), consumed = await kv.get(RANKINGS_RECOVERY_KEY), current = await kv.get(RANKINGS_SNAPSHOT_KEY);
+      const unused = consumed === null || (/^\d{1,10}$/.test(consumed) && Number(consumed) < slot);
+      if (!unused || !priorSnapshotOnly(current, slot * RANKINGS_INTERVAL_MS)) return refuse;
+      // A present receipt is decided on its own; an ineligible/malformed one never falls through to the legacy branch.
+      const admission: RecoveryAdmission | null = eligible !== null ? (eligibleFor(eligible, slot, nowMs) ? "receipt" : null)
+        : legacyAdmitted(operator.production, slot, nowMs) ? "legacy-2026-11-24" : null;
+      if (!admission) return refuse;
+      stage = "recovery-write";
+      await kv.put(RANKINGS_RECOVERY_KEY, String(slot)); // Shared with scheduled 17; reserved before any egress.
+      return { ...(await generate(slot, false)), attempt: "recovery", admission };
+    }
     if (prior && Number(prior) >= slot) {
       // Not a reset or replay: the consumed primary stays consumed. No extra KV reads outside a trusted 17 run.
       if (phase !== "recovery17" || prior !== String(slot)) return { status: "skipped", reason: "refresh-slot" };
@@ -220,5 +287,15 @@ export async function handleRankingsRefresh(request: Request, env: LeadersEnv, f
   if (!env.CFBD_REFRESH_TOKEN || request.headers.get("authorization") !== `Bearer ${env.CFBD_REFRESH_TOKEN}`) return Response.json({ error: "Unauthorized" }, { status: 401, headers });
   if (request.method !== "POST" || new URL(request.url).search || !(await emptyRefreshBody(request))) return Response.json({ error: "Use an empty POST." }, { status: 400, headers });
   const result = await refreshTeamRankings(env, fetcher);
+  return Response.json(result, { status: result.status === "failed" ? 503 : result.status === "blocked" ? 409 : 200, headers });
+}
+/** 1.29.2 separate operator recovery route. Same auth/empty-POST gate, checked before any storage or source. */
+export async function handleRankingsRecovery(request: Request, env: LeadersEnv, fetcher: typeof fetch = fetch, now = () => Date.now()): Promise<Response> {
+  const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
+  if (!env.CFBD_REFRESH_TOKEN || request.headers.get("authorization") !== `Bearer ${env.CFBD_REFRESH_TOKEN}`) return Response.json({ error: "Unauthorized" }, { status: 401, headers });
+  if (request.method !== "POST" || new URL(request.url).search || !(await emptyRefreshBody(request))) return Response.json({ error: "Use an empty POST." }, { status: 400, headers });
+  // Narrowing only (auth is the token): the URL host is the routed hostname, so only production matches.
+  const production = new URL(request.url).origin === RANKINGS_PRODUCTION_ORIGIN;
+  const result = await recoverTeamRankings(env, fetcher, now, undefined, production);
   return Response.json(result, { status: result.status === "failed" ? 503 : result.status === "blocked" ? 409 : 200, headers });
 }

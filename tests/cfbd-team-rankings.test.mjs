@@ -398,3 +398,205 @@ test('1.29.1 SYNTHETIC receipt and consumption storage faults: storage-unavailab
  const r=await run(s,f.fetcher,at17,sched(at17));
  assert.deepEqual([r.result.status,r.result.reason],['failed','storage-unavailable']);assert.deepEqual(r.result.diagnostic,{stage:'recovery-write',reason:'storage-unavailable'});assert.equal(f.calls.length,0);assert.equal(s.map.get(rank.RANKINGS_SNAPSHOT_KEY),'last-good');safeDiagnostic(r.lines[0]);
 });
+
+// ---- 1.29.2 operator recovery. SYNTHETIC source/time/storage: code behaviour only, never a live 502, hosted cron or production KV. ----
+const OP_TOKEN='operator-fixture',PROD='https://saturday-signal.scythe-wildflower.workers.dev',PREVIEW='https://saturday-signal-preview.scythe-wildflower.workers.dev';
+const NOV24=Date.UTC(2026,10,24),NOV25=Date.UTC(2026,10,25),DEC2=Date.UTC(2026,11,2),at20=NOV24+20*HOUR; // outside both scheduled windows
+const SKIP={status:'skipped',reason:'refresh-slot'};
+const slotOf=t=>Math.floor(t/DAY);
+const opPuts=(kv,key)=>kv.ops.filter(o=>o[0]==='put'&&(key===undefined||o[1]===key)).length;
+const noEgress=()=>counter(()=>{throw Error('unexpected egress');});
+const dayReceiptOf=(day,over={})=>({v:1,slot:slotOf(day),at:day+5*HOUR+6475,phase:'primary05',stage:'membership',reason:'source-response',httpStatus:502,...over});
+const dayReceipt=(day,over)=>JSON.stringify(dayReceiptOf(day,over));
+const priorSnapshot=(day,x=input())=>JSON.stringify(rank.createRankingsSnapshot(x.ids,x.rows,new Date(day-DAY+5*HOUR).toISOString()));
+/** The reviewed Nov 24 production state: consumed attempt, no receipt, unused recovery, prior-day snapshot only. */
+function spentDay(kv,day,{snap=priorSnapshot(day),withReceipt=null}={}){kv.map.set(ATTEMPT,String(slotOf(day)));if(withReceipt!==null)kv.map.set(rank.RANKINGS_ELIGIBLE_KEY,withReceipt);if(snap!==null)kv.map.set(rank.RANKINGS_SNAPSHOT_KEY,snap);}
+const opEnv=kv=>({SEASON_LEADERS_KV:kv,CFBD_API_KEY:CANARY,CFBD_REFRESH_TOKEN:OP_TOKEN});
+const opRequest=({origin=PROD,auth=`Bearer ${OP_TOKEN}`,method='POST',query='',body}={})=>new Request(`${origin}/api/internal/team-rankings-recovery${query}`,{method,...(body===undefined?{}:{body}),headers:auth===null?{}:{Authorization:auth}});
+async function quiet(run){const original=console.warn;console.warn=()=>{};try{return await run();}finally{console.warn=original;}}
+const post=(kv,fetcher,t,opts)=>quiet(async()=>{const r=await rank.handleRankingsRecovery(opRequest(opts),opEnv(kv),fetcher,()=>t);return {status:r.status,body:await r.json()};});
+const scheduledAt=(kv,fetcher,t)=>quiet(()=>rank.refreshTeamRankings({SEASON_LEADERS_KV:kv,CFBD_API_KEY:CANARY},fetcher,()=>t+1597,undefined,sched(t)));
+
+test('1.29.2 recovery route checks auth before any storage or egress; malformed authenticated requests rejected before work',async()=>{
+ for(const [label,opts,over] of [['hosted preflight, no auth',{auth:null}],['wrong token',{auth:'Bearer nope'}],['raw token',{auth:OP_TOKEN}],['GET no auth',{auth:null,method:'GET'}],['query no auth',{auth:null,query:'?force=1'}],['token unset',{},{CFBD_REFRESH_TOKEN:undefined}],['empty token',{auth:'Bearer '},{CFBD_REFRESH_TOKEN:''}]]){
+  const kv=storage();spentDay(kv,NOV24);kv.ops.length=0;const c=noEgress();
+  const r=await rank.handleRankingsRecovery(opRequest(opts),{...opEnv(kv),...(over??{})},c.fetcher,()=>at20);
+  assert.equal(r.status,401,label);assert.deepEqual(await r.json(),{error:'Unauthorized'});assert.equal(r.headers.get('cache-control'),'no-store');assert.equal(kv.ops.length,0,label);assert.equal(c.calls.length,0,label);
+ }
+ for(const [label,opts] of [['query',{query:'?force=1'}],['body',{body:'x'}],['json body',{body:'{}'}],['GET',{method:'GET'}],['PUT',{method:'PUT',body:''}]]){
+  const kv=storage();spentDay(kv,NOV24);kv.ops.length=0;const c=noEgress();
+  const r=await rank.handleRankingsRecovery(opRequest(opts),opEnv(kv),c.fetcher,()=>at20);
+  assert.equal(r.status,400,label);assert.equal(kv.ops.length,0,label);assert.equal(c.calls.length,0,label);
+ }
+});
+
+test('1.29.2 temporary legacy admission: exact Nov 24 production state recovers once, reserved before egress, nothing minted or rewritten',async()=>{
+ const x=input(),kv=storage();spentDay(kv,NOV24);const before=kv.map.get(rank.RANKINGS_SNAPSHOT_KEY),s=slotOf(NOV24),calls=[];
+ const fetcher=async url=>{assert.equal(kv.map.get(rank.RANKINGS_RECOVERY_KEY),String(s),'shared recovery marker reserved before any egress');calls.push(url);return served(x)(url);};
+ const r=await post(kv,fetcher,at20);
+ assert.equal(r.status,200);assert.deepEqual([r.body.status,r.body.attempt,r.body.admission,r.body.scoring],['refreshed','recovery','legacy-2026-11-24','published']);
+ assert.deepEqual(calls,rank.RANKINGS_URLS,'unchanged three fixed reads, no retries');
+ assert.equal(kv.map.get(ATTEMPT),String(s));assert.equal(opPuts(kv,ATTEMPT),0,'daily marker never written');assert.equal(opPuts(kv,rank.RANKINGS_ELIGIBLE_KEY),0,'no fake receipt');assert.equal(kv.map.has(rank.RANKINGS_ELIGIBLE_KEY),false);
+ assert.equal(opPuts(kv,rank.RANKINGS_RECOVERY_KEY),1);assert.notEqual(kv.map.get(rank.RANKINGS_SNAPSHOT_KEY),before);
+ assert.ok(Object.keys(r.body).every(k=>['status','checkedAt','teams','sourceTiming','scoring','scoringDiagnostic','attempt','admission'].includes(k)));assert.ok(!JSON.stringify(r.body).includes(CANARY));
+ assert.equal((await rank.readTeamRankings(kv,'251',2026,'Texas Longhorns','Texas',at20+1)).metrics.totalYards.total,2168);
+ // Once consumed: operator repeat, scheduled 17 and the ordinary operator refresh all skip with zero egress.
+ assert.deepEqual((await post(kv,fetcher,at20+60000)).body,SKIP);
+ assert.deepEqual(await scheduledAt(kv,fetcher,NOV24+17*HOUR+4878),SKIP);
+ assert.deepEqual(await quiet(()=>rank.refreshTeamRankings({SEASON_LEADERS_KV:kv,CFBD_API_KEY:CANARY},fetcher,()=>at20+120000)),SKIP);
+ assert.equal(calls.length,3);assert.equal(opPuts(kv,rank.RANKINGS_RECOVERY_KEY),1);
+});
+
+test('1.29.2 legacy admission: exact day bounds, Date.UTC expiry, fixed production origin only, exact attempt',async()=>{
+ const x=input();
+ const attempt=async(t,{origin=PROD,day=NOV24,setup}={})=>{const kv=storage();spentDay(kv,day);setup?.(kv);const c=counter(served(x));const r=await post(kv,c.fetcher,t,{origin});return {r,kv,c};};
+ for(const t of [NOV24,NOV24+1,NOV25-1]){const {r,c}=await attempt(t);assert.equal(r.body.admission,'legacy-2026-11-24',String(t));assert.equal(c.calls.length,3);}
+ // Exactly Date.UTC(2026,10,25) refuses even with that day's own consumed attempt; other days never qualify.
+ for(const [label,t,day] of [['Nov25 00:00:00.000',NOV25,NOV25],['Nov25 later',NOV25+20*HOUR,NOV25],['Nov23',NOV24-4*HOUR,NOV24-DAY],['Dec 2',DEC2+20*HOUR,DEC2]]){
+  const {r,kv,c}=await attempt(t,{day});assert.deepEqual(r.body,SKIP,label);assert.equal(c.calls.length,0,label);assert.equal(opPuts(kv),0,label);
+ }
+ {const {r,c}=await attempt(at20,{setup:kv=>kv.map.set(ATTEMPT,String(slotOf(NOV25)))});assert.deepEqual(r.body,SKIP,'future attempt marker');assert.equal(c.calls.length,0);}
+ for(const origin of [PREVIEW,'http://127.0.0.1:8787','https://saturday-signal.scythe-wildflower.workers.dev.evil.test','http://saturday-signal.scythe-wildflower.workers.dev']){
+  const {r,kv,c}=await attempt(at20,{origin});assert.deepEqual(r.body,SKIP,origin);assert.equal(c.calls.length,0,origin);assert.equal(opPuts(kv),0,origin);
+ }
+ assert.equal(rank.RANKINGS_LEGACY_DAY_START,Date.parse('2026-11-24T00:00:00.000Z'));assert.equal(rank.RANKINGS_LEGACY_DAY_END,Date.parse('2026-11-25T00:00:00.000Z'));
+});
+
+test('1.29.2 present-but-ineligible or malformed receipt (incl. nested formats) never falls through to the legacy branch',async()=>{
+ const s=slotOf(NOV24),cases={
+  'malformed JSON':'{'+CANARY,'empty string':'','null literal':'null','array':JSON.stringify([dayReceiptOf(NOV24)]),
+  'nested wrapper':JSON.stringify({receipt:dayReceiptOf(NOV24)}),'nested status':dayReceipt(NOV24,{httpStatus:{code:502}}),'nested slot':dayReceipt(NOV24,{slot:[s]}),
+  'previous day':dayReceipt(NOV24-DAY),'future time':dayReceipt(NOV24,{at:at20+HOUR}),'status503':dayReceipt(NOV24,{httpStatus:503}),'stats stage':dayReceipt(NOV24,{stage:'stats'}),
+  'extra field':dayReceipt(NOV24,{extra:1}),'v2':dayReceipt(NOV24,{v:2}),'oversize':dayReceipt(NOV24,{pad:'x'.repeat(300)}),'string slot':dayReceipt(NOV24,{slot:String(s)}),
+ };
+ for(const [label,raw] of Object.entries(cases)){
+  const kv=storage();spentDay(kv,NOV24,{withReceipt:raw});const c=noEgress();const r=await post(kv,c.fetcher,at20);
+  assert.deepEqual(r.body,SKIP,label);assert.equal(c.calls.length,0,label);assert.equal(opPuts(kv),0,label);
+ }
+});
+
+/** Genuine generated snapshots: legacy-factory (no scoring, as 1.23–1.28 wrote) and the real publisher (with scoring). */
+const generatedAt=(ms,x=input())=>JSON.stringify(rank.createRankingsSnapshot(x.ids,x.rows,new Date(ms).toISOString()));
+async function publishedAt(ms,x=input()){const kv=storage();const r=await quiet(()=>rank.refreshTeamRankings({SEASON_LEADERS_KV:kv,CFBD_API_KEY:CANARY},async url=>served(x)(url),()=>ms));assert.equal(r.scoring,'published');return kv.map.get(rank.RANKINGS_SNAPSHOT_KEY);}
+test('1.29.2 snapshot gate: absent or genuine prior-day generations allowed regardless of age; same-day (boundary equality) or future refuses',async()=>{
+ const x=input(),raw=v=>typeof v==='string'||v===null?v:JSON.stringify(v);
+ const published=await publishedAt(NOV24-DAY+5*HOUR);assert.ok(JSON.parse(published).teams['251'].rankings.scoring,'publisher fixture carries scoring');
+ const allowed=[['absent',null],['legacy-factory prior day',generatedAt(NOV24-DAY+5*HOUR)],['published prior day with scoring',published],
+  ['three days old',generatedAt(NOV24-3*DAY)],['ten days old (past reader max age)',generatedAt(NOV24-10*DAY)],['one ms before UTC midnight',generatedAt(NOV24-1)]];
+ for(const [label,snap] of allowed){
+  const kv=storage();spentDay(kv,NOV24,{snap});const c=counter(served(x));const r=await post(kv,c.fetcher,at20);
+  assert.equal(r.body.status,'refreshed',label);assert.equal(r.body.admission,'legacy-2026-11-24',label);assert.equal(c.calls.length,3,label);
+ }
+ const valid=JSON.parse(generatedAt(NOV24-DAY+5*HOUR)),noChecked=structuredClone(valid),noTeams=structuredClone(valid);delete noChecked.checkedAt;delete noTeams.teams;
+ const refused={
+  'generated exactly at UTC midnight':generatedAt(NOV24),'generated same day':generatedAt(NOV24+5*HOUR),'published same day':await publishedAt(NOV24+5*HOUR),'generated future':generatedAt(NOV25+HOUR),
+  'non-ISO checkedAt':{...valid,checkedAt:'Nov 23 2026'},'missing checkedAt':noChecked,'numeric checkedAt':{...valid,checkedAt:NOV24-DAY},
+  'v2':{...valid,v:2},'wrong year':{...valid,year:2025},'teams array':{...valid,teams:[]},'teams missing':noTeams,'nested wrapper':{snapshot:valid},
+  'array':[valid],'plain text':'last-good','empty string':'','JSON null':'null','oversize':JSON.stringify({...valid,pad:'x'.repeat(rank.RANKINGS_MAX_CHARS)}),
+ };
+ for(const [label,snap] of Object.entries(refused)){
+  const kv=storage();spentDay(kv,NOV24,{snap:raw(snap)});const c=noEgress();const r=await post(kv,c.fetcher,at20);
+  assert.deepEqual(r.body,SKIP,label);assert.equal(c.calls.length,0,label);assert.equal(opPuts(kv),0,label);
+ }
+ // A same-day success still refuses even if the shared recovery marker were somehow absent afterwards.
+ const kv=storage();spentDay(kv,NOV24);const c=counter(served(x));assert.equal((await post(kv,c.fetcher,at20)).body.status,'refreshed');kv.map.delete(rank.RANKINGS_RECOVERY_KEY);
+ assert.deepEqual((await post(kv,c.fetcher,at20+1000)).body,SKIP);assert.equal(c.calls.length,3);
+});
+
+test('1.29.2 snapshot gate: empty, incomplete or malformed v1 roster/member ranking shape refuses with zero egress',async()=>{
+ const base=JSON.parse(generatedAt(NOV24-DAY+5*HOUR)),otherStamp=new Date(NOV24-2*DAY).toISOString();
+ const mutate=fn=>{const s=structuredClone(base);fn(s);return JSON.stringify(s);};
+ const extra=s=>{s.teams['999999']={...structuredClone(s.teams['251']),id:'999999',school:'Synthetic Extra'};};
+ const cases={
+  'empty teams':mutate(s=>{s.teams={};}),'137 members':mutate(s=>{delete s.teams['10000'];}),'139 members':mutate(extra),'single member':mutate(s=>{s.teams={251:s.teams['251']};}),
+  'key/id mismatch':mutate(s=>{s.teams['251'].id='153';}),'numeric id':mutate(s=>{s.teams['251'].id=251;}),'non-numeric key':mutate(s=>{s.teams.abc={...s.teams['251'],id:'abc'};delete s.teams['251'];}),
+  'leading-zero key':mutate(s=>{s.teams['0251']={...s.teams['251'],id:'0251'};delete s.teams['251'];}),'duplicate school':mutate(s=>{s.teams['153'].school='Texas';}),
+  'missing mascot':mutate(s=>{delete s.teams['251'].mascot;}),'blank school':mutate(s=>{s.teams['251'].school=' ';}),'null member':mutate(s=>{s.teams['251']=null;}),'array member':mutate(s=>{s.teams['251']=[];}),
+  'missing rankings':mutate(s=>{delete s.teams['251'].rankings;}),'member checkedAt differs':mutate(s=>{s.teams['251'].rankings.checkedAt=otherStamp;}),
+  'member year 2025':mutate(s=>{s.teams['251'].rankings.year=2025;}),'member population 137':mutate(s=>{s.teams['251'].rankings.population=137;}),
+  'metrics missing':mutate(s=>{delete s.teams['251'].rankings.metrics;}),'metric rank 139':mutate(s=>{s.teams['251'].rankings.metrics.totalYards.rank=139;}),
+  'metric games mismatch':mutate(s=>{s.teams['251'].rankings.metrics.totalYards.games=7;}),'metric coverage inconsistent':mutate(s=>{s.teams['251'].rankings.metrics.totalYards.coverage=137;}),
+  'metric tied string':mutate(s=>{s.teams['251'].rankings.metrics.totalYards.tied='yes';}),'games zero':mutate(s=>{s.teams['251'].rankings.games=0;}),
+ };
+ for(const [label,snap] of Object.entries(cases)){
+  const kv=storage();spentDay(kv,NOV24,{snap});const c=noEgress();const r=await post(kv,c.fetcher,at20);
+  assert.deepEqual(r.body,SKIP,label);assert.equal(c.calls.length,0,label);assert.equal(opPuts(kv),0,label);
+ }
+ // Control: the same genuine base, unmutated, is admitted.
+ const kv=storage();spentDay(kv,NOV24,{snap:JSON.stringify(base)});const c=counter(served(input()));assert.equal((await post(kv,c.fetcher,at20)).body.admission,'legacy-2026-11-24');
+});
+
+test('1.29.2 operator recovery never becomes a primary: only the strict current daily marker and an unused shared marker admit',async()=>{
+ const s=slotOf(NOV24);
+ for(const [label,value] of [['absent',null],['previous day',String(s-1)],['future',String(s+1)],['leading zero','0'+s],['padded',` ${s}`],['decimal',`${s}.0`],['malformed','x']]){
+  const kv=storage();spentDay(kv,NOV24);if(value===null)kv.map.delete(ATTEMPT);else kv.map.set(ATTEMPT,value);const c=noEgress();
+  const r=await post(kv,c.fetcher,at20);assert.deepEqual(r.body,SKIP,label);assert.equal(c.calls.length,0,label);assert.equal(opPuts(kv),0,label);assert.equal(kv.map.get(ATTEMPT)??null,value,label);
+ }
+ for(const [label,value] of [['already consumed today',String(s)],['malformed consumption','x'],['future consumption',String(s+1)]]){
+  const kv=storage();spentDay(kv,NOV24);kv.map.set(rank.RANKINGS_RECOVERY_KEY,value);const c=noEgress();
+  const r=await post(kv,c.fetcher,at20);assert.deepEqual(r.body,SKIP,label);assert.equal(c.calls.length,0,label);assert.equal(kv.map.get(rank.RANKINGS_RECOVERY_KEY),value);
+ }
+ const x=input(),kv=storage();spentDay(kv,NOV24);kv.map.set(rank.RANKINGS_RECOVERY_KEY,String(s-1));const c=counter(served(x));
+ assert.equal((await post(kv,c.fetcher,at20)).body.status,'refreshed','an earlier day\'s consumption does not block today');
+});
+
+test('1.29.2 new valid receipt, both directions: operator then scheduled17 skips; scheduled17 then operator skips',async()=>{
+ const x=input(),s=slotOf(DEC2),at05d=DEC2+5*HOUR+4878,at17d=DEC2+17*HOUR+4878;
+ // A real 1.29.1 scheduled 05 membership 502 mints the receipt that the operator path accepts (no legacy needed, any origin).
+ const kv=storage();kv.map.set(rank.RANKINGS_SNAPSHOT_KEY,priorSnapshot(DEC2));
+ const primary=await scheduledAt(kv,counter(json502).fetcher,at05d);assert.equal(primary.diagnostic.httpStatus,502);assert.ok(kv.map.has(rank.RANKINGS_ELIGIBLE_KEY));
+ const calls=[],f=async url=>{assert.equal(kv.map.get(rank.RANKINGS_RECOVERY_KEY),String(s));calls.push(url);return served(x)(url);};
+ const r=await post(kv,f,DEC2+11*HOUR,{origin:PREVIEW});
+ assert.deepEqual([r.body.status,r.body.admission,r.body.attempt],['refreshed','receipt','recovery']);assert.deepEqual(calls,rank.RANKINGS_URLS);
+ assert.equal(opPuts(kv,rank.RANKINGS_ELIGIBLE_KEY),1,'receipt not renewed');assert.equal(opPuts(kv,ATTEMPT),1,'only the scheduled primary wrote it');
+ assert.deepEqual(await scheduledAt(kv,f,at17d),SKIP);assert.equal(calls.length,3);
+ // Reverse direction.
+ const kv2=storage();kv2.map.set(rank.RANKINGS_SNAPSHOT_KEY,priorSnapshot(DEC2));await scheduledAt(kv2,counter(json502).fetcher,at05d);
+ const c2=counter(served(x)),r17=await scheduledAt(kv2,c2.fetcher,at17d);assert.equal(r17.attempt,'recovery');assert.equal(r17.admission,undefined,'scheduled result shape unchanged');assert.equal(c2.calls.length,3);
+ assert.deepEqual((await post(kv2,c2.fetcher,at17d+HOUR)).body,SKIP);assert.equal(c2.calls.length,3);
+ // The ordinary operator refresh still never reads the receipt.
+ const kv3=storage();spentDay(kv3,DEC2,{withReceipt:dayReceipt(DEC2)});kv3.ops.length=0;
+ assert.deepEqual(await quiet(()=>rank.refreshTeamRankings({SEASON_LEADERS_KV:kv3,CFBD_API_KEY:CANARY},noEgress().fetcher,()=>DEC2+11*HOUR)),SKIP);
+ assert.equal(kv3.ops.some(o=>o[1]===rank.RANKINGS_ELIGIBLE_KEY||o[1]===rank.RANKINGS_RECOVERY_KEY),false);
+});
+
+test('1.29.2 failed operator recovery never renews or mints; the day stays consumed for operator and scheduled paths',async()=>{
+ const x=input();
+ for(const [label,answer] of [['membership502 again',json502],['stats502',url=>url===rank.RANKINGS_URLS[1]?json502():served(x)(url)],['transport',()=>{throw Error(CANARY);}]]){
+  const kv=storage();spentDay(kv,NOV24);const before=kv.map.get(rank.RANKINGS_SNAPSHOT_KEY),c=counter(answer);
+  const r=await post(kv,c.fetcher,at20);
+  assert.equal(r.status,503,label);assert.deepEqual([r.body.status,r.body.reason,r.body.attempt,r.body.admission],['failed','source-unavailable','recovery','legacy-2026-11-24'],label);
+  assert.ok(Object.keys(r.body.diagnostic).every(k=>['stage','reason','httpStatus'].includes(k)));assert.ok(!JSON.stringify(r.body).includes(CANARY));
+  assert.equal(opPuts(kv,rank.RANKINGS_ELIGIBLE_KEY),0,label);assert.equal(opPuts(kv,ATTEMPT),0,label);assert.equal(kv.map.get(rank.RANKINGS_SNAPSHOT_KEY),before,'last good kept');
+  const n=c.calls.length;assert.deepEqual((await post(kv,c.fetcher,at20+1000)).body,SKIP);assert.deepEqual(await scheduledAt(kv,c.fetcher,NOV24+17*HOUR),SKIP);assert.equal(c.calls.length,n,label);
+ }
+});
+
+test('1.29.2 denial gates: legacy/common markers refuse first; a recovery denial persists the shared block and stops later products',async()=>{
+ for(const marker of [shared.LEGACY_CFBD_BLOCK,shared.COMMON_CFBD_BLOCK]){
+  const kv=storage();spentDay(kv,NOV24);kv.map.set(marker,'blocked');const c=noEgress();const r=await post(kv,c.fetcher,at20);
+  assert.equal(r.status,409);assert.deepEqual(r.body,{status:'blocked',reason:'source-blocked'});assert.equal(c.calls.length,0);assert.equal(opPuts(kv),0);
+  assert.equal(kv.ops.some(o=>o[1]===ATTEMPT||o[1]===rank.RANKINGS_ELIGIBLE_KEY),false,'denial checked before admission state');
+ }
+ for(const [label,answer] of [['403 html',()=>new Response('',{status:403,headers:{'content-type':'text/html'}})],['429',()=>new Response('',{status:429})],['html502',()=>new Response('<html>'+CANARY,{status:502,headers:{'content-type':'text/html'}})]]){
+  const kv=storage();spentDay(kv,NOV24);const before=kv.map.get(rank.RANKINGS_SNAPSHOT_KEY),c=counter(answer);const r=await post(kv,c.fetcher,at20);
+  assert.equal(r.status,409,label);assert.deepEqual([r.body.status,r.body.attempt],['blocked','recovery']);assert.ok(kv.map.has(shared.COMMON_CFBD_BLOCK));assert.equal(kv.map.get(rank.RANKINGS_SNAPSHOT_KEY),before);assert.equal(c.calls.length,1);
+  assert.equal((await leader.refreshSeasonLeaders({SEASON_LEADERS_KV:kv,CFBD_API_KEY:CANARY},c.fetcher,()=>at20)).status,'blocked');assert.equal(c.calls.length,1);
+ }
+});
+
+test('1.29.2 storage faults before egress return storage-unavailable with zero source calls and no reservation',async()=>{
+ for(const [label,stage,fault] of [['block read','block-read',k=>k===shared.COMMON_CFBD_BLOCK],['attempt read','attempt-read',k=>k===ATTEMPT],['receipt read','recovery-read',k=>k===rank.RANKINGS_ELIGIBLE_KEY],['consumption read','recovery-read',k=>k===rank.RANKINGS_RECOVERY_KEY],['snapshot read','recovery-read',k=>k===rank.RANKINGS_SNAPSHOT_KEY]]){
+  const kv=storage(),get=kv.get.bind(kv);spentDay(kv,NOV24);kv.get=async k=>{if(fault(k))throw Error(CANARY);return get(k);};const c=noEgress();
+  const r=await post(kv,c.fetcher,at20);assert.equal(r.status,503,label);assert.deepEqual(r.body.diagnostic,{stage,reason:'storage-unavailable'},label);assert.equal(c.calls.length,0,label);assert.equal(kv.map.has(rank.RANKINGS_RECOVERY_KEY),false,label);assert.ok(!JSON.stringify(r.body).includes(CANARY));
+ }
+ const kv=storage(),put=kv.put.bind(kv);spentDay(kv,NOV24);kv.put=async(k,v)=>{if(k===rank.RANKINGS_RECOVERY_KEY)throw Error(CANARY);return put(k,v);};const c=noEgress();
+ const r=await post(kv,c.fetcher,at20);assert.equal(r.status,503);assert.deepEqual(r.body.diagnostic,{stage:'recovery-write',reason:'storage-unavailable'});assert.equal(c.calls.length,0);
+ const missing=await rank.handleRankingsRecovery(opRequest(),{SEASON_LEADERS_KV:storage(),CFBD_REFRESH_TOKEN:OP_TOKEN},noEgress().fetcher,()=>at20);
+ assert.equal(missing.status,503);assert.deepEqual(await missing.json(),{status:'failed',reason:'configuration'});
+});
+
+test('1.29.2 scheduled behaviour unchanged: the legacy Nov 24 state still gives the scheduled 17 nothing',async()=>{
+ const kv=storage();spentDay(kv,NOV24);const c=noEgress();
+ assert.deepEqual(await scheduledAt(kv,c.fetcher,NOV24+17*HOUR+4878),SKIP);assert.equal(c.calls.length,0);assert.equal(opPuts(kv),0);
+});

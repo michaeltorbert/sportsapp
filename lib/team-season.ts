@@ -61,10 +61,14 @@ export type RankingMetric = { total: number; games: number; rank: number | null;
  */
 export type ScoringRankings = { basis: "regular-completed"; year: number; games: number; population: number; checkedAt: string; offense: RankingMetric; defense: RankingMetric };
 export type SeasonRankings = { year: number; games: number | null; population: number; checkedAt: string; stale: boolean; metrics: Record<RankingKey, RankingMetric | null>; scoring?: ScoringRankings | null };
+// Immutable schemas built once at module load (previously rebuilt on every call); definitions unchanged.
+const rankingMetricSchema = z.object({ total: z.number().int().min(-10_000_000).max(10_000_000), games: z.number().int().min(1).max(20), rank: z.number().int().min(1).max(138).nullable(), population: z.literal(138), coverage: z.number().int().min(1).max(138), tied: z.boolean() });
+const seasonRankingsSchema = z.object({ year: z.literal(2026), games: z.number().int().min(1).max(20).nullable(), population: z.literal(138), checkedAt: z.string().datetime(), metrics: z.object({ totalYards: rankingMetricSchema.nullable(), netPassingYards: rankingMetricSchema.nullable(), rushingYards: rankingMetricSchema.nullable(), totalYardsOpponent: rankingMetricSchema.nullable(), netPassingYardsOpponent: rankingMetricSchema.nullable(), rushingYardsOpponent: rankingMetricSchema.nullable() }) });
+const scoringMetricSchema = z.object({ total: z.number().int().min(0).max(6_000), games: z.number().int().min(1).max(20), rank: z.number().int().min(1).max(138).nullable(), population: z.literal(138), coverage: z.number().int().min(1).max(138), tied: z.boolean() });
+const scoringRankingsSchema = z.object({ basis: z.literal("regular-completed"), year: z.literal(2026), games: z.number().int().min(1).max(20), population: z.literal(138), checkedAt: z.string().datetime(), offense: scoringMetricSchema, defense: scoringMetricSchema });
 /** Optional data fails closed independently of the retained ESPN season. */
 export function parseSeasonRankings(raw: unknown, year: number, now = Date.now()): SeasonRankings | null {
-  const metric = z.object({ total: z.number().int().min(-10_000_000).max(10_000_000), games: z.number().int().min(1).max(20), rank: z.number().int().min(1).max(138).nullable(), population: z.literal(138), coverage: z.number().int().min(1).max(138), tied: z.boolean() });
-  const parsed = z.object({ year: z.literal(2026), games: z.number().int().min(1).max(20).nullable(), population: z.literal(138), checkedAt: z.string().datetime(), metrics: z.object({ totalYards: metric.nullable(), netPassingYards: metric.nullable(), rushingYards: metric.nullable(), totalYardsOpponent: metric.nullable(), netPassingYardsOpponent: metric.nullable(), rushingYardsOpponent: metric.nullable() }) }).safeParse(raw);
+  const parsed = seasonRankingsSchema.safeParse(raw);
   if (!parsed.success || parsed.data.year !== year) return null;
   const data = parsed.data, age = now - Date.parse(data.checkedAt);
   if (!Number.isFinite(age) || age < 0 || age > 259_200_000) return null;
@@ -74,8 +78,7 @@ export function parseSeasonRankings(raw: unknown, year: number, now = Date.now()
 }
 /** Same metric rules as yardage, with its own completed-games denominator, from the same rankings generation only. */
 export function parseScoringRankings(raw: unknown, checkedAt: string): ScoringRankings | null {
-  const metric = z.object({ total: z.number().int().min(0).max(6_000), games: z.number().int().min(1).max(20), rank: z.number().int().min(1).max(138).nullable(), population: z.literal(138), coverage: z.number().int().min(1).max(138), tied: z.boolean() });
-  const parsed = z.object({ basis: z.literal("regular-completed"), year: z.literal(2026), games: z.number().int().min(1).max(20), population: z.literal(138), checkedAt: z.string().datetime(), offense: metric, defense: metric }).safeParse(raw);
+  const parsed = scoringRankingsSchema.safeParse(raw);
   if (!parsed.success || parsed.data.checkedAt !== checkedAt) return null;
   const data = parsed.data;
   for (const row of [data.offense, data.defense]) if (row.games !== data.games || row.coverage !== data.offense.coverage || (row.rank !== null && row.coverage !== row.population) || (row.rank === null && (row.coverage === row.population || row.tied)) || (row.tied && row.rank === row.population)) return null;
