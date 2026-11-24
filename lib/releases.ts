@@ -1,5 +1,6 @@
-export const VERSION = "1.29.1";
+export const VERSION = "1.29.2";
 export const releases = [
+  { version: "1.29.2", date: "November 24, 2026", changes: "Team rankings can make one controlled recovery refresh after a failed daily attempt, without changing the daily limit." },
   { version: "1.29.1", date: "November 24, 2026", changes: "Team rankings can recover at the next scheduled refresh after a temporary data-source failure." },
   { version: "1.29.0", date: "November 21, 2026", changes: "FBS statistical rankings on team pages add a Scoring row: points scored and allowed per game, each with its rank among 138 FBS teams. Scoring uses each team’s completed regular-season games as CFBD reports them, including games against FCS opponents, and shows that game count. Yardage rankings, leaders, averages and schedules stay in place. Missing scoring stays marked unavailable, and Duke spoiler protection covers the new values." },
   { version: "1.28.0", date: "November 20, 2026", changes: "Team season pages add defensive leaders for total tackles, sacks and interceptions, below the yard leaders. Every tied player is listed and opens their player page, which now shows total and solo tackles, tackles for loss, sacks and supplied interception totals. Values are as CFBD reports them and may differ from school reports. Existing team, player and game features stay in place, and Duke spoiler protection covers the new statistics." },

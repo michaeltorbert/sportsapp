@@ -1,5 +1,10 @@
 # Saturday Signal releases
 
+## 1.29.2 · 2026-11-24
+
+- Add a separate authenticated operator route, `POST /api/internal/team-rankings-recovery` (same `CFBD_REFRESH_TOKEN`, empty body, no query; auth before any storage or source access), for one controlled rankings recovery after a failed daily attempt. It never acts as the daily primary: it requires today's consumed daily marker, no shared denial, no same-day or malformed snapshot, an unused shared recovery marker (the same one the 17:00 UTC scheduled recovery uses) and a strict valid same-day membership-502 receipt. It reserves that marker before any source call, never mints or renews a receipt, and runs the unchanged three-read publisher once.
+- Temporary, self-expiring: on November 24, 2026 UTC only, the production origin may also admit the already observed old-code membership 502 that left no receipt, under every other gate above. It expires at the UTC midnight that begins November 25 and is removed in the next routine release. The daily limit, existing refresh route, schedules, receipt minting, leaders and browser publishers are unchanged. KV remains non-atomic; send one POST outside the 05:00/17:00 UTC windows. Broader #181/#189 remain open.
+
 ## 1.29.1 · 2026-11-24
 
 - Team rankings can recover at the next scheduled refresh after a temporary data-source failure. Only the 05:00 UTC scheduled publisher, when its first (FBS membership) read gets a non-denial HTTP 502, records a strict same-day receipt; the 17:00 UTC scheduled run that same UTC day may then make one recovery generation with the unchanged three fixed reads. Worst case is four source calls that day instead of three.
